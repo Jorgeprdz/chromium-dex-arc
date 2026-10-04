@@ -22,3 +22,6 @@
 - Retomado tras aviso del usuario: baseline 37229682148 falló antes de GN con python3_bin_reldir.txt not found. Fuentes y dependencias sí se descargaron; había108GiB libres tras limpieza.
 - Causa comprobada en gclient/gn de depot_tools: DEPOT_TOOLS_UPDATE=0 omite actualización y bootstrap automático; gclient usa vpython mientras GN exige python-bin/python3.
 - Corrección: ensure_bootstrap explícito conservando revisión fija. Gate CI ligero comprueba el mismo intérprete antes/después de inicializarlo, antes de otro checkout Chromium.
+
+- Nuevo intento: 37231453817. Gate bootstrap-check SUCCESS: antes de ensure_bootstrap reprodujo python3_bin_reldir.txt not found; después ejecutó Python3.11.8. Corrección del bootstrap verificada en runner x86_64. Build completo aún in_progress.
+- Monitor de Descargas actualizado al nuevo run y probado --once en Termux. Se vuelve a pausa mientras el usuario vigila; no cancelar CI.
