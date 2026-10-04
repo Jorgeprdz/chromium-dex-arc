@@ -14,3 +14,7 @@
 
 - Baseline lanzada: run 37229682148. Aún sin resultado de build.
 - Investigación UI: Chromium incluye pestañas verticales Android nativas (240/76 dp); reutilizar esos modelos y lifecycle, estudiar ajuste a 52 dp en lugar de crear una lista duplicada.
+
+- PAUSA solicitada por el usuario: 2026-10-04. Build 37229682148 sigue in_progress. No cancelar el build; el usuario lo vigilará.
+- Monitor guardado y probado en /sdcard/Download/vigilar-compilacion-arc.sh; consulta pública cada180s, --once probado desde Termux.
+- Al retomar: consultar resultado/logs de baseline antes de modificar UI. Esta compilación no contiene look Arc ni cambios propios de producto.
