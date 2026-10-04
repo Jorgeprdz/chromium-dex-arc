@@ -1,0 +1,30 @@
+# Chromium DeX Arc — preparación
+
+Diseño aprobado: [docs/design.md](docs/design.md).
+
+Este directorio contiene la preparación del proyecto, no un navegador terminado.
+No incluye una copia de Chromium, cambios a su interfaz ni una APK propia.
+
+## Base identificada
+
+- Snapshot AndroidDesktop_arm64: `1710899`.
+- Chromium Git: `cfd94726b7b5fb48aedcc32662f2f3fbdbadec35`.
+- La revisión está identificada por el archivo REVISIONS oficial de ese snapshot.
+
+## Primera comprobación
+
+El workflow manual `runner-probe.yml` mide arquitectura, memoria, discos y tamaño
+de herramientas preinstaladas. No descarga Chromium, borra archivos, crea montajes,
+publica artifacts ni utiliza servicios externos de compilación.
+
+Todavía no se ha ejecutado en GitHub. El runner estándar publicado tiene 16 GB de
+RAM y 14 GB de almacenamiento para proyectos públicos; Chromium documenta al menos
+100 GB libres. Medir el runner no garantiza que una compilación completa quepa o
+termine dentro de sus límites.
+
+Fuentes:
+- https://docs.github.com/en/actions/reference/runners/github-hosted-runners
+- https://chromium.googlesource.com/chromium/src/+/main/docs/android_build_instructions.md
+- https://commondatastorage.googleapis.com/chromium-browser-snapshots/AndroidDesktop_arm64/1710899/REVISIONS
+
+No se publicarán datos del teléfono ni claves de firma en este proyecto.
