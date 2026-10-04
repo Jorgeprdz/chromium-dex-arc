@@ -11,3 +11,6 @@
 
 - El runner tiene 92.4 GB libres y herramientas removibles; se prepara baseline con guardia de 100 GB después de limpieza, sin datos del teléfono.
 - Revisión independiente de la preparación: sin bloqueantes; estados obsoletos corregidos.
+
+- Baseline lanzada: run 37229682148. Aún sin resultado de build.
+- Investigación UI: Chromium incluye pestañas verticales Android nativas (240/76 dp); reutilizar esos modelos y lifecycle, estudiar ajuste a 52 dp en lugar de crear una lista duplicada.
