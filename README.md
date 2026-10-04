@@ -4,6 +4,8 @@ Diseño aprobado: [docs/design.md](docs/design.md).
 
 Este directorio contiene la preparación del proyecto, no un navegador terminado.
 No incluye una copia de Chromium, cambios a su interfaz ni una APK propia.
+El workflow de baseline intenta compilar la base sin modificaciones en GitHub;
+sus archivos temporales nunca se descargan al teléfono.
 
 ## Base identificada
 
@@ -17,7 +19,7 @@ El workflow manual `runner-probe.yml` mide arquitectura, memoria, discos y tama�
 de herramientas preinstaladas. No descarga Chromium, borra archivos, crea montajes,
 publica artifacts ni utiliza servicios externos de compilación.
 
-Todavía no se ha ejecutado en GitHub. El runner estándar publicado tiene 16 GB de
+El inventario terminó correctamente; resultados en [docs/builder-inventory.md](docs/builder-inventory.md). El runner estándar publicado tiene 16 GB de
 RAM y 14 GB de almacenamiento para proyectos públicos; Chromium documenta al menos
 100 GB libres. Medir el runner no garantiza que una compilación completa quepa o
 termine dentro de sus límites.

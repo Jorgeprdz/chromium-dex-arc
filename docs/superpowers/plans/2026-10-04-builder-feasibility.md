@@ -35,11 +35,11 @@
 **Interfaces:** `bash scripts/probe-runner.sh` imprime recursos medidos; no produce una APK.
 
 - [x] Preparar script de inventario de solo lectura y workflow manual con timeout de 10 minutos.
-- [ ] Comprobar sintaxis Bash y YAML, y revisar que no contiene descargas del motor, borrados ni secretos.
-- [ ] Obtener autorización para publicar el repositorio nuevo `Jorgeprdz/chromium-dex-arc`.
-- [ ] Publicar únicamente los archivos de preparación revisados.
-- [ ] Ejecutar el workflow manual y guardar las medidas en `docs/builder-inventory.md`.
-- [ ] Comparar filesystem disponible, RAM y arquitectura con los requisitos oficiales; documentar si una limpieza controlada del runner podría acercarlo al mínimo. No ejecutarla en este inventario.
+- [x] Comprobar sintaxis Bash y YAML, y revisar que no contiene descargas del motor, borrados ni secretos.
+- [x] Obtener autorización para publicar el repositorio nuevo `Jorgeprdz/chromium-dex-arc`.
+- [x] Publicar únicamente los archivos de preparación revisados.
+- [x] Ejecutar el workflow manual y guardar las medidas en `docs/builder-inventory.md`.
+- [x] Comparar filesystem disponible, RAM y arquitectura con los requisitos oficiales; documentar si una limpieza controlada del runner podría acercarlo al mínimo. No ejecutarla en este inventario.
 
 ### Task 2: Decisión técnica a partir de las medidas
 
