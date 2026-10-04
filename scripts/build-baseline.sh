@@ -25,6 +25,10 @@ git -C depot_tools fetch --depth 1 origin "$depot_revision"
 git -C depot_tools checkout --detach "$depot_revision"
 export PATH="$build_workspace/depot_tools:$PATH"
 export DEPOT_TOOLS_UPDATE=0
+# Pinning disables gclient's automatic update/bootstrap. Initialize the pinned
+# tools explicitly so GN's python-bin wrapper has its interpreter metadata.
+bash "$build_workspace/depot_tools/ensure_bootstrap"
+"$build_workspace/depot_tools/python-bin/python3" --version
 
 mkdir checkout
 cd checkout

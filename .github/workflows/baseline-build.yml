@@ -11,7 +11,25 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  bootstrap-check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - name: Bootstrap pinned depot_tools and exercise GN interpreter
+        run: |
+          git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git "$RUNNER_TEMP/depot_tools"
+          git -C "$RUNNER_TEMP/depot_tools" fetch --depth 1 origin 8a5434051036b32412a2ecb10c213a72e3f3ccb9
+          git -C "$RUNNER_TEMP/depot_tools" checkout --detach 8a5434051036b32412a2ecb10c213a72e3f3ccb9
+          export DEPOT_TOOLS_UPDATE=0
+          printf 'Before bootstrap (expected missing interpreter metadata):\n'
+          if "$RUNNER_TEMP/depot_tools/python-bin/python3" --version; then
+            printf 'Fresh tool checkout already initialized.\n'
+          fi
+          bash "$RUNNER_TEMP/depot_tools/ensure_bootstrap"
+          printf 'After bootstrap (must succeed):\n'
+          "$RUNNER_TEMP/depot_tools/python-bin/python3" --version
   build:
+    needs: bootstrap-check
     runs-on: ubuntu-24.04
     timeout-minutes: 350
     permissions:

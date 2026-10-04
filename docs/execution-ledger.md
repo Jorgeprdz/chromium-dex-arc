@@ -18,3 +18,7 @@
 - PAUSA solicitada por el usuario: 2026-10-04. Build 37229682148 sigue in_progress. No cancelar el build; el usuario lo vigilará.
 - Monitor guardado y probado en /sdcard/Download/vigilar-compilacion-arc.sh; consulta pública cada180s, --once probado desde Termux.
 - Al retomar: consultar resultado/logs de baseline antes de modificar UI. Esta compilación no contiene look Arc ni cambios propios de producto.
+
+- Retomado tras aviso del usuario: baseline 37229682148 falló antes de GN con python3_bin_reldir.txt not found. Fuentes y dependencias sí se descargaron; había108GiB libres tras limpieza.
+- Causa comprobada en gclient/gn de depot_tools: DEPOT_TOOLS_UPDATE=0 omite actualización y bootstrap automático; gclient usa vpython mientras GN exige python-bin/python3.
+- Corrección: ensure_bootstrap explícito conservando revisión fija. Gate CI ligero comprueba el mismo intérprete antes/después de inicializarlo, antes de otro checkout Chromium.
