@@ -115,3 +115,10 @@ Run `37231453817`: cancelado el 2026-10-05 a las 02:07:42 UTC.
 La anotación del job confirma que superó el timeout de 5 h 50 min;
 la publicación de prerelease se omitió y no produjo una APK distribuible.
 https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/37231453817
+
+## Run de Archium
+
+El workflow `baseline-build.yml` ahora aplica los parches y usa
+`config/archium-args.gn`; conserva la APK de prueba como artifact durante siete
+días. Timeout: 360 minutos, máximo del runner hospedado. No promete finalizar
+en esa ventana; para superar seis horas se requiere otro constructor.

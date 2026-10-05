@@ -1,4 +1,4 @@
-name: Chromium Android Desktop baseline
+name: Archium for Android build
 
 on:
   workflow_dispatch:
@@ -7,7 +7,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: chromium-baseline
+  group: archium-build
   cancel-in-progress: false
 
 jobs:
@@ -31,21 +31,18 @@ jobs:
   build:
     needs: bootstrap-check
     runs-on: ubuntu-24.04
-    timeout-minutes: 350
-    permissions:
-      contents: write
+    timeout-minutes: 360
     steps:
       - name: Checkout preparation
         uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           persist-credentials: false
-      - name: Build pinned Chromium without UI changes
-        run: bash scripts/build-baseline.sh
-      - name: Preserve successful baseline as prerelease
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          gh release create "baseline-${GITHUB_RUN_ID}" baseline-output/* \
-            --repo "$GITHUB_REPOSITORY" --prerelease \
-            --title "Unmodified Chromium Desktop baseline 1710899" \
-            --notes "Build feasibility baseline only. This APK has no Arc UI and uses Chromium's original application ID and test signing. Do not install over an existing Chromium profile."
+      - name: Build pinned Chromium with Archium patches
+        run: bash scripts/build-archium.sh
+      - name: Preserve Archium build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: Archium-for-Android-arm64
+          path: archium-output/
+          if-no-files-found: error
+          retention-days: 7
