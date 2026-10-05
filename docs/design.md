@@ -1,19 +1,32 @@
 # Chromium para DeX: diseño visual Arc
 
 Estado: diseño aprobado por el usuario el 2026-10-04. No se ha modificado Chromium ni creado una APK propia.
+Actualización visual del usuario el 2026-10-05: referencia exterior de Arc para
+Windows en `docs/references/arc-windows-reference.jpg`; marco con color personalizable,
+barra superior compacta y rail izquierdo con favoritos, carpetas y pestañas.
+Este diseño se aplica únicamente en modo escritorio/DeX. En la pantalla del
+teléfono se conserva el diseño tradicional, también en horizontal. Esta
+precisión sustituye cualquier elegibilidad anterior basada solo en el ancho.
+El usuario aclaró que el violeta es solo el color de la referencia: se conserva
+su distribución y se permite elegir el color del marco y rail, con persistencia
+y contraste en claro/oscuro. Esta precisión sustituye la paleta lavanda fija
+propuesta originalmente.
+La ampliación de integraciones Google se documenta por separado en
+`docs/superpowers/specs/2026-10-05-arc-google-design.md` y sigue en revisión.
 Objetivo del usuario: adaptar Chromium para Android Desktop al look de Arc/Zen,
 con navegación real en DeX y el motor ejecutándose en Android.
 
 ## Diseño propuesto
 
 Referencia elegida explícitamente por el usuario: Arc de escritorio.
-La propuesta utiliza su distribución lateral y un fondo lavanda suave.
+La propuesta utiliza su distribución lateral y un color de marco personalizable.
 
 - Barra lateral izquierda de 240 dp, ajustable, con navegación y búsqueda arriba.
 - Favoritos como botones compactos con favicon; lista vertical de pestañas debajo.
 - Selección, cierre, creación y reordenación conectados a las pestañas reales.
-- Tema claro lavanda para el marco y la barra lateral, con contenido blanco.
-  Tema oscuro equivalente que conserva el contraste de texto e iconos.
+- Color personalizable para el marco y la barra lateral, conservado tras reinicio.
+  Temas claro y oscuro que conservan el contraste de texto e iconos. El contenido
+  web conserva sus colores originales.
 - Contenido amplio con margen de 8 dp; esquinas suaves donde el compositor permita
   recortarlas correctamente, sin cubrir contenido de la página con máscaras.
 - Botón para contraer la barra a una columna de iconos de 52 dp. Sin controles

@@ -26,20 +26,47 @@ Un parche que aplica correctamente todavía necesita compilación y pruebas.
 
 ## Interfaz Arc
 
+Referencia visual inspeccionada el 2026-10-05:
+`docs/references/arc-windows-reference.jpg`, copiada de
+`/sdcard/Download/The-Arc-Browser-in-Windows.jpg` (2026-10-04 19:41), la imagen
+más reciente en Download del teléfono. Referencia: ventana exterior de Arc
+para Windows, no el navegador coral mostrado dentro del contenido de la web.
+
+El usuario precisa que este diseño se aplica solo al modo escritorio/DeX.
+En la pantalla del teléfono se mantiene la interfaz tradicional, incluso en
+horizontal o con ancho suficiente. La elegibilidad no puede depender solo
+del ancho ni de `is_desktop_android`, que es una condición de compilación.
+Usar el contexto de la ventana/display para identificar escritorio; verificar
+la API exacta antes de implementar. Dentro de escritorio, el ancho determina
+la contracción del rail. Volver al display del teléfono restaura la UI móvil
+sin perder pestañas ni el estado de navegación.
+
 Extender las pestañas verticales nativas, manteniendo TabModel, lifecycle,
 incógnito, foco, menús y arrastre de Chromium. Puntos de integración comprobados:
 `TabbedRootUiCoordinator`, `VerticalTabsSideUiCoordinator` y `VerticalTabUtils`.
 
 - Barra izquierda expandida de 240 dp y contraída de 52 dp. Revisar los layouts
   y áreas táctiles antes de cambiar el ancho colapsado actual de 76 dp.
-- Tema lavanda claro y oscuro con contraste; colores limitados al marco y rail.
-- Navegación y búsqueda arriba; favoritos con favicon vinculados al modelo de
-  marcadores; pestañas debajo con selección, creación, cierre y reordenación.
+- Distribución del marco y rail izquierdo siguiendo la ventana exterior de la
+  referencia. El violeta de la captura es un ejemplo, no un color obligatorio.
+  El usuario puede elegir el color del marco y rail en ajustes de apariencia;
+  guardar la elección y conservarla tras reiniciar. Derivar superficies y colores
+  de texto/iconos con contraste legible en claro y oscuro. La elección no cambia
+  la distribución ni tiñe el contenido web; el azul brillante de la referencia
+  pertenece a la página. Esta personalización aplica a la interfaz de escritorio,
+  conservando la interfaz tradicional del teléfono.
+- Barra superior compacta con atrás, adelante, recargar, dirección y acceso a
+  extensiones. Favoritos como botones compactos con favicon al inicio del rail,
+  vinculados al modelo real de marcadores; carpetas/marcadores debajo y pestañas
+  abiertas en una sección distinta con selección, creación, cierre y reordenación.
+  No interpretar los puntos inferiores de la referencia como workspaces ya
+  implementados ni añadir controles decorativos sin función.
 - Conservar Ctrl+L y el omnibox nativo. Integrar su acceso en el rail sin recrear
   la lógica de navegación ni dejar controles que solo simulen funcionar.
 - Margen de contenido de 8 dp. Esquinas únicamente con recorte real compatible
   con el compositor; nunca cubrir el contenido con máscaras.
-- Adaptación al ancho de la ventana DeX; mantener el flujo móvil en teléfono.
+- Adaptación al ancho de la ventana de escritorio/DeX; mantener el flujo móvil
+  tradicional en la pantalla del teléfono, cualquiera que sea su ancho.
 - Acceso a administración, instalación admitida y acciones de extensiones.
 
 ## Cuentas y servicios de Google: límites comprobados
@@ -116,6 +143,10 @@ y programar actualizaciones del motor independientemente de la estética.
 2. APK con pestañas y favoritos reales: mouse, teclado, incógnito, ventana
    estrecha/maximizada, reinicio y cambio de display. Confirmar ausencia de
    superposición sobre el contenido web y acceso a extensiones.
+   Comprobar teléfono vertical/horizontal con interfaz tradicional, DeX con
+   interfaz Arc y traslado entre ambos displays sin pérdida de pestañas.
+   Comprobar cambio de color desde apariencia, persistencia tras reinicio,
+   contraste claro/oscuro y contenido web sin tinte.
 3. Corrección de la ruta Agregar cuenta: sin excepción y sin atribuir Sync a
    una sesión web. Login web en Google probado manualmente por el usuario.
 4. Prueba de Autofill Android con credenciales de prueba: primero Google,
