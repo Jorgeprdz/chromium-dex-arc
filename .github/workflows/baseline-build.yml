@@ -1,48 +1,99 @@
-name: Archium for Android build
-
+name: Archium for Android build in resumable stages
 on:
   workflow_dispatch:
-
 permissions:
-  contents: read
-
+  contents: write
 concurrency:
-  group: archium-build
+  group: archium-build-staged
   cancel-in-progress: false
-
 jobs:
-  bootstrap-check:
+  stage1:
+    uses: ./.github/workflows/archium-stage.yml
+    with:
+      stage: 1
+  stage2:
+    needs: stage1
+    if: needs.stage1.outputs.complete != 'true'
+    uses: ./.github/workflows/archium-stage.yml
+    with:
+      stage: 2
+      previous_tag: archium-checkpoint-${{ github.run_id }}-1
+  stage3:
+    needs: stage2
+    if: needs.stage2.outputs.complete != 'true'
+    uses: ./.github/workflows/archium-stage.yml
+    with:
+      stage: 3
+      previous_tag: archium-checkpoint-${{ github.run_id }}-2
+  stage4:
+    needs: stage3
+    if: needs.stage3.outputs.complete != 'true'
+    uses: ./.github/workflows/archium-stage.yml
+    with:
+      stage: 4
+      previous_tag: archium-checkpoint-${{ github.run_id }}-3
+  stage5:
+    needs: stage4
+    if: needs.stage4.outputs.complete != 'true'
+    uses: ./.github/workflows/archium-stage.yml
+    with:
+      stage: 5
+      previous_tag: archium-checkpoint-${{ github.run_id }}-4
+  stage6:
+    needs: stage5
+    if: needs.stage5.outputs.complete != 'true'
+    uses: ./.github/workflows/archium-stage.yml
+    with:
+      stage: 6
+      previous_tag: archium-checkpoint-${{ github.run_id }}-5
+  stage7:
+    needs: stage6
+    if: needs.stage6.outputs.complete != 'true'
+    uses: ./.github/workflows/archium-stage.yml
+    with:
+      stage: 7
+      previous_tag: archium-checkpoint-${{ github.run_id }}-6
+  stage8:
+    needs: stage7
+    if: needs.stage7.outputs.complete != 'true'
+    uses: ./.github/workflows/archium-stage.yml
+    with:
+      stage: 8
+      previous_tag: archium-checkpoint-${{ github.run_id }}-7
+  stage9:
+    needs: stage8
+    if: needs.stage8.outputs.complete != 'true'
+    uses: ./.github/workflows/archium-stage.yml
+    with:
+      stage: 9
+      previous_tag: archium-checkpoint-${{ github.run_id }}-8
+  stage10:
+    needs: stage9
+    if: needs.stage9.outputs.complete != 'true'
+    uses: ./.github/workflows/archium-stage.yml
+    with:
+      stage: 10
+      previous_tag: archium-checkpoint-${{ github.run_id }}-9
+  stage11:
+    needs: stage10
+    if: needs.stage10.outputs.complete != 'true'
+    uses: ./.github/workflows/archium-stage.yml
+    with:
+      stage: 11
+      previous_tag: archium-checkpoint-${{ github.run_id }}-10
+  stage12:
+    needs: stage11
+    if: needs.stage11.outputs.complete != 'true'
+    uses: ./.github/workflows/archium-stage.yml
+    with:
+      stage: 12
+      previous_tag: archium-checkpoint-${{ github.run_id }}-11
+  result:
+    needs: stage12
+    if: needs.stage12.outputs.complete == 'false'
     runs-on: ubuntu-24.04
-    timeout-minutes: 10
     steps:
-      - name: Bootstrap pinned depot_tools and exercise GN interpreter
+      - name: Report resumable unfinished build
         run: |
-          git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git "$RUNNER_TEMP/depot_tools"
-          git -C "$RUNNER_TEMP/depot_tools" fetch --depth 1 origin 8a5434051036b32412a2ecb10c213a72e3f3ccb9
-          git -C "$RUNNER_TEMP/depot_tools" checkout --detach 8a5434051036b32412a2ecb10c213a72e3f3ccb9
-          export DEPOT_TOOLS_UPDATE=0
-          printf 'Before bootstrap (expected missing interpreter metadata):\n'
-          if "$RUNNER_TEMP/depot_tools/python-bin/python3" --version; then
-            printf 'Fresh tool checkout already initialized.\n'
-          fi
-          bash "$RUNNER_TEMP/depot_tools/ensure_bootstrap"
-          printf 'After bootstrap (must succeed):\n'
-          "$RUNNER_TEMP/depot_tools/python-bin/python3" --version
-  build:
-    needs: bootstrap-check
-    runs-on: ubuntu-24.04
-    timeout-minutes: 360
-    steps:
-      - name: Checkout preparation
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
-        with:
-          persist-credentials: false
-      - name: Build pinned Chromium with Archium patches
-        run: bash scripts/build-archium.sh
-      - name: Preserve Archium build artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: Archium-for-Android-arm64
-          path: archium-output/
-          if-no-files-found: error
-          retention-days: 7
+          echo 'All 12 compilation slices consumed. Latest checkpoint remains available for continuation.' >&2
+          exit 1

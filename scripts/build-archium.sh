@@ -18,6 +18,15 @@ if (( available_bytes < 100000000000 )); then
     exit 3
 fi
 df -h "$RUNNER_TEMP"
+if [[ -n "${ARCHIUM_PREVIOUS_TAG:-}" ]]; then
+    python3 "$GITHUB_WORKSPACE/scripts/archium-checkpoint.py" restore \
+        "$build_workspace" "$ARCHIUM_PREVIOUS_TAG"
+    export PATH="$build_workspace/depot_tools:$PATH"
+    export DEPOT_TOOLS_UPDATE=0
+    bash "$build_workspace/depot_tools/ensure_bootstrap"
+    cd "$build_workspace/checkout/src"
+    sudo ./build/install-build-deps.sh --no-prompt --android
+else
 mkdir -p "$build_workspace"
 cd "$build_workspace"
 git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git
@@ -52,10 +61,29 @@ mkdir -p out/Archium
 python3 "$GITHUB_WORKSPACE/scripts/apply-arc-patches.py" "$PWD"
 cp "$GITHUB_WORKSPACE/config/archium-args.gn" out/Archium/args.gn
 gn gen out/Archium
+fi
+
 df -h .
-autoninja -C out/Archium chrome_public_apk -j 4
+# SIGINT lets Ninja stop its children and flush .ninja_log/.ninja_deps before packing.
+set +e
+timeout --signal=INT --kill-after=90s "${ARCHIUM_SLICE_MINUTES:-120}m" \
+    autoninja -C out/Archium chrome_public_apk -j 4
+build_result=$?
+set -e
+if (( build_result == 124 )); then
+    printf 'Compilation slice ended; saving complete workspace.\n'
+    python3 "$GITHUB_WORKSPACE/scripts/archium-checkpoint.py" pack \
+        "$build_workspace" "$ARCHIUM_CHECKPOINT_TAG"
+    printf 'complete=false\n' >> "$GITHUB_OUTPUT"
+    exit 0
+elif (( build_result != 0 )); then
+    printf 'Compilation failed with exit %s; stopping the chain.\n' "$build_result" >&2
+    exit "$build_result"
+fi
 test -s out/Archium/apks/ChromePublic.apk
 mkdir -p "$GITHUB_WORKSPACE/archium-output"
 cp out/Archium/apks/ChromePublic.apk "$GITHUB_WORKSPACE/archium-output/Archium-for-Android-arm64.apk"
 cp LICENSE "$GITHUB_WORKSPACE/archium-output/LICENSE.chromium"
 sha256sum "$GITHUB_WORKSPACE/archium-output/Archium-for-Android-arm64.apk" > "$GITHUB_WORKSPACE/archium-output/SHA256SUMS"
+
+printf 'complete=true\n' >> "$GITHUB_OUTPUT"

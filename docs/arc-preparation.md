@@ -118,7 +118,7 @@ https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/37231453817
 
 ## Run de Archium
 
-El workflow `baseline-build.yml` ahora aplica los parches y usa
-`config/archium-args.gn`; conserva la APK de prueba como artifact durante siete
-días. Timeout: 360 minutos, máximo del runner hospedado. No promete finalizar
-en esa ventana; para superar seis horas se requiere otro constructor.
+El workflow `baseline-build.yml` aplica los parches y usa
+`config/archium-args.gn`. Ahora compila en hasta doce bloques de dos horas,
+con checkpoint completo entre jobs. Véase `docs/archium-staged-build.md`.
+La APK de prueba final se conserva como artifact durante siete días.
