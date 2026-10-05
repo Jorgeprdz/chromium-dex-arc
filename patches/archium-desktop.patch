@@ -1,0 +1,954 @@
+diff --git a/chrome/android/chrome_java_resources.gni b/chrome/android/chrome_java_resources.gni
+--- a/chrome/android/chrome_java_resources.gni
++++ b/chrome/android/chrome_java_resources.gni
+@@ -8,6 +8,7 @@
+ # git cl format
+ 
+ chrome_java_resources = [
++  "java/res/values/arc_strings.xml",
+   "java/res/anim/accelerate_quart.xml",
+   "java/res/anim/activity_close_exit.xml",
+   "java/res/anim/activity_open_enter.xml",
+diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java_sources.gni
+--- a/chrome/android/chrome_java_sources.gni
++++ b/chrome/android/chrome_java_sources.gni
+@@ -5,6 +5,8 @@
+ import("//content/public/common/features.gni")
+ 
+ chrome_java_sources = [
++  "java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java",
++  "java/src/org/chromium/chrome/browser/arc/ArcDesktopWindowObserver.java",
+   "java/src/com/google/android/apps/chrome/appwidget/bookmarks/BookmarkThumbnailWidgetProvider.java",
+   "java/src/org/chromium/chrome/browser/ActivityTabProvider.java",
+   "java/src/org/chromium/chrome/browser/ActivityUtils.java",
+diff --git a/chrome/android/features/tab_ui/java/res/values/dimens.xml b/chrome/android/features/tab_ui/java/res/values/dimens.xml
+--- a/chrome/android/features/tab_ui/java/res/values/dimens.xml
++++ b/chrome/android/features/tab_ui/java/res/values/dimens.xml
+@@ -184,7 +184,7 @@
+     <dimen name="pinned_tab_strip_height">72dp</dimen>
+ 
+     <!-- Dimens for Vertical Tabs (Desktop / Default) -->
+-    <dimen name="vertical_tabs_rail_horizontal_margin">12dp</dimen>
++    <dimen name="vertical_tabs_rail_horizontal_margin">4dp</dimen>
+     <dimen name="vertical_tabs_hover_overlay_corner_radius">12dp</dimen>
+     <dimen name="vertical_tabs_scrollbar_margin_end">-9dp</dimen>
+     <dimen name="vertical_tabs_scrollbar_padding_end">9dp</dimen>
+diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinder.java b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinder.java
+--- a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinder.java
++++ b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinder.java
+@@ -38,6 +38,8 @@
+ import org.chromium.chrome.browser.tasks.tab_management.TabUiThemeUtil;
+ import org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabItemHoverController.TabHoverListener;
+ import org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabListProperties.RailCollapseState;
++import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance;
++import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy;
+ import org.chromium.chrome.browser.ui.vertical_tabs.VerticalTabUtils;
+ import org.chromium.chrome.tab_ui.R;
+ import org.chromium.components.browser_ui.styles.ChromeColors;
+@@ -825,6 +827,10 @@
+      */
+     private static ColorStateList getBackgroundTintList(
+             Context context, boolean isSelected, boolean isMultiSelected, boolean isIncognito) {
++        if (ArcDesktopAppearance.isDesktopWindow(context)) {
++            return ColorStateList.valueOf(isSelected || isMultiSelected
++                    ? ArcDesktopAppearance.selection(context, isIncognito) : Color.TRANSPARENT);
++        }
+         if (!isSelected && !isMultiSelected) {
+             return ColorStateList.valueOf(Color.TRANSPARENT);
+         }
+@@ -850,6 +856,11 @@
+      */
+     private static @ColorInt int getTextColor(
+             Context context, boolean isSelected, boolean isIncognito) {
++        if (ArcDesktopAppearance.isDesktopWindow(context)) {
++            return ArcDesktopPolicy.foreground(isSelected
++                    ? ArcDesktopAppearance.selection(context, isIncognito)
++                    : ArcDesktopAppearance.surface(context, isIncognito));
++        }
+         if (isSelected) {
+             return isIncognito
+                     ? context.getColor(R.color.default_text_color_light)
+@@ -871,6 +882,9 @@
+      */
+     private static ColorStateList getActionButtonTintList(
+             Context context, boolean isSelected, boolean isIncognito) {
++        if (ArcDesktopAppearance.isDesktopWindow(context)) {
++            return ColorStateList.valueOf(getTextColor(context, isSelected, isIncognito));
++        }
+         if (isIncognito) {
+             return isSelected
+                     ? ChromeColors.getPrimaryIconTint(context, /* isIncognito= */ true)
+diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListViewBinder.java b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListViewBinder.java
+--- a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListViewBinder.java
++++ b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListViewBinder.java
+@@ -17,6 +17,7 @@
+ import org.chromium.build.annotations.Nullable;
+ import org.chromium.chrome.browser.incognito.IncognitoUtils;
+ import org.chromium.chrome.browser.tasks.tab_management.TabUiThemeUtil;
++import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance;
+ import org.chromium.chrome.browser.ui.vertical_tabs.VerticalTabUtils;
+ import org.chromium.chrome.tab_ui.R;
+ import org.chromium.components.browser_ui.styles.SemanticColorUtils;
+@@ -85,11 +86,14 @@
+      * @param isIncognito Whether the active tab model is incognito branded.
+      */
+     private static void updateIncognitoColors(VerticalTabRailLayout view, boolean isIncognito) {
+-        if (IncognitoUtils.shouldOpenIncognitoAsWindow()) {
++        if (IncognitoUtils.shouldOpenIncognitoAsWindow()
++                && !ArcDesktopAppearance.isDesktopWindow(view.getContext())) {
+             return;
+         }
+         Context context = view.getContext();
+-        int backgroundColor = TabUiThemeUtil.getTabStripBackgroundColor(context, isIncognito);
++        int backgroundColor = ArcDesktopAppearance.isDesktopWindow(context)
++                ? ArcDesktopAppearance.surface(context, isIncognito)
++                : TabUiThemeUtil.getTabStripBackgroundColor(context, isIncognito);
+         view.setBackgroundColor(backgroundColor);
+ 
+         ColorStateList iconTint =
+@@ -97,6 +101,9 @@
+                         ? context.getColorStateList(R.color.incognito_tab_action_button_color)
+                         : ColorStateList.valueOf(SemanticColorUtils.getDefaultIconColor(context));
+ 
++        if (ArcDesktopAppearance.isDesktopWindow(context)) {
++            iconTint = ColorStateList.valueOf(ArcDesktopAppearance.foreground(context, isIncognito));
++        }
+         ImageViewCompat.setImageTintList(view.getCollapseButton(), iconTint);
+         ImageViewCompat.setImageTintList(view.getSearchIcon(), iconTint);
+         view.getSearchLabel()
+@@ -105,6 +112,9 @@
+                                 ? iconTint
+                                 : ColorStateList.valueOf(
+                                         SemanticColorUtils.getDefaultTextColor(context)));
++        if (ArcDesktopAppearance.isDesktopWindow(context)) {
++            view.getSearchLabel().setTextColor(iconTint);
++        }
+         ImageButton newTabButton = view.getNewTabButton();
+         ImageButton incognitoButton = view.getIncognitoButton();
+         ImageViewCompat.setImageTintList(newTabButton, iconTint);
+@@ -121,6 +131,13 @@
+         ViewCompat.setBackgroundTintList(incognitoButton, buttonBgTint);
+     }
+ 
++    /** Reapply the saved Arc palette after an appearance change without mutating tab state. */
++    public static void refreshArcAppearance(VerticalTabRailLayout view, boolean isIncognito) {
++        if (ArcDesktopAppearance.isDesktopWindow(view.getContext())) {
++            updateIncognitoColors(view, isIncognito);
++        }
++    }
++
+     private static void updateIncognitoButton(@Nullable ImageButton button, boolean isIncognito) {
+         if (button == null) return;
+         int resId =
+diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabRailLayout.java b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabRailLayout.java
+--- a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabRailLayout.java
++++ b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabRailLayout.java
+@@ -29,6 +29,7 @@
+ import org.chromium.build.annotations.NullMarked;
+ import org.chromium.build.annotations.Nullable;
+ import org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabListProperties.RailCollapseState;
++import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance;
+ import org.chromium.chrome.browser.ui.vertical_tabs.VerticalTabUtils;
+ import org.chromium.chrome.tab_ui.R;
+ import org.chromium.ui.base.ViewUtils;
+@@ -102,6 +103,9 @@
+     @Override
+     protected void onFinishInflate() {
+         super.onFinishInflate();
++        if (ArcDesktopAppearance.isDesktopWindow(getContext())) {
++            setBackgroundColor(ArcDesktopAppearance.surface(getContext(), false));
++        }
+         mRecyclerView = findViewById(R.id.tab_list_recycler_view);
+         assert mRecyclerView != null;
+ 
+@@ -282,8 +286,22 @@
+     }
+ 
+     /** Sets the visibility of the desktop window top spacer. */
++    private @Nullable View mDesktopWindowSpacerHost;
++
++    /** Places the native caption inset above the whole Archium rail, including its header. */
++    public void setDesktopWindowSpacerHost(@Nullable View host) {
++        boolean visible = (mDesktopWindowSpacerHost != null
++                ? mDesktopWindowSpacerHost : mSpacerView).getVisibility() == View.VISIBLE;
++        mDesktopWindowSpacerHost = host;
++        setDesktopWindowSpacerVisible(visible);
++    }
++
+     public void setDesktopWindowSpacerVisible(boolean visible) {
+-        mSpacerView.setVisibility(visible ? View.VISIBLE : View.GONE);
++        mSpacerView.setVisibility(mDesktopWindowSpacerHost == null && visible
++                ? View.VISIBLE : View.GONE);
++        if (mDesktopWindowSpacerHost != null) {
++            mDesktopWindowSpacerHost.setVisibility(visible ? View.VISIBLE : View.GONE);
++        }
+     }
+ 
+     /** Sets the listener that receives the raw pointer events dispatched to the rail. */
+diff --git a/chrome/android/java/res_chromium_base/values/channel_constants.xml b/chrome/android/java/res_chromium_base/values/channel_constants.xml
+--- a/chrome/android/java/res_chromium_base/values/channel_constants.xml
++++ b/chrome/android/java/res_chromium_base/values/channel_constants.xml
+@@ -7,8 +7,8 @@
+ 
+ <resources xmlns:android="http://schemas.android.com/apk/res/android">
+     <!-- The application name displayed to the user. -->
+-    <string name="app_name" translatable="false">Chromium</string>
+-    <string name="bookmark_widget_title" translatable="false">Chromium bookmarks</string>
+-    <string name="search_widget_title" translatable="false">Chromium search</string>
+-    <string name="quick_action_search_widget_title" translatable="false">Chromium quick action search</string>
++    <string name="app_name" translatable="false">Archium for Android</string>
++    <string name="bookmark_widget_title" translatable="false">Archium bookmarks</string>
++    <string name="search_widget_title" translatable="false">Archium search</string>
++    <string name="quick_action_search_widget_title" translatable="false">Archium quick action search</string>
+ </resources>
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java
+@@ -71,6 +71,12 @@
+ import org.chromium.chrome.browser.ai_overlay_dialog.AiOverlayDialogBridge;
+ import org.chromium.chrome.browser.app.tabwindow.TabWindowManagerSingleton;
+ import org.chromium.chrome.browser.back_press.BackPressManager;
++import org.chromium.chrome.browser.arc.ArcDesktopCoordinator;
++import org.chromium.chrome.browser.arc.ArcDesktopWindowObserver;
++import org.chromium.chrome.browser.autofill.settings.options.AutofillOptionsFragment;
++import org.chromium.chrome.browser.settings.SettingsNavigationFactory;
++import org.chromium.chrome.browser.tab.TabLaunchType;
++import org.chromium.content_public.browser.LoadUrlParams;
+ import org.chromium.chrome.browser.bookmarks.BookmarkManagerOpener;
+ import org.chromium.chrome.browser.bookmarks.BookmarkManagerOpenerImpl;
+ import org.chromium.chrome.browser.bookmarks.BookmarkModel;
+@@ -391,6 +397,8 @@
+     private final DataSharingTabManager mDataSharingTabManager;
+     private final Supplier<Boolean> mCanAnimateBrowserControls;
+     protected @Nullable InstantMessageDelegateImpl mInstantMessageDelegateImpl;
++    private @Nullable ArcDesktopCoordinator mArcDesktopCoordinator;
++    private @Nullable ArcDesktopWindowObserver mArcWindowObserver;
+     private @Nullable BookmarkBarCoordinator mBookmarkBarCoordinator;
+     private @Nullable BookmarkBarIphController mBookmarkBarIphController;
+     private @Nullable BookmarkBarVisibilityProvider mBookmarkBarVisibilityProvider;
+@@ -883,11 +891,20 @@
+             Log.w(TAG, "Error getting application info", e);
+             mApplicationLabel = mActivity.getResources().getString(R.string.app_name);
+         }
++        mArcWindowObserver = new ArcDesktopWindowObserver(mActivity, mActivityLifecycleDispatcher);
+     }
+ 
+     @Override
+     @SuppressWarnings({"NullAway", "UseSharedPreferencesManagerFromChromeCheck"})
+     public void onDestroy() {
++        if (mArcWindowObserver != null) {
++            mArcWindowObserver.destroy();
++            mArcWindowObserver = null;
++        }
++        if (mArcDesktopCoordinator != null) {
++            mArcDesktopCoordinator.destroy();
++            mArcDesktopCoordinator = null;
++        }
+         if (mVerticalTabsPreferenceListener != null) {
+             ContextUtils.getAppSharedPreferences()
+                     .unregisterOnSharedPreferenceChangeListener(mVerticalTabsPreferenceListener);
+@@ -2501,6 +2518,21 @@
+                                     mBrowserControlsManager,
+                                     mBackPressManager),
+                             mIsVerticalTabsActiveSupplier);
++            mArcDesktopCoordinator = new ArcDesktopCoordinator(
++                    mActivity, (ViewGroup) mVerticalTabsSideUiCoordinator.getView(),
++                    BookmarkModel.getForProfile(currentlySelectedProfile.getOriginalProfile()),
++                    currentlySelectedProfile.getOriginalProfile(),
++                    url -> {
++                        var creator = mTabCreatorManagerSupplier.asNonNull().get().getTabCreator(
++                                mTabModelSelectorSupplier.asNonNull().get().isIncognitoSelected());
++                        if (creator != null) creator.createNewTab(new LoadUrlParams(url),
++                                TabLaunchType.FROM_CHROME_UI, mActivityTabProvider.get());
++                    },
++                    () -> mBookmarkManagerOpenerSupplier.asNonNull().get().showBookmarkManager(
++                            mActivity, mActivityTabProvider.get(), currentlySelectedProfile),
++                    () -> SettingsNavigationFactory.createSettingsNavigation().startSettings(
++                            mActivity, AutofillOptionsFragment.class),
++                    mIncognitoStateProvider);
+             if (mToolbarManager != null) {
+                 mToolbarManager.setVerticalTabsAutoHiddenSupplier(
+                         mVerticalTabsSideUiCoordinator.getIsAutoHiddenSupplier());
+diff --git a/chrome/browser/autofill/android/BUILD.gn b/chrome/browser/autofill/android/BUILD.gn
+--- a/chrome/browser/autofill/android/BUILD.gn
++++ b/chrome/browser/autofill/android/BUILD.gn
+@@ -32,6 +32,7 @@
+   sources = [
+     "java/src/org/chromium/chrome/browser/autofill/AddressNormalizerFactory.java",
+     "java/src/org/chromium/chrome/browser/autofill/AutofillAddress.java",
++    "java/src/org/chromium/chrome/browser/autofill/ArchiumAutofillPolicy.java",
+     "java/src/org/chromium/chrome/browser/autofill/AutofillClientProviderUtils.java",
+     "java/src/org/chromium/chrome/browser/autofill/AutofillEditorBase.java",
+     "java/src/org/chromium/chrome/browser/autofill/AutofillImageFetcher.java",
+diff --git a/chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/AutofillClientProviderUtils.java b/chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/AutofillClientProviderUtils.java
+--- a/chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/AutofillClientProviderUtils.java
++++ b/chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/AutofillClientProviderUtils.java
+@@ -102,7 +102,9 @@
+         if (autofillServicePackage == null) {
+             return AndroidAutofillAvailabilityStatus.UNKNOWN_ANDROID_AUTOFILL_SERVICE;
+         }
+-        if (AWG_PACKAGE_NAME.equals(autofillServicePackage)) {
++        if (ArchiumAutofillPolicy.mustUseInternalGoogleProvider(
++                ContextUtils.getApplicationContext().getPackageName(),
++                AWG_PACKAGE_NAME.equals(autofillServicePackage))) {
+             return AndroidAutofillAvailabilityStatus.ANDROID_AUTOFILL_SERVICE_IS_GOOGLE;
+         }
+         // If the user explicitly chose the current Autofill Service before, use it again. The
+@@ -157,8 +159,10 @@
+         if (autofillServicePackage == null) {
+             return; // No update possible.
+         }
+-        if (AWG_PACKAGE_NAME.equals(autofillServicePackage)) {
+-            return; // AWG can never be the preferred Autofill service.
++        if (ArchiumAutofillPolicy.mustUseInternalGoogleProvider(
++                ContextUtils.getApplicationContext().getPackageName(),
++                AWG_PACKAGE_NAME.equals(autofillServicePackage))) {
++            return; // Chrome uses its internal Google integration. Archium uses Android Autofill.
+         }
+         prefs.setString(
+                 Pref.AUTOFILL_THIRD_PARTY_PACKAGE_USED_FOR_PLATFORM_AUTOFILL,
+diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java
+--- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java
++++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java
+@@ -43,6 +43,7 @@
+ import org.chromium.chrome.browser.omnibox.fusebox.FuseboxCoordinator.FuseboxState;
+ import org.chromium.chrome.browser.omnibox.status.StatusCoordinator;
+ import org.chromium.chrome.browser.tabmodel.IncognitoStateProvider;
++import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance;
+ import org.chromium.chrome.browser.theme.ThemeColorProvider;
+ import org.chromium.chrome.browser.toolbar.R;
+ import org.chromium.chrome.browser.toolbar.ToolbarDataProvider;
+@@ -300,6 +301,10 @@
+             @Nullable ColorStateList tint,
+             @Nullable ColorStateList activityFocusTint,
+             @BrandedColorScheme int brandedColorScheme) {
++        if (ArcDesktopAppearance.isDesktopWindow(getContext())) {
++            activityFocusTint = ColorStateList.valueOf(
++                    ArcDesktopAppearance.foreground(getContext(), isIncognitoBranded()));
++        }
+         ImageViewCompat.setImageTintList(mHomeButton, activityFocusTint);
+         if (mOptionalButton != null && mOptionalButtonUsesTint) {
+             ImageViewCompat.setImageTintList(mOptionalButton, activityFocusTint);
+@@ -314,6 +319,17 @@
+ 
+     @Override
+     public void onThemeColorChanged(@ColorInt int color, boolean shouldAnimate) {
++        if (ArcDesktopAppearance.isDesktopWindow(getContext())) {
++            color = ArcDesktopAppearance.surface(getContext(), isIncognitoBranded());
++            ColorStateList tint = ColorStateList.valueOf(
++                    ArcDesktopAppearance.foreground(getContext(), isIncognitoBranded()));
++            ImageViewCompat.setImageTintList(mHomeButton, tint);
++            ImageViewCompat.setImageTintList(mBackButton, tint);
++            ImageViewCompat.setImageTintList(mReloadButton, tint);
++            if (mForwardButtonCoordinator != null) {
++                ImageViewCompat.setImageTintList(mForwardButtonCoordinator.getButton(), tint);
++            }
++        }
+         setBackgroundColor(color);
+         mFixedHeightBackground.setBackgroundColor(color);
+         mLocationBar.updateVisualsForState();
+diff --git a/chrome/browser/ui/vertical_tabs/BUILD.gn b/chrome/browser/ui/vertical_tabs/BUILD.gn
+--- a/chrome/browser/ui/vertical_tabs/BUILD.gn
++++ b/chrome/browser/ui/vertical_tabs/BUILD.gn
+@@ -5,7 +5,11 @@
+ import("//build/config/android/rules.gni")
+ 
+ android_library("java") {
+-  sources = [ "android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/VerticalTabUtils.java" ]
++  sources = [
++    "android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java",
++    "android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java",
++    "android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/VerticalTabUtils.java",
++  ]
+ 
+   resources_package = "org.chromium.chrome"
+ 
+diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/VerticalTabUtils.java b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/VerticalTabUtils.java
+--- a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/VerticalTabUtils.java
++++ b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/VerticalTabUtils.java
+@@ -43,7 +43,7 @@
+     public static final int SIDE_UI_CONTAINER_WIDTH_DP = 240;
+ 
+     /** The width of the collapsed vertical tabs SideUiContainer in dp. */
+-    public static final int SIDE_UI_CONTAINER_COLLAPSED_WIDTH_DP = 76;
++    public static final int SIDE_UI_CONTAINER_COLLAPSED_WIDTH_DP = 52;
+ 
+     /**
+      * Minimum width in dp required for the expanded vertical tabs rail before snapping to collapsed
+@@ -158,9 +158,7 @@
+         if (sIsVerticalTabsEligibleForTesting != null) {
+             return sIsVerticalTabsEligibleForTesting;
+         }
+-        return context != null
+-                && ChromeFeatureList.sAndroidVerticalTabs.isEnabled()
+-                && DeviceFormFactor.isNonMultiDisplayContextOnTablet(context);
++        return context != null && ArcDesktopAppearance.isDesktopWindow(context);
+     }
+ 
+     /**
+@@ -174,7 +172,7 @@
+         if (!isVerticalTabsEligible(context)) {
+             return false;
+         }
+-        boolean defaultValue = isVerticalTabsEnabledByDefault();
++        boolean defaultValue = true;
+         return ChromeSharedPreferences.getInstance()
+                 .readBoolean(ChromePreferenceKeys.VERTICAL_TABS_ENABLED, defaultValue);
+     }
+diff --git a/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java b/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java
+--- a/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java
++++ b/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java
+@@ -50,8 +50,9 @@
+     @Override
+     public void createAddAccountIntent(
+             @Nullable String prefilledEmail, Callback<@Nullable Intent> callback) {
+-        throw new UnsupportedOperationException(
+-                "NullAccountManagerDelegate does not implement createAddAccountIntent");
++        // A missing downstream account backend is an unavailable operation, not a crash.
++        // The facade's nullable callback contract allows callers to display their fallback UI.
++        callback.onResult(null);
+     }
+ 
+     @Override
+diff --git a/chrome/android/java/res/values/arc_strings.xml b/chrome/android/java/res/values/arc_strings.xml
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/res/values/arc_strings.xml
+@@ -0,0 +1,10 @@
++<?xml version="1.0" encoding="utf-8"?>
++<resources>
++    <string name="arc_bookmarks">Marcadores</string>
++    <string name="arc_bookmark_root">‹ Carpetas</string>
++    <string name="arc_frame_color">Color del navegador</string>
++    <string name="arc_reset_color">Restablecer</string>
++    <string name="arc_color_format">Introduce un color como #336699</string>
++    <string name="arc_google_login">Iniciar sesión en la web de Google</string>
++    <string name="arc_autofill">Autocompletado de Android</string>
++</resources>
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
+@@ -0,0 +1,323 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++import android.app.Activity;
++import android.app.AlertDialog;
++import android.content.SharedPreferences;
++import android.graphics.Color;
++import android.graphics.drawable.GradientDrawable;
++import android.text.InputType;
++import android.view.Gravity;
++import android.view.View;
++import android.view.ViewGroup;
++import android.widget.Button;
++import android.widget.EditText;
++import android.widget.ImageButton;
++import android.widget.LinearLayout;
++import android.widget.PopupMenu;
++import android.widget.ScrollView;
++import android.widget.TextView;
++
++import org.chromium.chrome.R;
++import org.chromium.chrome.browser.bookmarks.BookmarkModel;
++import org.chromium.chrome.browser.bookmarks.BookmarkModelObserver;
++import org.chromium.chrome.browser.profiles.Profile;
++import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance;
++import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy;
++import org.chromium.components.bookmarks.BookmarkId;
++import org.chromium.components.bookmarks.BookmarkItem;
++import org.chromium.components.favicon.LargeIconBridge;
++
++import java.util.List;
++import java.util.Locale;
++import java.util.function.Consumer;
++import org.chromium.chrome.browser.tabmodel.IncognitoStateProvider;
++import org.chromium.chrome.browser.tabmodel.IncognitoStateProvider.IncognitoStateObserver;
++
++import org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabListViewBinder;
++import org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabRailLayout;
++import org.chromium.chrome.browser.toolbar.top.ToolbarTablet;
++
++/** Adds real bookmark navigation and appearance controls around the native vertical tab rail. */
++public final class ArcDesktopCoordinator {
++    private final Activity mActivity;
++    private final ViewGroup mRail;
++    private final View mNativeTabs;
++    private final LinearLayout mColumn;
++    private final LinearLayout mHeader;
++    private final LinearLayout mFavorites;
++    private final LinearLayout mFolders;
++    private final ScrollView mBookmarkScroll;
++    private final BookmarkModel mBookmarks;
++    private final LargeIconBridge mIcons;
++    private final Consumer<String> mNavigate;
++    private final Runnable mOpenBookmarks;
++    private final IncognitoStateProvider mIncognitoStateProvider;
++    private final IncognitoStateObserver mIncognitoObserver;
++    private final SharedPreferences mPreferences;
++    private final SharedPreferences.OnSharedPreferenceChangeListener mPreferenceListener;
++    private final View.OnLayoutChangeListener mLayoutListener;
++    private final BookmarkModelObserver mBookmarkObserver;
++    private boolean mDestroyed;
++    private int mBookmarkGeneration;
++    private AlertDialog mColorDialog;
++
++    public ArcDesktopCoordinator(Activity activity, ViewGroup rail, BookmarkModel bookmarks,
++            Profile profile, Consumer<String> navigate, Runnable openBookmarks,
++            Runnable openAutofillSettings, IncognitoStateProvider incognitoStateProvider) {
++        mActivity = activity;
++        mRail = rail;
++        mBookmarks = bookmarks;
++        mNavigate = navigate;
++        mOpenBookmarks = openBookmarks;
++        mIncognitoStateProvider = incognitoStateProvider;
++        mIncognitoObserver = incognito -> { if (!mDestroyed) applyAppearance(); };
++        mIcons = new LargeIconBridge(profile);
++        mPreferences = ArcDesktopAppearance.preferences(activity);
++        mNativeTabs = rail.getChildAt(0);
++        rail.removeView(mNativeTabs);
++        mColumn = column();
++        View captionSpacer = new View(activity);
++        View nativeSpacer = mNativeTabs.findViewById(R.id.desktop_window_spacer);
++        mColumn.addView(captionSpacer, new LinearLayout.LayoutParams(
++                -1, nativeSpacer.getLayoutParams().height));
++        ((VerticalTabRailLayout) mNativeTabs).setDesktopWindowSpacerHost(captionSpacer);
++        mHeader = column();
++        mFavorites = new LinearLayout(activity);
++        mFavorites.setGravity(Gravity.CENTER_VERTICAL);
++        mFavorites.setPadding(dp(4), dp(4), dp(4), dp(4));
++        mHeader.addView(mFavorites);
++        LinearLayout actions = new LinearLayout(activity);
++        Button bookmarksButton = button(activity.getString(R.string.arc_bookmarks), openBookmarks);
++        Button googleButton = button("Google", () -> {});
++        googleButton.setOnClickListener(v -> showGoogleMenu(v, openAutofillSettings));
++        Button appearanceButton = button("●", this::showColorPicker);
++        appearanceButton.setContentDescription(activity.getString(R.string.arc_frame_color));
++        for (Button action : new Button[] {bookmarksButton, googleButton, appearanceButton}) {
++            actions.addView(action, new LinearLayout.LayoutParams(0, dp(44), 1));
++        }
++        mHeader.addView(actions);
++        mFolders = column();
++        mBookmarkScroll = new ScrollView(activity);
++        mBookmarkScroll.setFillViewport(false);
++        mBookmarkScroll.addView(mFolders);
++        mHeader.addView(mBookmarkScroll, new LinearLayout.LayoutParams(-1, dp(112)));
++        mColumn.addView(mHeader);
++        mColumn.addView(mNativeTabs, new LinearLayout.LayoutParams(-1, 0, 1));
++        rail.addView(mColumn, new ViewGroup.LayoutParams(-1, -1));
++        mPreferenceListener = (prefs, key) -> {
++            if (!mDestroyed && ArcDesktopAppearance.COLOR_KEY.equals(key)) {
++                // Rebind tab titles/buttons through the native RecyclerView after a palette change.
++                refreshNativeRows(mNativeTabs);
++                applyAppearance();
++                View toolbar = mActivity.findViewById(R.id.toolbar);
++                if (toolbar instanceof ToolbarTablet) {
++                    ((ToolbarTablet) toolbar).onThemeColorChanged(
++                            ArcDesktopAppearance.surface(mActivity, mIncognitoStateProvider.isIncognitoSelected()), false);
++                }
++            }
++        };
++        mPreferences.registerOnSharedPreferenceChangeListener(mPreferenceListener);
++        mLayoutListener = (v, l, t, r, b, ol, ot, or, ob) -> applyAppearance();
++        rail.addOnLayoutChangeListener(mLayoutListener);
++        mBookmarkObserver = new BookmarkModelObserver() {
++            @Override
++            public void bookmarkModelChanged() { rebuildBookmarks(); }
++        };
++        bookmarks.addObserver(mBookmarkObserver);
++        bookmarks.finishLoadingBookmarkModel(this::rebuildBookmarks);
++        mIncognitoStateProvider.addIncognitoStateObserverAndTrigger(mIncognitoObserver);
++        applyAppearance();
++    }
++
++    private LinearLayout column() {
++        LinearLayout result = new LinearLayout(mActivity);
++        result.setOrientation(LinearLayout.VERTICAL);
++        return result;
++    }
++
++    private int dp(int value) {
++        return Math.round(value * mActivity.getResources().getDisplayMetrics().density);
++    }
++
++    private Button button(String text, Runnable action) {
++        Button button = new Button(mActivity);
++        button.setText(text);
++        button.setAllCaps(false);
++        button.setTextSize(12);
++        button.setMinWidth(0);
++        button.setMinimumWidth(0);
++        button.setPadding(dp(4), 0, dp(4), 0);
++        button.setOnClickListener(v -> action.run());
++        return button;
++    }
++
++    private void rebuildBookmarks() {
++        if (mDestroyed || !mBookmarks.isBookmarkModelLoaded()) return;
++        int generation = ++mBookmarkGeneration;
++        mFavorites.removeAllViews();
++        mFolders.removeAllViews();
++        BookmarkId desktop = mBookmarks.getDesktopFolderId();
++        if (desktop != null) {
++            int count = 0;
++            for (BookmarkId id : mBookmarks.getChildIds(desktop)) {
++                BookmarkItem item = mBookmarks.getBookmarkById(id);
++                if (item == null || item.isFolder()) continue;
++                if (count++ == 4) break;
++                ImageButton favorite = new ImageButton(mActivity);
++                favorite.setImageResource(android.R.drawable.ic_menu_view);
++                favorite.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
++                favorite.setPadding(dp(12), dp(12), dp(12), dp(12));
++                favorite.setContentDescription(item.getTitle());
++                favorite.setTooltipText(item.getTitle());
++                favorite.setOnClickListener(v -> mNavigate.accept(item.getUrl().getSpec()));
++                mFavorites.addView(favorite, new LinearLayout.LayoutParams(0, dp(48), 1));
++                mIcons.getLargeIconForUrl(item.getUrl(), dp(24), (icon, color, fallback, type) -> {
++                    if (!mDestroyed && generation == mBookmarkGeneration && icon != null) {
++                        favorite.setImageBitmap(icon);
++                    }
++                });
++            }
++        }
++        showFolder(null);
++        applyAppearance();
++    }
++
++    private void showFolder(BookmarkId folder) {
++        if (mDestroyed || !mBookmarks.isBookmarkModelLoaded()) return;
++        mFolders.removeAllViews();
++        if (folder != null) {
++            mFolders.addView(button(mActivity.getString(R.string.arc_bookmark_root),
++                    () -> showFolder(null)), new LinearLayout.LayoutParams(-1, dp(36)));
++        }
++        List<BookmarkId> children = folder == null
++                ? mBookmarks.getTopLevelFolderIds() : mBookmarks.getChildIds(folder);
++        for (BookmarkId id : children) {
++            BookmarkItem item = mBookmarks.getBookmarkById(id);
++            if (item == null) continue;
++            Button row = button((item.isFolder() ? "▸  " : "") + item.getTitle(), () -> {
++                if (item.isFolder()) showFolder(id);
++                else mNavigate.accept(item.getUrl().getSpec());
++            });
++            row.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
++            row.setSingleLine(true);
++            row.setEllipsize(android.text.TextUtils.TruncateAt.END);
++            row.setOnLongClickListener(v -> { mOpenBookmarks.run(); return true; });
++            mFolders.addView(row, new LinearLayout.LayoutParams(-1, dp(36)));
++        }
++        applyAppearance();
++    }
++
++    private void showGoogleMenu(View anchor, Runnable openAutofillSettings) {
++        PopupMenu menu = new PopupMenu(mActivity, anchor);
++        String[] labels = {mActivity.getString(R.string.arc_google_login), "Gmail", "Drive",
++                "Calendar", "Docs", "YouTube", mActivity.getString(R.string.arc_autofill)};
++        String[] urls = {"https://accounts.google.com/", "https://mail.google.com/",
++                "https://drive.google.com/", "https://calendar.google.com/",
++                "https://docs.google.com/", "https://www.youtube.com/"};
++        for (int i = 0; i < labels.length; i++) menu.getMenu().add(0, i, i, labels[i]);
++        menu.setOnMenuItemClickListener(item -> {
++            if (item.getItemId() == urls.length) openAutofillSettings.run();
++            else mNavigate.accept(urls[item.getItemId()]);
++            return true;
++        });
++        menu.show();
++    }
++
++    private void showColorPicker() {
++        if (mDestroyed) return;
++        EditText input = new EditText(mActivity);
++        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
++        input.setSingleLine(true);
++        input.setText(String.format(Locale.ROOT, "#%06X",
++                mPreferences.getInt(ArcDesktopAppearance.COLOR_KEY,
++                        ArcDesktopAppearance.DEFAULT_COLOR) & 0xffffff));
++        input.setSelectAllOnFocus(true);
++        mColorDialog = new AlertDialog.Builder(mActivity)
++                .setTitle(R.string.arc_frame_color).setView(input)
++                .setPositiveButton(android.R.string.ok, null)
++                .setNegativeButton(android.R.string.cancel, null)
++                .setNeutralButton(R.string.arc_reset_color, (dialog, which) ->
++                        mPreferences.edit().remove(ArcDesktopAppearance.COLOR_KEY).apply()).create();
++        mColorDialog.setOnShowListener(dialog -> mColorDialog.getButton(AlertDialog.BUTTON_POSITIVE)
++                .setOnClickListener(v -> {
++                    String value = input.getText().toString().trim();
++                    if (!value.matches("#[0-9a-fA-F]{6}")) {
++                        input.setError(mActivity.getString(R.string.arc_color_format));
++                        return;
++                    }
++                    mPreferences.edit().putInt(ArcDesktopAppearance.COLOR_KEY,
++                            Color.parseColor(value)).apply();
++                    mColorDialog.dismiss();
++                }));
++        mColorDialog.show();
++    }
++
++    private void applyAppearance() {
++        if (mDestroyed) return;
++        boolean desktop = ArcDesktopAppearance.isDesktopWindow(mActivity);
++        mHeader.setVisibility(desktop && mRail.getWidth() >= dp(100)
++                && mRail.getHeight() >= dp(360) ? View.VISIBLE : View.GONE);
++        if (!desktop) return;
++        int bookmarkHeight = Math.max(dp(112), Math.min(dp(320), mRail.getHeight() / 3));
++        ViewGroup.LayoutParams bookmarkParams = mBookmarkScroll.getLayoutParams();
++        if (bookmarkParams.height != bookmarkHeight) {
++            bookmarkParams.height = bookmarkHeight;
++            mBookmarkScroll.setLayoutParams(bookmarkParams);
++        }
++        // Leave native tab selection, incognito and favicon rendering to its binders.
++        boolean incognito = mIncognitoStateProvider.isIncognitoSelected();
++        if (mNativeTabs instanceof VerticalTabRailLayout) {
++            VerticalTabListViewBinder.refreshArcAppearance((VerticalTabRailLayout) mNativeTabs, incognito);
++        }
++        int surface = ArcDesktopAppearance.surface(mActivity, incognito);
++        int foreground = ArcDesktopPolicy.foreground(surface);
++        mColumn.setBackgroundColor(surface);
++        tintHeader(mHeader, foreground, ArcDesktopPolicy.selection(surface));
++    }
++
++    private void tintHeader(View view, int foreground, int selection) {
++        if (view instanceof TextView) ((TextView) view).setTextColor(foreground);
++        if (view instanceof Button || view instanceof ImageButton) {
++            GradientDrawable background = new GradientDrawable();
++            background.setColor(selection);
++            background.setCornerRadius(dp(8));
++            view.setBackground(background);
++        }
++        // Website favicons are intentionally never tinted.
++        if (view instanceof ViewGroup) {
++            ViewGroup group = (ViewGroup) view;
++            for (int i = 0; i < group.getChildCount(); i++) {
++                tintHeader(group.getChildAt(i), foreground, selection);
++            }
++        }
++    }
++
++    private void refreshNativeRows(View view) {
++        if (view instanceof androidx.recyclerview.widget.RecyclerView) {
++            androidx.recyclerview.widget.RecyclerView.Adapter<?> adapter =
++                    ((androidx.recyclerview.widget.RecyclerView) view).getAdapter();
++            if (adapter != null) adapter.notifyDataSetChanged();
++        } else if (view instanceof ViewGroup) {
++            ViewGroup group = (ViewGroup) view;
++            for (int i = 0; i < group.getChildCount(); i++) refreshNativeRows(group.getChildAt(i));
++        }
++    }
++
++    public void destroy() {
++        if (mDestroyed) return;
++        mDestroyed = true;
++        mIncognitoStateProvider.removeObserver(mIncognitoObserver);
++        ((VerticalTabRailLayout) mNativeTabs).setDesktopWindowSpacerHost(null);
++        mBookmarks.removeObserver(mBookmarkObserver);
++        mPreferences.unregisterOnSharedPreferenceChangeListener(mPreferenceListener);
++        mRail.removeOnLayoutChangeListener(mLayoutListener);
++        if (mColorDialog != null) mColorDialog.dismiss();
++        mIcons.destroy();
++        mColumn.removeView(mNativeTabs);
++        mRail.removeView(mColumn);
++        mRail.addView(mNativeTabs, new ViewGroup.LayoutParams(-1, -1));
++    }
++}
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopWindowObserver.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopWindowObserver.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopWindowObserver.java
+@@ -0,0 +1,49 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++import android.app.Activity;
++import android.content.res.Configuration;
++
++import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
++import org.chromium.chrome.browser.lifecycle.ConfigurationChangedObserver;
++import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance;
++
++/** Rebuilds native browser UI when an activity changes between phone and desktop displays. */
++public final class ArcDesktopWindowObserver implements ConfigurationChangedObserver {
++    private final Activity mActivity;
++    private final ActivityLifecycleDispatcher mDispatcher;
++    private final boolean mDesktopAtCreation;
++    private boolean mDestroyed;
++    private boolean mRecreationScheduled;
++
++    public ArcDesktopWindowObserver(Activity activity, ActivityLifecycleDispatcher dispatcher) {
++        mActivity = activity;
++        mDispatcher = dispatcher;
++        mDesktopAtCreation = ArcDesktopAppearance.isDesktopWindow(activity);
++        dispatcher.register(this);
++    }
++
++    @Override
++    public void onConfigurationChanged(Configuration newConfig) {
++        // Dispatch happens after the activity's resources receive the new configuration.
++        if (mDestroyed || mRecreationScheduled
++                || mDesktopAtCreation == ArcDesktopAppearance.isDesktopWindow(mActivity)) return;
++        mRecreationScheduled = true;
++        mActivity.getWindow().getDecorView().post(() -> {
++            if (mDestroyed || mActivity.isFinishing() || mActivity.isDestroyed()) return;
++            if (mDesktopAtCreation == ArcDesktopAppearance.isDesktopWindow(mActivity)) {
++                mRecreationScheduled = false;
++                return;
++            }
++            // Use normal Activity save/restore rather than mutating tab models during reparenting.
++            mActivity.recreate();
++        });
++    }
++
++    public void destroy() {
++        mDestroyed = true;
++        mDispatcher.unregister(this);
++    }
++}
+diff --git a/chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/ArchiumAutofillPolicy.java b/chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/ArchiumAutofillPolicy.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/ArchiumAutofillPolicy.java
+@@ -0,0 +1,13 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.autofill;
++
++/** This unbranded fork has no internal Google backend; it may use the selected Android service. */
++public final class ArchiumAutofillPolicy {
++    private ArchiumAutofillPolicy() {}
++
++    public static boolean mustUseInternalGoogleProvider(String browserPackage, boolean googleService) {
++        return googleService && !"app.archium.android".equals(browserPackage);
++    }
++}
+diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java
+@@ -0,0 +1,64 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.ui.vertical_tabs;
++
++import android.content.Context;
++import android.content.SharedPreferences;
++import android.content.pm.PackageManager;
++import android.content.res.Configuration;
++import android.view.Display;
++import android.view.WindowManager;
++
++/** Arc styling only for the current desktop window, never inferred from width or build flags. */
++public final class ArcDesktopAppearance {
++    public static final String COLOR_KEY = "frame_color";
++    public static final int DEFAULT_COLOR = 0xff53657b;
++
++    private ArcDesktopAppearance() {}
++
++    public static boolean isDesktopWindow(Context context) {
++        WindowManager manager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
++        if (manager == null) return false;
++        Display display = manager.getDefaultDisplay();
++        // FEATURE_PC describes the runtime device, unlike IS_DESKTOP_ANDROID which describes
++        // this APK and is also true when installed on a phone.
++        boolean pc = context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_PC);
++        return ArcDesktopPolicy.isDesktopWindow(
++                display.getDisplayId() == Display.DEFAULT_DISPLAY,
++                isDexConfiguration(context.getResources().getConfiguration()), pc);
++    }
++
++    private static boolean isDexConfiguration(Configuration config) {
++        // Samsung documents these fields for the WINDOW's Configuration. The global desktopmode
++        // service can report DeX active even for an activity still on the phone's screen.
++        try {
++            Class<?> type = config.getClass();
++            int enabled = type.getField("SEM_DESKTOP_MODE_ENABLED").getInt(null);
++            return enabled == type.getField("semDesktopModeEnabled").getInt(config);
++        } catch (ReflectiveOperationException | SecurityException e) {
++            // Unknown vendor/mode stays mobile; do not guess from display size.
++            return false;
++        }
++    }
++
++    @SuppressWarnings("UseSharedPreferencesManagerFromChromeCheck")
++    public static SharedPreferences preferences(Context context) {
++        return context.getApplicationContext().getSharedPreferences("arc_appearance", Context.MODE_PRIVATE);
++    }
++
++    public static int surface(Context context, boolean incognito) {
++        boolean dark = incognito || (context.getResources().getConfiguration().uiMode
++                & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
++        int seed = preferences(context).getInt(COLOR_KEY, DEFAULT_COLOR);
++        return ArcDesktopPolicy.surface(seed, dark);
++    }
++
++    public static int foreground(Context context, boolean incognito) {
++        return ArcDesktopPolicy.foreground(surface(context, incognito));
++    }
++
++    public static int selection(Context context, boolean incognito) {
++        return ArcDesktopPolicy.selection(surface(context, incognito));
++    }
++}
+diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java
+@@ -0,0 +1,53 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.ui.vertical_tabs;
++
++/** Window eligibility and accessible colors, independent of Android and tab models. */
++public final class ArcDesktopPolicy {
++    private ArcDesktopPolicy() {}
++
++    public static boolean isDesktopWindow(boolean phoneDisplay, boolean dexWindow, boolean pcDevice) {
++        return pcDevice || (!phoneDisplay && dexWindow);
++    }
++
++    public static int surface(int seed, boolean dark) {
++        return blend(seed, dark ? 0xff141414 : 0xfffafafa, dark ? 0.22 : 0.12);
++    }
++
++    public static int selection(int surface) {
++        return blend(foreground(surface), surface, 0.12);
++    }
++
++    public static int foreground(int background) {
++        return contrast(background, 0xff000000) >= contrast(background, 0xffffffff)
++                ? 0xff000000 : 0xffffffff;
++    }
++
++    public static double contrast(int first, int second) {
++        double a = luminance(first);
++        double b = luminance(second);
++        return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
++    }
++
++    private static double luminance(int color) {
++        return linear((color >> 16) & 255) * 0.2126
++                + linear((color >> 8) & 255) * 0.7152
++                + linear(color & 255) * 0.0722;
++    }
++
++    private static double linear(int channel) {
++        double value = channel / 255.0;
++        return value <= 0.04045 ? value / 12.92 : Math.pow((value + 0.055) / 1.055, 2.4);
++    }
++
++    private static int blend(int foreground, int background, double fraction) {
++        int result = 0xff000000;
++        for (int shift = 0; shift <= 16; shift += 8) {
++            int a = (foreground >> shift) & 255;
++            int b = (background >> shift) & 255;
++            result |= ((int) Math.round(a * fraction + b * (1 - fraction))) << shift;
++        }
++        return result;
++    }
++}

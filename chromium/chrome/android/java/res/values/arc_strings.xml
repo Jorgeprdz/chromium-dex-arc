@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="arc_bookmarks">Marcadores</string>
+    <string name="arc_bookmark_root">‹ Carpetas</string>
+    <string name="arc_frame_color">Color del navegador</string>
+    <string name="arc_reset_color">Restablecer</string>
+    <string name="arc_color_format">Introduce un color como #336699</string>
+    <string name="arc_google_login">Iniciar sesión en la web de Google</string>
+    <string name="arc_autofill">Autocompletado de Android</string>
+</resources>

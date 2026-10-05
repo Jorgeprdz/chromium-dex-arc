@@ -1,1 +1,5 @@
 docs/source-investigation/
+.source-reference/
+.source-modified/
+.test-build/
+__pycache__/

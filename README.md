@@ -1,9 +1,11 @@
-# Chromium DeX Arc — preparación
+# Archium for Android — preparación
 
 Diseño aprobado: [docs/design.md](docs/design.md).
 
 Este directorio contiene la preparación del proyecto, no un navegador terminado.
-No incluye una copia de Chromium, cambios a su interfaz ni una APK propia.
+Incluye código nativo y parches contra la revisión fijada de Chromium, descritos
+en [docs/arc-preparation.md](docs/arc-preparation.md). No contiene un checkout
+completo de Chromium ni una APK propia compilada.
 El workflow de baseline intenta compilar la base sin modificaciones en GitHub;
 sus archivos temporales nunca se descargan al teléfono.
 
