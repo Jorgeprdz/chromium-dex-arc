@@ -67,6 +67,10 @@ formularios en logs, CI o repositorio. Las pruebas usan credenciales ficticias.
 
 ## Arc para Mac: apariencia e interacción
 
+Render conceptual solicitado por el usuario:
+`docs/references/archium-arc-mac-concept-v1.png` y su nota de alcance `.md`.
+No es captura de implementación ni reemplaza la referencia Mac oficial.
+
 Referencia oficial guardada:
 `docs/references/arc-mac-pinned-tabs.png`, captura de la sección macOS del artículo
 de Arc sobre pestañas fijadas. El recorte muestra navegación y dirección en la
