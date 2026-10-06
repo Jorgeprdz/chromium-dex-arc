@@ -15,7 +15,7 @@ import sys
 import urllib.request
 
 REPO = 'Jorgeprdz/chromium-dex-arc'
-RUN = '37438146116'
+RUN = '37466225653'
 
 
 def get_json(path):
