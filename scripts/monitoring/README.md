@@ -2,9 +2,9 @@
 
 The FINAL Arc + local-password/CSV build has been dispatched.
 
-- Run ID: `37438146116`
-- Run URL: https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/37438146116
-- Dispatch commit: `739efb61e79d7d606f5aa10694552b5edee42ef1`
+- Run ID: `37466225653`
+- Run URL: https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/37466225653
+- Dispatch commit: `d419f13b87bdeaca59ff7ace5ee5c98dbaf2089e`
 - Source checkpoint: `archium-checkpoint-37255997027-7`
 - Source checkpoint commit: `c8ffd13ee7fe1c6baab4913da6a01e8009febe18`
 - Poll interval: **900 seconds / 15 minutes**
@@ -17,14 +17,14 @@ One-shot verification:
 
 ```bash
 python3 scripts/monitoring/monitor-archium-run.py \
-  --run 37438146116 --interval 900 --once --no-window
+  --run 37466225653 --interval 900 --once --no-window
 ```
 
 Continuous foreground monitoring:
 
 ```bash
 python3 scripts/monitoring/monitor-archium-run.py \
-  --run 37438146116 --interval 900 --no-window
+  --run 37466225653 --interval 900 --no-window
 ```
 
 Background launcher:
