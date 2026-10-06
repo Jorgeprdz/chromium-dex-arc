@@ -306,8 +306,11 @@ void ArchiumPasswordManagerBridge::PreviewImport(
         JNIEnv* env = base::android::AttachCurrentThread();
         Java_ArchiumPasswordManagerBridge_onPreviewStart(env, self->peer_, request);
         for (size_t i = 0; i < rows.size(); ++i) {
-          Java_ArchiumPasswordManagerBridge_onPreviewRow(env, self->peer_, request, static_cast<int32_t>(i),
-              static_cast<int32_t>(rows[i].kind), rows[i].url.spec(), rows[i].username);
+          Java_ArchiumPasswordManagerBridge_onPreviewRow(
+              env, self->peer_, request, static_cast<int32_t>(i),
+              static_cast<int32_t>(rows[i].kind), rows[i].url.spec(),
+              rows[i].username, rows[i].identity,
+              static_cast<int32_t>(rows[i].required_decision));
         }
         Java_ArchiumPasswordManagerBridge_onPreviewEnd(env, self->peer_, request, static_cast<int>(status));
       }, weak_ptr_factory_.GetWeakPtr(), request));
