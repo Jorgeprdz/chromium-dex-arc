@@ -73,6 +73,8 @@ import org.chromium.chrome.browser.app.tabwindow.TabWindowManagerSingleton;
 import org.chromium.chrome.browser.back_press.BackPressManager;
 import org.chromium.chrome.browser.arc.ArcDesktopCoordinator;
 import org.chromium.chrome.browser.arc.ArcDesktopWindowObserver;
+import org.chromium.chrome.browser.password_manager.ArchiumPasswordManagerBridge;
+import org.chromium.chrome.browser.password_manager.ArchiumPasswordSettingsFragment;
 import org.chromium.chrome.browser.autofill.settings.options.AutofillOptionsFragment;
 import org.chromium.chrome.browser.settings.SettingsNavigationFactory;
 import org.chromium.chrome.browser.tab.TabLaunchType;
@@ -310,6 +312,8 @@ import org.chromium.components.tab_group_sync.SavedTabGroup;
 import org.chromium.components.tab_group_sync.TabGroupSyncController;
 import org.chromium.components.tab_group_sync.TabGroupSyncService;
 import org.chromium.components.tab_group_sync.TabGroupUiActionHandler;
+import org.chromium.components.omnibox.AutocompleteInput;
+import org.chromium.components.omnibox.OmniboxFocusReason;
 import org.chromium.components.user_prefs.UserPrefs;
 import org.chromium.components.webapps.bottomsheet.PwaBottomSheetController;
 import org.chromium.components.webapps.bottomsheet.PwaBottomSheetControllerFactory;
@@ -2527,10 +2531,24 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
                         if (creator != null) creator.createNewTab(new LoadUrlParams(url),
                                 TabLaunchType.FROM_CHROME_UI, mActivityTabProvider.get());
                     },
+                    () -> {
+                        if (mToolbarManager != null) {
+                            mToolbarManager.beginFuseboxInput(
+                                    new AutocompleteInput(OmniboxFocusReason.OMNIBOX_TAP));
+                        }
+                    },
                     () -> mBookmarkManagerOpenerSupplier.asNonNull().get().showBookmarkManager(
                             mActivity, mActivityTabProvider.get(), currentlySelectedProfile),
-                    () -> SettingsNavigationFactory.createSettingsNavigation().startSettings(
-                            mActivity, AutofillOptionsFragment.class),
+                    () -> {
+                        if (ArchiumPasswordManagerBridge.isLocalEnabled()) {
+                            SettingsNavigationFactory.createSettingsNavigation().startSettings(
+                                    mActivity, ArchiumPasswordSettingsFragment.class);
+                        } else {
+                            SettingsNavigationFactory.createSettingsNavigation().startSettings(
+                                    mActivity, AutofillOptionsFragment.class);
+                        }
+                    },
+                    ArchiumPasswordManagerBridge.isLocalEnabled(),
                     mIncognitoStateProvider,
                     () -> mTabModelSelectorSupplier.asNonNull().get().getCurrentModel(),
                     () -> mTabCreatorManagerSupplier.asNonNull().get().getTabCreator(
