@@ -37,6 +37,9 @@ elif name=='python3' and args[0].endswith('archium-checkpoint.py') and args[1]==
  (s/'out/Archium/apks').mkdir(parents=True)
  (s/'out/Archium/args.gn').write_text(os.environ.get('MOCK_RESTORED_ARGS','restored old args\\n'))
  (s/'out/Archium/apks/ChromePublic.apk').write_bytes(b'synthetic APK fixture')
+ for relative in os.environ.get('MOCK_NATIVE_TEST_PATHS','').split(':'):
+  if relative:
+   binary=s/relative;binary.parent.mkdir(parents=True,exist_ok=True);binary.write_bytes(b'synthetic native test artifact')
  (s/'LICENSE').write_text('fixture license')
  (s/'build').mkdir();(s/'build/install-build-deps.sh').write_text('exit 0\\n')
  (w/'depot_tools').mkdir();(w/'depot_tools/ensure_bootstrap').write_text('exit 0\\n')
@@ -128,6 +131,19 @@ elif name=='autoninja':sys.exit(int(os.environ.get('MOCK_NINJA_RESULT','0')))
         pack=next(c for c in self.calls() if c[0]=='python3' and 'pack' in c)
         self.assertNotIn('--source-commit',pack)
         self.assertEqual(self.output.read_text(),'complete=false\n')
+
+    def test_both_native_test_executables_are_kept_in_artifact(self):
+        binaries = [
+            'out/Archium/obj/chrome/browser/password_manager/android/archium_key_provider_tests/archium_key_provider_tests',
+            'out/Archium/obj/components/password_manager/core/browser/password_store/archium_login_database_tests/archium_login_database_tests',
+        ]
+        result = self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
+                                MOCK_NATIVE_TEST_PATHS=':'.join(binaries))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        for path in binaries:
+            kept = self.repo / 'archium-output/native-tests' / Path(path).name
+            self.assertTrue(kept.is_file(), str(kept))
+            self.assertEqual(kept.read_bytes(), b'synthetic native test artifact')
 
     def test_workflow_exposes_source_identity_only_to_first_stage(self):
         workflow=(ROOT / '.github/workflows/baseline-build.yml').read_text()

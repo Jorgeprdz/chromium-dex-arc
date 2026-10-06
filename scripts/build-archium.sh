@@ -133,11 +133,16 @@ test -s out/Archium/apks/ChromePublic.apk
 mkdir -p "$GITHUB_WORKSPACE/archium-output"
 cp out/Archium/apks/ChromePublic.apk "$GITHUB_WORKSPACE/archium-output/Archium-for-Android-arm64.apk"
 cp LICENSE "$GITHUB_WORKSPACE/archium-output/LICENSE.chromium"
-native_test=out/Archium/obj/chrome/browser/password_manager/android/archium_key_provider_tests/archium_key_provider_tests
-if [[ -s "$native_test" ]]; then
-    mkdir -p "$GITHUB_WORKSPACE/archium-output/native-tests"
-    cp "$native_test" "$GITHUB_WORKSPACE/archium-output/native-tests/"
-fi
+native_tests=(
+    out/Archium/obj/chrome/browser/password_manager/android/archium_key_provider_tests/archium_key_provider_tests
+    out/Archium/obj/components/password_manager/core/browser/password_store/archium_login_database_tests/archium_login_database_tests
+)
+for native_test in "${native_tests[@]}"; do
+    if [[ -s "$native_test" ]]; then
+        mkdir -p "$GITHUB_WORKSPACE/archium-output/native-tests"
+        cp "$native_test" "$GITHUB_WORKSPACE/archium-output/native-tests/"
+    fi
+done
 sha256sum "$GITHUB_WORKSPACE/archium-output/Archium-for-Android-arm64.apk" > "$GITHUB_WORKSPACE/archium-output/SHA256SUMS"
 
 printf 'complete=true\n' >> "$GITHUB_OUTPUT"

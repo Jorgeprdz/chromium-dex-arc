@@ -60,7 +60,10 @@ etapas posteriores restauran el commit nuevo estrictamente y no repiten la
 transición. La reducción de tiempo se debe medir, no se garantiza.
 
 Con `validate_native=true`, se compilan primero `archium_key_provider_tests` y
-`archium_key_java`, registrados en el BUILD.gn de password_manager/android. El
+`archium_key_java`, registrados en el BUILD.gn de password_manager/android, y
+`archium_login_database_tests`, registrado en password_store/BUILD.gn. Este último
+comprueba cifrado, persistencia, errores de clave y rollback de importación en una
+base de datos temporal real. El
 primero es un ejecutable nativo Android con pruebas de Encryptor real; el segundo
 compila las clases de Keystore y el JNI. Comparten con el APK un único presupuesto
 de 120 minutos de Ninja por etapa. Un error detiene la cadena; un timeout guarda
