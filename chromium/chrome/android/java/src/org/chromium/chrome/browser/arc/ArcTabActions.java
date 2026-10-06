@@ -16,6 +16,7 @@ public final class ArcTabActions {
         void close(int tabId);
         void pin(int tabId);
         void unpin(int tabId);
+        default void onSpaceChanged(ArcSidebarState state) {}
     }
     public enum Result { OPENED, SELECTED, NOT_OPENED, PERSISTENCE_ERROR }
 
