@@ -190,6 +190,7 @@ android_library("java") {
     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreAndroidBackendDispatcherBridgeImpl.java",
     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreAndroidBackendReceiverBridgeImpl.java",
     "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordManagerBridge.java",
+    "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordSettingsFragment.java",
     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreBridge.java",
     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreCredential.java",
     "java/src/org/chromium/chrome/browser/password_manager/PasswordSyncControllerDelegateBridgeImpl.java",
