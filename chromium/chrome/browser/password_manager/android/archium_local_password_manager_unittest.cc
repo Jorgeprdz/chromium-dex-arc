@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 #include "chrome/browser/password_manager/android/archium_local_password_manager.h"
 
+#include <algorithm>
 #include <memory>
 #include <utility>
 
