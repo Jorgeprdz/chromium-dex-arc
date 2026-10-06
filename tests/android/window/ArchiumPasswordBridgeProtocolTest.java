@@ -61,6 +61,15 @@ public final class ArchiumPasswordBridgeProtocolTest {
         char[][] input = {"synthetic import".toCharArray()};
         peer.previewImport(3, new String[] {"https://test.example/"}, new String[] {"user"}, input);
         for (char c : input[0]) check(c == 0, "JNI input source not erased");
+
+        char[] added = "synthetic add".toCharArray();
+        peer.add(30, "https://add.example/", "added-user", added);
+        for (char c : added) check(c == 0, "CRUD add input not erased");
+        char[] updated = "synthetic update".toCharArray();
+        peer.update(31, 17, "updated-user", updated);
+        for (char c : updated) check(c == 0, "CRUD update input not erased");
+        peer.delete(32, 17);
+
         peer.destroy(); peer.destroy();
         int commands = ArchiumPasswordManagerBridgeJni.commands;
         peer.refresh(); peer.reveal(4, 17); peer.export(5);
