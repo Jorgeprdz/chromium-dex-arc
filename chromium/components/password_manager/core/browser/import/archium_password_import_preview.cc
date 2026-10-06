@@ -38,6 +38,22 @@ Kind GetKind(AddResult result) {
   }
   return Kind::kInvalid;
 }
+
+ArchiumPasswordImportPreview::Decision GetRequiredDecision(AddResult result) {
+  using Decision = ArchiumPasswordImportPreview::Decision;
+  switch (result) {
+    case AddResult::kSuccess:
+    case AddResult::kExactMatch:
+      return Decision::kImport;
+    case AddResult::kConflictInProfileStore:
+      return Decision::kReplace;
+    case AddResult::kInvalid:
+    case AddResult::kConflictInAccountStore:
+    case AddResult::kConflictInProfileAndAccountStore:
+      return Decision::kSkip;
+  }
+  return Decision::kSkip;
+}
 }  // namespace
 
 ArchiumPasswordImportPreview::ArchiumPasswordImportPreview(
@@ -52,7 +68,8 @@ ArchiumPasswordImportPreview::ArchiumPasswordImportPreview(
     // CredentialUIEntry's CSV constructor requires a parsed URL and kOK.
     // Preserve a non-secret invalid row without invoking that constructor.
     if (csv.GetParseStatus() != CSVPassword::Status::kOK || !csv.GetURL()) {
-      rows_.push_back({GURL(), base::UTF8ToUTF16(csv.GetUsername()), Kind::kInvalid});
+      rows_.push_back({GURL(), base::UTF8ToUTF16(csv.GetUsername()), "",
+                       Kind::kInvalid, Decision::kSkip});
       entries_.emplace_back();
       store_results_.push_back(AddResult::kInvalid);
       continue;
@@ -61,7 +78,9 @@ ArchiumPasswordImportPreview::ArchiumPasswordImportPreview(
     AddResult result = SavedPasswordsPresenter::GetExpectedAddResultForStoredCredentials(
         entry, snapshot_.credentials);
     const size_t index = entries_.size();
-    rows_.push_back({entry.GetURL(), entry.username, GetKind(result)});
+    rows_.push_back({entry.GetURL(), entry.username,
+                     entry.GetFirstSignonRealm(), GetKind(result),
+                     GetRequiredDecision(result)});
     store_results_.push_back(result);
     entries_.push_back(std::move(entry));
     if (result != AddResult::kInvalid) {
