@@ -159,3 +159,9 @@ El usuario reportó 18% de cuota y pidió respaldo al 2%. La sesión NO tiene un
 herramienta que lea su porcentaje: no inventes monitoreo/alertas automáticas ni
 lo confundas con contexto o token budget. Ya se guardó preventivamente antes del
 umbral. Si el usuario informa 2%, actualiza y verifica la copia inmediatamente.
+
+Para renovar los respaldos tras actualizar este documento:
+python3 scripts/save-archium-recovery.py --device 192.168.101.105:44641
+El script no monitoriza cuota. Verifica SHA-256 de cada copia. El JSON del respaldo
+registra HEAD y los cambios pendientes; tar conserva la preparación/WIP mientras
+el bundle conserva la historia committed.
