@@ -989,6 +989,49 @@ diff --git a/components/password_manager/core/browser/buildflags.gni b/component
  # Drawables from the downstream clank/ repository are
  # used for branded builds.
  password_manager_use_internal_android_resources =
+diff --git a/components/password_manager/core/browser/import/BUILD.gn b/components/password_manager/core/browser/import/BUILD.gn
+--- a/components/password_manager/core/browser/import/BUILD.gn
++++ b/components/password_manager/core/browser/import/BUILD.gn
+@@ -3,6 +3,8 @@
+ # found in the LICENSE file.
+ 
+ import("//testing/libfuzzer/fuzzer_test.gni")
++import("//testing/test.gni")
++import("//components/password_manager/core/browser/buildflags.gni")
+ 
+ if (is_android) {
+   import("//build/config/android/config.gni")
+@@ -109,3 +111,30 @@
+   seed_corpus = "password_csv_reader_corpus"
+   dict = "password_csv_reader_fuzzer.dict"
+ }
++
++if (is_android && enable_archium_local_passwords) {
++  source_set("archium_import_preview") {
++    sources = [
++      "archium_password_import_preview.cc",
++      "archium_password_import_preview.h",
++    ]
++    public_deps = [
++      ":csv",
++      "//base",
++      "//components/password_manager/core/browser/password_store:password_store_interface",
++      "//components/password_manager/core/browser/ui",
++    ]
++  }
++  test("archium_password_import_tests") {
++    use_raw_android_executable = true
++    sources = [
++      "archium_password_import_preview_unittest.cc",
++      "//base/test/run_all_unittests.cc",
++    ]
++    deps = [
++      ":archium_import_preview",
++      "//base/test:test_support",
++      "//testing/gtest",
++    ]
++  }
++}
 diff --git a/components/password_manager/core/browser/password_store/BUILD.gn b/components/password_manager/core/browser/password_store/BUILD.gn
 --- a/components/password_manager/core/browser/password_store/BUILD.gn
 +++ b/components/password_manager/core/browser/password_store/BUILD.gn
@@ -1766,6 +1809,158 @@ diff --git a/components/password_manager/core/browser/password_store_factory_uti
  // Creates a LoginDatabase. Looks in |db_directory| for the database file.
  // Does not call LoginDatabase::Init() -- to avoid UI jank, that needs to be
  // called by PasswordStore::Init() on the background thread.
+diff --git a/components/password_manager/core/browser/ui/saved_passwords_presenter.cc b/components/password_manager/core/browser/ui/saved_passwords_presenter.cc
+--- a/components/password_manager/core/browser/ui/saved_passwords_presenter.cc
++++ b/components/password_manager/core/browser/ui/saved_passwords_presenter.cc
+@@ -97,6 +97,47 @@
+   return stored_credential;
+ }
+ 
++// One implementation serves both the live presenter cache and import snapshots.
++// Exact matches keep their upstream precedence even if another matching form
++// has a different password.
++template <typename Range, typename Projection>
++password_manager::SavedPasswordsPresenter::AddResult EvaluateAddResult(
++    const password_manager::CredentialUIEntry& credential,
++    const Range& credentials,
++    Projection project) {
++  using AddResult = password_manager::SavedPasswordsPresenter::AddResult;
++  if (!password_manager::IsValidPasswordURL(credential.GetURL()) ||
++      credential.password.empty()) {
++    return AddResult::kInvalid;
++  }
++  bool profile = false;
++  bool account = false;
++  bool exact = false;
++  for (const auto& value : credentials) {
++    const password_manager::StoredCredential& entry = project(value);
++    if (credential.GetFirstSignonRealm() != entry.signon_realm ||
++        credential.username != entry.username_value) {
++      continue;
++    }
++    profile |= entry.IsUsingProfileStore();
++    account |= entry.IsUsingAccountStore();
++    exact |= credential.password == entry.password_value;
++  }
++  if (!profile && !account) {
++    return AddResult::kSuccess;
++  }
++  if (exact) {
++    return AddResult::kExactMatch;
++  }
++  if (!profile) {
++    return AddResult::kConflictInAccountStore;
++  }
++  if (!account) {
++    return AddResult::kConflictInProfileStore;
++  }
++  return AddResult::kConflictInProfileAndAccountStore;
++}
++
+ bool MergeDeleteAllResultsFromPasswordStores(std::vector<bool> results) {
+   return std::ranges::all_of(results, [](bool result) { return result; });
+ }
+@@ -236,60 +277,27 @@
+ SavedPasswordsPresenter::AddResult
+ SavedPasswordsPresenter::GetExpectedAddResult(
+     const CredentialUIEntry& credential) const {
+-  if (!IsValidPasswordURL(credential.GetURL())) {
+-    return AddResult::kInvalid;
+-  }
+-  if (credential.password.empty()) {
+-    return AddResult::kInvalid;
+-  }
+-
+-  auto have_equal_username_and_realm =
+-      [&credential](const StoredCredential& entry) {
+-        return credential.GetFirstSignonRealm() == entry.signon_realm &&
+-               credential.username == entry.username_value;
+-      };
+-  auto have_equal_username_and_realm_in_profile_store =
+-      [&have_equal_username_and_realm](
+-          const DuplicatePasswordsMap::value_type& pair) {
+-        return have_equal_username_and_realm(pair.second) &&
+-               pair.second.IsUsingProfileStore();
+-      };
+-  auto have_equal_username_and_realm_in_account_store =
+-      [&have_equal_username_and_realm](
+-          const DuplicatePasswordsMap::value_type& pair) {
+-        return have_equal_username_and_realm(pair.second) &&
+-               pair.second.IsUsingAccountStore();
+-      };
+-
+-  bool existing_credential_profile =
+-      std::ranges::any_of(sort_key_to_stored_credentials_,
+-                          have_equal_username_and_realm_in_profile_store);
+-  bool existing_credential_account =
+-      std::ranges::any_of(sort_key_to_stored_credentials_,
+-                          have_equal_username_and_realm_in_account_store);
+-
+-  if (!existing_credential_profile && !existing_credential_account) {
+-    return AddResult::kSuccess;
+-  }
+-
+-  auto have_exact_match = [&credential, &have_equal_username_and_realm](
+-                              const DuplicatePasswordsMap::value_type& pair) {
+-    return have_equal_username_and_realm(pair.second) &&
+-           credential.password == pair.second.password_value;
+-  };
+-
+-  if (std::ranges::any_of(sort_key_to_stored_credentials_, have_exact_match)) {
+-    return AddResult::kExactMatch;
+-  }
+-
+-  if (!existing_credential_profile) {
+-    return AddResult::kConflictInAccountStore;
+-  }
+-  if (!existing_credential_account) {
+-    return AddResult::kConflictInProfileStore;
+-  }
+-
+-  return AddResult::kConflictInProfileAndAccountStore;
++  return EvaluateAddResult(credential, sort_key_to_stored_credentials_,
++                           [](const auto& pair) -> const StoredCredential& {
++                             return pair.second;
++                           });
++}
++
++// static
++SavedPasswordsPresenter::AddResult
++SavedPasswordsPresenter::GetExpectedAddResultForStoredCredentials(
++    const CredentialUIEntry& credential,
++    base::span<const StoredCredential> credentials) {
++  return EvaluateAddResult(credential, credentials,
++                           [](const StoredCredential& entry)
++                               -> const StoredCredential& { return entry; });
++}
++
++// static
++StoredCredential SavedPasswordsPresenter::CreateImportedCredential(
++    CredentialUIEntry credential) {
++  return GenerateStoredCredentialFromCredential(std::move(credential),
++                                                 PasswordForm::Type::kImported);
+ }
+ 
+ bool SavedPasswordsPresenter::AddCredential(const CredentialUIEntry& credential,
+diff --git a/components/password_manager/core/browser/ui/saved_passwords_presenter.h b/components/password_manager/core/browser/ui/saved_passwords_presenter.h
+--- a/components/password_manager/core/browser/ui/saved_passwords_presenter.h
++++ b/components/password_manager/core/browser/ui/saved_passwords_presenter.h
+@@ -111,6 +111,15 @@
+     kMaxValue = kConflictInProfileAndAccountStore,
+   };
+ 
++  // Evaluates the same native validity/duplicate rules against a DB snapshot.
++  // This is read-only and does not rely on asynchronously refreshed UI caches.
++  static AddResult GetExpectedAddResultForStoredCredentials(
++      const CredentialUIEntry& credential,
++      base::span<const StoredCredential> credentials);
++
++  // Reuses the native UI-to-store conversion for local CSV imports.
++  static StoredCredential CreateImportedCredential(CredentialUIEntry credential);
++
+   using AddCredentialsCallback = base::OnceClosure;
+   using DuplicatePasswordsMap =
+       std::multimap<CredentialSortKey, StoredCredential>;
 diff --git a/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java b/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java
 --- a/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java
 +++ b/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java
@@ -3860,6 +4055,447 @@ new file mode 100644
 +        return result;
 +    }
 +}
+diff --git a/components/password_manager/core/browser/import/archium_password_import_preview.cc b/components/password_manager/core/browser/import/archium_password_import_preview.cc
+new file mode 100644
+--- /dev/null
++++ b/components/password_manager/core/browser/import/archium_password_import_preview.cc
+@@ -0,0 +1,164 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++#include "components/password_manager/core/browser/import/archium_password_import_preview.h"
++
++#include <algorithm>
++#include <map>
++#include <set>
++#include <unordered_set>
++#include <utility>
++
++#include "base/time/time.h"
++#include "base/strings/utf_string_conversions.h"
++#include "components/password_manager/core/browser/password_store/password_form_converters.h"
++
++namespace password_manager {
++namespace {
++using AddResult = SavedPasswordsPresenter::AddResult;
++using Kind = ArchiumPasswordImportPreview::Kind;
++using Identity = std::pair<std::string, std::u16string>;
++
++Identity GetIdentity(const CredentialUIEntry& entry) {
++  return {entry.GetFirstSignonRealm(), entry.username};
++}
++
++Kind GetKind(AddResult result) {
++  switch (result) {
++    case AddResult::kSuccess:
++      return Kind::kNew;
++    case AddResult::kExactMatch:
++      return Kind::kExactMatch;
++    case AddResult::kInvalid:
++      return Kind::kInvalid;
++    case AddResult::kConflictInProfileStore:
++    case AddResult::kConflictInAccountStore:
++    case AddResult::kConflictInProfileAndAccountStore:
++      return Kind::kConflict;
++  }
++  return Kind::kInvalid;
++}
++}  // namespace
++
++ArchiumPasswordImportPreview::ArchiumPasswordImportPreview(
++    base::span<const CSVPassword> input,
++    ArchiumPasswordImportSnapshot snapshot)
++    : snapshot_(std::move(snapshot)) {
++  std::map<Identity, std::vector<size_t>> groups;
++  entries_.reserve(input.size());
++  rows_.reserve(input.size());
++  store_results_.reserve(input.size());
++  for (const auto& csv : input) {
++    // CredentialUIEntry's CSV constructor requires a parsed URL and kOK.
++    // Preserve a non-secret invalid row without invoking that constructor.
++    if (csv.GetParseStatus() != CSVPassword::Status::kOK || !csv.GetURL()) {
++      rows_.push_back({GURL(), base::UTF8ToUTF16(csv.GetUsername()), Kind::kInvalid});
++      entries_.emplace_back();
++      store_results_.push_back(AddResult::kInvalid);
++      continue;
++    }
++    CredentialUIEntry entry(csv);
++    AddResult result = SavedPasswordsPresenter::GetExpectedAddResultForStoredCredentials(
++        entry, snapshot_.credentials);
++    const size_t index = entries_.size();
++    rows_.push_back({entry.GetURL(), entry.username, GetKind(result)});
++    store_results_.push_back(result);
++    entries_.push_back(std::move(entry));
++    if (result != AddResult::kInvalid) {
++      groups[GetIdentity(entries_.back())].push_back(index);
++    }
++  }
++  // Resolve canonical site/user identity in native Chromium types, including
++  // URLs that differ textually but normalize to the same sign-on realm.
++  for (const auto& [identity, indices] : groups) {
++    std::vector<size_t> unique;
++    std::unordered_set<PasswordString, PasswordString::TransparentHash,
++                       PasswordString::TransparentEqual> seen;
++    for (size_t index : indices) {
++      if (!seen.insert(entries_[index].password).second) {
++        rows_[index].kind = Kind::kDuplicateInFile;
++      } else {
++        unique.push_back(index);
++      }
++    }
++    if (unique.size() > 1) {
++      for (size_t index : unique) {
++        rows_[index].kind = Kind::kConflictInFile;
++      }
++    }
++  }
++}
++
++ArchiumPasswordImportPreview::~ArchiumPasswordImportPreview() = default;
++
++base::expected<std::vector<StoredCredential>, ArchiumPasswordImportPreview::Error>
++ArchiumPasswordImportPreview::BuildBatch(
++    const std::vector<Decision>& decisions) const {
++  if (decisions.size() != rows_.size()) {
++    return base::unexpected(Error::kInvalidDecision);
++  }
++  if (std::ranges::any_of(snapshot_.credentials, [](const auto& entry) {
++        return !entry.IsUsingProfileStore() || entry.IsUsingAccountStore();
++      })) {
++    return base::unexpected(Error::kNonLocalSnapshot);
++  }
++  std::set<Identity> selected;
++  std::vector<StoredCredential> batch;
++  for (size_t index = 0; index < rows_.size(); ++index) {
++    Decision decision = decisions[index];
++    if (decision == Decision::kSkip) {
++      continue;
++    }
++    if (decision != Decision::kImport && decision != Decision::kReplace) {
++      return base::unexpected(Error::kInvalidDecision);
++    }
++    if (rows_[index].kind == Kind::kDuplicateInFile) {
++      if (decision != Decision::kImport) {
++        return base::unexpected(Error::kInvalidDecision);
++      }
++      continue;
++    }
++    const auto& entry = entries_[index];
++    AddResult result = store_results_[index];
++    if (result == AddResult::kInvalid ||
++        (result == AddResult::kSuccess && decision != Decision::kImport) ||
++        (result == AddResult::kExactMatch && decision != Decision::kImport) ||
++        (result == AddResult::kConflictInProfileStore && decision != Decision::kReplace) ||
++        result == AddResult::kConflictInAccountStore ||
++        result == AddResult::kConflictInProfileAndAccountStore) {
++      return base::unexpected(Error::kInvalidDecision);
++    }
++    if (!selected.insert(GetIdentity(entry)).second) {
++      return base::unexpected(Error::kMultipleChoicesForSite);
++    }
++    if (result == AddResult::kExactMatch) {
++      continue;
++    }
++    if (result == AddResult::kSuccess) {
++      batch.push_back(SavedPasswordsPresenter::CreateImportedCredential(entry));
++      continue;
++    }
++    // Match Chromium's edit behavior: change all actual saved form keys for
++    // this site/user, preserving form fields, dates, notes and usage metadata.
++    // Never replace them with a CSV-created form with empty element names.
++    const size_t previous_size = batch.size();
++    for (const auto& existing : snapshot_.credentials) {
++      if (existing.signon_realm != entry.GetFirstSignonRealm() ||
++          existing.username_value != entry.username || existing.blocked_by_user ||
++          existing.federation_origin.IsValid()) {
++        continue;
++      }
++      auto updated = CloneStoredCredential(existing);
++      updated.password_value = entry.password;
++      updated.date_password_modified = base::Time::Now();
++      updated.password_issues.clear();
++      batch.push_back(std::move(updated));
++    }
++    if (batch.size() == previous_size) {
++      return base::unexpected(Error::kInvalidDecision);
++    }
++  }
++  return batch;
++}
++
++}  // namespace password_manager
+diff --git a/components/password_manager/core/browser/import/archium_password_import_preview.h b/components/password_manager/core/browser/import/archium_password_import_preview.h
+new file mode 100644
+--- /dev/null
++++ b/components/password_manager/core/browser/import/archium_password_import_preview.h
+@@ -0,0 +1,67 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++#ifndef COMPONENTS_PASSWORD_MANAGER_CORE_BROWSER_IMPORT_ARCHIUM_PASSWORD_IMPORT_PREVIEW_H_
++#define COMPONENTS_PASSWORD_MANAGER_CORE_BROWSER_IMPORT_ARCHIUM_PASSWORD_IMPORT_PREVIEW_H_
++
++#include <string>
++#include <vector>
++
++#include "base/containers/span.h"
++#include "base/types/expected.h"
++#include "components/password_manager/core/browser/import/csv_password.h"
++#include "components/password_manager/core/browser/password_store/archium_password_import_snapshot.h"
++#include "components/password_manager/core/browser/ui/credential_ui_entry.h"
++#include "components/password_manager/core/browser/ui/saved_passwords_presenter.h"
++
++namespace password_manager {
++
++// A read-only, local-profile preview. Row metadata may be sent to the UI;
++// passwords stay in the native entries and are never included in Row.
++// The owner must authenticate confirmation and submit BuildBatch's output with
++// revision() to ApplyImportedLogins. A changed DB revision rejects the entire
++// transaction; BuildBatch itself never performs a write.
++class ArchiumPasswordImportPreview {
++ public:
++  enum class Kind {
++    kNew = 0,
++    kExactMatch = 1,
++    kConflict = 2,
++    kInvalid = 3,
++    kDuplicateInFile = 4,
++    kConflictInFile = 5,
++  };
++  enum class Decision { kSkip = 0, kImport = 1, kReplace = 2 };
++  enum class Error {
++    kInvalidDecision,
++    kMultipleChoicesForSite,
++    kNonLocalSnapshot,
++  };
++  struct Row {
++    GURL url;
++    std::u16string username;
++    Kind kind;
++  };
++
++  ArchiumPasswordImportPreview(base::span<const CSVPassword> input,
++                              ArchiumPasswordImportSnapshot snapshot);
++  ~ArchiumPasswordImportPreview();
++  ArchiumPasswordImportPreview(const ArchiumPasswordImportPreview&) = delete;
++  ArchiumPasswordImportPreview& operator=(const ArchiumPasswordImportPreview&) = delete;
++
++  const std::vector<Row>& rows() const { return rows_; }
++  const ArchiumPasswordImportRevision& revision() const {
++    return snapshot_.revision;
++  }
++  base::expected<std::vector<StoredCredential>, Error> BuildBatch(
++      const std::vector<Decision>& decisions) const;
++
++ private:
++  ArchiumPasswordImportSnapshot snapshot_;
++  std::vector<Row> rows_;
++  std::vector<CredentialUIEntry> entries_;
++  std::vector<SavedPasswordsPresenter::AddResult> store_results_;
++};
++
++}  // namespace password_manager
++#endif  // COMPONENTS_PASSWORD_MANAGER_CORE_BROWSER_IMPORT_ARCHIUM_PASSWORD_IMPORT_PREVIEW_H_
+diff --git a/components/password_manager/core/browser/import/archium_password_import_preview_unittest.cc b/components/password_manager/core/browser/import/archium_password_import_preview_unittest.cc
+new file mode 100644
+--- /dev/null
++++ b/components/password_manager/core/browser/import/archium_password_import_preview_unittest.cc
+@@ -0,0 +1,195 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++#include "components/password_manager/core/browser/import/archium_password_import_preview.h"
++
++#include <utility>
++#include <vector>
++
++#include "base/containers/span.h"
++#include "base/time/time.h"
++#include "components/password_manager/core/browser/password_store/password_form_converters.h"
++#include "components/password_manager/core/browser/ui/saved_passwords_presenter.h"
++#include "testing/gtest/include/gtest/gtest.h"
++
++namespace password_manager {
++namespace {
++using AddResult = SavedPasswordsPresenter::AddResult;
++using Kind = ArchiumPasswordImportPreview::Kind;
++using Decision = ArchiumPasswordImportPreview::Decision;
++using Error = ArchiumPasswordImportPreview::Error;
++
++CSVPassword Csv(std::string password = "new", std::string url = "https://example.test/login") {
++  return CSVPassword(GURL(url), "user", std::move(password), "", CSVPassword::Status::kOK);
++}
++
++StoredCredential Stored(std::string password = "old") {
++  return SavedPasswordsPresenter::CreateImportedCredential(CredentialUIEntry(Csv(std::move(password))));
++}
++
++ArchiumPasswordImportSnapshot Snapshot() {
++  ArchiumPasswordImportSnapshot snapshot;
++  snapshot.revision.session = base::UnguessableToken::Create();
++  snapshot.revision.total_changes = 7;
++  return snapshot;
++}
++
++TEST(ArchiumPasswordImportPreviewTest, ReusesNativeAddValidationAcrossStores) {
++  std::vector<StoredCredential> stored;
++  const CredentialUIEntry incoming(Csv());
++  auto evaluate = [&] {
++    return SavedPasswordsPresenter::GetExpectedAddResultForStoredCredentials(incoming, stored);
++  };
++  EXPECT_EQ(evaluate(), AddResult::kSuccess);
++  stored.push_back(Stored());
++  EXPECT_EQ(evaluate(), AddResult::kConflictInProfileStore);
++  stored.back().in_store = PasswordForm::Store::kAccountStore;
++  EXPECT_EQ(evaluate(), AddResult::kConflictInAccountStore);
++  stored.push_back(Stored());
++  EXPECT_EQ(evaluate(), AddResult::kConflictInProfileAndAccountStore);
++  stored.push_back(Stored("new"));
++  EXPECT_EQ(evaluate(), AddResult::kExactMatch);
++  EXPECT_EQ(SavedPasswordsPresenter::GetExpectedAddResultForStoredCredentials(
++                CredentialUIEntry(Csv("", "https://example.test/")), stored),
++            AddResult::kInvalid);
++  EXPECT_EQ(SavedPasswordsPresenter::GetExpectedAddResultForStoredCredentials(
++                CredentialUIEntry(Csv("secret", "javascript:alert(1)")), stored),
++            AddResult::kInvalid);
++  EXPECT_EQ(SavedPasswordsPresenter::GetExpectedAddResultForStoredCredentials(
++                CredentialUIEntry(Csv("secret", "https://other.test/")), stored),
++            AddResult::kSuccess);
++}
++
++TEST(ArchiumPasswordImportPreviewTest, PreviewIsReadOnlyAndCarriesExactRevision) {
++  auto snapshot = Snapshot();
++  const auto revision = snapshot.revision;
++  snapshot.credentials.push_back(Stored());
++  const std::vector<CSVPassword> input = {Csv()};
++  ArchiumPasswordImportPreview preview(input, std::move(snapshot));
++  ASSERT_EQ(preview.rows().size(), 1u);
++  EXPECT_EQ(preview.rows()[0].kind, Kind::kConflict);
++  EXPECT_EQ(preview.revision(), revision);
++  auto skipped = preview.BuildBatch({Decision::kSkip});
++  ASSERT_TRUE(skipped.has_value());
++  EXPECT_TRUE(skipped->empty());
++  auto unresolved = preview.BuildBatch({Decision::kImport});
++  ASSERT_FALSE(unresolved.has_value());
++  EXPECT_EQ(unresolved.error(), Error::kInvalidDecision);
++}
++
++TEST(ArchiumPasswordImportPreviewTest, ExactMatchesAndRepeatedFileRowsAreSkipped) {
++  auto snapshot = Snapshot();
++  snapshot.credentials.push_back(Stored("new"));
++  const std::vector<CSVPassword> input = {Csv(), Csv()};
++  ArchiumPasswordImportPreview preview(input, std::move(snapshot));
++  EXPECT_EQ(preview.rows()[0].kind, Kind::kExactMatch);
++  EXPECT_EQ(preview.rows()[1].kind, Kind::kDuplicateInFile);
++  auto batch = preview.BuildBatch({Decision::kImport, Decision::kImport});
++  ASSERT_TRUE(batch.has_value());
++  EXPECT_TRUE(batch->empty());
++}
++
++TEST(ArchiumPasswordImportPreviewTest, DifferentPasswordsInFileNeedOneExplicitChoice) {
++  const std::vector<CSVPassword> input = {Csv("first"), Csv("second")};
++  ArchiumPasswordImportPreview preview(input, Snapshot());
++  EXPECT_EQ(preview.rows()[0].kind, Kind::kConflictInFile);
++  EXPECT_EQ(preview.rows()[1].kind, Kind::kConflictInFile);
++  auto ambiguous = preview.BuildBatch({Decision::kImport, Decision::kImport});
++  ASSERT_FALSE(ambiguous.has_value());
++  EXPECT_EQ(ambiguous.error(), Error::kMultipleChoicesForSite);
++  auto selected = preview.BuildBatch({Decision::kSkip, Decision::kImport});
++  ASSERT_TRUE(selected.has_value());
++  ASSERT_EQ(selected->size(), 1u);
++  EXPECT_EQ(selected->front().password_value, u"second");
++}
++
++TEST(ArchiumPasswordImportPreviewTest, ReplacementPreservesEveryExistingFormAndMetadata) {
++  auto snapshot = Snapshot();
++  auto first = Stored();
++  first.url = GURL("https://example.test/first");
++  first.username_element = u"login";
++  first.password_element = u"secret";
++  first.date_created = base::Time::FromSecondsSinceUnixEpoch(10);
++  first.times_used_in_html_form = 12;
++  first.SetPasswordNote(u"keep my note");
++  auto second = CloneStoredCredential(first);
++  second.url = GURL("https://example.test/second");
++  second.username_element = u"email";
++  snapshot.credentials.push_back(std::move(first));
++  snapshot.credentials.push_back(std::move(second));
++  const std::vector<CSVPassword> input = {Csv()};
++  ArchiumPasswordImportPreview preview(input, std::move(snapshot));
++  auto batch = preview.BuildBatch({Decision::kReplace});
++  ASSERT_TRUE(batch.has_value());
++  ASSERT_EQ(batch->size(), 2u);
++  EXPECT_EQ((*batch)[0].url, GURL("https://example.test/first"));
++  EXPECT_EQ((*batch)[1].url, GURL("https://example.test/second"));
++  EXPECT_EQ((*batch)[0].username_element, u"login");
++  EXPECT_EQ((*batch)[1].username_element, u"email");
++  for (const auto& entry : *batch) {
++    EXPECT_EQ(entry.password_value, u"new");
++    EXPECT_EQ(entry.date_created, base::Time::FromSecondsSinceUnixEpoch(10));
++    EXPECT_EQ(entry.times_used_in_html_form, 12);
++    EXPECT_EQ(entry.GetPasswordNote(), u"keep my note");
++    EXPECT_TRUE(entry.password_issues.empty());
++  }
++}
++
++TEST(ArchiumPasswordImportPreviewTest, RejectsWrongDecisionCountAndAccountSnapshot) {
++  const std::vector<CSVPassword> input = {Csv()};
++  ArchiumPasswordImportPreview preview(input, Snapshot());
++  auto missing = preview.BuildBatch({});
++  ASSERT_FALSE(missing.has_value());
++  EXPECT_EQ(missing.error(), Error::kInvalidDecision);
++  auto snapshot = Snapshot();
++  auto account = Stored();
++  account.in_store = PasswordForm::Store::kAccountStore;
++  snapshot.credentials.push_back(std::move(account));
++  ArchiumPasswordImportPreview account_preview(input, std::move(snapshot));
++  auto batch = account_preview.BuildBatch({Decision::kReplace});
++  ASSERT_FALSE(batch.has_value());
++  EXPECT_EQ(batch.error(), Error::kNonLocalSnapshot);
++}
++
++TEST(ArchiumPasswordImportPreviewTest, InvalidRowsCannotBeForcedIntoBatch) {
++  const std::vector<CSVPassword> input = {Csv(""), Csv("pw", "file:///private")};
++  ArchiumPasswordImportPreview preview(input, Snapshot());
++  EXPECT_EQ(preview.rows()[0].kind, Kind::kInvalid);
++  EXPECT_EQ(preview.rows()[1].kind, Kind::kInvalid);
++  auto batch = preview.BuildBatch({Decision::kImport, Decision::kImport});
++  ASSERT_FALSE(batch.has_value());
++  EXPECT_EQ(batch.error(), Error::kInvalidDecision);
++}
++
++TEST(ArchiumPasswordImportPreviewTest, InvalidParsedUrlDoesNotConstructNativeUiCredential) {
++  const std::vector<CSVPassword> input = {
++      CSVPassword(std::string("not a valid URL"), "user", "secret", "",
++                  CSVPassword::Status::kOK),
++      CSVPassword(GURL("https://example.test/"), "user", "secret", "",
++                  CSVPassword::Status::kSyntaxError)};
++  ArchiumPasswordImportPreview preview(input, Snapshot());
++  ASSERT_EQ(preview.rows().size(), 2u);
++  EXPECT_EQ(preview.rows()[0].kind, Kind::kInvalid);
++  EXPECT_EQ(preview.rows()[1].kind, Kind::kInvalid);
++  auto skipped = preview.BuildBatch({Decision::kSkip, Decision::kSkip});
++  ASSERT_TRUE(skipped.has_value());
++  EXPECT_TRUE(skipped->empty());
++}
++
++TEST(ArchiumPasswordImportPreviewTest, ChangingPreparedBatchDoesNotChangePreviewSecrets) {
++  const std::vector<CSVPassword> input = {Csv()};
++  ArchiumPasswordImportPreview preview(input, Snapshot());
++  auto first = preview.BuildBatch({Decision::kImport});
++  ASSERT_TRUE(first.has_value());
++  ASSERT_EQ(first->size(), 1u);
++  first->front().password_value = PasswordString(u"changed by caller");
++  auto second = preview.BuildBatch({Decision::kImport});
++  ASSERT_TRUE(second.has_value());
++  ASSERT_EQ(second->size(), 1u);
++  EXPECT_EQ(second->front().password_value, u"new");
++  EXPECT_EQ(second->front().type, PasswordForm::Type::kImported);
++  EXPECT_TRUE(second->front().IsUsingProfileStore());
++}
++}  // namespace
++}  // namespace password_manager
 diff --git a/components/password_manager/core/browser/password_store/archium_login_database_unittest.cc b/components/password_manager/core/browser/password_store/archium_login_database_unittest.cc
 new file mode 100644
 --- /dev/null

@@ -69,6 +69,14 @@ El checkout nativo completo lo prepara CI; no descargues cientos de GB sin neces
    Ruta async en helper/backend/store y WeakPtr para cierre. Seis nuevas regresiones
    C++ están escritas pero NO ejecutadas. Experimento SQLite local sólo validó
    contadores, no prueba la implementación Chromium.
+   ArchiumPasswordImportPreview prepara clasificación nativa y decisiones por fila:
+   usa una sola validación SavedPasswordsPresenter para caché/snapshot, omite
+   duplicados, exige elegir una contraseña cuando el archivo discrepa, conserva
+   formularios/notas al reemplazar y lleva la revisión a la confirmación futura.
+   Nueve tests nativos escritos, target archium_password_import_tests registrado
+   y retenido como artifact; NO compilados/ejecutados aún. No hay integración UI/JNI.
+   Archivos principales: components/password_manager/core/browser/import/
+   archium_password_import_preview.{h,cc,_unittest.cc} y ui/saved_passwords_presenter.
 6. ArchiumWindowClass usa constantes 600/840 dp de AndroidX fijado. WindowMetrics
    mide ventana útil actual; sin fabricante/DeX/display físico. JVM y app temporal
    física pasaron. No es implementación completa de política UA/RDS desktop.
@@ -113,7 +121,7 @@ git diff --check -- . ':!patches/archium-desktop.patch'
 .sync-audit/actionlint .github/workflows/baseline-build.yml .github/workflows/archium-stage.yml
 bash -n scripts/build-archium.sh
 
-Último estado: patch de 68 archivos se aplica y coincide con hashes. JVM/SDK-adapters
+Último estado: patch de 74 archivos se aplica y coincide con hashes. JVM/SDK-adapters
 pasan; estos últimos usan contratos Chromium stubbed. 28 Python tests pasaron.
 Tests físicos: scripts/test-android-password-key.py y test-android-window-policy.py
 con --device 192.168.101.105:44641. SDK /opt/android-sdk, android-36/build-tools36.
@@ -135,7 +143,7 @@ identidad/hashes/paths y rollback; no saltes controles de checkpoint ni caches.
 Workflow baseline-build.yml usa etapas de 2 horas/checkpoints. No prometas duración
 corta: se intentará incremental pero todavía no se midió el nuevo build.
 Targets nativos preparados: archium_key_provider_tests, archium_key_java,
-archium_login_database_tests, archium_password_csv_java,
+archium_login_database_tests, archium_password_import_tests, archium_password_csv_java,
 chrome/browser/password_manager:unit_tests. Compilar el source_set de tests del
 cliente no es ejecutar esos tests. Binarios de las dos suites se conservan en artifact.
 

@@ -82,3 +82,12 @@ de salida. Regresión y suite Keystore real (9 casos + fallo de commit) pasaron
 en app.archium.keytests, y la fase de reinicio pasó. No se cambió el PIN ni se
 borró ningún dato de Archium del usuario. La prueba de dispositivo bloqueado
 sigue pendiente.
+
+Vista previa nativa preparada: `ArchiumPasswordImportPreview` clasifica mediante
+la misma validación de `SavedPasswordsPresenter`, evita elegir arbitrariamente
+entre contraseñas distintas del CSV, omite duplicados y conserva cada formulario
+existente y sus notas al reemplazar. Mantiene la revisión DB para el commit
+atómico futuro. Nueve pruebas C++ escritas, no compiladas/ejecutadas; se registró
+`archium_password_import_tests` y su retención como artifact. Regresión de
+retención observada RED y luego GREEN; suite Python 28 pasa. Patch de 74 archivos
+aplica/hashes coinciden. Gestor, JNI, auth, SAF y UI siguen pendientes.

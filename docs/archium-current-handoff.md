@@ -21,7 +21,7 @@ Este documento describe preparación; no es una entrega de APK ni aceptación fu
 - CSV independiente: 18 casos sintéticos pasan. La pantalla, autenticación y
   conexión SAF/PasswordStore todavía faltan. No se ha leído el CSV personal.
 - 28 pruebas Python de preparación/checkpoints/routing pasan. El parche de
-  68 archivos aplica y coincide con sus hashes. Los checks
+  74 archivos aplica y coincide con sus hashes. Los checks
   aislados de Java/SDK no equivalen a compilar Chromium.
 - Workflow preparado para restaurar un checkpoint anterior con commit explícito,
   conservar objetos/mtimes y compilar los targets modificados antes de la APK.
@@ -101,3 +101,12 @@ comandos simulada; adapter sólo pasó SDK con contratos stubbed. Todavía NO se
 construyen desde el coordinador Arc y faltan pruebas dentro de Chromium.
 
 Actualización de clave: marcador no secreto de inicialización en filesDir evita regenerar una DEK después de perder simultáneamente KEK y registro. RED/GREEN real en app temporal Android (9 casos + commit/reinicio). Backend GetError también exige disponibilidad de cifrado en el fork Android; regresión C++ pendiente.
+
+Vista previa nativa preparada: `ArchiumPasswordImportPreview` clasifica mediante
+la misma validación de `SavedPasswordsPresenter`, evita elegir arbitrariamente
+entre contraseñas distintas del CSV, omite duplicados y conserva cada formulario
+existente y sus notas al reemplazar. Mantiene la revisión DB para el commit
+atómico futuro. Nueve pruebas C++ escritas, no compiladas/ejecutadas; se registró
+`archium_password_import_tests` y su retención como artifact. Regresión de
+retención observada RED y luego GREEN; suite Python 28 pasa. Patch de 74 archivos
+aplica/hashes coinciden. Gestor, JNI, auth, SAF y UI siguen pendientes.
