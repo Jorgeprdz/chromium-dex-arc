@@ -107,17 +107,12 @@ class PasswordStoreInterface : public RefcountedKeyedService {
 
   // An accepted local import is all-or-nothing. Implementations without an
   // atomic backend must reject it, never fall back to AddLogins().
-  virtual void GetImportSnapshot(ArchiumImportSnapshotReply callback) {
-    std::move(callback).Run(base::unexpected(PasswordStoreBackendError(
-        PasswordStoreBackendErrorType::kUncategorized)));
-  }
-  virtual void ImportLoginsAtomically(std::vector<StoredCredential> credentials,
-                                     ImportCompletion completion,
-                                     std::optional<ArchiumPasswordImportRevision> expected_revision =
-          std::nullopt) {
-    std::move(completion).Run(base::unexpected(PasswordStoreBackendError(
-        PasswordStoreBackendErrorType::kUncategorized)));
-  }
+  virtual void GetImportSnapshot(ArchiumImportSnapshotReply callback);
+  virtual void ImportLoginsAtomically(
+      std::vector<StoredCredential> credentials,
+      ImportCompletion completion,
+      std::optional<ArchiumPasswordImportRevision> expected_revision =
+          std::nullopt);
 
   // Updates the matching StoredCredential in the secure password store (async).
   // If any of the primary key fields (signon_realm, url, username_element,
