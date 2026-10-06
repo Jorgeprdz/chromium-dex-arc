@@ -104,6 +104,48 @@ TEST(ArchiumPasswordImportPreviewTest, DifferentPasswordsInFileNeedOneExplicitCh
   EXPECT_EQ(selected->front().password_value, u"second");
 }
 
+TEST(ArchiumPasswordImportPreviewTest,
+     ExistingAccountWithMultipleCsvPasswordsRequiresReplaceForChosenRow) {
+  auto snapshot = Snapshot();
+  snapshot.credentials.push_back(Stored("old"));
+  const std::vector<CSVPassword> input = {Csv("first"), Csv("second")};
+  ArchiumPasswordImportPreview preview(input, std::move(snapshot));
+
+  ASSERT_EQ(preview.rows().size(), 2u);
+  for (const auto& row : preview.rows()) {
+    EXPECT_EQ(row.kind, Kind::kConflictInFile);
+    EXPECT_EQ(row.identity, "https://example.test/");
+    EXPECT_EQ(row.required_decision, Decision::kReplace);
+  }
+
+  auto wrong = preview.BuildBatch({Decision::kImport, Decision::kSkip});
+  ASSERT_FALSE(wrong.has_value());
+  EXPECT_EQ(wrong.error(), Error::kInvalidDecision);
+
+  auto selected = preview.BuildBatch({Decision::kReplace, Decision::kSkip});
+  ASSERT_TRUE(selected.has_value());
+  ASSERT_EQ(selected->size(), 1u);
+  EXPECT_EQ(selected->front().password_value, u"first");
+}
+
+TEST(ArchiumPasswordImportPreviewTest,
+     DifferentUrlPathsShareOneCanonicalRealmAndOneChoice) {
+  const std::vector<CSVPassword> input = {
+      Csv("first", "https://example.test/one"),
+      Csv("second", "https://example.test/two")};
+  ArchiumPasswordImportPreview preview(input, Snapshot());
+
+  ASSERT_EQ(preview.rows().size(), 2u);
+  EXPECT_EQ(preview.rows()[0].identity, "https://example.test/");
+  EXPECT_EQ(preview.rows()[1].identity, "https://example.test/");
+  EXPECT_EQ(preview.rows()[0].kind, Kind::kConflictInFile);
+  EXPECT_EQ(preview.rows()[1].kind, Kind::kConflictInFile);
+
+  auto ambiguous = preview.BuildBatch({Decision::kImport, Decision::kImport});
+  ASSERT_FALSE(ambiguous.has_value());
+  EXPECT_EQ(ambiguous.error(), Error::kMultipleChoicesForSite);
+}
+
 TEST(ArchiumPasswordImportPreviewTest, ReplacementPreservesEveryExistingFormAndMetadata) {
   auto snapshot = Snapshot();
   auto first = Stored();
