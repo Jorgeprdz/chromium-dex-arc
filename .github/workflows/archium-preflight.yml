@@ -35,27 +35,49 @@ jobs:
           fi
           yes | "$SDKMANAGER" "platforms;android-36" >/dev/null
 
-      - name: Regenerate pinned Archium patch
+      - name: Run preparation gates and refresh patch
+        id: gates
         shell: bash
         run: |
-          set -euo pipefail
-          python3 scripts/generate-arc-patch.py
-          python3 scripts/check-arc-preparation.py \
-            --android-jar "${ANDROID_HOME}/platforms/android-36/android.jar"
-          python3 -m unittest discover -s tests -p 'test_*.py'
-          git diff --check -- . ':!patches/archium-desktop.patch'
-          bash -n scripts/build-archium.sh
+          set +e
+          mkdir -p docs/validation
+          LOG="$RUNNER_TEMP/archium-preflight.log"
+          {
+            set -x
+            python3 scripts/generate-arc-patch.py &&
+            python3 scripts/check-arc-preparation.py \
+              --android-jar "${ANDROID_HOME}/platforms/android-36/android.jar" &&
+            python3 -m unittest discover -s tests -p 'test_*.py' &&
+            git diff --check -- . ':!patches/archium-desktop.patch' &&
+            bash -n scripts/build-archium.sh
+          } >"$LOG" 2>&1
+          rc=$?
+          if [[ $rc -eq 0 ]]; then result=PASS; else result=FAIL; fi
+          {
+            echo '# Archium preflight'
+            echo
+            echo "Result: $result"
+            echo "Trigger commit: $GITHUB_SHA"
+            echo
+            echo '```text'
+            tail -n 160 "$LOG"
+            echo '```'
+          } > docs/validation/preflight-ci.md
+          echo "result=$result" >> "$GITHUB_OUTPUT"
+          exit 0
 
-      - name: Commit refreshed patch and manifest
+      - name: Commit refreshed patch, manifest and preflight result
         shell: bash
         run: |
           set -euo pipefail
-          git add patches/archium-desktop.patch patches/upstream-files.json
+          git add patches/archium-desktop.patch patches/upstream-files.json \
+            docs/validation/preflight-ci.md
           if git diff --cached --quiet; then
-            echo "Patch already current."
-            exit 0
+            echo 'No generated changes.'
+          else
+            git config user.name 'Archium CI'
+            git config user.email 'actions@users.noreply.github.com'
+            git commit -m 'build: refresh Archium patch and preflight'
+            git push origin HEAD:feat/arc-desktop
           fi
-          git config user.name "Archium CI"
-          git config user.email "actions@users.noreply.github.com"
-          git commit -m "build: refresh Archium pinned patch"
-          git push origin HEAD:feat/arc-desktop
+          test "${{ steps.gates.outputs.result }}" = PASS
