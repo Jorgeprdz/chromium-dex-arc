@@ -24,7 +24,10 @@ public final class ArcSidebarStateTest {
         check(state.entries(work).isEmpty(), "Spaces have independent pinned entries");
         check(state.favorites().size() == 1, "Favorites shared across Spaces");
         check(state.visibleTab(11) && !state.visibleTab(10), "Space chooses native tab membership");
+        check(state.hasTabSpace(10) && state.hasTabSpace(11), "native tab membership is explicit");
         check(state.visibleTab(9), "Favorite native tab is shared");
+        check(state.isFavoriteTab(9) && !state.hasTabSpace(9),
+                "favorite tabs remain globally visible instead of leaking into one Space");
         state.selectSpace(initial);
         state.tabClosed(7);
         check(state.entry(pinned).tabId == null, "Closed pin loses only native association");
