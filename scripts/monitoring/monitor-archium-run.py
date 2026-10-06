@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only GitHub run monitor, with a desktop popup every ten minutes."""
+"""Read-only GitHub run monitor, with a desktop popup every fifteen minutes."""
 import argparse
 from datetime import datetime, timezone
 import fcntl
@@ -15,7 +15,7 @@ import sys
 import urllib.request
 
 REPO = 'Jorgeprdz/chromium-dex-arc'
-RUN = '37255997027'
+RUN = '37426799878'
 
 
 def get_json(path):
@@ -48,7 +48,7 @@ def describe(run, jobs, now):
         lines.append('Esperando runner o siguiente etapa.')
     lines += [f'Jobs terminados: {len(finished)}',
               'Cada bloque compila hasta 2 h; despues guarda el avance.',
-              'Estimacion inicial: 16-24 h totales, incluidas transferencias.',
+              'Duracion total: sin estimacion garantizada.',
               'Porcentaje Ninja: no disponible en el log publico en vivo.',
               run['html_url']]
     return '\n'.join(lines), events
@@ -104,12 +104,12 @@ def ascii_window(text):
                 rows.append(paint('|', 'cyan') + ' ' + paint(line.ljust(inside), color) + ' ' + paint('|', 'cyan'))
         rows.append(paint('+' + '-' * (width - 2) + '+', 'cyan'))
     box('ARCHIUM / BUILD MONITOR', ['FOR ANDROID   |   GitHub Actions',
-        'Refresco: 10 min   |   ' + get('Actualizado: ')], 'purple')
+        'Refresco: 15 min   |   ' + get('Actualizado: ')], 'purple')
     box('ESTADO ACTUAL', [status, 'Etapa: ' + get('Etapa actual: '),
         'Actividad: ' + get('Paso: ')], status_color)
     box('TIEMPO Y AVANCE', ['Transcurrido: ' + get('Tiempo transcurrido: '),
         'Jobs terminados: ' + get('Jobs terminados: '),
-        'Estimacion inicial: 16-24 h (incluye transferencias)',
+        'Duracion total: sin estimacion garantizada',
         'Hasta 12 bloques de 2 h. Termina al generar la APK.',
         'Porcentaje Ninja: pendiente de log en vivo'], 'white')
     if 'Sin conexion' in status:
@@ -122,7 +122,7 @@ def ascii_window(text):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run', default=RUN)
-    parser.add_argument('--interval', type=int, default=600)
+    parser.add_argument('--interval', type=int, default=900)
     parser.add_argument('--once', action='store_true')
     parser.add_argument('--no-window', action='store_true')
     parser.add_argument('--ascii', action='store_true', help='Render a terminal ASCII window')
@@ -169,7 +169,7 @@ def main():
                         output.write(f'[{stamp}] {event}\n')
                 done = run['status'] == 'completed'
             except Exception as error:
-                summary = 'No se pudo consultar GitHub. Se intentara de nuevo en 10 minutos.\n' + str(error)
+                summary = 'No se pudo consultar GitHub. Se intentara de nuevo en 15 minutos.\n' + str(error)
                 with log.open('a') as output:
                     output.write(f'[{stamp}] Error: {error}\n')
             recent = log.read_text().splitlines()[-12:]
