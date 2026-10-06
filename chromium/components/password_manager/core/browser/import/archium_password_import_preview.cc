@@ -16,6 +16,7 @@
 namespace password_manager {
 namespace {
 using AddResult = SavedPasswordsPresenter::AddResult;
+using Decision = ArchiumPasswordImportPreview::Decision;
 using Kind = ArchiumPasswordImportPreview::Kind;
 using Identity = std::pair<std::string, std::u16string>;
 
@@ -40,7 +41,6 @@ Kind GetKind(AddResult result) {
 }
 
 ArchiumPasswordImportPreview::Decision GetRequiredDecision(AddResult result) {
-  using Decision = ArchiumPasswordImportPreview::Decision;
   switch (result) {
     case AddResult::kSuccess:
     case AddResult::kExactMatch:
