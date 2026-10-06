@@ -33,7 +33,11 @@ jobs:
           if [[ ! -x "$SDKMANAGER" ]]; then
             SDKMANAGER="$(command -v sdkmanager)"
           fi
+          set +o pipefail
           yes | "$SDKMANAGER" "platforms;android-36" >/dev/null
+          sdk_rc=${PIPESTATUS[1]}
+          set -o pipefail
+          exit "$sdk_rc"
 
       - name: Run preparation gates and refresh patch
         id: gates
