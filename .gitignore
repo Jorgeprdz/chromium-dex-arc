@@ -1,6 +1,5 @@
+# Pinned upstream originals and prepared edits are versioned for GitHub continuation.
 docs/source-investigation/
-.source-reference/
-.source-modified/
 .test-build/
 __pycache__/
 

@@ -1,3 +1,11 @@
+## Publicación para continuar desde GitHub
+
+Usuario autorizó subir todo el trabajo a `feat/arc-desktop`. Originales fijados,
+ediciones de upstream, ledgers/briefs y snapshots de monitores pasan a estar
+versionados. Retomar desde clone de la rama; consultar el prompt actualizado.
+Esta publicación no lanza compilación ni continúa implementación de features.
+Seguimiento futuro del run FINAL: ID real, refresh 900 segundos, verificar y pausar.
+
 ## Estado autoritativo al detenerse — 2026-10-06
 
 Usuario ordenó guardar prompt detallado y detenerse. Código checkpoint
@@ -85,7 +93,7 @@ Las pruebas de formularios deben usar un APK/perfil aislado: jamás ejecutar
 
 Resultados: `docs/validation/local-passwords-results.md`.
 Formularios: `tests/runtime/passwords/README.md`.
-Ledgers/briefs locales de tareas: `.superpowers/sdd/` (ignorados por Git).
+Ledgers/briefs de tareas: `.superpowers/sdd/` (versionados para continuar desde GitHub).
 
 ## Ajuste de alcance del usuario (2026-10-06)
 

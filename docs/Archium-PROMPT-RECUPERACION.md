@@ -25,6 +25,40 @@ verifica una consulta --once, guarda la información y ponte en pausa. No espere
 compilación ni instales hasta que el usuario reanude. No anuncies éxito antes de que
 termine la compilación; luego se necesita validación real de la APK.
 
+## Continuación directamente desde GitHub (publicación solicitada)
+
+El usuario pidió subir TODO lo realizado para continuar desde el repo de GitHub.
+Esta publicación conserva la rama feat/arc-desktop; NO lanza un run ni reanuda
+features. Se publica el historial local, código nuevo, patch/hash manifest,
+originales upstream exactos en .source-reference, ediciones en .source-modified,
+planes/briefs/ledgers en .superpowers/sdd y snapshots de monitores.
+Ya NO dependas del tar del teléfono para obtener los caches de preparación:
+están versionados. Logs/binarios temporales de pruebas, credenciales, claves,
+CSV personal y checkout completo Chromium NO forman parte de esta publicación.
+
+Para una máquina nueva:
+
+```bash
+git clone --branch feat/arc-desktop https://github.com/Jorgeprdz/chromium-dex-arc.git
+cd chromium-dex-arc
+git status --short
+git log -5 --oneline
+```
+
+Para un checkout existente, inspeccionar primero status/branch y luego fetch;
+no resetear cambios locales para igualar origin. El nombre del directorio del
+clone puede diferir del workspace: resolver rutas desde la raíz del repo.
+Leer este prompt, docs/archium-current-handoff.md y resultados antes de cambiar
+código. El último commit de la rama remota identifica el snapshot publicado;
+el JSON del respaldo telefónico guarda su HEAD exacto. La confirmación de push
+se verifica contra git ls-remote, no se infiere por tener un commit local.
+
+Monitores conservados en scripts/monitoring/: monitor-archium-run.py,
+monitor-archium.sh y start-archium-monitor.sh, con README de rutas/uso. El monitor
+Python puede utilizarse desde un clone con --run ID_REAL --interval 900. Los
+launchers y textos heredados todavía necesitan integración al lanzar el run.
+No activarlos ahora con el ID viejo. Conservar scripts/vigilar-compilacion-arc.sh.
+
 ## Recuperación inmediata
 
 Workspace: /workspace/ChromiumDeXArc-work
@@ -42,7 +76,7 @@ pruebas host/SDK con stubs y pruebas reales de Chromium. No confundas esos nivel
 
 Este repo prepara un PATCH: no es un checkout completo de Chromium. Los nuevos
 archivos upstream están en chromium/ (seguimiento git). Los cambios a originales
-están en .source-modified/ y sus originales exactos en .source-reference/ (ignorados).
+están en .source-modified/ y sus originales exactos en .source-reference/ (ahora versionados).
 La entrega efectiva está en patches/archium-desktop.patch y upstream-files.json.
 NO regeneres el patch con cachés originales/modificados ausentes o incompletos,
 porque eliminarías modificaciones existentes del patch.
@@ -351,7 +385,7 @@ Revisar el JSON: el tar puede traer WIP que no está en HEAD. Restaurar origin a
 URL de arriba si se necesita push; clone desde bundle tendrá origin local. No
 limpiar caches ni sobrescribir WIP. .sync-audit/.test-build son ignorados y NO se
 incluyen íntegros en tar; resultados relevantes están descritos en estos docs.
-Ledgers .superpowers/sdd Markdown sí se incluyen. Nunca se incluyó CSV personal.
+Ledgers .superpowers/sdd también están versionados y en el respaldo. Nunca se incluyó CSV personal.
 
 ## Inventario completo del patch al detenerse
 

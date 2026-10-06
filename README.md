@@ -2,6 +2,16 @@
 
 Diseño aprobado: [docs/design.md](docs/design.md).
 
+Para retomar el trabajo actual, usar la rama `feat/arc-desktop` y leer el
+[prompt de continuación](docs/Archium-PROMPT-RECUPERACION.md) y el
+[estado de implementación](docs/archium-current-handoff.md). Los originales
+fijados (`.source-reference/`), ediciones (`.source-modified/`), código nuevo
+(`chromium/`), planes y ledgers están versionados. No hace falta recuperar
+los caches desde el teléfono para seguir preparando el patch.
+El alcance actual es Arc y contraseñas locales/CSV; ambos siguen en preparación.
+No se ha lanzado un nuevo build. Monitores guardados en `scripts/monitoring/`;
+el futuro run final requiere seguimiento cada 15 minutos y pausa del agente.
+
 Este directorio contiene la preparación del proyecto, no un navegador terminado.
 Incluye código nativo y parches contra la revisión fijada de Chromium, descritos
 en [docs/arc-preparation.md](docs/arc-preparation.md). No contiene un checkout
