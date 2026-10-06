@@ -3,7 +3,7 @@
 set -u
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 monitor="$script_dir/macdesk-maintenance/monitor-archium-run.py"
-run_id="${1:-37438146116}"
+run_id="${1:-37466225653}"
 state_dir="$script_dir/.archium-monitor-termux"
 python_bin=$(command -v python3 || command -v python || true)
 if [ -z "$python_bin" ]; then
