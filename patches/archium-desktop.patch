@@ -3505,7 +3505,7 @@ diff --git a/chrome/browser/password_manager/android/java/src/org/chromium/chrom
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordKey.java
-@@ -0,0 +1,167 @@
+@@ -0,0 +1,184 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -3541,6 +3541,7 @@ new file mode 100644
 +public final class ArchiumPasswordKey {
 +    private static final String ALIAS = "archium.passwords.wrap.v1";
 +    private static final String RECORD = "archium-password-key-v1";
++    private static final String INITIALIZED = "archium-password-key-initialized-v1";
 +    private static final int MAGIC = 0x41505731; // APW1
 +    private static final int DATA_KEY_BYTES = 32;
 +    private static final int NONCE_BYTES = 12;
@@ -3563,7 +3564,21 @@ new file mode 100644
 +        // receive the native Encryptor over IPC and must not initialize a key themselves.
 +        try (RandomAccessFile lockFile = new RandomAccessFile(new File(directory, RECORD + ".lock"), "rw");
 +                FileLock lock = lockFile.getChannel().lock()) {
-+            return loadOrCreate(context, new File(directory, RECORD));
++            byte[] dataKey = loadOrCreate(context, new File(directory, RECORD));
++            try {
++                // Keep a non-secret initialization marker in regular app files. It survives
++                // backups that exclude Keystore and noBackupFilesDir, so a restore cannot
++                // silently mint a different key for an already encrypted profile.
++                File marker = new File(context.getFilesDir(), INITIALIZED);
++                if (!marker.exists()) {
++                    writeWrappedRecord(new AtomicFile(marker),
++                            ByteBuffer.allocate(4).putInt(MAGIC).array());
++                }
++                return dataKey;
++            } catch (IOException | RuntimeException failure) {
++                Arrays.fill(dataKey, (byte) 0);
++                throw failure;
++            }
 +        }
 +    }
 +
@@ -3598,7 +3613,9 @@ new file mode 100644
 +        }
 +        // A missing record with an existing KEK may mean data was lost. Do not create a new DEK
 +        // that would render existing passwords undecryptable or hide the loss from the user.
-+        if (keyExists) throw new GeneralSecurityException("Wrapped password key unavailable");
++        if (keyExists || new File(context.getFilesDir(), INITIALIZED).exists()) {
++            throw new GeneralSecurityException("Wrapped password key unavailable");
++        }
 +        KeyGenerator generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES,
 +                "AndroidKeyStore");
 +        generator.init(new KeyGenParameterSpec.Builder(ALIAS,

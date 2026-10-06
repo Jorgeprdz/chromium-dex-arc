@@ -45,7 +45,7 @@ public final class ArchiumPasswordKeyTest extends Instrumentation {
                 result.putString("stream", "PASS: persisted key reopened after process restart\n");
             } else {
                 runSuite();
-                result.putString("stream", "PASS: 8 real Keystore cases plus verified-commit failure regression\n");
+                result.putString("stream", "PASS: 9 real Keystore cases plus verified-commit failure regression\n");
             }
             finish(-1, result);
         } catch (Throwable error) {
@@ -87,6 +87,14 @@ public final class ArchiumPasswordKeyTest extends Instrumentation {
         check(record().delete(), "delete test key record");
         expectFailure();
         check(!record().exists(), "lost record is not silently replaced");
+
+        // Break caught: treating a restore that lost both record/KEK as a new installation.
+        reset(); key();
+        check(record().delete(), "delete synthetic wrapped key");
+        store().deleteEntry(ALIAS);
+        expectFailure();
+        check(!record().exists() && !store().containsAlias(ALIAS),
+                "double key loss is not replaced after prior initialization");
 
         // Break caught: fallback to a fresh key for a truncated/version-invalid record.
         reset(); key();
@@ -171,6 +179,11 @@ public final class ArchiumPasswordKeyTest extends Instrumentation {
         for (String suffix : new String[] {"", ".bak", ".new"}) {
             File file = new File(record().getPath() + suffix);
             if (file.exists() && !file.delete()) throw new java.io.IOException("test cleanup failed");
+        }
+        for (String suffix : new String[] {"", ".bak", ".new"}) {
+            File marker = new File(context.getFilesDir(),
+                    "archium-password-key-initialized-v1" + suffix);
+            if (marker.exists() && !marker.delete()) throw new java.io.IOException("test marker cleanup failed");
         }
         store().deleteEntry(ALIAS);
     }

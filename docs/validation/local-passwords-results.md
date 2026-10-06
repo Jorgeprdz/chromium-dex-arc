@@ -70,3 +70,15 @@ rechaza disponibilidad mientras sea false, sin cambiar el comportamiento flag-of
 Se escribió una regresión con backend real y OSCryptAsync sin proveedores, cuya
 consulta ocurre después de inicializar la DB. Su compilación/ejecución nativa
 sigue pendiente; no se presenta como prueba pasada.
+
+## Pérdida simultánea de KEK y registro envuelto
+
+La nueva regresión Android falló primero: al borrar ambos, la implementación
+podía generar otra clave. Ahora persiste un marcador no secreto de inicialización
+en filesDir, además del registro cifrado en noBackupFilesDir. Si ya hubo una clave
+y faltan registro y KEK, falla sin recrearlos. El marcador se escribe y verifica
+con el mismo commit durable antes de entregar la DEK; una falla borra el buffer
+de salida. Regresión y suite Keystore real (9 casos + fallo de commit) pasaron
+en app.archium.keytests, y la fase de reinicio pasó. No se cambió el PIN ni se
+borró ningún dato de Archium del usuario. La prueba de dispositivo bloqueado
+sigue pendiente.
