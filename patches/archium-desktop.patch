@@ -269,6 +269,37 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
              if (mToolbarManager != null) {
                  mToolbarManager.setVerticalTabsAutoHiddenSupplier(
                          mVerticalTabsSideUiCoordinator.getIsAutoHiddenSupplier());
+diff --git a/chrome/browser/BUILD.gn b/chrome/browser/BUILD.gn
+--- a/chrome/browser/BUILD.gn
++++ b/chrome/browser/BUILD.gn
+@@ -2,6 +2,7 @@
+ # Use of this source code is governed by a BSD-style license that can be
+ # found in the LICENSE file.
+ 
++import("//components/password_manager/core/browser/buildflags.gni")
+ import("//base/allocator/allocator.gni")
+ import("//build/buildflag_header.gni")
+ import("//build/config/buildflags_paint_preview.gni")
+@@ -834,6 +835,10 @@
+ }
+ 
+ source_set("core") {
++  deps = [ "//components/password_manager/core/browser:password_manager_buildflags" ]
++  if (is_android && enable_archium_local_passwords) {
++    deps += [ "//chrome/browser/password_manager/android:archium_key_provider" ]
++  }
+   sources = [
+     "about_flags.cc",
+     "after_startup_task_utils.cc",
+@@ -885,7 +890,7 @@
+     defines += [ "USE_OFFICIAL_ENTERPRISE_CONNECTORS_API_KEYS=1" ]
+   }
+ 
+-  deps = [
++  deps += [
+     ":active_use_util",
+     ":after_startup_task_utils",
+     ":bad_message",
 diff --git a/chrome/browser/autofill/android/BUILD.gn b/chrome/browser/autofill/android/BUILD.gn
 --- a/chrome/browser/autofill/android/BUILD.gn
 +++ b/chrome/browser/autofill/android/BUILD.gn
@@ -307,6 +338,113 @@ diff --git a/chrome/browser/autofill/android/java/src/org/chromium/chrome/browse
          }
          prefs.setString(
                  Pref.AUTOFILL_THIRD_PARTY_PACKAGE_USED_FOR_PLATFORM_AUTOFILL,
+diff --git a/chrome/browser/browser_process_impl.cc b/chrome/browser/browser_process_impl.cc
+--- a/chrome/browser/browser_process_impl.cc
++++ b/chrome/browser/browser_process_impl.cc
+@@ -122,6 +122,11 @@
+ #include "components/metrics_services_manager/metrics_services_manager_client.h"
+ #include "components/network_time/network_time_tracker.h"
+ #include "components/os_crypt/async/browser/os_crypt_async.h"
++#include "components/password_manager/core/browser/password_manager_buildflags.h"
++
++#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
++#include "chrome/browser/password_manager/android/archium_password_key_provider.h"
++#endif
+ #include "components/permissions/permissions_client.h"
+ #include "components/policy/core/common/policy_service.h"
+ #include "components/prefs/json_pref_store.h"
+@@ -1648,7 +1653,14 @@
+           password_store, l10n_util::GetStringUTF8(IDS_PRODUCT_NAME), nullptr));
+ #endif  // BUILDFLAG(IS_LINUX)
+ 
+-#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_MAC)
++#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
++  providers.emplace_back(
++      /*precedence=*/20u,
++      std::make_unique<password_manager::ArchiumPasswordKeyProvider>());
++#endif
++
++#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_MAC) && \
++    !(BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS))
+   // On other POSIX systems, this is the only key provider. On Linux, it is used
+   // as a fallback.
+   providers.emplace_back(
+diff --git a/chrome/browser/password_manager/android/BUILD.gn b/chrome/browser/password_manager/android/BUILD.gn
+--- a/chrome/browser/password_manager/android/BUILD.gn
++++ b/chrome/browser/password_manager/android/BUILD.gn
+@@ -4,6 +4,7 @@
+ 
+ import("//build/config/android/rules.gni")
+ import("//testing/libfuzzer/fuzzer_test.gni")
++import("//components/password_manager/core/browser/buildflags.gni")
+ import("//third_party/jni_zero/jni_zero.gni")
+ import("//third_party/protobuf/proto_library.gni")
+ 
+@@ -113,7 +114,11 @@
+ }
+ 
+ android_library("java") {
+-  deps = [
++  deps = []
++  if (enable_archium_local_passwords) {
++    deps += [ ":archium_key_java" ]
++  }
++  deps += [
+     ":android_backend_java_enums",
+     ":java_resources",
+     ":settings_interface_java",
+@@ -616,6 +621,14 @@
+     "//ui/base",
+   ]
+ 
++  if (enable_archium_local_passwords) {
++    sources += [ "archium_password_key_provider_unittest.cc" ]
++    deps += [
++      ":archium_key_provider",
++      "//components/os_crypt/async/browser",
++    ]
++  }
++
+   # TODO(crbug.com/40031409): Fix code that adds exit-time destructors and
+   # enable the diagnostic by removing this line.
+   configs += [ "//build/config/compiler:no_exit_time_destructors" ]
+@@ -699,3 +712,36 @@
+     "//testing/gtest",
+   ]
+ }
++
++if (enable_archium_local_passwords) {
++  generate_jni("archium_key_jni_headers") {
++    sources = [ "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordKeyBridge.java" ]
++  }
++
++  android_library("archium_key_java") {
++    sources = [
++      "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordKey.java",
++      "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordKeyBridge.java",
++    ]
++    srcjar_deps = [ ":archium_key_jni_headers" ]
++    deps = [
++      "//base:base_java",
++      "//build/android:build_java",
++      "//third_party/jni_zero:jni_zero_java",
++    ]
++  }
++
++  source_set("archium_key_provider") {
++    sources = [
++      "archium_password_key_provider.cc",
++      "archium_password_key_provider.h",
++    ]
++    deps = [
++      ":archium_key_jni_headers",
++      "//base",
++      "//components/os_crypt/async/browser:key_provider_interface",
++      "//components/os_crypt/async/common",
++      "//third_party/boringssl",
++    ]
++  }
++}
 diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java
 --- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java
 +++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java
@@ -395,6 +533,35 @@ diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrom
          return ChromeSharedPreferences.getInstance()
                  .readBoolean(ChromePreferenceKeys.VERTICAL_TABS_ENABLED, defaultValue);
      }
+diff --git a/components/password_manager/core/browser/BUILD.gn b/components/password_manager/core/browser/BUILD.gn
+--- a/components/password_manager/core/browser/BUILD.gn
++++ b/components/password_manager/core/browser/BUILD.gn
+@@ -668,5 +668,8 @@
+ 
+ buildflag_header("password_manager_buildflags") {
+   header = "password_manager_buildflags.h"
+-  flags = [ "PASSWORD_MANAGER_USE_INTERNAL_ANDROID_RESOURCES=$password_manager_use_internal_android_resources" ]
+-}
++  flags = [
++    "PASSWORD_MANAGER_USE_INTERNAL_ANDROID_RESOURCES=$password_manager_use_internal_android_resources",
++    "ENABLE_ARCHIUM_LOCAL_PASSWORDS=$enable_archium_local_passwords",
++  ]
++}
+diff --git a/components/password_manager/core/browser/buildflags.gni b/components/password_manager/core/browser/buildflags.gni
+--- a/components/password_manager/core/browser/buildflags.gni
++++ b/components/password_manager/core/browser/buildflags.gni
+@@ -5,6 +5,11 @@
+ import("//build/config/android/config.gni")
+ import("//build/config/chrome_build.gni")
+ 
++declare_args() {
++  # Native local password storage in Archium; upstream behavior stays opt-in.
++  enable_archium_local_passwords = false
++}
++
+ # Drawables from the downstream clank/ repository are
+ # used for branded builds.
+ password_manager_use_internal_android_resources =
 diff --git a/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java b/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java
 --- a/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java
 +++ b/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java
@@ -823,6 +990,373 @@ new file mode 100644
 +
 +    public static boolean mustUseInternalGoogleProvider(String browserPackage, boolean googleService) {
 +        return googleService && !"app.archium.android".equals(browserPackage);
++    }
++}
+diff --git a/chrome/browser/password_manager/android/archium_password_key_provider.cc b/chrome/browser/password_manager/android/archium_password_key_provider.cc
+new file mode 100644
+--- /dev/null
++++ b/chrome/browser/password_manager/android/archium_password_key_provider.cc
+@@ -0,0 +1,81 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++#include "chrome/browser/password_manager/android/archium_password_key_provider.h"
++
++#include <array>
++#include <utility>
++
++#include "base/android/jni_android.h"
++#include "base/android/jni_array.h"
++#include "base/functional/bind.h"
++#include "base/task/thread_pool.h"
++#include "components/os_crypt/async/common/algorithm.mojom.h"
++#include "third_party/boringssl/src/include/openssl/mem.h"
++
++// Must come after headers that specialize FromJniType/ToJniType.
++#include "chrome/browser/password_manager/android/archium_key_jni_headers/ArchiumPasswordKeyBridge_jni.h"
++
++namespace password_manager {
++namespace {
++
++std::vector<uint8_t> LoadAndroidKey() {
++  JNIEnv* env = base::android::AttachCurrentThread();
++  auto java_key = Java_ArchiumPasswordKeyBridge_getDataKey(env);
++  std::vector<uint8_t> key;
++  if (!java_key.is_null()) {
++    base::android::JavaByteArrayToByteVector(env, java_key, &key);
++    // Java owns a temporary copy; erase it as soon as the native key is copied.
++    if (env->GetArrayLength(java_key.obj()) == 32) {
++      const std::array<jbyte, 32> zeros = {};
++      env->SetByteArrayRegion(java_key.obj(), 0, zeros.size(), zeros.data());
++    }
++  }
++  return key;
++}
++
++base::expected<os_crypt_async::Encryptor::Key,
++               os_crypt_async::KeyProvider::KeyError>
++LoadEncryptionKey(ArchiumPasswordKeyProvider::KeyLoader loader) {
++  auto bytes = loader.Run();
++  if (bytes.size() != 32) {
++    if (!bytes.empty()) OPENSSL_cleanse(bytes.data(), bytes.size());
++    // Even corrupt or missing state must not authorize removal of saved rows.
++    return base::unexpected(
++        os_crypt_async::KeyProvider::KeyError::kTemporarilyUnavailable);
++  }
++  os_crypt_async::Encryptor::Key key(
++      bytes, os_crypt_async::mojom::Algorithm::kAES256GCM);
++  OPENSSL_cleanse(bytes.data(), bytes.size());
++  return key;
++}
++
++}  // namespace
++
++ArchiumPasswordKeyProvider::ArchiumPasswordKeyProvider()
++    : ArchiumPasswordKeyProvider(base::BindRepeating(&LoadAndroidKey)) {}
++
++ArchiumPasswordKeyProvider::ArchiumPasswordKeyProvider(KeyLoader loader)
++    : loader_(std::move(loader)) {}
++
++ArchiumPasswordKeyProvider::~ArchiumPasswordKeyProvider() = default;
++
++void ArchiumPasswordKeyProvider::GetKey(KeyCallback callback) {
++  base::ThreadPool::PostTaskAndReplyWithResult(
++      FROM_HERE, {base::MayBlock(), base::TaskPriority::USER_VISIBLE},
++      base::BindOnce(&LoadEncryptionKey, loader_),
++      base::BindOnce(
++          [](KeyCallback callback,
++             base::expected<os_crypt_async::Encryptor::Key, KeyError> key) {
++            std::move(callback).Run("apw1", std::move(key));
++          },
++          std::move(callback)));
++}
++
++bool ArchiumPasswordKeyProvider::UseForEncryption() {
++  return true;
++}
++
++}  // namespace password_manager
++
++DEFINE_JNI(ArchiumPasswordKeyBridge)
+diff --git a/chrome/browser/password_manager/android/archium_password_key_provider.h b/chrome/browser/password_manager/android/archium_password_key_provider.h
+new file mode 100644
+--- /dev/null
++++ b/chrome/browser/password_manager/android/archium_password_key_provider.h
+@@ -0,0 +1,31 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++#ifndef CHROME_BROWSER_PASSWORD_MANAGER_ANDROID_ARCHIUM_PASSWORD_KEY_PROVIDER_H_
++#define CHROME_BROWSER_PASSWORD_MANAGER_ANDROID_ARCHIUM_PASSWORD_KEY_PROVIDER_H_
++
++#include <cstdint>
++#include <vector>
++
++#include "base/functional/callback.h"
++#include "components/os_crypt/async/browser/key_provider.h"
++
++namespace password_manager {
++
++// Android Keystore-backed wrapping of the password database's stable data key.
++class ArchiumPasswordKeyProvider final : public os_crypt_async::KeyProvider {
++ public:
++  using KeyLoader = base::RepeatingCallback<std::vector<uint8_t>()>;
++  ArchiumPasswordKeyProvider();
++  explicit ArchiumPasswordKeyProvider(KeyLoader loader);
++  ~ArchiumPasswordKeyProvider() override;
++
++  void GetKey(KeyCallback callback) override;
++  bool UseForEncryption() override;
++
++ private:
++  KeyLoader loader_;
++};
++
++}  // namespace password_manager
++#endif  // CHROME_BROWSER_PASSWORD_MANAGER_ANDROID_ARCHIUM_PASSWORD_KEY_PROVIDER_H_
+diff --git a/chrome/browser/password_manager/android/archium_password_key_provider_unittest.cc b/chrome/browser/password_manager/android/archium_password_key_provider_unittest.cc
+new file mode 100644
+--- /dev/null
++++ b/chrome/browser/password_manager/android/archium_password_key_provider_unittest.cc
+@@ -0,0 +1,74 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++#include "chrome/browser/password_manager/android/archium_password_key_provider.h"
++
++#include "base/functional/bind.h"
++#include "base/test/task_environment.h"
++#include "base/test/test_future.h"
++#include "base/threading/platform_thread.h"
++#include "components/os_crypt/async/browser/os_crypt_async.h"
++#include "testing/gtest/include/gtest/gtest.h"
++
++namespace password_manager {
++namespace {
++
++class ArchiumPasswordKeyProviderTest : public testing::Test {
++ protected:
++  base::test::TaskEnvironment task_environment_;
++};
++
++TEST_F(ArchiumPasswordKeyProviderTest, WorkerLoadAndOriginSequenceReply) {
++  const auto origin = base::PlatformThread::CurrentRef();
++  ArchiumPasswordKeyProvider provider(base::BindRepeating([origin] {
++    EXPECT_NE(origin, base::PlatformThread::CurrentRef());
++    return std::vector<uint8_t>(32, 42);
++  }));
++  base::test::TestFuture<std::string,
++                        base::expected<os_crypt_async::Encryptor::Key,
++                                       os_crypt_async::KeyProvider::KeyError>> future;
++  provider.GetKey(future.GetCallback());
++  EXPECT_FALSE(future.IsReady());
++  ASSERT_TRUE(future.Wait());
++  EXPECT_EQ("apw1", future.Get<0>());
++  EXPECT_TRUE(future.Get<1>().has_value());
++  EXPECT_TRUE(provider.UseForEncryption());
++}
++
++TEST_F(ArchiumPasswordKeyProviderTest, RealEncryptorRoundTripAndTamperRejection) {
++  std::vector<std::pair<size_t, std::unique_ptr<os_crypt_async::KeyProvider>>> providers;
++  providers.emplace_back(20u, std::make_unique<ArchiumPasswordKeyProvider>(
++      base::BindRepeating([] { return std::vector<uint8_t>(32, 42); })));
++  os_crypt_async::OSCryptAsync crypt(std::move(providers));
++  base::test::TestFuture<scoped_refptr<os_crypt_async::Encryptor>> future;
++  crypt.GetInstance(future.GetCallback());
++  auto encryptor = future.Get();
++  ASSERT_TRUE(encryptor->IsEncryptionAvailable());
++  auto ciphertext = encryptor->EncryptString("synthetic-password");
++  ASSERT_TRUE(ciphertext.has_value());
++  EXPECT_EQ("apw1", std::string(ciphertext->begin(), ciphertext->begin() + 4));
++  EXPECT_EQ("synthetic-password", encryptor->DecryptData(*ciphertext));
++  ciphertext->back() ^= 1;
++  EXPECT_FALSE(encryptor->DecryptData(*ciphertext).has_value());
++}
++
++TEST_F(ArchiumPasswordKeyProviderTest, InvalidKeyFailsClosedAndPreservesData) {
++  for (size_t size : {0u, 31u, 33u}) {
++    std::vector<std::pair<size_t, std::unique_ptr<os_crypt_async::KeyProvider>>> providers;
++    providers.emplace_back(20u, std::make_unique<ArchiumPasswordKeyProvider>(
++        base::BindRepeating([size] { return std::vector<uint8_t>(size, 42); })));
++    os_crypt_async::OSCryptAsync crypt(std::move(providers));
++    base::test::TestFuture<scoped_refptr<os_crypt_async::Encryptor>> future;
++    crypt.GetInstance(future.GetCallback());
++    auto encryptor = future.Get();
++    EXPECT_FALSE(encryptor->IsEncryptionAvailable());
++    EXPECT_FALSE(encryptor->EncryptString("synthetic-password").has_value());
++    os_crypt_async::Encryptor::DecryptFlags flags;
++    const std::vector<uint8_t> unavailable_ciphertext = {'a', 'p', 'w', '1', 0};
++    EXPECT_FALSE(encryptor->DecryptData(unavailable_ciphertext, &flags).has_value());
++    EXPECT_TRUE(flags.temporarily_unavailable);
++  }
++}
++
++}  // namespace
++}  // namespace password_manager
+diff --git a/chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordKey.java b/chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordKey.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordKey.java
+@@ -0,0 +1,128 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.password_manager;
++
++import android.content.Context;
++import android.security.keystore.KeyGenParameterSpec;
++import android.security.keystore.KeyProperties;
++import android.util.AtomicFile;
++
++import java.io.File;
++import java.io.FileOutputStream;
++import java.io.IOException;
++import java.io.RandomAccessFile;
++import java.nio.ByteBuffer;
++import java.nio.channels.FileLock;
++import java.nio.charset.StandardCharsets;
++import java.security.GeneralSecurityException;
++import java.security.KeyStore;
++import java.security.SecureRandom;
++import java.util.Arrays;
++
++import javax.crypto.Cipher;
++import javax.crypto.KeyGenerator;
++import javax.crypto.SecretKey;
++import javax.crypto.spec.GCMParameterSpec;
++
++/** Persistent data key protected by a nonexportable Android Keystore wrapping key. */
++public final class ArchiumPasswordKey {
++    private static final String ALIAS = "archium.passwords.wrap.v1";
++    private static final String RECORD = "archium-password-key-v1";
++    private static final int MAGIC = 0x41505731; // APW1
++    private static final int DATA_KEY_BYTES = 32;
++    private static final int NONCE_BYTES = 12;
++    private static final int TAG_BYTES = 16;
++    private static final int RECORD_BYTES = 4 + NONCE_BYTES + DATA_KEY_BYTES + TAG_BYTES;
++
++    private ArchiumPasswordKey() {}
++
++    /**
++     * Runs on a worker thread. Errors are surfaced to the caller; existing invalid state is never
++     * replaced. The caller must not fall back to a fresh or less protected key after failure.
++     */
++    public static synchronized byte[] getOrCreateDataKey(Context context)
++            throws GeneralSecurityException, IOException {
++        File directory = context.getNoBackupFilesDir();
++        if (directory == null || !directory.isDirectory()) {
++            throw new IOException("Password key storage unavailable");
++        }
++        // Serialize initialization across browser processes as well as threads. Renderers should
++        // receive the native Encryptor over IPC and must not initialize a key themselves.
++        try (RandomAccessFile lockFile = new RandomAccessFile(new File(directory, RECORD + ".lock"), "rw");
++                FileLock lock = lockFile.getChannel().lock()) {
++            return loadOrCreate(context, new File(directory, RECORD));
++        }
++    }
++
++    private static byte[] loadOrCreate(Context context, File file)
++            throws GeneralSecurityException, IOException {
++        KeyStore keystore = KeyStore.getInstance("AndroidKeyStore");
++        keystore.load(null);
++        AtomicFile storage = new AtomicFile(file);
++        byte[] aad = (context.getPackageName() + "|archium-password-key|v1")
++                .getBytes(StandardCharsets.UTF_8);
++        boolean recordExists = file.exists() || new File(file.getPath() + ".bak").exists();
++        boolean keyExists = keystore.containsAlias(ALIAS);
++        if (recordExists) {
++            if (!keyExists) throw new GeneralSecurityException("Password wrapping key unavailable");
++            byte[] record = storage.readFully();
++            if (record.length != RECORD_BYTES || ByteBuffer.wrap(record).getInt() != MAGIC) {
++                throw new GeneralSecurityException("Invalid wrapped password key record");
++            }
++            SecretKey kek = (SecretKey) keystore.getKey(ALIAS, null);
++            if (kek == null) throw new GeneralSecurityException("Password wrapping key unavailable");
++            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
++            cipher.init(Cipher.DECRYPT_MODE, kek,
++                    new GCMParameterSpec(128, record, 4, NONCE_BYTES));
++            cipher.updateAAD(aad);
++            byte[] dataKey = cipher.doFinal(record, 4 + NONCE_BYTES,
++                    DATA_KEY_BYTES + TAG_BYTES);
++            if (dataKey.length != DATA_KEY_BYTES) {
++                Arrays.fill(dataKey, (byte) 0);
++                throw new GeneralSecurityException("Invalid password data key");
++            }
++            return dataKey;
++        }
++        // A missing record with an existing KEK may mean data was lost. Do not create a new DEK
++        // that would render existing passwords undecryptable or hide the loss from the user.
++        if (keyExists) throw new GeneralSecurityException("Wrapped password key unavailable");
++        KeyGenerator generator = KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES,
++                "AndroidKeyStore");
++        generator.init(new KeyGenParameterSpec.Builder(ALIAS,
++                KeyProperties.PURPOSE_ENCRYPT | KeyProperties.PURPOSE_DECRYPT)
++                .setKeySize(256)
++                .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
++                .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
++                .setRandomizedEncryptionRequired(true)
++                .setUnlockedDeviceRequired(true)
++                .build());
++        SecretKey kek = generator.generateKey();
++        byte[] dataKey = new byte[DATA_KEY_BYTES];
++        new SecureRandom().nextBytes(dataKey);
++        FileOutputStream output = null;
++        try {
++            Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
++            cipher.init(Cipher.ENCRYPT_MODE, kek);
++            cipher.updateAAD(aad);
++            byte[] encrypted = cipher.doFinal(dataKey);
++            byte[] nonce = cipher.getIV();
++            if (nonce.length != NONCE_BYTES || encrypted.length != DATA_KEY_BYTES + TAG_BYTES) {
++                throw new GeneralSecurityException("Unsupported password wrapping parameters");
++            }
++            byte[] record = ByteBuffer.allocate(RECORD_BYTES).putInt(MAGIC)
++                    .put(nonce).put(encrypted).array();
++            output = storage.startWrite();
++            output.write(record);
++            storage.finishWrite(output);
++            output = null;
++            return dataKey;
++        } catch (IOException | GeneralSecurityException | RuntimeException exception) {
++            if (output != null) storage.failWrite(output);
++            Arrays.fill(dataKey, (byte) 0);
++            // Keep the KEK/state for explicit recovery. Automatic replacement would conceal
++            // a failed key initialization and risks losing already encrypted data.
++            throw exception;
++        }
++    }
++}
+diff --git a/chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordKeyBridge.java b/chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordKeyBridge.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordKeyBridge.java
+@@ -0,0 +1,28 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.password_manager;
++
++import org.chromium.base.ContextUtils;
++import org.chromium.build.annotations.Nullable;
++import org.jni_zero.CalledByNative;
++import org.jni_zero.JNINamespace;
++
++import java.io.IOException;
++import java.security.GeneralSecurityException;
++
++/** Native worker-thread bridge. Failures never return a replacement or fallback key. */
++@JNINamespace("password_manager")
++final class ArchiumPasswordKeyBridge {
++    private ArchiumPasswordKeyBridge() {}
++
++    @CalledByNative
++    private static byte @Nullable [] getDataKey() {
++        try {
++            return ArchiumPasswordKey.getOrCreateDataKey(ContextUtils.getApplicationContext());
++        } catch (GeneralSecurityException | IOException | RuntimeException exception) {
++            // Native maps this to temporary unavailability and preserves encrypted records.
++            return null;
++        }
 +    }
 +}
 diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java

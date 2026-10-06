@@ -68,7 +68,7 @@ def main():
                 assert overlay.read_bytes() == (checkout / name).read_bytes(), 'Stale patch: ' + name
             if name.endswith('.xml'):
                 ET.parse(checkout / name)
-        print('Pinned patch: all 20 files applied and hashes matched', flush=True)
+        print(f'Pinned patch: all {len(manifest["originals"])} files applied and hashes matched', flush=True)
         classes = work / 'classes'
         pure = list((ROOT / 'chromium').rglob('ArcDesktopPolicy.java')) + list((ROOT / 'chromium').rglob('ArchiumAutofillPolicy.java'))
         run('javac', '-d', str(classes), *map(str, pure), str(ROOT / 'tests/java/ArcDesktopPolicyTest.java'),
@@ -94,6 +94,9 @@ def main():
             'org.chromium.chrome.browser.lifecycle.ConfigurationChangedObserver': 'public interface ConfigurationChangedObserver { void onConfigurationChanged(android.content.res.Configuration c); }',
             'org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher': 'public interface ActivityLifecycleDispatcher { void register(ConfigurationChangedObserver o); void unregister(ConfigurationChangedObserver o); }',
             'androidx.recyclerview.widget.RecyclerView': 'public class RecyclerView extends android.view.ViewGroup { public RecyclerView(android.content.Context c){super(c);} public abstract static class Adapter<T> { public void notifyDataSetChanged(){} } public Adapter<?> getAdapter(){return null;} protected void onLayout(boolean c,int l,int t,int r,int b){} }',
+            'org.chromium.base.ContextUtils': 'public class ContextUtils { public static android.content.Context getApplicationContext(){return null;} }',
+            'org.jni_zero.CalledByNative': '@java.lang.annotation.Target(java.lang.annotation.ElementType.METHOD) public @interface CalledByNative {}',
+            'org.jni_zero.JNINamespace': '@java.lang.annotation.Target(java.lang.annotation.ElementType.TYPE) public @interface JNINamespace { String value(); }',
             'org.chromium.base.Callback': 'public interface Callback<T> { void onResult(T value); }',
             'org.chromium.google_apis.gaia.GaiaId': 'public class GaiaId {}',
             'org.chromium.components.signin.AuthException': 'public class AuthException extends Exception {}',

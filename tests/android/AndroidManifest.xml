@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="app.archium.keytests">
+    <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="36" />
+    <application android:label="Archium key tests" android:allowBackup="false" />
+    <instrumentation android:name="app.archium.keytests.ArchiumPasswordKeyTest"
+        android:targetPackage="app.archium.keytests" />
+</manifest>
