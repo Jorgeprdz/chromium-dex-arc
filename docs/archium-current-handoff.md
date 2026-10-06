@@ -21,7 +21,7 @@ Este documento describe preparación; no es una entrega de APK ni aceptación fu
 - CSV independiente: 18 casos sintéticos pasan. La pantalla, autenticación y
   conexión SAF/PasswordStore todavía faltan. No se ha leído el CSV personal.
 - 28 pruebas Python de preparación/checkpoints/routing pasan. El parche de
-  59 archivos aplica y coincide con sus hashes. Los checks
+  68 archivos aplica y coincide con sus hashes. Los checks
   aislados de Java/SDK no equivalen a compilar Chromium.
 - Workflow preparado para restaurar un checkpoint anterior con commit explícito,
   conservar objetos/mtimes y compilar los targets modificados antes de la APK.
@@ -31,12 +31,12 @@ Este documento describe preparación; no es una entrega de APK ni aceptación fu
 1. Terminar el gestor nativo de contraseñas: listado/CRUD, autenticación,
    preview y decisiones de duplicados, rechazo de preview desactualizado,
    confirmación atómica, exportación SAF e integración de ajustes/Arc.
-2. Completar la interfaz Arc Mac: selector AUTO/ARC/MOBILE, sidebar, Spaces,
+2. Completar la interfaz Arc Mac: integrar selector ya preparado, sidebar, Spaces,
    favoritos/pinned/carpetas, omnibox y controles reales, clipping del viewport.
-3. Conectar clasificación a RDS/UA, WebPreferences/text sizing, resize/display
-   y preferencias de zoom nativas. Conservar overrides explícitos por sitio.
-4. Integrar Ctrl+Shift+B/middle-click en la sidebar y verificar los comandos e
-   interacciones de Chromium. F11 no se implementa como fullscreen ficticio.
+3. APLAZADO por el usuario: conectar clasificación a RDS/UA, text sizing y zoom
+   en el próximo update; conservar sólo el clasificador ya implementado para UI.
+4. APLAZADO por el usuario: capa adicional de teclado/mouse para el próximo
+   update. Conservar comandos e interacciones nativas existentes.
 5. Review del cambio completo y gates pre-build. Los gates nativos dependen del
    checkout completo de CI; no están marcados como pasados.
 
@@ -92,3 +92,10 @@ completa de MainSettings.
 Modelo de sidebar y almacenamiento preparados: identidades estables, Spaces, Favorites compartidos, carpetas anidadas, fijados que conservan URL al cerrar su pestaña, recuperación de asociación ausente y persistencia versionada. Pruebas JVM de modelo/almacenamiento pasan. El adaptador utiliza UserPrefs y ProfileKeyedMap OWN_INSTANCE; el almacenamiento privado es en memoria. Todavía falta conectar TabModel, renderizar las colecciones y verificar el ciclo de vida nativo/perfiles. No se ha compilado otra APK.
 
 Preparada la API de snapshot/revisión de importación en la DB y su ruta async. Seis nuevas regresiones C++ escritas, pendientes de compilación/ejecución. Ver `docs/validation/local-passwords-results.md`. El gestor visible, autenticación y SAF siguen sin implementar. No hay run nuevo.
+
+Preparados ArcTabActions y ArcNativeTabSession: selección/reapertura sin duplicar
+una pestaña tras error de metadata, cierre confirmado conservando canonical URL,
+comandos nativos createNewTab/pinTab/setIndex/remover/cancelTabClosure, scope del
+modelo activo y limpieza de observers. El controlador pasó JVM con frontera de
+comandos simulada; adapter sólo pasó SDK con contratos stubbed. Todavía NO se
+construyen desde el coordinador Arc y faltan pruebas dentro de Chromium.

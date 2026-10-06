@@ -50,9 +50,11 @@
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAppearanceDialog.java": null,
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java": null,
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopWindowObserver.java": null,
+    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcNativeTabSession.java": null,
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarProfiles.java": null,
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarState.java": null,
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarStore.java": null,
+    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcTabActions.java": null,
     "chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/ArchiumAutofillPolicy.java": null,
     "chrome/browser/desktop_policy/android/BUILD.gn": null,
     "chrome/browser/desktop_policy/android/java/src/org/chromium/chrome/browser/desktop_policy/ArchiumWindowClass.java": null,
@@ -70,7 +72,7 @@
   },
   "modified": {
     "chrome/android/chrome_java_resources.gni": "c4ce973725968badfa1486af494f70f21946d90b576fd033c19699a2502c179c",
-    "chrome/android/chrome_java_sources.gni": "726effa784409da4a5cfe65adce8513cadfb19fc5cf5b42adb344fffeba8bf24",
+    "chrome/android/chrome_java_sources.gni": "3485ad0c69283785c72789c27672dd29b928c341cfe5a4caee3aeff125541a55",
     "chrome/android/features/tab_ui/java/res/values/dimens.xml": "28df17073fd1a88fb4a658d918a8ac92d654e67d2f239d7428b50cff6b4e4670",
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinder.java": "bb51879e1770f1e7b7e46a86ba8af92430a4ff4aeb9bbc5d413682be4dc23cd0",
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListViewBinder.java": "8e8a5e79b6a8b3cb62bcb195b51241b576c959f03ade79416432ef4d61f62950",
@@ -118,9 +120,11 @@
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAppearanceDialog.java": "466f7bd99df2721b289905b7662268c1f82811bf08fc2a1537661a582641a33a",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java": "e1380104f0b9f2a051009e54a34634c90ca37f2286cc6f3e315e0bdc8474951b",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopWindowObserver.java": "0cdde8640e59b8d5d5349a18ba19556bbc7f10e7c6d3ab32820c03064705258c",
+    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcNativeTabSession.java": "62f3d5b93360ebcf813795af585d072ff54f4100b38e7816bdfb4a78fed8cbc6",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarProfiles.java": "16ca484649483c7255aac1d31e3e55a391f5c36cce8921509232cf8ac9ffb52c",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarState.java": "9fa5a851c61eb0d954930c85fd14b1e457709eea9f2fb0b37a5eaeee360675dc",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarStore.java": "4e8f9f565079d87cdf8b5dccb4a780664618f7e3c77993edbaaf23d161b23a1b",
+    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcTabActions.java": "822104e66acde483bb86c134c6a7e53aaaacb99ff908f336e615fa00eb833199",
     "chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/ArchiumAutofillPolicy.java": "8d8c47803c49da5133a19cf94f113a33081d438ac51543122476635f4100b7ef",
     "chrome/browser/desktop_policy/android/BUILD.gn": "0fb70c913943466d344c3c2726a409c66409c58fc33f75976f12968f92a55db5",
     "chrome/browser/desktop_policy/android/java/src/org/chromium/chrome/browser/desktop_policy/ArchiumWindowClass.java": "93a7e3ed1ae260b7470c8fff667a6364577bd3ef880257285a739d926873b14e",
@@ -136,5 +140,5 @@
     "components/password_manager/core/browser/password_store/archium_login_database_unittest.cc": "312c3f77db697e012de57cf1193e524e9526ca5dc5ee776e930a7c862f755734",
     "components/password_manager/core/browser/password_store/archium_password_import_snapshot.h": "85c0a8c44de5edbcddc3fbb4da69edf1c5074914d0af0b5072cfa1981bc41ef9"
   },
-  "patch_sha256": "8e0326be803a60debd3a70e4651a7397464d77273913c5f21268c8ead2ff3d8e"
+  "patch_sha256": "a1ce3c474ec6292823762a5a484044f01d0c3cc16acd5a8c129eead7469ffb7a"
 }
