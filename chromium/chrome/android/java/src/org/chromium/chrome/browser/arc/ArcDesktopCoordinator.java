@@ -9,6 +9,7 @@ import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.text.InputType;
+import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -45,6 +46,8 @@ public final class ArcDesktopCoordinator {
     private final View mNativeTabs;
     private final LinearLayout mColumn;
     private final LinearLayout mHeader;
+    private final LinearLayout mFooter;
+    private final Button mAddressButton;
     private final LargeIconBridge mIcons;
     private final Consumer<String> mNavigate;
     private final IncognitoStateProvider mIncognitoStateProvider;
@@ -63,8 +66,9 @@ public final class ArcDesktopCoordinator {
     private AlertDialog mColorDialog;
 
     public ArcDesktopCoordinator(Activity activity, ViewGroup rail,
-            Profile profile, Consumer<String> navigate, Runnable openBookmarks,
-            Runnable openAutofillSettings, IncognitoStateProvider incognitoStateProvider,
+            Profile profile, Consumer<String> navigate, Runnable focusOmnibox,
+            Runnable openBookmarks, Runnable openPasswordSettings,
+            IncognitoStateProvider incognitoStateProvider,
             Supplier<TabModel> currentModel, Supplier<TabCreator> currentCreator,
             Supplier<Tab> currentTab) {
         mActivity = activity;
@@ -86,18 +90,62 @@ public final class ArcDesktopCoordinator {
                 -1, nativeSpacer.getLayoutParams().height));
         ((VerticalTabRailLayout) mNativeTabs).setDesktopWindowSpacerHost(captionSpacer);
         mHeader = column();
+
+        LinearLayout navigation = new LinearLayout(activity);
+        Button backButton = button("‹", () -> {
+            Tab tab = mCurrentTab.get();
+            if (tab != null && tab.canGoBack()) tab.goBack();
+        });
+        backButton.setContentDescription("Back");
+        Button forwardButton = button("›", () -> {
+            Tab tab = mCurrentTab.get();
+            if (tab != null && tab.canGoForward()) tab.goForward();
+        });
+        forwardButton.setContentDescription("Forward");
+        Button reloadButton = button("↻", () -> {
+            Tab tab = mCurrentTab.get();
+            if (tab != null) tab.reload();
+        });
+        reloadButton.setContentDescription("Reload");
+        for (Button action : new Button[] {backButton, forwardButton, reloadButton}) {
+            navigation.addView(action, new LinearLayout.LayoutParams(dp(44), dp(42)));
+        }
+        mAddressButton = button("Search or enter address", focusOmnibox);
+        mAddressButton.setSingleLine(true);
+        mAddressButton.setEllipsize(TextUtils.TruncateAt.MIDDLE);
+        mAddressButton.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        mAddressButton.setContentDescription("Address and search");
+        navigation.addView(mAddressButton, new LinearLayout.LayoutParams(0, dp(42), 1));
+        mHeader.addView(navigation);
+
         LinearLayout actions = new LinearLayout(activity);
         Button bookmarksButton = button(activity.getString(R.string.arc_bookmarks), openBookmarks);
         Button googleButton = button("Google", () -> {});
-        googleButton.setOnClickListener(v -> showGoogleMenu(v, openAutofillSettings));
+        googleButton.setOnClickListener(v -> showGoogleMenu(v));
         Button appearanceButton = button("●", this::showColorPicker);
         appearanceButton.setContentDescription(activity.getString(R.string.arc_frame_color));
         for (Button action : new Button[] {bookmarksButton, googleButton, appearanceButton}) {
-            actions.addView(action, new LinearLayout.LayoutParams(0, dp(44), 1));
+            actions.addView(action, new LinearLayout.LayoutParams(0, dp(42), 1));
         }
         mHeader.addView(actions);
         mColumn.addView(mHeader);
         mColumn.addView(mNativeTabs, new LinearLayout.LayoutParams(-1, 0, 1));
+
+        mFooter = new LinearLayout(activity);
+        Button passwordButton = button("Passwords", openPasswordSettings);
+        passwordButton.setContentDescription("Local passwords");
+        Button newTabButton = button("+ New tab", () -> {
+            TabCreator creator = mCurrentCreator.get();
+            if (creator != null) {
+                creator.createNewTab(new org.chromium.content_public.browser.LoadUrlParams("chrome://newtab/"),
+                        org.chromium.chrome.browser.tab.TabLaunchType.FROM_CHROME_UI,
+                        mCurrentTab.get());
+            }
+        });
+        for (Button action : new Button[] {passwordButton, newTabButton}) {
+            mFooter.addView(action, new LinearLayout.LayoutParams(0, dp(42), 1));
+        }
+        mColumn.addView(mFooter);
         rail.addView(mColumn, new ViewGroup.LayoutParams(-1, -1));
         mPreferenceListener = (prefs, key) -> {
             if (!mDestroyed && ArcDesktopAppearance.COLOR_KEY.equals(key)) {
@@ -186,17 +234,16 @@ public final class ArcDesktopCoordinator {
         mHeader.addView(mCollectionsView, 0);
     }
 
-    private void showGoogleMenu(View anchor, Runnable openAutofillSettings) {
+    private void showGoogleMenu(View anchor) {
         PopupMenu menu = new PopupMenu(mActivity, anchor);
         String[] labels = {mActivity.getString(R.string.arc_google_login), "Gmail", "Drive",
-                "Calendar", "Docs", "YouTube", mActivity.getString(R.string.arc_autofill)};
+                "Calendar", "Docs", "YouTube"};
         String[] urls = {"https://accounts.google.com/", "https://mail.google.com/",
                 "https://drive.google.com/", "https://calendar.google.com/",
                 "https://docs.google.com/", "https://www.youtube.com/"};
         for (int i = 0; i < labels.length; i++) menu.getMenu().add(0, i, i, labels[i]);
         menu.setOnMenuItemClickListener(item -> {
-            if (item.getItemId() == urls.length) openAutofillSettings.run();
-            else mNavigate.accept(urls[item.getItemId()]);
+            mNavigate.accept(urls[item.getItemId()]);
             return true;
         });
         menu.show();
@@ -234,9 +281,15 @@ public final class ArcDesktopCoordinator {
     private void applyAppearance() {
         if (mDestroyed) return;
         boolean desktop = ArcDesktopAppearance.isDesktopWindow(mActivity);
-        mHeader.setVisibility(desktop && mRail.getWidth() >= dp(100)
-                && mRail.getHeight() >= dp(360) ? View.VISIBLE : View.GONE);
+        boolean showChrome = desktop && mRail.getWidth() >= dp(100)
+                && mRail.getHeight() >= dp(360);
+        mHeader.setVisibility(showChrome ? View.VISIBLE : View.GONE);
+        mFooter.setVisibility(showChrome ? View.VISIBLE : View.GONE);
         if (!desktop) return;
+        Tab current = mCurrentTab.get();
+        String currentUrl = current == null || current.getUrl() == null
+                ? "" : current.getUrl().getSpec();
+        mAddressButton.setText(currentUrl.isEmpty() ? "Search or enter address" : currentUrl);
         if (mCollectionsView != null) {
             mCollectionsView.setCollectionHeight(Math.max(dp(80), Math.min(dp(240), mRail.getHeight() / 4)));
         }
@@ -249,6 +302,7 @@ public final class ArcDesktopCoordinator {
         int foreground = ArcDesktopPolicy.foreground(surface);
         mColumn.setBackgroundColor(surface);
         tintHeader(mHeader, foreground, ArcDesktopPolicy.selection(surface));
+        tintHeader(mFooter, foreground, ArcDesktopPolicy.selection(surface));
     }
 
     private void tintHeader(View view, int foreground, int selection) {
