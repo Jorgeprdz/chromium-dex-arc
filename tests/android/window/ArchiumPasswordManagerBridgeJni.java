@@ -11,6 +11,9 @@ public final class ArchiumPasswordManagerBridgeJni {
         public boolean isLocalEnabled() { return true; }
         public long init(ArchiumPasswordManagerBridge peer, Profile profile, Activity activity) { return 1; }
         public void refresh(long ptr) { commands++; }
+        public void add(long ptr, int request, String url, String username, char[] password) { commands++; }
+        public void update(long ptr, int request, long id, String username, char[] password) { commands++; }
+        public void delete(long ptr, int request, long id) { commands++; }
         public void reveal(long ptr, int request, long id) { commands++; }
         public void export(long ptr, int request) { commands++; }
         public void previewImport(long ptr, int request, String[] urls, String[] users, char[][] passwords) { commands++; }
