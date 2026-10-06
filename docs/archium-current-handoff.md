@@ -88,3 +88,5 @@ la ventana del navegador. Pruebas del diálogo real Android y cola UI pasan en
 la app temporal. La recreación se contó con una Activity de prueba; todavía no
 prueba restauración de pestañas/formularios en la APK Chromium ni la compilación
 completa de MainSettings.
+
+Modelo de sidebar y almacenamiento preparados: identidades estables, Spaces, Favorites compartidos, carpetas anidadas, fijados que conservan URL al cerrar su pestaña, recuperación de asociación ausente y persistencia versionada. Pruebas JVM de modelo/almacenamiento pasan. El adaptador utiliza UserPrefs y ProfileKeyedMap OWN_INSTANCE; el almacenamiento privado es en memoria. Todavía falta conectar TabModel, renderizar las colecciones y verificar el ciclo de vida nativo/perfiles. No se ha compilado otra APK.
