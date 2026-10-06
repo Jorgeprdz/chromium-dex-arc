@@ -353,22 +353,31 @@ diff --git a/chrome/browser/browser_process_impl.cc b/chrome/browser/browser_pro
  #include "components/permissions/permissions_client.h"
  #include "components/policy/core/common/policy_service.h"
  #include "components/prefs/json_pref_store.h"
-@@ -1648,7 +1653,14 @@
+@@ -1648,11 +1653,24 @@
            password_store, l10n_util::GetStringUTF8(IDS_PRODUCT_NAME), nullptr));
  #endif  // BUILDFLAG(IS_LINUX)
  
--#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_MAC)
 +#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
 +  providers.emplace_back(
 +      /*precedence=*/20u,
 +      std::make_unique<password_manager::ArchiumPasswordKeyProvider>());
 +#endif
 +
-+#if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_MAC) && \
-+    !(BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS))
+ #if BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_MAC)
++#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
++  // Read legacy encrypted browser data, but never select its fixed key for new writes.
++  providers.emplace_back(
++      /*precedence=*/5u,
++      std::make_unique<password_manager::ArchiumLegacyKeyProvider>());
++#else
    // On other POSIX systems, this is the only key provider. On Linux, it is used
    // as a fallback.
    providers.emplace_back(
+       /*precedence=*/5u, std::make_unique<os_crypt_async::PosixKeyProvider>());
++#endif  // BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
+ #endif  // BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_LINUX)
+ 
+ #if BUILDFLAG(IS_MAC)
 diff --git a/chrome/browser/password_manager/android/BUILD.gn b/chrome/browser/password_manager/android/BUILD.gn
 --- a/chrome/browser/password_manager/android/BUILD.gn
 +++ b/chrome/browser/password_manager/android/BUILD.gn
@@ -409,7 +418,7 @@ diff --git a/chrome/browser/password_manager/android/BUILD.gn b/chrome/browser/p
    # TODO(crbug.com/40031409): Fix code that adds exit-time destructors and
    # enable the diagnostic by removing this line.
    configs += [ "//build/config/compiler:no_exit_time_destructors" ]
-@@ -699,3 +713,52 @@
+@@ -699,3 +713,55 @@
      "//testing/gtest",
    ]
  }
@@ -437,10 +446,13 @@ diff --git a/chrome/browser/password_manager/android/BUILD.gn b/chrome/browser/p
 +      "archium_password_key_provider.cc",
 +      "archium_password_key_provider.h",
 +    ]
++    public_deps = [
++      "//components/os_crypt/async/browser:key_provider_interface",
++      "//components/os_crypt/async/browser:posix_key_provider",
++    ]
 +    deps = [
 +      ":archium_key_jni_headers",
 +      "//base",
-+      "//components/os_crypt/async/browser:key_provider_interface",
 +      "//components/os_crypt/async/common",
 +      "//third_party/boringssl",
 +    ]
@@ -1199,7 +1211,7 @@ diff --git a/chrome/browser/password_manager/android/archium_password_key_provid
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/password_manager/android/archium_password_key_provider.h
-@@ -0,0 +1,31 @@
+@@ -0,0 +1,38 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -1211,8 +1223,15 @@ new file mode 100644
 +
 +#include "base/functional/callback.h"
 +#include "components/os_crypt/async/browser/key_provider.h"
++#include "components/os_crypt/async/browser/posix_key_provider.h"
 +
 +namespace password_manager {
++
++// Retain readability of the old profile without accepting the old fixed key for new writes.
++class ArchiumLegacyKeyProvider final : public os_crypt_async::PosixKeyProvider {
++ public:
++  bool UseForEncryption() override { return false; }
++};
 +
 +// Android Keystore-backed wrapping of the password database's stable data key.
 +class ArchiumPasswordKeyProvider final : public os_crypt_async::KeyProvider {
@@ -1235,7 +1254,7 @@ diff --git a/chrome/browser/password_manager/android/archium_password_key_provid
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/password_manager/android/archium_password_key_provider_unittest.cc
-@@ -0,0 +1,77 @@
+@@ -0,0 +1,109 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -1291,6 +1310,38 @@ new file mode 100644
 +  EXPECT_EQ("synthetic-password", encryptor->DecryptData(*ciphertext));
 +  ciphertext->back() ^= 1;
 +  EXPECT_FALSE(encryptor->DecryptData(*ciphertext).has_value());
++}
++
++TEST_F(ArchiumPasswordKeyProviderTest, LegacyDecryptsWithoutBecomingEncryptionFallback) {
++  std::vector<std::pair<size_t, std::unique_ptr<os_crypt_async::KeyProvider>>> old_providers;
++  old_providers.emplace_back(5u, std::make_unique<os_crypt_async::PosixKeyProvider>());
++  os_crypt_async::OSCryptAsync old_crypt(std::move(old_providers));
++  base::test::TestFuture<scoped_refptr<os_crypt_async::Encryptor>> old_future;
++  old_crypt.GetInstance(old_future.GetCallback());
++  auto legacy_ciphertext = old_future.Get()->EncryptString("synthetic-legacy-data");
++  ASSERT_TRUE(legacy_ciphertext.has_value());
++
++  for (bool available : {false, true}) {
++    std::vector<std::pair<size_t, std::unique_ptr<os_crypt_async::KeyProvider>>> providers;
++    providers.emplace_back(5u, std::make_unique<ArchiumLegacyKeyProvider>());
++    providers.emplace_back(20u, std::make_unique<ArchiumPasswordKeyProvider>(
++        base::BindRepeating([available] {
++          return std::vector<uint8_t>(available ? 32 : 0, 42);
++        })));
++    os_crypt_async::OSCryptAsync crypt(std::move(providers));
++    base::test::TestFuture<scoped_refptr<os_crypt_async::Encryptor>> future;
++    crypt.GetInstance(future.GetCallback());
++    auto encryptor = future.Get();
++    EXPECT_EQ("synthetic-legacy-data", encryptor->DecryptData(*legacy_ciphertext));
++    EXPECT_EQ(available, encryptor->IsEncryptionAvailable());
++    auto new_ciphertext = encryptor->EncryptString("synthetic-new-password");
++    if (available) {
++      ASSERT_TRUE(new_ciphertext.has_value());
++      EXPECT_EQ("apw1", std::string(new_ciphertext->begin(), new_ciphertext->begin() + 4));
++    } else {
++      EXPECT_FALSE(new_ciphertext.has_value());
++    }
++  }
 +}
 +
 +TEST_F(ArchiumPasswordKeyProviderTest, InvalidKeyFailsClosedAndPreservesData) {

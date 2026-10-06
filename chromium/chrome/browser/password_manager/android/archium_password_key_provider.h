@@ -9,8 +9,15 @@
 
 #include "base/functional/callback.h"
 #include "components/os_crypt/async/browser/key_provider.h"
+#include "components/os_crypt/async/browser/posix_key_provider.h"
 
 namespace password_manager {
+
+// Retain readability of the old profile without accepting the old fixed key for new writes.
+class ArchiumLegacyKeyProvider final : public os_crypt_async::PosixKeyProvider {
+ public:
+  bool UseForEncryption() override { return false; }
+};
 
 // Android Keystore-backed wrapping of the password database's stable data key.
 class ArchiumPasswordKeyProvider final : public os_crypt_async::KeyProvider {

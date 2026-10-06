@@ -55,6 +55,38 @@ TEST_F(ArchiumPasswordKeyProviderTest, RealEncryptorRoundTripAndTamperRejection)
   EXPECT_FALSE(encryptor->DecryptData(*ciphertext).has_value());
 }
 
+TEST_F(ArchiumPasswordKeyProviderTest, LegacyDecryptsWithoutBecomingEncryptionFallback) {
+  std::vector<std::pair<size_t, std::unique_ptr<os_crypt_async::KeyProvider>>> old_providers;
+  old_providers.emplace_back(5u, std::make_unique<os_crypt_async::PosixKeyProvider>());
+  os_crypt_async::OSCryptAsync old_crypt(std::move(old_providers));
+  base::test::TestFuture<scoped_refptr<os_crypt_async::Encryptor>> old_future;
+  old_crypt.GetInstance(old_future.GetCallback());
+  auto legacy_ciphertext = old_future.Get()->EncryptString("synthetic-legacy-data");
+  ASSERT_TRUE(legacy_ciphertext.has_value());
+
+  for (bool available : {false, true}) {
+    std::vector<std::pair<size_t, std::unique_ptr<os_crypt_async::KeyProvider>>> providers;
+    providers.emplace_back(5u, std::make_unique<ArchiumLegacyKeyProvider>());
+    providers.emplace_back(20u, std::make_unique<ArchiumPasswordKeyProvider>(
+        base::BindRepeating([available] {
+          return std::vector<uint8_t>(available ? 32 : 0, 42);
+        })));
+    os_crypt_async::OSCryptAsync crypt(std::move(providers));
+    base::test::TestFuture<scoped_refptr<os_crypt_async::Encryptor>> future;
+    crypt.GetInstance(future.GetCallback());
+    auto encryptor = future.Get();
+    EXPECT_EQ("synthetic-legacy-data", encryptor->DecryptData(*legacy_ciphertext));
+    EXPECT_EQ(available, encryptor->IsEncryptionAvailable());
+    auto new_ciphertext = encryptor->EncryptString("synthetic-new-password");
+    if (available) {
+      ASSERT_TRUE(new_ciphertext.has_value());
+      EXPECT_EQ("apw1", std::string(new_ciphertext->begin(), new_ciphertext->begin() + 4));
+    } else {
+      EXPECT_FALSE(new_ciphertext.has_value());
+    }
+  }
+}
+
 TEST_F(ArchiumPasswordKeyProviderTest, InvalidKeyFailsClosedAndPreservesData) {
   for (size_t size : {0u, 31u, 33u}) {
     std::vector<std::pair<size_t, std::unique_ptr<os_crypt_async::KeyProvider>>> providers;
