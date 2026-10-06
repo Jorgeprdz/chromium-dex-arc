@@ -5,12 +5,11 @@ package org.chromium.chrome.browser.ui.vertical_tabs;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.content.pm.PackageManager;
 import android.content.res.Configuration;
-import android.view.Display;
-import android.view.WindowManager;
 
-/** Arc styling only for the current desktop window, never inferred from width or build flags. */
+import org.chromium.chrome.browser.desktop_policy.ArchiumWindowMetrics;
+
+/** Arc styling follows the current usable window; independent of vendor or desktop service. */
 public final class ArcDesktopAppearance {
     public static final String COLOR_KEY = "frame_color";
     public static final int DEFAULT_COLOR = 0xff53657b;
@@ -18,28 +17,7 @@ public final class ArcDesktopAppearance {
     private ArcDesktopAppearance() {}
 
     public static boolean isDesktopWindow(Context context) {
-        WindowManager manager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
-        if (manager == null) return false;
-        Display display = manager.getDefaultDisplay();
-        // FEATURE_PC describes the runtime device, unlike IS_DESKTOP_ANDROID which describes
-        // this APK and is also true when installed on a phone.
-        boolean pc = context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_PC);
-        return ArcDesktopPolicy.isDesktopWindow(
-                display.getDisplayId() == Display.DEFAULT_DISPLAY,
-                isDexConfiguration(context.getResources().getConfiguration()), pc);
-    }
-
-    private static boolean isDexConfiguration(Configuration config) {
-        // Samsung documents these fields for the WINDOW's Configuration. The global desktopmode
-        // service can report DeX active even for an activity still on the phone's screen.
-        try {
-            Class<?> type = config.getClass();
-            int enabled = type.getField("SEM_DESKTOP_MODE_ENABLED").getInt(null);
-            return enabled == type.getField("semDesktopModeEnabled").getInt(config);
-        } catch (ReflectiveOperationException | SecurityException e) {
-            // Unknown vendor/mode stays mobile; do not guess from display size.
-            return false;
-        }
+        return ArcDesktopPolicy.isDesktopWindow(ArchiumWindowMetrics.currentWidthDp(context));
     }
 
     @SuppressWarnings("UseSharedPreferencesManagerFromChromeCheck")

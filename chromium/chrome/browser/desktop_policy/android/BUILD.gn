@@ -1,0 +1,13 @@
+# Copyright 2026 The Chromium Authors
+# Use of this source code is governed by a BSD-style license that can be
+# found in the LICENSE file.
+import("//build/config/android/rules.gni")
+
+android_library("java") {
+  sources = [
+    "java/src/org/chromium/chrome/browser/desktop_policy/ArchiumWindowClass.java",
+    "java/src/org/chromium/chrome/browser/desktop_policy/ArchiumWindowMetrics.java",
+  ]
+  # Window publicly exports the pinned Window Core dependency and its size classes.
+  deps = [ "//third_party/androidx:androidx_window_window_java" ]
+}

@@ -5,12 +5,12 @@ public final class ArcDesktopPolicyTest {
         if (!value) throw new AssertionError(message);
     }
     public static void main(String[] args) {
-        check(!ArcDesktopPolicy.isDesktopWindow(true, false, false), "phone landscape stays mobile");
-        check(!ArcDesktopPolicy.isDesktopWindow(true, true, false), "phone stays mobile while DeX runs elsewhere");
-        check(!ArcDesktopPolicy.isDesktopWindow(false, false, false), "external mirror is not DeX");
-        check(ArcDesktopPolicy.isDesktopWindow(false, true, false), "DeX window uses Arc");
-        check(ArcDesktopPolicy.isDesktopWindow(true, false, true), "actual PC uses Arc on primary display");
-        check(ArcDesktopPolicy.isDesktopWindow(false, false, true), "actual PC secondary display uses Arc");
+        check(!ArcDesktopPolicy.isDesktopWindow(580), "phone-sized window stays mobile");
+        check(!ArcDesktopPolicy.isDesktopWindow(520), "narrow split/freeform stays mobile");
+        check(ArcDesktopPolicy.isDesktopWindow(600), "tablet boundary enables Arc");
+        check(ArcDesktopPolicy.isDesktopWindow(620), "tablet-sized window uses Arc");
+        check(ArcDesktopPolicy.isDesktopWindow(840), "expanded window uses Arc");
+        check(ArcDesktopPolicy.isDesktopWindow(900), "large window uses Arc independent of device");
         for (int seed = 0; seed <= 0xffffff; seed += 7919) {
             for (boolean dark : new boolean[] {false, true}) {
                 int bg = ArcDesktopPolicy.surface(seed, dark);

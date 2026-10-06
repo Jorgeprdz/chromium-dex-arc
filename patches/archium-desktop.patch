@@ -505,7 +505,7 @@ diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/brow
 diff --git a/chrome/browser/ui/vertical_tabs/BUILD.gn b/chrome/browser/ui/vertical_tabs/BUILD.gn
 --- a/chrome/browser/ui/vertical_tabs/BUILD.gn
 +++ b/chrome/browser/ui/vertical_tabs/BUILD.gn
-@@ -5,7 +5,11 @@
+@@ -5,11 +5,16 @@
  import("//build/config/android/rules.gni")
  
  android_library("java") {
@@ -518,6 +518,11 @@ diff --git a/chrome/browser/ui/vertical_tabs/BUILD.gn b/chrome/browser/ui/vertic
  
    resources_package = "org.chromium.chrome"
  
+   deps = [
++    "//chrome/browser/desktop_policy/android:java",
+     "//base:build_info_java",
+     "//base:metrics_java",
+     "//base:resetters_java",
 diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/VerticalTabUtils.java b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/VerticalTabUtils.java
 --- a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/VerticalTabUtils.java
 +++ b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/VerticalTabUtils.java
@@ -1009,6 +1014,101 @@ new file mode 100644
 +        return googleService && !"app.archium.android".equals(browserPackage);
 +    }
 +}
+diff --git a/chrome/browser/desktop_policy/android/BUILD.gn b/chrome/browser/desktop_policy/android/BUILD.gn
+new file mode 100644
+--- /dev/null
++++ b/chrome/browser/desktop_policy/android/BUILD.gn
+@@ -0,0 +1,13 @@
++# Copyright 2026 The Chromium Authors
++# Use of this source code is governed by a BSD-style license that can be
++# found in the LICENSE file.
++import("//build/config/android/rules.gni")
++
++android_library("java") {
++  sources = [
++    "java/src/org/chromium/chrome/browser/desktop_policy/ArchiumWindowClass.java",
++    "java/src/org/chromium/chrome/browser/desktop_policy/ArchiumWindowMetrics.java",
++  ]
++  # Window publicly exports the pinned Window Core dependency and its size classes.
++  deps = [ "//third_party/androidx:androidx_window_window_java" ]
++}
+diff --git a/chrome/browser/desktop_policy/android/java/src/org/chromium/chrome/browser/desktop_policy/ArchiumWindowClass.java b/chrome/browser/desktop_policy/android/java/src/org/chromium/chrome/browser/desktop_policy/ArchiumWindowClass.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/browser/desktop_policy/android/java/src/org/chromium/chrome/browser/desktop_policy/ArchiumWindowClass.java
+@@ -0,0 +1,24 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.desktop_policy;
++
++import static androidx.window.core.layout.WindowSizeClass.WIDTH_DP_EXPANDED_LOWER_BOUND;
++import static androidx.window.core.layout.WindowSizeClass.WIDTH_DP_MEDIUM_LOWER_BOUND;
++
++/** Current-window classes shared by navigation and Archium UI, independent of hardware. */
++public enum ArchiumWindowClass {
++    COMPACT,
++    TABLET,
++    DESKTOP;
++
++    public static ArchiumWindowClass classify(int currentWidthDp) {
++        if (currentWidthDp >= WIDTH_DP_EXPANDED_LOWER_BOUND) return DESKTOP;
++        if (currentWidthDp >= WIDTH_DP_MEDIUM_LOWER_BOUND) return TABLET;
++        return COMPACT;
++    }
++
++    public boolean usesDesktopNavigation() {
++        return this != COMPACT;
++    }
++}
+diff --git a/chrome/browser/desktop_policy/android/java/src/org/chromium/chrome/browser/desktop_policy/ArchiumWindowMetrics.java b/chrome/browser/desktop_policy/android/java/src/org/chromium/chrome/browser/desktop_policy/ArchiumWindowMetrics.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/browser/desktop_policy/android/java/src/org/chromium/chrome/browser/desktop_policy/ArchiumWindowMetrics.java
+@@ -0,0 +1,43 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.desktop_policy;
++
++import android.content.Context;
++import android.content.res.Configuration;
++import android.graphics.Insets;
++import android.os.Build;
++import android.view.WindowInsets;
++import android.view.WindowManager;
++import android.view.WindowMetrics;
++
++/** Reads the current usable window. Callers must provide their window-scoped Context. */
++public final class ArchiumWindowMetrics {
++    private ArchiumWindowMetrics() {}
++
++    public static int configurationWidthDp(Configuration configuration) {
++        return Math.max(0, configuration.screenWidthDp);
++    }
++
++    public static int currentWidthDp(Context context) {
++        // Application/display contexts do not represent an Activity's freeform or split window.
++        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S && !context.isUiContext()) return 0;
++        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
++            WindowManager manager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
++            if (manager != null) {
++                try {
++                    WindowMetrics metrics = manager.getCurrentWindowMetrics();
++                    Insets insets = metrics.getWindowInsets().getInsetsIgnoringVisibility(
++                            WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout());
++                    int widthPixels = metrics.getBounds().width() - insets.left - insets.right;
++                    float density = context.getResources().getDisplayMetrics().density;
++                    if (widthPixels > 0 && density > 0) return (int) Math.floor(widthPixels / density);
++                } catch (IllegalStateException | UnsupportedOperationException exception) {
++                    // During window attachment the metrics can be unavailable; window Configuration
++                    // remains the adaptive fallback. Never use getDefaultDisplay or panel dimensions.
++                }
++            }
++        }
++        return configurationWidthDp(context.getResources().getConfiguration());
++    }
++}
 diff --git a/chrome/browser/password_manager/android/archium_password_key_provider.cc b/chrome/browser/password_manager/android/archium_password_key_provider.cc
 new file mode 100644
 --- /dev/null
@@ -1383,7 +1483,7 @@ diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrom
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java
-@@ -0,0 +1,64 @@
+@@ -0,0 +1,42 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -1391,12 +1491,11 @@ new file mode 100644
 +
 +import android.content.Context;
 +import android.content.SharedPreferences;
-+import android.content.pm.PackageManager;
 +import android.content.res.Configuration;
-+import android.view.Display;
-+import android.view.WindowManager;
 +
-+/** Arc styling only for the current desktop window, never inferred from width or build flags. */
++import org.chromium.chrome.browser.desktop_policy.ArchiumWindowMetrics;
++
++/** Arc styling follows the current usable window; independent of vendor or desktop service. */
 +public final class ArcDesktopAppearance {
 +    public static final String COLOR_KEY = "frame_color";
 +    public static final int DEFAULT_COLOR = 0xff53657b;
@@ -1404,28 +1503,7 @@ new file mode 100644
 +    private ArcDesktopAppearance() {}
 +
 +    public static boolean isDesktopWindow(Context context) {
-+        WindowManager manager = (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
-+        if (manager == null) return false;
-+        Display display = manager.getDefaultDisplay();
-+        // FEATURE_PC describes the runtime device, unlike IS_DESKTOP_ANDROID which describes
-+        // this APK and is also true when installed on a phone.
-+        boolean pc = context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_PC);
-+        return ArcDesktopPolicy.isDesktopWindow(
-+                display.getDisplayId() == Display.DEFAULT_DISPLAY,
-+                isDexConfiguration(context.getResources().getConfiguration()), pc);
-+    }
-+
-+    private static boolean isDexConfiguration(Configuration config) {
-+        // Samsung documents these fields for the WINDOW's Configuration. The global desktopmode
-+        // service can report DeX active even for an activity still on the phone's screen.
-+        try {
-+            Class<?> type = config.getClass();
-+            int enabled = type.getField("SEM_DESKTOP_MODE_ENABLED").getInt(null);
-+            return enabled == type.getField("semDesktopModeEnabled").getInt(config);
-+        } catch (ReflectiveOperationException | SecurityException e) {
-+            // Unknown vendor/mode stays mobile; do not guess from display size.
-+            return false;
-+        }
++        return ArcDesktopPolicy.isDesktopWindow(ArchiumWindowMetrics.currentWidthDp(context));
 +    }
 +
 +    @SuppressWarnings("UseSharedPreferencesManagerFromChromeCheck")
@@ -1452,18 +1530,20 @@ diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrom
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java
-@@ -0,0 +1,53 @@
+@@ -0,0 +1,55 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
 +package org.chromium.chrome.browser.ui.vertical_tabs;
 +
++import org.chromium.chrome.browser.desktop_policy.ArchiumWindowClass;
++
 +/** Window eligibility and accessible colors, independent of Android and tab models. */
 +public final class ArcDesktopPolicy {
 +    private ArcDesktopPolicy() {}
 +
-+    public static boolean isDesktopWindow(boolean phoneDisplay, boolean dexWindow, boolean pcDevice) {
-+        return pcDevice || (!phoneDisplay && dexWindow);
++    public static boolean isDesktopWindow(int currentWidthDp) {
++        return ArchiumWindowClass.classify(currentWidthDp).usesDesktopNavigation();
 +    }
 +
 +    public static int surface(int seed, boolean dark) {

@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="app.archium.windowtests">
+  <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="36" />
+  <application android:allowBackup="false" android:label="Archium window tests">
+    <activity android:name="app.archium.windowtests.ArchiumWindowMetricsTest$WindowTestActivity" android:exported="false" android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+  </application>
+  <instrumentation android:name="app.archium.windowtests.ArchiumWindowMetricsTest" android:targetPackage="app.archium.windowtests" />
+</manifest>

@@ -3,12 +3,14 @@
 // found in the LICENSE file.
 package org.chromium.chrome.browser.ui.vertical_tabs;
 
+import org.chromium.chrome.browser.desktop_policy.ArchiumWindowClass;
+
 /** Window eligibility and accessible colors, independent of Android and tab models. */
 public final class ArcDesktopPolicy {
     private ArcDesktopPolicy() {}
 
-    public static boolean isDesktopWindow(boolean phoneDisplay, boolean dexWindow, boolean pcDevice) {
-        return pcDevice || (!phoneDisplay && dexWindow);
+    public static boolean isDesktopWindow(int currentWidthDp) {
+        return ArchiumWindowClass.classify(currentWidthDp).usesDesktopNavigation();
     }
 
     public static int surface(int seed, boolean dark) {

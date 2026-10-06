@@ -29,6 +29,10 @@ def main():
     parser.add_argument('--android-jar', type=Path, default=ANDROID_JAR)
     parser.add_argument('--test-original-account-delegate', action='store_true')
     args = parser.parse_args()
+    window_spec = importlib.util.spec_from_file_location('window_core', ROOT / 'scripts/fetch-window-core.py')
+    window_module = importlib.util.module_from_spec(window_spec)
+    window_spec.loader.exec_module(window_module)
+    window_jar = window_module.ensure_jar()
     manifest = json.loads((ROOT / 'patches/upstream-files.json').read_text())
     patch = ROOT / 'patches/archium-desktop.patch'
     assert hashlib.sha256(patch.read_bytes()).hexdigest() == manifest['patch_sha256']
@@ -70,9 +74,10 @@ def main():
                 ET.parse(checkout / name)
         print(f'Pinned patch: all {len(manifest["originals"])} files applied and hashes matched', flush=True)
         classes = work / 'classes'
-        pure = list((ROOT / 'chromium').rglob('ArcDesktopPolicy.java')) + list((ROOT / 'chromium').rglob('ArchiumAutofillPolicy.java'))
-        run('javac', '-d', str(classes), *map(str, pure), str(ROOT / 'tests/java/ArcDesktopPolicyTest.java'),
-            str(ROOT / 'tests/java/ArchiumAutofillPolicyTest.java'))
+        pure = list((ROOT / 'chromium').rglob('ArchiumWindowClass.java')) + list((ROOT / 'chromium').rglob('ArcDesktopPolicy.java')) + list((ROOT / 'chromium').rglob('ArchiumAutofillPolicy.java'))
+        run('javac', '-cp', str(window_jar), '-d', str(classes), *map(str, pure), str(ROOT / 'tests/java/ArcDesktopPolicyTest.java'),
+            str(ROOT / 'tests/java/ArchiumAutofillPolicyTest.java'), str(ROOT / 'tests/java/ArchiumWindowClassTest.java'))
+        run('java', '-cp', str(classes), 'ArchiumWindowClassTest')
         run('java', '-cp', str(classes), 'ArcDesktopPolicyTest')
         run('java', '-cp', str(classes), 'ArchiumAutofillPolicyTest')
         if not args.android_jar.is_file():
@@ -112,7 +117,7 @@ def main():
         new_java = list((ROOT / 'chromium').rglob('*.java'))
         account_path = 'components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java'
         account = (ROOT / '.source-reference' if args.test_original_account_delegate else checkout) / account_path
-        run('javac', '-cp', str(args.android_jar), '-d', str(classes),
+        run('javac', '-cp', str(args.android_jar) + ':' + str(window_jar), '-d', str(classes),
             *map(str, stubs.rglob('*.java')), *map(str, new_java), str(account), str(ROOT / 'tests/java/NullAccountDelegateTest.java'))
         print('New Android adapters: isolated SDK API compilation passed (dependency contracts stubbed)', flush=True)
         run('java', '-cp', str(classes) + ':' + str(args.android_jar), 'NullAccountDelegateTest')

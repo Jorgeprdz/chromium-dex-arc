@@ -3,3 +3,5 @@ docs/source-investigation/
 .source-modified/
 .test-build/
 __pycache__/
+
+.sync-audit/
