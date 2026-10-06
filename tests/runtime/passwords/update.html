@@ -1,0 +1,11 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Archium synthetic password update fixture</title>
+<h1>Synthetic password update</h1>
+<form action="/done" method="post">
+  <label>User <input id="username" name="username" autocomplete="username" required></label>
+  <label>Current password <input id="current" type="password" name="current" autocomplete="current-password" required></label>
+  <label>New password <input id="new" type="password" name="new" autocomplete="new-password" required></label>
+  <label>Repeat password <input id="repeat" type="password" name="repeat" autocomplete="new-password" required></label>
+  <button id="submit" type="submit">Change password</button>
+</form>

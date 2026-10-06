@@ -42,7 +42,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           ARCHIUM_SOURCE_TAG: ${{ inputs.source_tag }}
           ARCHIUM_SOURCE_COMMIT: ${{ inputs.source_commit }}
-          ARCHIUM_VALIDATE_TARGETS: ${{ inputs.validate_native && 'archium_key_provider_tests archium_key_java archium_login_database_tests archium_password_csv_java' || '' }}
+          ARCHIUM_VALIDATE_TARGETS: ${{ inputs.validate_native && 'archium_key_provider_tests archium_key_java archium_login_database_tests archium_password_csv_java chrome/browser/password_manager:unit_tests' || '' }}
           ARCHIUM_PREVIOUS_TAG: ${{ inputs.previous_tag }}
           ARCHIUM_CHECKPOINT_TAG: archium-checkpoint-${{ github.run_id }}-${{ inputs.stage }}
           ARCHIUM_SLICE_MINUTES: '120'

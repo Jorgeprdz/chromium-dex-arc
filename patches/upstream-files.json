@@ -13,9 +13,13 @@
     "chrome/browser/autofill/android/BUILD.gn": "185f8cc78ff078b3cbf64118f95f5aa5279db9e6a379c937e7b51174fdd6db31",
     "chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/AutofillClientProviderUtils.java": "d529bafece94a1ee9cebf8cdffb6390ecc71193f072e19c14ed2bd76bdc54dce",
     "chrome/browser/browser_process_impl.cc": "e2e9f2234b2009f0aace7834aa40907bf0440cf61b6a13e148b8c7c16006a52e",
+    "chrome/browser/password_manager/BUILD.gn": "9cc25b885788a53943fb38b10e82642106988ee55e2962150f6d12d56efc3aaa",
     "chrome/browser/password_manager/android/BUILD.gn": "70616a3dd29419d7ed1f5cb86aae9553f8a31b43abe18eff89c864b39681c1aa",
     "chrome/browser/password_manager/android/password_manager_android_util.cc": "0242c75713a389efcb9c840e5f78e6cc0c75d7d909871088329660aa3c11c3bd",
     "chrome/browser/password_manager/android/password_manager_android_util.h": "e02a833892af437f522064f20660fd1904ec2ec3b3f716600fe6c123ae8996a1",
+    "chrome/browser/password_manager/chrome_password_manager_client.cc": "7f733ca72014891ee7cb31ec6cd0fba15adaaa67228635e0ba12b11847abe180",
+    "chrome/browser/password_manager/chrome_password_manager_client_unittest.cc": "f66c74cbf7cc7a3464048a36c4575906fa0212223e90db631b67523a5ad67c41",
+    "chrome/browser/password_manager/factories/password_manager_settings_service_factory.cc": "ff5d16f8a2d9db94df445be385c0e4d7891e398c9907962d4cb0fe087d92a88a",
     "chrome/browser/password_manager/factories/password_store_backend_factory.cc": "4fc2eecddcaf6384aa55e2ecaf8efbf00bf7076473bad26480fc7d2bef041a1f",
     "chrome/browser/password_manager/factories/profile_password_store_factory.cc": "ade620e99596c844c8262e945b015f078c526b91c963bea178b82877681ae2ec",
     "chrome/browser/sync/BUILD.gn": "d5e0cd499203dc7eeb30f6bcf9cedec75fe3d59b600ae0ef7e28a764f6193792",
@@ -70,9 +74,13 @@
     "chrome/browser/autofill/android/BUILD.gn": "00e2d69719b56d99054d6f62e59fd139ac396af4248cd4aa8d9a4ee813749125",
     "chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/AutofillClientProviderUtils.java": "b14949cce15c8cf64a2cf31a202455309419c22b12539a594952ac3eed34e56a",
     "chrome/browser/browser_process_impl.cc": "94e33383b5380231041c03a8d8986435679d888a48abf6a69a0cafa8a643764e",
+    "chrome/browser/password_manager/BUILD.gn": "b6e34f662ff9afe766a660ede0d2b81fb064e7c2e929dbbe5563aebf8171862a",
     "chrome/browser/password_manager/android/BUILD.gn": "c744fe73400a063a1a09fdefea7729b69b4691a09309891f243952939c1bbc82",
     "chrome/browser/password_manager/android/password_manager_android_util.cc": "ffb74f088ba8e4147f92f946fe3f8909efc57513f43264251b4775e3dae211ca",
     "chrome/browser/password_manager/android/password_manager_android_util.h": "ca6ccc9c45b1b3ddaad787e6d32773f31eba975e5fc304f9acfedd74d8e87ffb",
+    "chrome/browser/password_manager/chrome_password_manager_client.cc": "6636cf6eb0d8b9425347a7a9743012245d69de925d7c513434b688da4fa5f34c",
+    "chrome/browser/password_manager/chrome_password_manager_client_unittest.cc": "e21dfc461bbd3e748193ba3f270db280822e7f7f13708a739a5d17e98371a423",
+    "chrome/browser/password_manager/factories/password_manager_settings_service_factory.cc": "0b86d9e329106c54597fb6ec71aaccdb78b3f0751ae1e22dbb41172baab6da92",
     "chrome/browser/password_manager/factories/password_store_backend_factory.cc": "82663f089aeec79d419b5638715afbbbd13f729d7c5387071d16f5e96044cdf5",
     "chrome/browser/password_manager/factories/profile_password_store_factory.cc": "056269fc4823b2b1fdab4af7ea9aec287d38193ee4bd9deac4d794ccbdfe1b04",
     "chrome/browser/sync/BUILD.gn": "fbdcca57731beaa9b8312b29204cb4db6fdc7f86460469d52d45003ea2d61f92",
@@ -114,5 +122,5 @@
     "chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java": "6a4ee6964cf543285f5559d7c60bf4fe6b213f680775d7e695d82b94e022bc7d",
     "components/password_manager/core/browser/password_store/archium_login_database_unittest.cc": "bd2d761f79347a82c9486e122465f621d3ef81dea40e6e8b946304820f58dec8"
   },
-  "patch_sha256": "d8c7c9a694bb47d0b928f2e85c5ee53d54acae67da7232f56ad008a3117e5d24"
+  "patch_sha256": "da2c72527e4da6366f98220c1ccee33fef920a6a56f1eab90e196769863d7cf1"
 }

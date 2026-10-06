@@ -378,6 +378,17 @@ diff --git a/chrome/browser/browser_process_impl.cc b/chrome/browser/browser_pro
  #endif  // BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_LINUX)
  
  #if BUILDFLAG(IS_MAC)
+diff --git a/chrome/browser/password_manager/BUILD.gn b/chrome/browser/password_manager/BUILD.gn
+--- a/chrome/browser/password_manager/BUILD.gn
++++ b/chrome/browser/password_manager/BUILD.gn
+@@ -457,6 +457,7 @@
+     "//components/password_manager/core/browser",
+     "//components/password_manager/core/browser:passkey_credential",
+     "//components/password_manager/core/browser:password_form",
++    "//components/password_manager/core/browser:password_manager_buildflags",
+     "//components/password_manager/core/browser:test_support",
+     "//components/password_manager/core/browser/features:password_features",
+     "//components/password_manager/core/browser/password_store:test_support",
 diff --git a/chrome/browser/password_manager/android/BUILD.gn b/chrome/browser/password_manager/android/BUILD.gn
 --- a/chrome/browser/password_manager/android/BUILD.gn
 +++ b/chrome/browser/password_manager/android/BUILD.gn
@@ -540,6 +551,99 @@ diff --git a/chrome/browser/password_manager/android/password_manager_android_ut
  
  }  // namespace password_manager_android_util
  
+diff --git a/chrome/browser/password_manager/chrome_password_manager_client.cc b/chrome/browser/password_manager/chrome_password_manager_client.cc
+--- a/chrome/browser/password_manager/chrome_password_manager_client.cc
++++ b/chrome/browser/password_manager/chrome_password_manager_client.cc
+@@ -110,6 +110,7 @@
+ #include "components/password_manager/core/browser/password_store/password_store_util.h"
+ #include "components/password_manager/core/browser/password_sync_util.h"
+ #include "components/password_manager/core/common/password_manager_features.h"
++#include "components/password_manager/core/browser/password_manager_buildflags.h"
+ #include "components/password_manager/core/common/password_manager_pref_names.h"
+ #include "components/policy/core/browser/url_list/url_blocklist_manager.h"
+ #include "components/prefs/pref_service.h"
+@@ -334,9 +335,17 @@
+   }
+ 
+   // Filling is impossible if password store in unavailable.
+-  if (!GetProfilePasswordStore()) {
++  auto* profile_store = GetProfilePasswordStore();
++  if (!profile_store) {
+     return false;
+   }
++#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
++  // A local vault is usable only after its database and Keystore-backed
++  // encryptor initialize. Never offer capture/fill for an unavailable key.
++  if (profile_store->GetError() != password_manager::ActionableError::kNoError) {
++    return false;
++  }
++#endif
+ 
+   const bool ssl_errors = net::IsCertStatusError(GetMainFrameCertStatus());
+   autofill::LogManager* log_manager = GetOrCreateLogManager();
+diff --git a/chrome/browser/password_manager/chrome_password_manager_client_unittest.cc b/chrome/browser/password_manager/chrome_password_manager_client_unittest.cc
+--- a/chrome/browser/password_manager/chrome_password_manager_client_unittest.cc
++++ b/chrome/browser/password_manager/chrome_password_manager_client_unittest.cc
+@@ -74,6 +74,7 @@
+ #include "components/password_manager/core/browser/password_store/mock_password_store_interface.h"
+ #include "components/password_manager/core/browser/password_store/password_form_converters.h"
+ #include "components/password_manager/core/browser/password_store/password_store_consumer.h"
++#include "components/password_manager/core/browser/password_manager_buildflags.h"
+ #include "components/password_manager/core/common/password_manager_pref_names.h"
+ #include "components/prefs/pref_service.h"
+ #include "components/safe_browsing/buildflags.h"
+@@ -626,6 +627,26 @@
+   EXPECT_FALSE(client->IsSavingAndFillingEnabled(url::Origin::Create(kUrlOn)));
+ }
+ 
++#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
++TEST_F(ChromePasswordManagerClientTest, LocalVaultNotReadyBlocksSavingAndFilling) {
++  auto* client = GetClient();
++  auto* store = static_cast<password_manager::MockPasswordStoreInterface*>(
++      client->GetProfilePasswordStore());
++  ON_CALL(settings_service(),
++          IsSettingEnabled(PasswordManagerSetting::kOfferToSavePasswords))
++      .WillByDefault(Return(true));
++  const auto origin = url::Origin::Create(GURL("https://synthetic.example/"));
++  EXPECT_CALL(*store, GetError)
++      .WillRepeatedly(Return(password_manager::ActionableError::kInactionable));
++  EXPECT_FALSE(client->IsFillingEnabled(origin));
++  EXPECT_FALSE(client->IsSavingAndFillingEnabled(origin));
++  EXPECT_CALL(*store, GetError)
++      .WillRepeatedly(Return(password_manager::ActionableError::kNoError));
++  EXPECT_TRUE(client->IsFillingEnabled(origin));
++  EXPECT_TRUE(client->IsSavingAndFillingEnabled(origin));
++}
++#endif
++
+ TEST_F(ChromePasswordManagerClientTest, SavingAndFillingEnabledConditionsTest) {
+   std::unique_ptr<WebContents> test_web_contents(
+       content::WebContentsTester::CreateTestWebContents(
+diff --git a/chrome/browser/password_manager/factories/password_manager_settings_service_factory.cc b/chrome/browser/password_manager/factories/password_manager_settings_service_factory.cc
+--- a/chrome/browser/password_manager/factories/password_manager_settings_service_factory.cc
++++ b/chrome/browser/password_manager/factories/password_manager_settings_service_factory.cc
+@@ -10,6 +10,7 @@
+ #include "chrome/browser/webid/federated_identity_auto_reauthn_permission_context.h"
+ #include "chrome/browser/webid/federated_identity_auto_reauthn_permission_context_factory.h"
+ #include "components/password_manager/core/browser/features/password_features.h"
++#include "components/password_manager/core/browser/password_manager_buildflags.h"
+ #include "components/password_manager/core/browser/password_manager_settings_service.h"
+ #include "components/password_manager/core/browser/password_manager_settings_service_impl.h"
+ #include "components/password_manager/core/common/password_manager_features.h"
+@@ -83,7 +84,12 @@
+ 
+ std::unique_ptr<password_manager::PasswordManagerSettingsService>
+ PasswordManagerSettingsServiceFactory::CreateService(Profile* profile) const {
+-#if BUILDFLAG(IS_ANDROID)
++#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
++  // Reuse Chromium's regular profile preferences; do not fetch GMS settings
++  // for a local vault, or alter the genuine account backend's availability.
++  return std::make_unique<password_manager::PasswordManagerSettingsServiceImpl>(
++      profile->GetPrefs());
++#elif BUILDFLAG(IS_ANDROID)
+   if (password_manager_android_util::IsPasswordManagerAvailable(
+           std::make_unique<
+               password_manager_android_util::PasswordManagerUtilBridge>())) {
 diff --git a/chrome/browser/password_manager/factories/password_store_backend_factory.cc b/chrome/browser/password_manager/factories/password_store_backend_factory.cc
 --- a/chrome/browser/password_manager/factories/password_store_backend_factory.cc
 +++ b/chrome/browser/password_manager/factories/password_store_backend_factory.cc

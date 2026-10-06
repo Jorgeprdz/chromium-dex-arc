@@ -124,7 +124,7 @@ def main():
             *map(str, stubs.rglob('*.java')), *map(str, new_java), str(account), str(ROOT / 'tests/java/NullAccountDelegateTest.java'))
         print('New Android adapters: isolated SDK API compilation passed (dependency contracts stubbed)', flush=True)
         run('java', '-cp', str(classes) + ':' + str(args.android_jar), 'NullAccountDelegateTest')
-        print('APK build and DeX/Google Autofill runtime tests remain pending', flush=True)
+        print('Full Chromium build/native tests and browser password/Arc/adaptive/input acceptance remain pending', flush=True)
 
 
 if __name__ == '__main__':

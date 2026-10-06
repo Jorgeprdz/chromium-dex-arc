@@ -66,7 +66,10 @@ comprueba cifrado, persistencia, errores de clave y rollback de importación en 
 base de datos temporal real. El
 primero es un ejecutable nativo Android con pruebas de Encryptor real; el segundo
 compila las clases de Keystore y el JNI. También se compila
-`archium_password_csv_java`, el transporte CSV sin acceso al almacén. Comparten con el APK un único presupuesto
+`archium_password_csv_java`, el transporte CSV sin acceso al almacén, y el
+source_set `chrome/browser/password_manager:unit_tests`, que incluye el
+regression test de disponibilidad del almacén en el cliente. Compilar el
+source_set comprueba sus objetos; no enlaza ni ejecuta la suite completa. Comparten con el APK un único presupuesto
 de 120 minutos de Ninja por etapa. Un error detiene la cadena; un timeout guarda
 el checkpoint actual. Cuando termina el APK, se conserva también el ejecutable de
 pruebas en el artifact si está disponible. Compilación de esos targets y ejecución
@@ -80,3 +83,7 @@ pausa; la instalación y E2E requieren reanudar.
 Fuentes: https://docs.github.com/en/repositories/releasing-projects-on-github/about-releases
 (límite de 2 GiB por asset, sin límite total de release) y
 https://docs.github.com/en/actions/reference/limits (seis horas por job hospedado).
+
+La forma calificada sin barras iniciales usada por Ninja para el source_set de
+pruebas sigue la [documentación oficial de GN](https://gn.googlesource.com/gn/+/HEAD/docs/reference.md#ninja-build-rules).
+La compilación real contra el checkout fijado sigue pendiente.
