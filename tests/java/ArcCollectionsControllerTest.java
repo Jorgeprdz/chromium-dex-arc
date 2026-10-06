@@ -9,13 +9,14 @@ import org.chromium.chrome.browser.arc.ArcCollectionsController;
 public final class ArcCollectionsControllerTest {
     private static final class Native implements ArcTabActions.NativeTabs {
         final Set<Integer> ids = new HashSet<>();
-        int pinned = -1, unpinned = -1, selected = -1, opens;
+        int pinned = -1, unpinned = -1, selected = -1, opens, spaceChanges;
         public boolean exists(int id) { return ids.contains(id); }
         public int open(String url) { opens++; ids.add(100 + opens); return 100 + opens; }
         public void select(int id) { selected = id; }
         public void pin(int id) { pinned = id; }
         public void unpin(int id) { unpinned = id; }
         public void close(int id) {}
+        public void onSpaceChanged(ArcSidebarState state) { spaceChanges++; }
     }
     private static final class Storage implements ArcSidebarStore.Persistence {
         String value = "";
@@ -47,6 +48,7 @@ public final class ArcCollectionsControllerTest {
                 "favorite replaces pin placement");
         String work = controller.createSpace("Work");
         check(controller.state().selectedSpace().equals(work), "new Space selected atomically");
+        check(nativeTabs.spaceChanges == 1, "native session notified only after Space persistence");
         check(controller.state().favorites().get(0).id.equals(pinned), "favorites shared across Spaces");
         check(controller.rememberTab(7, "https://example.test/", "Example", false).equals(pinned),
                 "moving back from favorites keeps identity");
@@ -57,7 +59,9 @@ public final class ArcCollectionsControllerTest {
         controller.selectSpace(personal);
         check(controller.state().entries(controller.state().selectedSpace()).isEmpty(),
                 "Space selection changes actual visible pinned collection");
+        check(nativeTabs.spaceChanges == 2, "existing Space switch reaches native session");
         controller.selectSpace(work);
+        check(nativeTabs.spaceChanges == 3, "switching back reaches native session");
         ArcSidebarState reopened = new ArcSidebarStore(persistence).load();
         check(reopened.selectedSpace().equals(work) && reopened.entry(pinned).folderId.equals(folder),
                 "Space/folder selection survives reopened store");
