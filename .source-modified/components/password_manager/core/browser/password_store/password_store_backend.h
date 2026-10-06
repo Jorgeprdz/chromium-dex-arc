@@ -134,20 +134,14 @@ class PasswordStoreBackend {
   // required to know the current state of the backend.
   virtual void AddLoginAsync(StoredCredential cred,
                              PasswordChangesOrErrorReply callback) = 0;
-  virtual void GetImportSnapshotAsync(ArchiumImportSnapshotReply callback) {
-    std::move(callback).Run(base::unexpected(PasswordStoreBackendError(
-        PasswordStoreBackendErrorType::kUncategorized)));
-  }
+  virtual void GetImportSnapshotAsync(ArchiumImportSnapshotReply callback);
   // Only a backend with a real transactional implementation may accept imports.
   // The default rejects without changing any row or notifying observers.
   virtual void ImportLoginsAtomicallyAsync(
       std::vector<StoredCredential> credentials,
       PasswordChangesOrErrorReply callback,
       std::optional<ArchiumPasswordImportRevision> expected_revision =
-          std::nullopt) {
-    std::move(callback).Run(base::unexpected(PasswordStoreBackendError(
-        PasswordStoreBackendErrorType::kUncategorized)));
-  }
+          std::nullopt);
   virtual void UpdateLoginAsync(StoredCredential cred,
                                 PasswordChangesOrErrorReply callback) = 0;
   virtual void RemoveLoginAsync(const base::Location& location,
