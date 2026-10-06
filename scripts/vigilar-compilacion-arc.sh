@@ -7,10 +7,10 @@ if [[ -d /data/data/com.termux/files/usr/bin ]]; then
     export PATH="/data/data/com.termux/files/usr/bin:$PATH"
 fi
 readonly repo='Jorgeprdz/chromium-dex-arc'
-readonly run_id='37231453817'
+readonly run_id='37426799878'
 readonly api="https://api.github.com/repos/$repo/actions/runs/$run_id"
 readonly url="https://github.com/$repo/actions/runs/$run_id"
-readonly interval=180
+readonly interval=900
 once=false
 case "${1:-}" in
     --once) once=true ;;
@@ -24,8 +24,8 @@ for dependency in curl jq; do
     fi
 done
 trap 'printf "\nMonitor detenido. La compilación sigue en GitHub.\n"; exit 0' INT TERM
-printf 'Chromium Desktop BASE: sin interfaz Arc todavía.\n%s\n' "$url"
-printf 'Consulta cada 3 minutos; Ctrl+C para salir. No requiere iniciar sesión.\n'
+printf 'Archium FINAL: Arc + contraseñas locales/CSV en compilación.\n%s\n' "$url"
+printf 'Consulta cada 15 minutos; Ctrl+C para salir. No requiere iniciar sesión.\n'
 
 while :; do
     printf '\n[%s]\n' "$(date '+%Y-%m-%d %H:%M:%S')"
@@ -44,8 +44,7 @@ while :; do
         if [[ "$status" == completed ]]; then
             printf '\nTerminó: %s. Detalles y logs: %s\n' "$conclusion" "$url"
             if [[ "$conclusion" == success ]]; then
-                printf 'APK base disponible en: https://github.com/%s/releases\n' "$repo"
-                printf 'No tiene nuestros cambios; no instalar encima de Chromium existente.\n'
+                printf 'Build terminado. Verifica artifact, firma y pruebas antes de instalar o declarar aceptación.\n'
                 exit 0
             fi
             exit 1
