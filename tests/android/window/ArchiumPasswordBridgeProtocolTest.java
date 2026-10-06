@@ -22,6 +22,7 @@ public final class ArchiumPasswordBridgeProtocolTest {
         int[] secrets = {0};
         int[] metadata = {0};
         List<?>[] exports = {null};
+        List<ArchiumPasswordManagerBridge.ImportRow>[] previews = new List[] {null};
         ArchiumPasswordManagerBridge peer = new ArchiumPasswordManagerBridge(activity, new Profile(),
                 new ArchiumPasswordManagerBridge.Listener() {
                     public void onMetadata(List<ArchiumPasswordManagerBridge.Entry> rows, int status) {
@@ -35,7 +36,12 @@ public final class ArchiumPasswordBridgeProtocolTest {
                     public void onExport(int request, int status, List<ArchiumPasswordCsv.SecretRow> rows) {
                         exports[0] = rows;
                     }
-                    public void onPreview(int request, int status, List<ArchiumPasswordManagerBridge.ImportRow> rows) {}
+                    public void onPreview(
+                            int request,
+                            int status,
+                            List<ArchiumPasswordManagerBridge.ImportRow> rows) {
+                        previews[0] = rows;
+                    }
                     public void onOperation(int request, int status) {}
                 });
         peer.start();
@@ -58,6 +64,33 @@ public final class ArchiumPasswordBridgeProtocolTest {
         ArchiumPasswordCsv.writeSecrets(writer, List.of(exportRow));
         check(writer.toString().contains("synthetic export"), "transport preserves export buffer until consumer closes");
         exportRow.close();
+
+        call(peer, "onPreviewStart", new Class<?>[] {int.class}, 20);
+        call(
+                peer,
+                "onPreviewRow",
+                new Class<?>[] {
+                    int.class,
+                    int.class,
+                    int.class,
+                    String.class,
+                    String.class,
+                    String.class,
+                    int.class
+                },
+                20,
+                0,
+                5,
+                "https://test.example/path",
+                "user",
+                "https://test.example/",
+                2);
+        call(peer, "onPreviewEnd", new Class<?>[] {int.class, int.class}, 20, 0);
+        check(previews[0] != null && previews[0].size() == 1, "native preview row delivered");
+        ArchiumPasswordManagerBridge.ImportRow preview = previews[0].get(0);
+        check(preview.identity.equals("https://test.example/"), "canonical native identity preserved");
+        check(preview.requiredDecision == 2, "native replacement decision preserved");
+
         char[][] input = {"synthetic import".toCharArray()};
         peer.previewImport(3, new String[] {"https://test.example/"}, new String[] {"user"}, input);
         for (char c : input[0]) check(c == 0, "JNI input source not erased");
