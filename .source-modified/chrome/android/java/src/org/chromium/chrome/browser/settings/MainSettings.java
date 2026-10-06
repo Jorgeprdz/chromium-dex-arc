@@ -859,6 +859,10 @@ public class MainSettings extends ChromeBaseSettingsFragment
 
     private static void showPasswordSettings(
             Context context, Profile profile, ModalDialogManager modalDialogManager) {
+        if (ArchiumPasswordManagerBridge.isLocalEnabled()) {
+            openArchiumPasswordSettings(context);
+            return;
+        }
         PasswordManagerLauncher.showPasswordSettings(
                 context,
                 profile,
