@@ -7,7 +7,7 @@ if [[ -d /data/data/com.termux/files/usr/bin ]]; then
     export PATH="/data/data/com.termux/files/usr/bin:$PATH"
 fi
 readonly repo='Jorgeprdz/chromium-dex-arc'
-readonly run_id='37426799878'
+readonly run_id='37438146116'
 readonly api="https://api.github.com/repos/$repo/actions/runs/$run_id"
 readonly url="https://github.com/$repo/actions/runs/$run_id"
 readonly interval=900
