@@ -230,6 +230,60 @@ TEST_F(ArchiumLocalPasswordManagerTest, DeniedExportNeverReturnsStoreCredentials
   EXPECT_TRUE(result.Get<1>().empty());
 }
 
+TEST_F(ArchiumLocalPasswordManagerTest,
+       BusyPreviewRequestDoesNotInvalidateAcceptedImportFlow) {
+  std::vector<CSVPassword> first_rows;
+  first_rows.emplace_back(GURL("https://import.test/"), "import-user",
+                          "import-secret", "", CSVPassword::Status::kOK);
+  base::test::TestFuture<
+      Status, std::vector<ArchiumPasswordImportPreview::Row>>
+      first_preview;
+  manager_->PreviewImport(std::move(first_rows), first_preview.GetCallback());
+  ASSERT_TRUE(pending_auth_);
+
+  std::vector<CSVPassword> second_rows;
+  second_rows.emplace_back(GURL("https://rejected.test/"), "other",
+                           "other-secret", "", CSVPassword::Status::kOK);
+  base::test::TestFuture<
+      Status, std::vector<ArchiumPasswordImportPreview::Row>>
+      rejected_preview;
+  manager_->PreviewImport(std::move(second_rows),
+                          rejected_preview.GetCallback());
+  EXPECT_EQ(rejected_preview.Get<0>(), Status::kBusy);
+
+  std::move(pending_auth_).Run(true);
+  tasks_.RunUntilIdle();
+  ASSERT_EQ(first_preview.Get<0>(), Status::kSuccess);
+  ASSERT_EQ(first_preview.Get<1>().size(), 1u);
+
+  base::test::TestFuture<Status> confirmed;
+  manager_->ConfirmImport({ArchiumPasswordImportPreview::Decision::kImport},
+                          confirmed.GetCallback());
+  ASSERT_TRUE(pending_auth_);
+  std::move(pending_auth_).Run(true);
+  tasks_.RunUntilIdle();
+  EXPECT_EQ(confirmed.Get(), Status::kSuccess);
+}
+
+TEST_F(ArchiumLocalPasswordManagerTest,
+       DeniedImportAuthenticationDoesNotCreateConfirmablePreview) {
+  std::vector<CSVPassword> rows;
+  rows.emplace_back(GURL("https://import.test/"), "import-user",
+                    "import-secret", "", CSVPassword::Status::kOK);
+  base::test::TestFuture<
+      Status, std::vector<ArchiumPasswordImportPreview::Row>>
+      preview;
+  manager_->PreviewImport(std::move(rows), preview.GetCallback());
+  ASSERT_TRUE(pending_auth_);
+  std::move(pending_auth_).Run(false);
+  EXPECT_EQ(preview.Get<0>(), Status::kAuthenticationFailed);
+
+  EXPECT_CALL(*auth_, AuthenticateWithMessage(_, _)).Times(0);
+  base::test::TestFuture<Status> confirm;
+  manager_->ConfirmImport({}, confirm.GetCallback());
+  EXPECT_EQ(confirm.Get(), Status::kStale);
+}
+
 TEST_F(ArchiumLocalPasswordManagerTest, CancelledImportCannotConfirmAnything) {
   manager_->CancelImport();
   EXPECT_CALL(*auth_, AuthenticateWithMessage(_, _)).Times(0);
