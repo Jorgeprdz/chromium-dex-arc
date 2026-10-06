@@ -1,11 +1,11 @@
 {
-  "run_id": 37438146116,
-  "url": "https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/37438146116",
-  "dispatch_commit": "739efb61e79d7d606f5aa10694552b5edee42ef1",
+  "run_id": 37466225653,
+  "url": "https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/37466225653",
+  "dispatch_commit": "d419f13b87bdeaca59ff7ace5ee5c98dbaf2089e",
   "source_checkpoint": "archium-checkpoint-37255997027-7",
   "source_commit": "c8ffd13ee7fe1c6baab4913da6a01e8009febe18",
   "monitor_interval_seconds": 900,
-  "preflight_run_id": 37438059397,
+  "preflight_run_id": 37466120522,
   "preflight_result": "success",
-  "note": "Relaunched after moving PasswordStoreInterface/PasswordStoreBackend default virtual implementations out of line; build pending."
+  "note": "Relaunched after adapting PasswordStoreBuiltInBackend platform guards for Android-only enum/pref availability; build pending."
 }
