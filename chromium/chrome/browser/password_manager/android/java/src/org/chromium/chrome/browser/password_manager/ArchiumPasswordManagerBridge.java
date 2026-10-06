@@ -42,8 +42,23 @@ public final class ArchiumPasswordManagerBridge {
         public final int kind;
         public final String url;
         public final String username;
-        private ImportRow(int index, int kind, String url, String username) {
-            this.index = index; this.kind = kind; this.url = url; this.username = username;
+        /** Canonical sign-on realm computed by native Chromium. */
+        public final String identity;
+        /** Only non-skip decision accepted by the native preview for this row. */
+        public final int requiredDecision;
+        private ImportRow(
+                int index,
+                int kind,
+                String url,
+                String username,
+                String identity,
+                int requiredDecision) {
+            this.index = index;
+            this.kind = kind;
+            this.url = url;
+            this.username = username;
+            this.identity = identity;
+            this.requiredDecision = requiredDecision;
         }
     }
     public interface Listener {
@@ -165,10 +180,19 @@ public final class ArchiumPasswordManagerBridge {
     @CalledByNative private void onPreviewStart(int request) {
         if (mListener != null) mPreviews.put(request, new ArrayList<>());
     }
-    @CalledByNative private void onPreviewRow(int request, int index, int kind,
-            @JniType("std::string") String url, @JniType("std::u16string") String username) {
+    @CalledByNative private void onPreviewRow(
+            int request,
+            int index,
+            int kind,
+            @JniType("std::string") String url,
+            @JniType("std::u16string") String username,
+            @JniType("std::string") String identity,
+            int requiredDecision) {
         List<ImportRow> rows = mPreviews.get(request);
-        if (rows != null && mListener != null) rows.add(new ImportRow(index, kind, url, username));
+        if (rows != null && mListener != null) {
+            rows.add(new ImportRow(
+                    index, kind, url, username, identity, requiredDecision));
+        }
     }
     @CalledByNative private void onPreviewEnd(int request, int status) {
         List<ImportRow> rows = mPreviews.remove(request);
