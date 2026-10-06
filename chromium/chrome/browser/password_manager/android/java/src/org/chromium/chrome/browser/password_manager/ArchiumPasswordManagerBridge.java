@@ -79,6 +79,31 @@ public final class ArchiumPasswordManagerBridge {
     }
     private boolean active() { return mStarted && mNativePtr != 0 && mListener != null; }
     public void refresh() { if (active()) ArchiumPasswordManagerBridgeJni.get().refresh(mNativePtr); }
+    /** Password input is consumed and erased after the native call returns. */
+    public void add(int request, String url, String username, char[] password) {
+        try {
+            if (active()) {
+                ArchiumPasswordManagerBridgeJni.get().add(
+                        mNativePtr, request, url, username, password);
+            }
+        } finally {
+            Arrays.fill(password, '\0');
+        }
+    }
+    /** Password input is consumed and erased after the native call returns. */
+    public void update(int request, long id, String username, char[] password) {
+        try {
+            if (active()) {
+                ArchiumPasswordManagerBridgeJni.get().update(
+                        mNativePtr, request, id, username, password);
+            }
+        } finally {
+            Arrays.fill(password, '\0');
+        }
+    }
+    public void delete(int request, long id) {
+        if (active()) ArchiumPasswordManagerBridgeJni.get().delete(mNativePtr, request, id);
+    }
     public void reveal(int request, long id) {
         if (active()) ArchiumPasswordManagerBridgeJni.get().reveal(mNativePtr, request, id);
     }
@@ -172,6 +197,11 @@ public final class ArchiumPasswordManagerBridge {
         boolean isLocalEnabled();
         long init(ArchiumPasswordManagerBridge bridge, @JniType("Profile*") Profile profile, Activity activity);
         void refresh(long nativeArchiumPasswordManagerBridge);
+        void add(long nativeArchiumPasswordManagerBridge, int request, String url,
+                String username, char[] password);
+        void update(long nativeArchiumPasswordManagerBridge, int request, long id,
+                String username, char[] password);
+        void delete(long nativeArchiumPasswordManagerBridge, int request, long id);
         void reveal(long nativeArchiumPasswordManagerBridge, int request, long id);
         void export(long nativeArchiumPasswordManagerBridge, int request);
         void previewImport(long nativeArchiumPasswordManagerBridge, int request, String[] urls, String[] users, char[][] passwords);
