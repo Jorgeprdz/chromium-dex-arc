@@ -229,7 +229,16 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSe
  import org.chromium.chrome.browser.appearance.settings.AppearanceSettingsFragment;
  import org.chromium.chrome.browser.autofill.settings.SettingsNavigationHelper;
  import org.chromium.chrome.browser.autofill.settings.options.AutofillOptionsFragment;
-@@ -130,6 +133,9 @@
+@@ -46,6 +49,8 @@
+ import org.chromium.chrome.browser.flags.ChromeFeatureList;
+ import org.chromium.chrome.browser.glic.GlicEnabling;
+ import org.chromium.chrome.browser.homepage.HomepageManager;
++import org.chromium.chrome.browser.password_manager.ArchiumPasswordManagerBridge;
++import org.chromium.chrome.browser.password_manager.ArchiumPasswordSettingsFragment;
+ import org.chromium.chrome.browser.password_manager.ManagePasswordsReferrer;
+ import org.chromium.chrome.browser.password_manager.PasswordExportLauncher;
+ import org.chromium.chrome.browser.password_manager.PasswordManagerHelper;
+@@ -130,6 +135,9 @@
      public static final String PREF_AUTOFILL_PAYMENTS = "autofill_payment_methods";
      public static final String PREF_SAFETY_HUB = "safety_hub";
      public static final String PREF_ADDRESS_BAR = "address_bar";
@@ -239,7 +248,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSe
      public static final String PREF_APPEARANCE = "appearance";
      public static final String PREF_DEFAULT_BROWSER = "default_browser";
      public static final String PREF_GLIC = "glic";
-@@ -256,6 +262,10 @@
+@@ -256,6 +264,10 @@
  
      @Override
      public void onDestroy() {
@@ -250,7 +259,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSe
          super.onDestroy();
          setMultiColumnSettings(null, null);
          mCallbackController.destroy();
-@@ -370,6 +380,20 @@
+@@ -370,6 +382,20 @@
          mManagedPreferenceDelegate = createManagedPreferenceDelegate();
  
          SettingsUtils.addPreferencesFromResource(this, R.xml.main_preferences);
@@ -271,7 +280,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSe
  
          IdentityManager identityManager =
                  IdentityServicesProvider.get().getIdentityManager(getProfile());
-@@ -603,6 +627,7 @@
+@@ -603,6 +629,7 @@
          updateAutofillPreferences();
          updateAddressBarPreference();
          updateAppearancePreference();
@@ -279,28 +288,96 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSe
          addPreferenceIfAbsent(PREF_TABS);
  
          updateHomepagePreference();
-@@ -853,6 +878,12 @@
-                         || !DeviceFormFactor.isNonMultiDisplayContextOnTablet(context));
+@@ -681,7 +708,13 @@
      }
  
+     private void updateAutofillPreferences() {
+-        if (ChromeFeatureList.isEnabled(ChromeFeatureList.YOUR_SAVED_INFO_SETTINGS_PAGE_ANDROID)) {
++        if (ArchiumPasswordManagerBridge.isLocalEnabled()) {
++            // Archium's local vault is an in-Chrome settings surface. Keep the dedicated
++            // password row visible even if upstream would replace it with the combined page.
++            removePreferenceIfPresent(PREF_AUTOFILL_AND_PASSWORDS);
++            updateAutofillPreferencesPreAutofillAndPasswords();
++        } else if (ChromeFeatureList.isEnabled(
++                ChromeFeatureList.YOUR_SAVED_INFO_SETTINGS_PAGE_ANDROID)) {
+             updateAutofillAndPasswords();
+         } else {
+             removePreferenceIfPresent(PREF_AUTOFILL_AND_PASSWORDS);
+@@ -738,13 +771,23 @@
+         passwordsPreference.setProfile(getProfile());
+         passwordsPreference.setOnPreferenceClickListener(
+                 preference -> {
+-                    onExternalActivityPreferenceClicked(preference);
+-                    showPasswordSettings(
+-                            getActivity(),
+-                            getProfile(),
+-                            mModalDialogManagerSupplier.asNonNull().get());
++                    if (ArchiumPasswordManagerBridge.isLocalEnabled()) {
++                        onPreferenceSelected(preference);
++                        openArchiumPasswordSettings(getActivity());
++                    } else {
++                        onExternalActivityPreferenceClicked(preference);
++                        showPasswordSettings(
++                                getActivity(),
++                                getProfile(),
++                                mModalDialogManagerSupplier.asNonNull().get());
++                    }
+                     return true;
+                 });
++    }
++
++    private static void openArchiumPasswordSettings(Context context) {
++        SettingsNavigationFactory.createSettingsNavigation(context)
++                .startSettings(context, ArchiumPasswordSettingsFragment.class);
+     }
+ 
+     private static void openAutofillOptions(Context context) {
+@@ -790,6 +833,10 @@
+             ModalDialogManager modalDialogManager,
+             boolean shownInTab) {
+         if (key.equals(PREF_PASSWORDS)) {
++            if (ArchiumPasswordManagerBridge.isLocalEnabled()) {
++                openArchiumPasswordSettings(context);
++                return true;
++            }
+             MainSettings.showPasswordSettings(context, profile, modalDialogManager);
+             // Open an external activity. Keep the state as is.
+             return false;
+@@ -812,6 +859,10 @@
+ 
+     private static void showPasswordSettings(
+             Context context, Profile profile, ModalDialogManager modalDialogManager) {
++        if (ArchiumPasswordManagerBridge.isLocalEnabled()) {
++            openArchiumPasswordSettings(context);
++            return;
++        }
+         PasswordManagerLauncher.showPasswordSettings(
+                 context,
+                 profile,
+@@ -851,6 +902,12 @@
+         return !DeviceInfo.isAutomotive()
+                 && (DeviceInfo.isFoldable()
+                         || !DeviceFormFactor.isNonMultiDisplayContextOnTablet(context));
++    }
++
 +    private void updateArcAppearancePreference() {
 +        Preference pref = findPreference(PREF_ARC_INTERFACE);
 +        pref.setSummary(ArcAppearanceDialog.labelForMode(
 +                ArcDesktopAppearance.getUiMode(requireContext())));
-+    }
-+
+     }
+ 
      private void updateAppearancePreference() {
-         Preference pref = findPreference(PREF_APPEARANCE);
-         pref.setTitle(AppearanceSettingsFragment.getTitle(getContext()));
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java
 --- a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java
-@@ -71,6 +71,12 @@
+@@ -71,6 +71,14 @@
  import org.chromium.chrome.browser.ai_overlay_dialog.AiOverlayDialogBridge;
  import org.chromium.chrome.browser.app.tabwindow.TabWindowManagerSingleton;
  import org.chromium.chrome.browser.back_press.BackPressManager;
 +import org.chromium.chrome.browser.arc.ArcDesktopCoordinator;
 +import org.chromium.chrome.browser.arc.ArcDesktopWindowObserver;
++import org.chromium.chrome.browser.password_manager.ArchiumPasswordManagerBridge;
++import org.chromium.chrome.browser.password_manager.ArchiumPasswordSettingsFragment;
 +import org.chromium.chrome.browser.autofill.settings.options.AutofillOptionsFragment;
 +import org.chromium.chrome.browser.settings.SettingsNavigationFactory;
 +import org.chromium.chrome.browser.tab.TabLaunchType;
@@ -308,7 +385,16 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
  import org.chromium.chrome.browser.bookmarks.BookmarkManagerOpener;
  import org.chromium.chrome.browser.bookmarks.BookmarkManagerOpenerImpl;
  import org.chromium.chrome.browser.bookmarks.BookmarkModel;
-@@ -391,6 +397,8 @@
+@@ -304,6 +312,8 @@
+ import org.chromium.components.tab_group_sync.TabGroupSyncController;
+ import org.chromium.components.tab_group_sync.TabGroupSyncService;
+ import org.chromium.components.tab_group_sync.TabGroupUiActionHandler;
++import org.chromium.components.omnibox.AutocompleteInput;
++import org.chromium.components.omnibox.OmniboxFocusReason;
+ import org.chromium.components.user_prefs.UserPrefs;
+ import org.chromium.components.webapps.bottomsheet.PwaBottomSheetController;
+ import org.chromium.components.webapps.bottomsheet.PwaBottomSheetControllerFactory;
+@@ -391,6 +401,8 @@
      private final DataSharingTabManager mDataSharingTabManager;
      private final Supplier<Boolean> mCanAnimateBrowserControls;
      protected @Nullable InstantMessageDelegateImpl mInstantMessageDelegateImpl;
@@ -317,7 +403,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
      private @Nullable BookmarkBarCoordinator mBookmarkBarCoordinator;
      private @Nullable BookmarkBarIphController mBookmarkBarIphController;
      private @Nullable BookmarkBarVisibilityProvider mBookmarkBarVisibilityProvider;
-@@ -883,11 +891,20 @@
+@@ -883,11 +895,20 @@
              Log.w(TAG, "Error getting application info", e);
              mApplicationLabel = mActivity.getResources().getString(R.string.app_name);
          }
@@ -338,7 +424,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
          if (mVerticalTabsPreferenceListener != null) {
              ContextUtils.getAppSharedPreferences()
                      .unregisterOnSharedPreferenceChangeListener(mVerticalTabsPreferenceListener);
-@@ -2501,6 +2518,24 @@
+@@ -2501,6 +2522,38 @@
                                      mBrowserControlsManager,
                                      mBackPressManager),
                              mIsVerticalTabsActiveSupplier);
@@ -351,10 +437,24 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
 +                        if (creator != null) creator.createNewTab(new LoadUrlParams(url),
 +                                TabLaunchType.FROM_CHROME_UI, mActivityTabProvider.get());
 +                    },
++                    () -> {
++                        if (mToolbarManager != null) {
++                            mToolbarManager.beginFuseboxInput(
++                                    new AutocompleteInput(OmniboxFocusReason.OMNIBOX_TAP));
++                        }
++                    },
 +                    () -> mBookmarkManagerOpenerSupplier.asNonNull().get().showBookmarkManager(
 +                            mActivity, mActivityTabProvider.get(), currentlySelectedProfile),
-+                    () -> SettingsNavigationFactory.createSettingsNavigation().startSettings(
-+                            mActivity, AutofillOptionsFragment.class),
++                    () -> {
++                        if (ArchiumPasswordManagerBridge.isLocalEnabled()) {
++                            SettingsNavigationFactory.createSettingsNavigation().startSettings(
++                                    mActivity, ArchiumPasswordSettingsFragment.class);
++                        } else {
++                            SettingsNavigationFactory.createSettingsNavigation().startSettings(
++                                    mActivity, AutofillOptionsFragment.class);
++                        }
++                    },
++                    ArchiumPasswordManagerBridge.isLocalEnabled(),
 +                    mIncognitoStateProvider,
 +                    () -> mTabModelSelectorSupplier.asNonNull().get().getCurrentModel(),
 +                    () -> mTabCreatorManagerSupplier.asNonNull().get().getTabCreator(
@@ -548,7 +648,16 @@ diff --git a/chrome/browser/password_manager/android/BUILD.gn b/chrome/browser/p
      ":android_backend_java_enums",
      ":java_resources",
      ":settings_interface_java",
-@@ -181,6 +189,7 @@
+@@ -181,6 +189,8 @@
+     "java/src/org/chromium/chrome/browser/password_manager/PasswordSettingsUpdaterReceiverBridge.java",
+     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreAndroidBackendDispatcherBridgeImpl.java",
+     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreAndroidBackendReceiverBridgeImpl.java",
++    "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordManagerBridge.java",
++    "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordSettingsFragment.java",
+     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreBridge.java",
+     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreCredential.java",
+     "java/src/org/chromium/chrome/browser/password_manager/PasswordSyncControllerDelegateBridgeImpl.java",
+@@ -204,6 +214,7 @@
      "java/src/org/chromium/chrome/browser/password_manager/PasswordSettingsUpdaterReceiverBridge.java",
      "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreAndroidBackendDispatcherBridgeImpl.java",
      "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreAndroidBackendReceiverBridgeImpl.java",
@@ -556,15 +665,7 @@ diff --git a/chrome/browser/password_manager/android/BUILD.gn b/chrome/browser/p
      "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreBridge.java",
      "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreCredential.java",
      "java/src/org/chromium/chrome/browser/password_manager/PasswordSyncControllerDelegateBridgeImpl.java",
-@@ -204,6 +213,7 @@
-     "java/src/org/chromium/chrome/browser/password_manager/PasswordSettingsUpdaterReceiverBridge.java",
-     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreAndroidBackendDispatcherBridgeImpl.java",
-     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreAndroidBackendReceiverBridgeImpl.java",
-+    "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordManagerBridge.java",
-     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreBridge.java",
-     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreCredential.java",
-     "java/src/org/chromium/chrome/browser/password_manager/PasswordSyncControllerDelegateBridgeImpl.java",
-@@ -616,6 +626,14 @@
+@@ -616,6 +627,14 @@
      "//ui/base",
    ]
  
@@ -579,7 +680,7 @@ diff --git a/chrome/browser/password_manager/android/BUILD.gn b/chrome/browser/p
    # TODO(crbug.com/40031409): Fix code that adds exit-time destructors and
    # enable the diagnostic by removing this line.
    configs += [ "//build/config/compiler:no_exit_time_destructors" ]
-@@ -699,3 +717,93 @@
+@@ -699,3 +718,93 @@
      "//testing/gtest",
    ]
  }
@@ -2570,7 +2671,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopC
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
-@@ -0,0 +1,296 @@
+@@ -0,0 +1,352 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -2582,6 +2683,7 @@ new file mode 100644
 +import android.graphics.Color;
 +import android.graphics.drawable.GradientDrawable;
 +import android.text.InputType;
++import android.text.TextUtils;
 +import android.view.Gravity;
 +import android.view.View;
 +import android.view.ViewGroup;
@@ -2618,6 +2720,8 @@ new file mode 100644
 +    private final View mNativeTabs;
 +    private final LinearLayout mColumn;
 +    private final LinearLayout mHeader;
++    private final LinearLayout mFooter;
++    private final Button mAddressButton;
 +    private final LargeIconBridge mIcons;
 +    private final Consumer<String> mNavigate;
 +    private final IncognitoStateProvider mIncognitoStateProvider;
@@ -2636,8 +2740,9 @@ new file mode 100644
 +    private AlertDialog mColorDialog;
 +
 +    public ArcDesktopCoordinator(Activity activity, ViewGroup rail,
-+            Profile profile, Consumer<String> navigate, Runnable openBookmarks,
-+            Runnable openAutofillSettings, IncognitoStateProvider incognitoStateProvider,
++            Profile profile, Consumer<String> navigate, Runnable focusOmnibox,
++            Runnable openBookmarks, Runnable openPasswordSettings,
++            boolean localPasswordsEnabled, IncognitoStateProvider incognitoStateProvider,
 +            Supplier<TabModel> currentModel, Supplier<TabCreator> currentCreator,
 +            Supplier<Tab> currentTab) {
 +        mActivity = activity;
@@ -2659,18 +2764,64 @@ new file mode 100644
 +                -1, nativeSpacer.getLayoutParams().height));
 +        ((VerticalTabRailLayout) mNativeTabs).setDesktopWindowSpacerHost(captionSpacer);
 +        mHeader = column();
++
++        LinearLayout navigation = new LinearLayout(activity);
++        Button backButton = button("‹", () -> {
++            Tab tab = mCurrentTab.get();
++            if (tab != null && tab.canGoBack()) tab.goBack();
++        });
++        backButton.setContentDescription("Back");
++        Button forwardButton = button("›", () -> {
++            Tab tab = mCurrentTab.get();
++            if (tab != null && tab.canGoForward()) tab.goForward();
++        });
++        forwardButton.setContentDescription("Forward");
++        Button reloadButton = button("↻", () -> {
++            Tab tab = mCurrentTab.get();
++            if (tab != null) tab.reload();
++        });
++        reloadButton.setContentDescription("Reload");
++        for (Button action : new Button[] {backButton, forwardButton, reloadButton}) {
++            navigation.addView(action, new LinearLayout.LayoutParams(dp(44), dp(42)));
++        }
++        mAddressButton = button("Search or enter address", focusOmnibox);
++        mAddressButton.setSingleLine(true);
++        mAddressButton.setEllipsize(TextUtils.TruncateAt.MIDDLE);
++        mAddressButton.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
++        mAddressButton.setContentDescription("Address and search");
++        navigation.addView(mAddressButton, new LinearLayout.LayoutParams(0, dp(42), 1));
++        mHeader.addView(navigation);
++
 +        LinearLayout actions = new LinearLayout(activity);
 +        Button bookmarksButton = button(activity.getString(R.string.arc_bookmarks), openBookmarks);
 +        Button googleButton = button("Google", () -> {});
-+        googleButton.setOnClickListener(v -> showGoogleMenu(v, openAutofillSettings));
++        googleButton.setOnClickListener(v -> showGoogleMenu(v));
 +        Button appearanceButton = button("●", this::showColorPicker);
 +        appearanceButton.setContentDescription(activity.getString(R.string.arc_frame_color));
 +        for (Button action : new Button[] {bookmarksButton, googleButton, appearanceButton}) {
-+            actions.addView(action, new LinearLayout.LayoutParams(0, dp(44), 1));
++            actions.addView(action, new LinearLayout.LayoutParams(0, dp(42), 1));
 +        }
 +        mHeader.addView(actions);
 +        mColumn.addView(mHeader);
 +        mColumn.addView(mNativeTabs, new LinearLayout.LayoutParams(-1, 0, 1));
++
++        mFooter = new LinearLayout(activity);
++        Button passwordButton = button(localPasswordsEnabled ? "Passwords" : "Autofill",
++                openPasswordSettings);
++        passwordButton.setContentDescription(
++                localPasswordsEnabled ? "Local passwords" : "Autofill settings");
++        Button newTabButton = button("+ New tab", () -> {
++            TabCreator creator = mCurrentCreator.get();
++            if (creator != null) {
++                creator.createNewTab(new org.chromium.content_public.browser.LoadUrlParams("chrome://newtab/"),
++                        org.chromium.chrome.browser.tab.TabLaunchType.FROM_CHROME_UI,
++                        mCurrentTab.get());
++            }
++        });
++        for (Button action : new Button[] {passwordButton, newTabButton}) {
++            mFooter.addView(action, new LinearLayout.LayoutParams(0, dp(42), 1));
++        }
++        mColumn.addView(mFooter);
 +        rail.addView(mColumn, new ViewGroup.LayoutParams(-1, -1));
 +        mPreferenceListener = (prefs, key) -> {
 +            if (!mDestroyed && ArcDesktopAppearance.COLOR_KEY.equals(key)) {
@@ -2759,17 +2910,16 @@ new file mode 100644
 +        mHeader.addView(mCollectionsView, 0);
 +    }
 +
-+    private void showGoogleMenu(View anchor, Runnable openAutofillSettings) {
++    private void showGoogleMenu(View anchor) {
 +        PopupMenu menu = new PopupMenu(mActivity, anchor);
 +        String[] labels = {mActivity.getString(R.string.arc_google_login), "Gmail", "Drive",
-+                "Calendar", "Docs", "YouTube", mActivity.getString(R.string.arc_autofill)};
++                "Calendar", "Docs", "YouTube"};
 +        String[] urls = {"https://accounts.google.com/", "https://mail.google.com/",
 +                "https://drive.google.com/", "https://calendar.google.com/",
 +                "https://docs.google.com/", "https://www.youtube.com/"};
 +        for (int i = 0; i < labels.length; i++) menu.getMenu().add(0, i, i, labels[i]);
 +        menu.setOnMenuItemClickListener(item -> {
-+            if (item.getItemId() == urls.length) openAutofillSettings.run();
-+            else mNavigate.accept(urls[item.getItemId()]);
++            mNavigate.accept(urls[item.getItemId()]);
 +            return true;
 +        });
 +        menu.show();
@@ -2807,9 +2957,15 @@ new file mode 100644
 +    private void applyAppearance() {
 +        if (mDestroyed) return;
 +        boolean desktop = ArcDesktopAppearance.isDesktopWindow(mActivity);
-+        mHeader.setVisibility(desktop && mRail.getWidth() >= dp(100)
-+                && mRail.getHeight() >= dp(360) ? View.VISIBLE : View.GONE);
++        boolean showChrome = desktop && mRail.getWidth() >= dp(100)
++                && mRail.getHeight() >= dp(360);
++        mHeader.setVisibility(showChrome ? View.VISIBLE : View.GONE);
++        mFooter.setVisibility(showChrome ? View.VISIBLE : View.GONE);
 +        if (!desktop) return;
++        Tab current = mCurrentTab.get();
++        String currentUrl = current == null || current.getUrl() == null
++                ? "" : current.getUrl().getSpec();
++        mAddressButton.setText(currentUrl.isEmpty() ? "Search or enter address" : currentUrl);
 +        if (mCollectionsView != null) {
 +            mCollectionsView.setCollectionHeight(Math.max(dp(80), Math.min(dp(240), mRail.getHeight() / 4)));
 +        }
@@ -2822,6 +2978,7 @@ new file mode 100644
 +        int foreground = ArcDesktopPolicy.foreground(surface);
 +        mColumn.setBackgroundColor(surface);
 +        tintHeader(mHeader, foreground, ArcDesktopPolicy.selection(surface));
++        tintHeader(mFooter, foreground, ArcDesktopPolicy.selection(surface));
 +    }
 +
 +    private void tintHeader(View view, int foreground, int selection) {
@@ -3676,7 +3833,7 @@ diff --git a/chrome/browser/password_manager/android/archium_local_password_mana
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/password_manager/android/archium_local_password_manager.cc
-@@ -0,0 +1,188 @@
+@@ -0,0 +1,405 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -3687,6 +3844,7 @@ new file mode 100644
 +
 +#include "base/functional/bind.h"
 +#include "base/location.h"
++#include "base/strings/utf_string_conversions.h"
 +#include "base/task/thread_pool.h"
 +#include "components/password_manager/core/browser/password_store/actionable_error.h"
 +
@@ -3723,6 +3881,222 @@ new file mode 100644
 +    entries_.emplace(id, std::move(entry));
 +  }
 +  return metadata;
++}
++
++void ArchiumLocalPasswordManager::Add(
++    GURL url,
++    std::u16string username,
++    PasswordString password,
++    OperationReply reply) {
++  Authenticate(base::BindOnce(
++      [](base::WeakPtr<ArchiumLocalPasswordManager> self, GURL url,
++         std::u16string username, PasswordString password, OperationReply reply,
++         Status status) {
++        if (!self) return;
++        if (status != Status::kSuccess) {
++          std::move(reply).Run(status);
++          return;
++        }
++
++        const auto secret = password.secure_value();
++        std::u16string password_text(secret.data(), secret.size());
++        CSVPassword csv(url, base::UTF16ToUTF8(username),
++                        base::UTF16ToUTF8(password_text), "",
++                        CSVPassword::Status::kOK);
++        CredentialUIEntry credential(csv, PasswordForm::Store::kProfileStore);
++        std::fill(password_text.begin(), password_text.end(), u'\0');
++
++        self->writing_ = true;
++        const bool accepted = self->presenter_.AddCredential(
++            credential, PasswordForm::Type::kManuallyAdded, base::DoNothing());
++        std::fill(credential.password.begin(), credential.password.end(), u'\0');
++        if (!accepted) {
++          self->writing_ = false;
++          std::move(reply).Run(Status::kInvalid);
++          return;
++        }
++        self->VerifyAddedCredential(url, username, password, std::move(reply));
++      },
++      weak_ptr_factory_.GetWeakPtr(), std::move(url), std::move(username),
++      std::move(password), std::move(reply)));
++}
++
++void ArchiumLocalPasswordManager::Update(
++    int64_t id,
++    std::u16string username,
++    PasswordString password,
++    OperationReply reply) {
++  Authenticate(base::BindOnce(
++      [](base::WeakPtr<ArchiumLocalPasswordManager> self, int64_t id,
++         std::u16string username, PasswordString password, OperationReply reply,
++         Status status) {
++        if (!self) return;
++        if (status != Status::kSuccess) {
++          std::move(reply).Run(status);
++          return;
++        }
++        auto found = self->entries_.find(id);
++        if (found == self->entries_.end()) {
++          std::move(reply).Run(Status::kStale);
++          return;
++        }
++
++        CredentialUIEntry original = found->second;
++        CredentialUIEntry updated = original;
++        updated.username = username;
++        const auto secret = password.secure_value();
++        updated.password.assign(secret.data(), secret.size());
++        const GURL url = original.GetURL();
++        const std::string signon_realm = original.GetFirstSignonRealm();
++        const std::u16string old_username = original.username;
++
++        self->writing_ = true;
++        const auto result =
++            self->presenter_.EditSavedCredentials(original, updated);
++        std::fill(updated.password.begin(), updated.password.end(), u'\0');
++        if (result == SavedPasswordsPresenter::EditResult::kNothingChanged) {
++          self->writing_ = false;
++          std::move(reply).Run(Status::kSuccess);
++          return;
++        }
++        if (result == SavedPasswordsPresenter::EditResult::kNotFound) {
++          self->writing_ = false;
++          std::move(reply).Run(Status::kStale);
++          return;
++        }
++        if (result != SavedPasswordsPresenter::EditResult::kSuccess) {
++          self->writing_ = false;
++          std::move(reply).Run(Status::kInvalid);
++          return;
++        }
++        self->VerifyUpdatedCredential(url, signon_realm, old_username, username,
++                                      password, std::move(reply));
++      },
++      weak_ptr_factory_.GetWeakPtr(), id, std::move(username),
++      std::move(password), std::move(reply)));
++}
++
++void ArchiumLocalPasswordManager::Delete(int64_t id, OperationReply reply) {
++  Authenticate(base::BindOnce(
++      [](base::WeakPtr<ArchiumLocalPasswordManager> self, int64_t id,
++         OperationReply reply, Status status) {
++        if (!self) return;
++        if (status != Status::kSuccess) {
++          std::move(reply).Run(status);
++          return;
++        }
++        auto found = self->entries_.find(id);
++        if (found == self->entries_.end()) {
++          std::move(reply).Run(Status::kStale);
++          return;
++        }
++        CredentialUIEntry original = found->second;
++        const std::string signon_realm = original.GetFirstSignonRealm();
++        const std::u16string username = original.username;
++
++        self->writing_ = true;
++        if (!self->presenter_.RemoveCredential(original)) {
++          self->writing_ = false;
++          std::move(reply).Run(Status::kStale);
++          return;
++        }
++        self->VerifyDeletedCredential(signon_realm, username, std::move(reply));
++      },
++      weak_ptr_factory_.GetWeakPtr(), id, std::move(reply)));
++}
++
++void ArchiumLocalPasswordManager::VerifyAddedCredential(
++    const GURL& url,
++    const std::u16string& username,
++    const PasswordString& password,
++    OperationReply reply) {
++  store_->GetImportSnapshot(base::BindOnce(
++      [](base::WeakPtr<ArchiumLocalPasswordManager> self, GURL url,
++         std::u16string username, PasswordString password, OperationReply reply,
++         ArchiumImportSnapshotResult snapshot) {
++        if (!self) return;
++        self->writing_ = false;
++        if (!snapshot || !self->Ready()) {
++          std::move(reply).Run(Status::kWriteFailed);
++          return;
++        }
++        const bool found = std::ranges::any_of(
++            snapshot->credentials, [&](const StoredCredential& entry) {
++              return entry.IsUsingProfileStore() && entry.url == url &&
++                     entry.username_value == username &&
++                     entry.password_value == password;
++            });
++        std::move(reply).Run(found ? Status::kSuccess : Status::kWriteFailed);
++      },
++      weak_ptr_factory_.GetWeakPtr(), url, username, password,
++      std::move(reply)));
++}
++
++void ArchiumLocalPasswordManager::VerifyUpdatedCredential(
++    const GURL& url,
++    const std::string& signon_realm,
++    const std::u16string& old_username,
++    const std::u16string& username,
++    const PasswordString& password,
++    OperationReply reply) {
++  store_->GetImportSnapshot(base::BindOnce(
++      [](base::WeakPtr<ArchiumLocalPasswordManager> self, GURL url,
++         std::string signon_realm, std::u16string old_username,
++         std::u16string username, PasswordString password, OperationReply reply,
++         ArchiumImportSnapshotResult snapshot) {
++        if (!self) return;
++        self->writing_ = false;
++        if (!snapshot || !self->Ready()) {
++          std::move(reply).Run(Status::kWriteFailed);
++          return;
++        }
++        const bool updated = std::ranges::any_of(
++            snapshot->credentials, [&](const StoredCredential& entry) {
++              return entry.IsUsingProfileStore() &&
++                     entry.signon_realm == signon_realm && entry.url == url &&
++                     entry.username_value == username &&
++                     entry.password_value == password;
++            });
++        const bool stale_old =
++            old_username != username &&
++            std::ranges::any_of(
++                snapshot->credentials, [&](const StoredCredential& entry) {
++                  return entry.IsUsingProfileStore() &&
++                         entry.signon_realm == signon_realm &&
++                         entry.username_value == old_username;
++                });
++        std::move(reply).Run(updated && !stale_old ? Status::kSuccess
++                                                   : Status::kWriteFailed);
++      },
++      weak_ptr_factory_.GetWeakPtr(), url, signon_realm, old_username, username,
++      password, std::move(reply)));
++}
++
++void ArchiumLocalPasswordManager::VerifyDeletedCredential(
++    const std::string& signon_realm,
++    const std::u16string& username,
++    OperationReply reply) {
++  store_->GetImportSnapshot(base::BindOnce(
++      [](base::WeakPtr<ArchiumLocalPasswordManager> self,
++         std::string signon_realm, std::u16string username,
++         OperationReply reply, ArchiumImportSnapshotResult snapshot) {
++        if (!self) return;
++        self->writing_ = false;
++        if (!snapshot || !self->Ready()) {
++          std::move(reply).Run(Status::kWriteFailed);
++          return;
++        }
++        const bool still_present = std::ranges::any_of(
++            snapshot->credentials, [&](const StoredCredential& entry) {
++              return entry.IsUsingProfileStore() &&
++                     entry.signon_realm == signon_realm &&
++                     entry.username_value == username;
++            });
++        std::move(reply).Run(!still_present ? Status::kSuccess
++                                            : Status::kWriteFailed);
++      },
++      weak_ptr_factory_.GetWeakPtr(), signon_realm, username,
++      std::move(reply)));
 +}
 +
 +void ArchiumLocalPasswordManager::Authenticate(OperationReply reply) {
@@ -3869,7 +4243,7 @@ diff --git a/chrome/browser/password_manager/android/archium_local_password_mana
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/password_manager/android/archium_local_password_manager.h
-@@ -0,0 +1,85 @@
+@@ -0,0 +1,107 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -3924,6 +4298,15 @@ new file mode 100644
 +  ~ArchiumLocalPasswordManager() override;
 +
 +  base::expected<std::vector<Metadata>, Status> GetMetadata();
++  void Add(GURL url,
++           std::u16string username,
++           PasswordString password,
++           OperationReply reply);
++  void Update(int64_t id,
++              std::u16string username,
++              PasswordString password,
++              OperationReply reply);
++  void Delete(int64_t id, OperationReply reply);
 +  void Reveal(int64_t id, SecretReply reply);
 +  void Export(ExportReply reply);
 +  void PreviewImport(std::vector<CSVPassword> rows, PreviewReply reply);
@@ -3936,6 +4319,19 @@ new file mode 100644
 +  bool Ready() const;
 +  void Authenticate(OperationReply reply);
 +  void OnAuthenticated(OperationReply reply, bool success);
++  void VerifyAddedCredential(const GURL& url,
++                             const std::u16string& username,
++                             const PasswordString& password,
++                             OperationReply reply);
++  void VerifyUpdatedCredential(const GURL& url,
++                               const std::string& signon_realm,
++                               const std::u16string& old_username,
++                               const std::u16string& username,
++                               const PasswordString& password,
++                               OperationReply reply);
++  void VerifyDeletedCredential(const std::string& signon_realm,
++                               const std::u16string& username,
++                               OperationReply reply);
 +  void OnSavedPasswordsChanged(const PasswordStoreChangeList& changes) override;
 +
 +  scoped_refptr<PasswordStoreInterface> store_;
@@ -3959,12 +4355,13 @@ diff --git a/chrome/browser/password_manager/android/archium_local_password_mana
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/password_manager/android/archium_local_password_manager_unittest.cc
-@@ -0,0 +1,176 @@
+@@ -0,0 +1,263 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
 +#include "chrome/browser/password_manager/android/archium_local_password_manager.h"
 +
++#include <algorithm>
 +#include <memory>
 +#include <utility>
 +
@@ -4032,6 +4429,92 @@ new file mode 100644
 +  EXPECT_GT(metadata->front().id, 0);
 +  EXPECT_EQ(metadata->front().url, GURL("https://example.test/"));
 +  EXPECT_EQ(metadata->front().username, u"user");
++}
++
++TEST_F(ArchiumLocalPasswordManagerTest, AddAuthenticatesAndVerifiesPersistedCredential) {
++  base::test::TestFuture<Status> result;
++  manager_->Add(GURL("https://added.test/"), u"new-user",
++                PasswordString(std::u16string(u"new-secret")),
++                result.GetCallback());
++  EXPECT_FALSE(result.IsReady());
++  ASSERT_TRUE(pending_auth_);
++  std::move(pending_auth_).Run(true);
++  tasks_.RunUntilIdle();
++  ASSERT_TRUE(result.IsReady());
++  EXPECT_EQ(result.Get(), Status::kSuccess);
++
++  auto metadata = manager_->GetMetadata();
++  ASSERT_TRUE(metadata.has_value());
++  EXPECT_EQ(metadata->size(), 2u);
++  EXPECT_TRUE(std::ranges::any_of(*metadata, [](const auto& entry) {
++    return entry.url == GURL("https://added.test/") &&
++           entry.username == u"new-user";
++  }));
++}
++
++TEST_F(ArchiumLocalPasswordManagerTest, UpdateRevalidatesIdAndVerifiesPersistedCredential) {
++  const int64_t id = FirstId();
++  base::test::TestFuture<Status> result;
++  manager_->Update(id, u"renamed",
++                   PasswordString(std::u16string(u"new-secret")),
++                   result.GetCallback());
++  ASSERT_TRUE(pending_auth_);
++  std::move(pending_auth_).Run(true);
++  tasks_.RunUntilIdle();
++  ASSERT_TRUE(result.IsReady());
++  EXPECT_EQ(result.Get(), Status::kSuccess);
++
++  auto metadata = manager_->GetMetadata();
++  ASSERT_TRUE(metadata.has_value());
++  ASSERT_EQ(metadata->size(), 1u);
++  EXPECT_EQ(metadata->front().username, u"renamed");
++
++  base::test::TestFuture<Status, PasswordString> reveal;
++  manager_->Reveal(metadata->front().id, reveal.GetCallback());
++  ASSERT_TRUE(pending_auth_);
++  std::move(pending_auth_).Run(true);
++  EXPECT_EQ(reveal.Get<0>(), Status::kSuccess);
++  EXPECT_EQ(reveal.Get<1>(), u"new-secret");
++}
++
++TEST_F(ArchiumLocalPasswordManagerTest, DeleteRevalidatesIdAndVerifiesRemoval) {
++  const int64_t id = FirstId();
++  base::test::TestFuture<Status> result;
++  manager_->Delete(id, result.GetCallback());
++  ASSERT_TRUE(pending_auth_);
++  std::move(pending_auth_).Run(true);
++  tasks_.RunUntilIdle();
++  ASSERT_TRUE(result.IsReady());
++  EXPECT_EQ(result.Get(), Status::kSuccess);
++
++  auto metadata = manager_->GetMetadata();
++  ASSERT_TRUE(metadata.has_value());
++  EXPECT_TRUE(metadata->empty());
++}
++
++TEST_F(ArchiumLocalPasswordManagerTest, StoreChangeDuringUpdateAuthenticationMakesIdStale) {
++  const int64_t id = FirstId();
++  base::test::TestFuture<Status> result;
++  manager_->Update(id, u"renamed",
++                   PasswordString(std::u16string(u"new-secret")),
++                   result.GetCallback());
++  CSVPassword csv(GURL("https://other.test/"), "another", "different", "",
++                  CSVPassword::Status::kOK);
++  store_->AddLogin(
++      SavedPasswordsPresenter::CreateImportedCredential(CredentialUIEntry(csv)));
++  tasks_.RunUntilIdle();
++  ASSERT_TRUE(pending_auth_);
++  std::move(pending_auth_).Run(true);
++  EXPECT_EQ(result.Get(), Status::kStale);
++}
++
++TEST_F(ArchiumLocalPasswordManagerTest, InvalidAddDoesNotReportWriteSuccess) {
++  base::test::TestFuture<Status> result;
++  manager_->Add(GURL("https://invalid.test/"), u"user", PasswordString(),
++                result.GetCallback());
++  ASSERT_TRUE(pending_auth_);
++  std::move(pending_auth_).Run(true);
++  EXPECT_EQ(result.Get(), Status::kInvalid);
 +}
 +
 +TEST_F(ArchiumLocalPasswordManagerTest, RevealWaitsForRealAuthenticatorResult) {
@@ -4383,13 +4866,15 @@ diff --git a/chrome/browser/password_manager/android/archium_password_manager_br
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/password_manager/android/archium_password_manager_bridge.cc
-@@ -0,0 +1,262 @@
+@@ -0,0 +1,365 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
 +#include "chrome/browser/password_manager/android/archium_password_manager_bridge.h"
 +
++#include <algorithm>
 +#include <limits>
++#include <optional>
 +#include <string>
 +#include <string_view>
 +#include <utility>
@@ -4432,6 +4917,23 @@ new file mode 100644
 +                           reinterpret_cast<const jchar*>(secret.data()));
 +  }
 +  return result;
++}
++
++std::optional<password_manager::PasswordString> PasswordFromJava(
++    JNIEnv* env, const base::android::JavaRef<jcharArray>& password) {
++  if (password.is_null()) return std::nullopt;
++  const jsize length = env->GetArrayLength(password.obj());
++  if (length < 0 || length > 1048576) return std::nullopt;
++  std::u16string value(static_cast<size_t>(length), u'\0');
++  if (length) {
++    env->GetCharArrayRegion(password.obj(), 0, length,
++                            reinterpret_cast<jchar*>(value.data()));
++    if (env->ExceptionCheck()) {
++      std::fill(value.begin(), value.end(), u'\0');
++      return std::nullopt;
++    }
++  }
++  return password_manager::PasswordString(std::move(value));
 +}
 +#endif
 +}  // namespace
@@ -4490,6 +4992,90 @@ new file mode 100644
 +  Java_ArchiumPasswordManagerBridge_onListEnd(env, peer_, result ? 0 : static_cast<int>(result.error()));
 +#else
 +  Java_ArchiumPasswordManagerBridge_onListEnd(env, peer_, kUnavailable);
++#endif
++}
++
++void ArchiumPasswordManagerBridge::Add(
++    JNIEnv* env,
++    int32_t request,
++    const base::android::JavaRef<jstring>& url,
++    const base::android::JavaRef<jstring>& username,
++    const base::android::JavaRef<jcharArray>& password) {
++#if BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
++  auto secret = PasswordFromJava(env, password);
++  if (url.is_null() || username.is_null() || !secret) {
++    Java_ArchiumPasswordManagerBridge_onOperation(env, peer_, request, kInvalid);
++    return;
++  }
++  manager_->Add(
++      GURL(base::android::ConvertJavaStringToUTF8(env, url)),
++      base::android::ConvertJavaStringToUTF16(env, username),
++      std::move(*secret),
++      base::BindOnce(
++          [](base::WeakPtr<ArchiumPasswordManagerBridge> self,
++             int32_t request, Manager::Status status) {
++            if (self) {
++              Java_ArchiumPasswordManagerBridge_onOperation(
++                  base::android::AttachCurrentThread(), self->peer_, request,
++                  static_cast<int>(status));
++            }
++          },
++          weak_ptr_factory_.GetWeakPtr(), request));
++#else
++  Java_ArchiumPasswordManagerBridge_onOperation(env, peer_, request,
++                                                kUnavailable);
++#endif
++}
++
++void ArchiumPasswordManagerBridge::Update(
++    JNIEnv* env,
++    int32_t request,
++    int64_t id,
++    const base::android::JavaRef<jstring>& username,
++    const base::android::JavaRef<jcharArray>& password) {
++#if BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
++  auto secret = PasswordFromJava(env, password);
++  if (username.is_null() || !secret) {
++    Java_ArchiumPasswordManagerBridge_onOperation(env, peer_, request, kInvalid);
++    return;
++  }
++  manager_->Update(
++      id, base::android::ConvertJavaStringToUTF16(env, username),
++      std::move(*secret),
++      base::BindOnce(
++          [](base::WeakPtr<ArchiumPasswordManagerBridge> self,
++             int32_t request, Manager::Status status) {
++            if (self) {
++              Java_ArchiumPasswordManagerBridge_onOperation(
++                  base::android::AttachCurrentThread(), self->peer_, request,
++                  static_cast<int>(status));
++            }
++          },
++          weak_ptr_factory_.GetWeakPtr(), request));
++#else
++  Java_ArchiumPasswordManagerBridge_onOperation(env, peer_, request,
++                                                kUnavailable);
++#endif
++}
++
++void ArchiumPasswordManagerBridge::Delete(
++    JNIEnv* env, int32_t request, int64_t id) {
++#if BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
++  manager_->Delete(
++      id,
++      base::BindOnce(
++          [](base::WeakPtr<ArchiumPasswordManagerBridge> self,
++             int32_t request, Manager::Status status) {
++            if (self) {
++              Java_ArchiumPasswordManagerBridge_onOperation(
++                  base::android::AttachCurrentThread(), self->peer_, request,
++                  static_cast<int>(status));
++            }
++          },
++          weak_ptr_factory_.GetWeakPtr(), request));
++#else
++  Java_ArchiumPasswordManagerBridge_onOperation(env, peer_, request,
++                                                kUnavailable);
 +#endif
 +}
 +
@@ -4650,7 +5236,7 @@ diff --git a/chrome/browser/password_manager/android/archium_password_manager_br
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/password_manager/android/archium_password_manager_bridge.h
-@@ -0,0 +1,49 @@
+@@ -0,0 +1,60 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -4678,6 +5264,17 @@ new file mode 100644
 +                               const base::android::JavaRef<jobject>& activity);
 +  ~ArchiumPasswordManagerBridge() override;
 +  void Refresh(JNIEnv* env);
++  void Add(JNIEnv* env,
++           int32_t request,
++           const base::android::JavaRef<jstring>& url,
++           const base::android::JavaRef<jstring>& username,
++           const base::android::JavaRef<jcharArray>& password);
++  void Update(JNIEnv* env,
++              int32_t request,
++              int64_t id,
++              const base::android::JavaRef<jstring>& username,
++              const base::android::JavaRef<jcharArray>& password);
++  void Delete(JNIEnv* env, int32_t request, int64_t id);
 +  void Reveal(JNIEnv* env, int32_t request, int64_t id);
 +  void Export(JNIEnv* env, int32_t request);
 +  void PreviewImport(JNIEnv* env, int32_t request,
@@ -5273,7 +5870,7 @@ diff --git a/chrome/browser/password_manager/android/java/src/org/chromium/chrom
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordManagerBridge.java
-@@ -0,0 +1,182 @@
+@@ -0,0 +1,212 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -5355,6 +5952,31 @@ new file mode 100644
 +    }
 +    private boolean active() { return mStarted && mNativePtr != 0 && mListener != null; }
 +    public void refresh() { if (active()) ArchiumPasswordManagerBridgeJni.get().refresh(mNativePtr); }
++    /** Password input is consumed and erased after the native call returns. */
++    public void add(int request, String url, String username, char[] password) {
++        try {
++            if (active()) {
++                ArchiumPasswordManagerBridgeJni.get().add(
++                        mNativePtr, request, url, username, password);
++            }
++        } finally {
++            Arrays.fill(password, '\0');
++        }
++    }
++    /** Password input is consumed and erased after the native call returns. */
++    public void update(int request, long id, String username, char[] password) {
++        try {
++            if (active()) {
++                ArchiumPasswordManagerBridgeJni.get().update(
++                        mNativePtr, request, id, username, password);
++            }
++        } finally {
++            Arrays.fill(password, '\0');
++        }
++    }
++    public void delete(int request, long id) {
++        if (active()) ArchiumPasswordManagerBridgeJni.get().delete(mNativePtr, request, id);
++    }
 +    public void reveal(int request, long id) {
 +        if (active()) ArchiumPasswordManagerBridgeJni.get().reveal(mNativePtr, request, id);
 +    }
@@ -5448,12 +6070,731 @@ new file mode 100644
 +        boolean isLocalEnabled();
 +        long init(ArchiumPasswordManagerBridge bridge, @JniType("Profile*") Profile profile, Activity activity);
 +        void refresh(long nativeArchiumPasswordManagerBridge);
++        void add(long nativeArchiumPasswordManagerBridge, int request, String url,
++                String username, char[] password);
++        void update(long nativeArchiumPasswordManagerBridge, int request, long id,
++                String username, char[] password);
++        void delete(long nativeArchiumPasswordManagerBridge, int request, long id);
 +        void reveal(long nativeArchiumPasswordManagerBridge, int request, long id);
 +        void export(long nativeArchiumPasswordManagerBridge, int request);
 +        void previewImport(long nativeArchiumPasswordManagerBridge, int request, String[] urls, String[] users, char[][] passwords);
 +        void confirmImport(long nativeArchiumPasswordManagerBridge, int request, int[] decisions);
 +        void cancelImport(long nativeArchiumPasswordManagerBridge);
 +        void destroy(long nativeArchiumPasswordManagerBridge);
++    }
++}
+diff --git a/chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordSettingsFragment.java b/chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordSettingsFragment.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordSettingsFragment.java
+@@ -0,0 +1,709 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++package org.chromium.chrome.browser.password_manager;
++
++import android.app.Activity;
++import android.app.AlertDialog;
++import android.content.ContentResolver;
++import android.content.Intent;
++import android.net.Uri;
++import android.os.Bundle;
++import android.os.Handler;
++import android.os.Looper;
++import android.text.InputType;
++import android.view.ViewGroup;
++import android.widget.EditText;
++import android.widget.LinearLayout;
++import android.widget.Toast;
++
++import androidx.preference.Preference;
++import androidx.preference.PreferenceCategory;
++import androidx.preference.PreferenceScreen;
++
++import org.chromium.base.supplier.ObservableSuppliers;
++import org.chromium.base.supplier.SettableMonotonicObservableSupplier;
++import org.chromium.build.annotations.NullMarked;
++import org.chromium.build.annotations.Nullable;
++import org.chromium.chrome.browser.settings.ChromeBaseSettingsFragment;
++import org.chromium.components.browser_ui.settings.SettingsFragment;
++
++import java.io.BufferedReader;
++import java.io.BufferedWriter;
++import java.io.InputStream;
++import java.io.InputStreamReader;
++import java.io.OutputStream;
++import java.io.OutputStreamWriter;
++import java.nio.charset.CodingErrorAction;
++import java.nio.charset.StandardCharsets;
++import java.util.ArrayList;
++import java.util.Arrays;
++import java.util.HashMap;
++import java.util.HashSet;
++import java.util.List;
++import java.util.Locale;
++import java.util.Map;
++import java.util.Set;
++import java.util.concurrent.ExecutorService;
++import java.util.concurrent.Executors;
++
++/**
++ * Native settings surface for Archium's profile-local password vault.
++ *
++ * <p>Metadata is safe to list without device authentication. Reveal, CRUD, import confirmation and
++ * export are authenticated by the native manager. SAF is the only file transport.
++ */
++@NullMarked
++public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFragment
++        implements ArchiumPasswordManagerBridge.Listener {
++    private static final int REQUEST_OPEN_CSV = 7401;
++    private static final int REQUEST_CREATE_CSV = 7402;
++
++    private static final int PREVIEW_NEW = 0;
++    private static final int PREVIEW_EXACT = 1;
++    private static final int PREVIEW_STORE_CONFLICT = 2;
++    private static final int PREVIEW_INVALID = 3;
++    private static final int PREVIEW_FILE_DUPLICATE = 4;
++    private static final int PREVIEW_FILE_CONFLICT = 5;
++
++    private static final int DECISION_SKIP = 0;
++    private static final int DECISION_IMPORT = 1;
++    private static final int DECISION_REPLACE = 2;
++
++    private final SettableMonotonicObservableSupplier<String> mPageTitle =
++            ObservableSuppliers.createMonotonic();
++    private final ExecutorService mIo = Executors.newSingleThreadExecutor();
++    private final Handler mMain = new Handler(Looper.getMainLooper());
++    private final Map<Integer, ArchiumPasswordManagerBridge.Entry> mRevealRequests =
++            new HashMap<>();
++
++    private @Nullable ArchiumPasswordManagerBridge mBridge;
++    private @Nullable PreferenceCategory mEntriesCategory;
++    private @Nullable Uri mPendingExportUri;
++    private int mPendingExportRequest;
++    private int mNextRequest = 1;
++    private String mQuery = "";
++    private List<ArchiumPasswordManagerBridge.Entry> mEntries = List.of();
++    private boolean mDestroyed;
++
++    @Override
++    public void onCreate(@Nullable Bundle savedInstanceState) {
++        super.onCreate(savedInstanceState);
++        mPageTitle.set("Local passwords");
++        if (!ArchiumPasswordManagerBridge.isLocalEnabled()) return;
++        mBridge =
++                new ArchiumPasswordManagerBridge(
++                        requireActivity(), getProfile().getOriginalProfile(), this);
++    }
++
++    @Override
++    public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
++        PreferenceScreen screen = getPreferenceManager().createPreferenceScreen(requireContext());
++        setPreferenceScreen(screen);
++
++        Preference search = new Preference(requireContext());
++        search.setTitle("Search");
++        search.setSummary("Filter by site or username");
++        search.setOnPreferenceClickListener(
++                preference -> {
++                    showSearchDialog();
++                    return true;
++                });
++        screen.addPreference(search);
++
++        Preference add = new Preference(requireContext());
++        add.setTitle("Add password");
++        add.setSummary("Save a credential in this device profile");
++        add.setOnPreferenceClickListener(
++                preference -> {
++                    showAddDialog();
++                    return true;
++                });
++        screen.addPreference(add);
++
++        Preference importCsv = new Preference(requireContext());
++        importCsv.setTitle("Import CSV");
++        importCsv.setSummary("Review before anything is written");
++        importCsv.setOnPreferenceClickListener(
++                preference -> {
++                    launchImportPicker();
++                    return true;
++                });
++        screen.addPreference(importCsv);
++
++        Preference exportCsv = new Preference(requireContext());
++        exportCsv.setTitle("Export CSV");
++        exportCsv.setSummary("Device authentication is required before secrets are read");
++        exportCsv.setOnPreferenceClickListener(
++                preference -> {
++                    launchExportPicker();
++                    return true;
++                });
++        screen.addPreference(exportCsv);
++
++        mEntriesCategory = new PreferenceCategory(requireContext());
++        mEntriesCategory.setTitle("Saved passwords");
++        screen.addPreference(mEntriesCategory);
++
++        if (mBridge == null) {
++            setUnavailable("Local password storage is unavailable in this build.");
++        } else {
++            mBridge.start();
++        }
++    }
++
++    @Override
++    public SettableMonotonicObservableSupplier<String> getPageTitle() {
++        return mPageTitle;
++    }
++
++    @Override
++    public @SettingsFragment.AnimationType int getAnimationType() {
++        return SettingsFragment.AnimationType.PROPERTY;
++    }
++
++    private int nextRequest() {
++        return mNextRequest++;
++    }
++
++    private void setUnavailable(String message) {
++        if (mEntriesCategory == null) return;
++        mEntriesCategory.removeAll();
++        Preference row = new Preference(requireContext());
++        row.setTitle(message);
++        row.setEnabled(false);
++        mEntriesCategory.addPreference(row);
++    }
++
++    private void rebuildEntries() {
++        if (mEntriesCategory == null || mDestroyed) return;
++        mEntriesCategory.removeAll();
++        String query = mQuery.trim().toLowerCase(Locale.ROOT);
++        int shown = 0;
++        for (ArchiumPasswordManagerBridge.Entry entry : mEntries) {
++            String haystack = (entry.url + "\n" + entry.username).toLowerCase(Locale.ROOT);
++            if (!query.isEmpty() && !haystack.contains(query)) continue;
++            Preference row = new Preference(requireContext());
++            row.setTitle(entry.username.isEmpty() ? "(no username)" : entry.username);
++            row.setSummary(entry.url);
++            row.setOnPreferenceClickListener(
++                    preference -> {
++                        showEntryActions(entry);
++                        return true;
++                    });
++            mEntriesCategory.addPreference(row);
++            shown++;
++        }
++        if (shown == 0) {
++            Preference empty = new Preference(requireContext());
++            empty.setTitle(query.isEmpty() ? "No saved passwords" : "No matching passwords");
++            empty.setEnabled(false);
++            mEntriesCategory.addPreference(empty);
++        }
++    }
++
++    private void showSearchDialog() {
++        EditText input = new EditText(requireContext());
++        input.setSingleLine(true);
++        input.setText(mQuery);
++        input.setSelectAllOnFocus(true);
++        new AlertDialog.Builder(requireContext())
++                .setTitle("Search saved passwords")
++                .setView(input)
++                .setPositiveButton(
++                        android.R.string.ok,
++                        (dialog, which) -> {
++                            mQuery = input.getText().toString();
++                            rebuildEntries();
++                        })
++                .setNegativeButton(android.R.string.cancel, null)
++                .setNeutralButton(
++                        "Clear",
++                        (dialog, which) -> {
++                            mQuery = "";
++                            rebuildEntries();
++                        })
++                .show();
++    }
++
++    private LinearLayout credentialForm(
++            @Nullable String url, @Nullable String username, boolean editableUrl) {
++        LinearLayout layout = new LinearLayout(requireContext());
++        layout.setOrientation(LinearLayout.VERTICAL);
++        int padding = Math.round(20 * getResources().getDisplayMetrics().density);
++        layout.setPadding(padding, 0, padding, 0);
++
++        EditText urlInput = new EditText(requireContext());
++        urlInput.setTag("url");
++        urlInput.setHint("https://example.com");
++        urlInput.setSingleLine(true);
++        urlInput.setEnabled(editableUrl);
++        if (url != null) urlInput.setText(url);
++        layout.addView(
++                urlInput,
++                new LinearLayout.LayoutParams(
++                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
++
++        EditText usernameInput = new EditText(requireContext());
++        usernameInput.setTag("username");
++        usernameInput.setHint("Username");
++        usernameInput.setSingleLine(true);
++        if (username != null) usernameInput.setText(username);
++        layout.addView(
++                usernameInput,
++                new LinearLayout.LayoutParams(
++                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
++
++        EditText passwordInput = new EditText(requireContext());
++        passwordInput.setTag("password");
++        passwordInput.setHint("Password");
++        passwordInput.setSingleLine(true);
++        passwordInput.setInputType(
++                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
++        layout.addView(
++                passwordInput,
++                new LinearLayout.LayoutParams(
++                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
++        return layout;
++    }
++
++    private static EditText field(LinearLayout layout, String tag) {
++        for (int i = 0; i < layout.getChildCount(); i++) {
++            if (layout.getChildAt(i) instanceof EditText
++                    && tag.equals(layout.getChildAt(i).getTag())) {
++                return (EditText) layout.getChildAt(i);
++            }
++        }
++        throw new IllegalStateException("Missing credential field " + tag);
++    }
++
++    private void showAddDialog() {
++        ArchiumPasswordManagerBridge bridge = mBridge;
++        if (bridge == null) return;
++        LinearLayout form = credentialForm(null, null, true);
++        AlertDialog dialog =
++                new AlertDialog.Builder(requireContext())
++                        .setTitle("Add password")
++                        .setView(form)
++                        .setPositiveButton("Save", null)
++                        .setNegativeButton(android.R.string.cancel, null)
++                        .create();
++        dialog.setOnShowListener(
++                ignored ->
++                        dialog.getButton(AlertDialog.BUTTON_POSITIVE)
++                                .setOnClickListener(
++                                        view -> {
++                                            String url = field(form, "url").getText().toString().trim();
++                                            String username =
++                                                    field(form, "username").getText().toString();
++                                            char[] password =
++                                                    field(form, "password")
++                                                            .getText()
++                                                            .toString()
++                                                            .toCharArray();
++                                            if (url.isEmpty() || password.length == 0) {
++                                                Arrays.fill(password, '\0');
++                                                Toast.makeText(
++                                                                requireContext(),
++                                                                "Site and password are required.",
++                                                                Toast.LENGTH_SHORT)
++                                                        .show();
++                                                return;
++                                            }
++                                            bridge.add(
++                                                    nextRequest(), url, username, password);
++                                            dialog.dismiss();
++                                        }));
++        dialog.show();
++    }
++
++    private void showEntryActions(ArchiumPasswordManagerBridge.Entry entry) {
++        new AlertDialog.Builder(requireContext())
++                .setTitle(entry.username.isEmpty() ? entry.url : entry.username)
++                .setItems(
++                        new String[] {"Reveal password", "Edit", "Delete"},
++                        (dialog, which) -> {
++                            if (which == 0) reveal(entry);
++                            else if (which == 1) showEditDialog(entry);
++                            else confirmDelete(entry);
++                        })
++                .show();
++    }
++
++    private void reveal(ArchiumPasswordManagerBridge.Entry entry) {
++        ArchiumPasswordManagerBridge bridge = mBridge;
++        if (bridge == null) return;
++        int request = nextRequest();
++        mRevealRequests.put(request, entry);
++        bridge.reveal(request, entry.id);
++    }
++
++    private void showEditDialog(ArchiumPasswordManagerBridge.Entry entry) {
++        ArchiumPasswordManagerBridge bridge = mBridge;
++        if (bridge == null) return;
++        LinearLayout form = credentialForm(entry.url, entry.username, false);
++        AlertDialog dialog =
++                new AlertDialog.Builder(requireContext())
++                        .setTitle("Edit password")
++                        .setMessage("Enter the new password. The site cannot be changed in-place.")
++                        .setView(form)
++                        .setPositiveButton("Save", null)
++                        .setNegativeButton(android.R.string.cancel, null)
++                        .create();
++        dialog.setOnShowListener(
++                ignored ->
++                        dialog.getButton(AlertDialog.BUTTON_POSITIVE)
++                                .setOnClickListener(
++                                        view -> {
++                                            String username =
++                                                    field(form, "username").getText().toString();
++                                            char[] password =
++                                                    field(form, "password")
++                                                            .getText()
++                                                            .toString()
++                                                            .toCharArray();
++                                            if (password.length == 0) {
++                                                Arrays.fill(password, '\0');
++                                                Toast.makeText(
++                                                                requireContext(),
++                                                                "Enter a new password.",
++                                                                Toast.LENGTH_SHORT)
++                                                        .show();
++                                                return;
++                                            }
++                                            bridge.update(
++                                                    nextRequest(), entry.id, username, password);
++                                            dialog.dismiss();
++                                        }));
++        dialog.show();
++    }
++
++    private void confirmDelete(ArchiumPasswordManagerBridge.Entry entry) {
++        ArchiumPasswordManagerBridge bridge = mBridge;
++        if (bridge == null) return;
++        new AlertDialog.Builder(requireContext())
++                .setTitle("Delete password?")
++                .setMessage(entry.url)
++                .setPositiveButton(
++                        "Delete",
++                        (dialog, which) -> bridge.delete(nextRequest(), entry.id))
++                .setNegativeButton(android.R.string.cancel, null)
++                .show();
++    }
++
++    private void launchImportPicker() {
++        Intent intent =
++                new Intent(Intent.ACTION_OPEN_DOCUMENT)
++                        .addCategory(Intent.CATEGORY_OPENABLE)
++                        .setType("text/*");
++        startActivityForResult(intent, REQUEST_OPEN_CSV);
++    }
++
++    private void launchExportPicker() {
++        Intent intent =
++                new Intent(Intent.ACTION_CREATE_DOCUMENT)
++                        .addCategory(Intent.CATEGORY_OPENABLE)
++                        .setType("text/csv")
++                        .putExtra(Intent.EXTRA_TITLE, "archium-passwords.csv");
++        startActivityForResult(intent, REQUEST_CREATE_CSV);
++    }
++
++    @Override
++    @SuppressWarnings("deprecation")
++    public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
++        super.onActivityResult(requestCode, resultCode, data);
++        if (resultCode != Activity.RESULT_OK || data == null || data.getData() == null) return;
++        Uri uri = data.getData();
++        if (requestCode == REQUEST_OPEN_CSV) {
++            parseImport(uri);
++        } else if (requestCode == REQUEST_CREATE_CSV) {
++            mPendingExportUri = uri;
++            mPendingExportRequest = nextRequest();
++            ArchiumPasswordManagerBridge bridge = mBridge;
++            if (bridge != null) bridge.export(mPendingExportRequest);
++        }
++    }
++
++    private void parseImport(Uri uri) {
++        ContentResolver resolver = requireContext().getContentResolver();
++        mIo.execute(
++                () -> {
++                    try (InputStream stream = resolver.openInputStream(uri)) {
++                        if (stream == null) throw new java.io.IOException("Unable to open selected file");
++                        var decoder =
++                                StandardCharsets.UTF_8
++                                        .newDecoder()
++                                        .onMalformedInput(CodingErrorAction.REPORT)
++                                        .onUnmappableCharacter(CodingErrorAction.REPORT);
++                        ArchiumPasswordCsv.ParseResult result;
++                        try (BufferedReader reader =
++                                new BufferedReader(new InputStreamReader(stream, decoder))) {
++                            result = ArchiumPasswordCsv.parse(reader);
++                        }
++                        mMain.post(() -> startImportPreview(result));
++                    } catch (Exception error) {
++                        mMain.post(() -> showError("Import failed", error.getMessage()));
++                    }
++                });
++    }
++
++    private void startImportPreview(ArchiumPasswordCsv.ParseResult parsed) {
++        if (mDestroyed) return;
++        if (!parsed.errors.isEmpty()) {
++            showError(
++                    "CSV needs attention",
++                    parsed.errors.size()
++                            + " row(s) could not be read. Nothing was imported.");
++            return;
++        }
++        if (parsed.rows.isEmpty()) {
++            Toast.makeText(requireContext(), "No passwords found in the CSV.", Toast.LENGTH_SHORT)
++                    .show();
++            return;
++        }
++        String[] urls = new String[parsed.rows.size()];
++        String[] users = new String[parsed.rows.size()];
++        char[][] passwords = new char[parsed.rows.size()][];
++        for (int i = 0; i < parsed.rows.size(); i++) {
++            ArchiumPasswordCsv.Row row = parsed.rows.get(i);
++            urls[i] = row.url;
++            users[i] = row.username;
++            passwords[i] = row.password.toCharArray();
++        }
++        ArchiumPasswordManagerBridge bridge = mBridge;
++        if (bridge != null) bridge.previewImport(nextRequest(), urls, users, passwords);
++        else for (char[] password : passwords) Arrays.fill(password, '\0');
++    }
++
++    private void reviewImport(
++            int request, List<ArchiumPasswordManagerBridge.ImportRow> rows) {
++        int maxIndex = -1;
++        for (ArchiumPasswordManagerBridge.ImportRow row : rows) {
++            maxIndex = Math.max(maxIndex, row.index);
++        }
++        int[] decisions = new int[maxIndex + 1];
++        Set<String> acceptedFileConflicts = new HashSet<>();
++        reviewNextConflict(request, rows, decisions, acceptedFileConflicts, 0);
++    }
++
++    private void reviewNextConflict(
++            int request,
++            List<ArchiumPasswordManagerBridge.ImportRow> rows,
++            int[] decisions,
++            Set<String> acceptedFileConflicts,
++            int position) {
++        if (mDestroyed) return;
++        for (int i = position; i < rows.size(); i++) {
++            ArchiumPasswordManagerBridge.ImportRow row = rows.get(i);
++            if (row.kind == PREVIEW_NEW) {
++                decisions[row.index] = DECISION_IMPORT;
++                continue;
++            }
++            if (row.kind == PREVIEW_EXACT
++                    || row.kind == PREVIEW_INVALID
++                    || row.kind == PREVIEW_FILE_DUPLICATE) {
++                decisions[row.index] = DECISION_SKIP;
++                continue;
++            }
++            if (row.kind == PREVIEW_STORE_CONFLICT || row.kind == PREVIEW_FILE_CONFLICT) {
++                final int next = i + 1;
++                final String identity = row.url + "\u0000" + row.username;
++                if (row.kind == PREVIEW_FILE_CONFLICT
++                        && acceptedFileConflicts.contains(identity)) {
++                    decisions[row.index] = DECISION_SKIP;
++                    continue;
++                }
++                String message =
++                        row.url
++                                + "\n"
++                                + (row.username.isEmpty() ? "(no username)" : row.username)
++                                + (row.kind == PREVIEW_STORE_CONFLICT
++                                        ? "\n\nA different password is already saved."
++                                        : "\n\nThe CSV contains more than one password for this login.");
++                new AlertDialog.Builder(requireContext())
++                        .setTitle("Review import conflict")
++                        .setMessage(message)
++                        .setPositiveButton(
++                                row.kind == PREVIEW_STORE_CONFLICT ? "Replace" : "Use this row",
++                                (dialog, which) -> {
++                                    decisions[row.index] =
++                                            row.kind == PREVIEW_STORE_CONFLICT
++                                                    ? DECISION_REPLACE
++                                                    : DECISION_IMPORT;
++                                    if (row.kind == PREVIEW_FILE_CONFLICT) {
++                                        acceptedFileConflicts.add(identity);
++                                    }
++                                    reviewNextConflict(
++                                            request,
++                                            rows,
++                                            decisions,
++                                            acceptedFileConflicts,
++                                            next);
++                                })
++                        .setNegativeButton(
++                                "Skip",
++                                (dialog, which) -> {
++                                    decisions[row.index] = DECISION_SKIP;
++                                    reviewNextConflict(
++                                            request,
++                                            rows,
++                                            decisions,
++                                            acceptedFileConflicts,
++                                            next);
++                                })
++                        .setOnCancelListener(
++                                dialog -> {
++                                    ArchiumPasswordManagerBridge bridge = mBridge;
++                                    if (bridge != null) bridge.cancelImport();
++                                })
++                        .show();
++                return;
++            }
++        }
++        ArchiumPasswordManagerBridge bridge = mBridge;
++        if (bridge != null) bridge.confirmImport(request, decisions);
++    }
++
++    private void writeExport(
++            Uri uri, List<ArchiumPasswordCsv.SecretRow> rows) {
++        ContentResolver resolver = requireContext().getContentResolver();
++        mIo.execute(
++                () -> {
++                    String error = null;
++                    try (OutputStream stream = resolver.openOutputStream(uri, "wt");
++                            BufferedWriter writer =
++                                    stream == null
++                                            ? null
++                                            : new BufferedWriter(
++                                                    new OutputStreamWriter(
++                                                            stream, StandardCharsets.UTF_8))) {
++                        if (writer == null) throw new java.io.IOException("Unable to open destination");
++                        ArchiumPasswordCsv.writeSecrets(writer, rows);
++                        writer.flush();
++                    } catch (Exception failure) {
++                        error = failure.getMessage();
++                    } finally {
++                        for (ArchiumPasswordCsv.SecretRow row : rows) row.close();
++                    }
++                    String finalError = error;
++                    mMain.post(
++                            () -> {
++                                if (mDestroyed) return;
++                                if (finalError == null) {
++                                    Toast.makeText(
++                                                    requireContext(),
++                                                    "Passwords exported.",
++                                                    Toast.LENGTH_SHORT)
++                                            .show();
++                                } else {
++                                    showError("Export failed", finalError);
++                                }
++                            });
++                });
++    }
++
++    private void showError(String title, @Nullable String detail) {
++        if (mDestroyed || !isAdded()) return;
++        new AlertDialog.Builder(requireContext())
++                .setTitle(title)
++                .setMessage(detail == null || detail.isEmpty() ? "Operation failed." : detail)
++                .setPositiveButton(android.R.string.ok, null)
++                .show();
++    }
++
++    private static String statusMessage(int status) {
++        return switch (status) {
++            case ArchiumPasswordManagerBridge.AUTHENTICATION_FAILED ->
++                    "Device authentication failed.";
++            case ArchiumPasswordManagerBridge.BUSY -> "Another protected operation is running.";
++            case ArchiumPasswordManagerBridge.STALE ->
++                    "The password list changed. Refresh and try again.";
++            case ArchiumPasswordManagerBridge.INVALID -> "The requested change is not valid.";
++            case ArchiumPasswordManagerBridge.WRITE_FAILED ->
++                    "The password store did not confirm the change.";
++            default -> "Local password storage is unavailable.";
++        };
++    }
++
++    @Override
++    public void onMetadata(List<ArchiumPasswordManagerBridge.Entry> entries, int status) {
++        if (mDestroyed) return;
++        if (status != ArchiumPasswordManagerBridge.SUCCESS) {
++            setUnavailable(statusMessage(status));
++            return;
++        }
++        mEntries = entries;
++        rebuildEntries();
++    }
++
++    @Override
++    public void onSecret(int request, int status, char[] password) {
++        ArchiumPasswordManagerBridge.Entry entry = mRevealRequests.remove(request);
++        if (mDestroyed || entry == null) return;
++        if (status != ArchiumPasswordManagerBridge.SUCCESS) {
++            showError("Couldn't reveal password", statusMessage(status));
++            return;
++        }
++        String shown = new String(password);
++        new AlertDialog.Builder(requireContext())
++                .setTitle(entry.username.isEmpty() ? entry.url : entry.username)
++                .setMessage(shown)
++                .setPositiveButton(android.R.string.ok, null)
++                .show();
++    }
++
++    @Override
++    public void onExport(
++            int request, int status, List<ArchiumPasswordCsv.SecretRow> rows) {
++        Uri destination =
++                request == mPendingExportRequest ? mPendingExportUri : null;
++        mPendingExportUri = null;
++        mPendingExportRequest = 0;
++        if (mDestroyed || status != ArchiumPasswordManagerBridge.SUCCESS || destination == null) {
++            for (ArchiumPasswordCsv.SecretRow row : rows) row.close();
++            if (!mDestroyed && status != ArchiumPasswordManagerBridge.SUCCESS) {
++                showError("Couldn't export passwords", statusMessage(status));
++            }
++            return;
++        }
++        writeExport(destination, rows);
++    }
++
++    @Override
++    public void onPreview(
++            int request, int status, List<ArchiumPasswordManagerBridge.ImportRow> rows) {
++        if (mDestroyed) return;
++        if (status != ArchiumPasswordManagerBridge.SUCCESS) {
++            showError("Couldn't review import", statusMessage(status));
++            return;
++        }
++        reviewImport(request, rows);
++    }
++
++    @Override
++    public void onOperation(int request, int status) {
++        if (mDestroyed) return;
++        if (status == ArchiumPasswordManagerBridge.SUCCESS) {
++            Toast.makeText(requireContext(), "Password store updated.", Toast.LENGTH_SHORT).show();
++            ArchiumPasswordManagerBridge bridge = mBridge;
++            if (bridge != null) bridge.refresh();
++        } else {
++            showError("Password operation failed", statusMessage(status));
++        }
++    }
++
++    @Override
++    public void onDestroy() {
++        mDestroyed = true;
++        mRevealRequests.clear();
++        ArchiumPasswordManagerBridge bridge = mBridge;
++        mBridge = null;
++        if (bridge != null) {
++            bridge.cancelImport();
++            bridge.destroy();
++        }
++        mIo.shutdownNow();
++        super.onDestroy();
 +    }
 +}
 diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java
