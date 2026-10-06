@@ -156,6 +156,13 @@ public final class ArcSidebarState {
         if (!mTabSpaces.containsKey(tabId)) capacity(mTabSpaces.size());
         mTabSpaces.put(tabId, spaceId);
     }
+    public boolean hasTabSpace(int tabId) { return mTabSpaces.containsKey(tabId); }
+    public boolean isFavoriteTab(int tabId) {
+        for (Entry entry : mEntries) {
+            if (entry.favorite && Integer.valueOf(tabId).equals(entry.tabId)) return true;
+        }
+        return false;
+    }
     public boolean visibleTab(int tabId) {
         for (Entry entry : mEntries) {
             if (entry.favorite && Integer.valueOf(tabId).equals(entry.tabId)) return true;
