@@ -8,6 +8,7 @@
 
 #include "base/functional/bind.h"
 #include "base/location.h"
+#include "base/strings/utf_string_conversions.h"
 #include "base/task/thread_pool.h"
 #include "components/password_manager/core/browser/password_store/actionable_error.h"
 
@@ -44,6 +45,222 @@ ArchiumLocalPasswordManager::GetMetadata() {
     entries_.emplace(id, std::move(entry));
   }
   return metadata;
+}
+
+void ArchiumLocalPasswordManager::Add(
+    GURL url,
+    std::u16string username,
+    PasswordString password,
+    OperationReply reply) {
+  Authenticate(base::BindOnce(
+      [](base::WeakPtr<ArchiumLocalPasswordManager> self, GURL url,
+         std::u16string username, PasswordString password, OperationReply reply,
+         Status status) {
+        if (!self) return;
+        if (status != Status::kSuccess) {
+          std::move(reply).Run(status);
+          return;
+        }
+
+        const auto secret = password.secure_value();
+        std::u16string password_text(secret.data(), secret.size());
+        CSVPassword csv(url, base::UTF16ToUTF8(username),
+                        base::UTF16ToUTF8(password_text), "",
+                        CSVPassword::Status::kOK);
+        CredentialUIEntry credential(csv, PasswordForm::Store::kProfileStore);
+        std::fill(password_text.begin(), password_text.end(), u'\0');
+
+        self->writing_ = true;
+        const bool accepted = self->presenter_.AddCredential(
+            credential, PasswordForm::Type::kManuallyAdded, base::DoNothing());
+        std::fill(credential.password.begin(), credential.password.end(), u'\0');
+        if (!accepted) {
+          self->writing_ = false;
+          std::move(reply).Run(Status::kInvalid);
+          return;
+        }
+        self->VerifyAddedCredential(url, username, password, std::move(reply));
+      },
+      weak_ptr_factory_.GetWeakPtr(), std::move(url), std::move(username),
+      std::move(password), std::move(reply)));
+}
+
+void ArchiumLocalPasswordManager::Update(
+    int64_t id,
+    std::u16string username,
+    PasswordString password,
+    OperationReply reply) {
+  Authenticate(base::BindOnce(
+      [](base::WeakPtr<ArchiumLocalPasswordManager> self, int64_t id,
+         std::u16string username, PasswordString password, OperationReply reply,
+         Status status) {
+        if (!self) return;
+        if (status != Status::kSuccess) {
+          std::move(reply).Run(status);
+          return;
+        }
+        auto found = self->entries_.find(id);
+        if (found == self->entries_.end()) {
+          std::move(reply).Run(Status::kStale);
+          return;
+        }
+
+        CredentialUIEntry original = found->second;
+        CredentialUIEntry updated = original;
+        updated.username = username;
+        const auto secret = password.secure_value();
+        updated.password.assign(secret.data(), secret.size());
+        const GURL url = original.GetURL();
+        const std::string signon_realm = original.GetFirstSignonRealm();
+        const std::u16string old_username = original.username;
+
+        self->writing_ = true;
+        const auto result =
+            self->presenter_.EditSavedCredentials(original, updated);
+        std::fill(updated.password.begin(), updated.password.end(), u'\0');
+        if (result == SavedPasswordsPresenter::EditResult::kNothingChanged) {
+          self->writing_ = false;
+          std::move(reply).Run(Status::kSuccess);
+          return;
+        }
+        if (result == SavedPasswordsPresenter::EditResult::kNotFound) {
+          self->writing_ = false;
+          std::move(reply).Run(Status::kStale);
+          return;
+        }
+        if (result != SavedPasswordsPresenter::EditResult::kSuccess) {
+          self->writing_ = false;
+          std::move(reply).Run(Status::kInvalid);
+          return;
+        }
+        self->VerifyUpdatedCredential(url, signon_realm, old_username, username,
+                                      password, std::move(reply));
+      },
+      weak_ptr_factory_.GetWeakPtr(), id, std::move(username),
+      std::move(password), std::move(reply)));
+}
+
+void ArchiumLocalPasswordManager::Delete(int64_t id, OperationReply reply) {
+  Authenticate(base::BindOnce(
+      [](base::WeakPtr<ArchiumLocalPasswordManager> self, int64_t id,
+         OperationReply reply, Status status) {
+        if (!self) return;
+        if (status != Status::kSuccess) {
+          std::move(reply).Run(status);
+          return;
+        }
+        auto found = self->entries_.find(id);
+        if (found == self->entries_.end()) {
+          std::move(reply).Run(Status::kStale);
+          return;
+        }
+        CredentialUIEntry original = found->second;
+        const std::string signon_realm = original.GetFirstSignonRealm();
+        const std::u16string username = original.username;
+
+        self->writing_ = true;
+        if (!self->presenter_.RemoveCredential(original)) {
+          self->writing_ = false;
+          std::move(reply).Run(Status::kStale);
+          return;
+        }
+        self->VerifyDeletedCredential(signon_realm, username, std::move(reply));
+      },
+      weak_ptr_factory_.GetWeakPtr(), id, std::move(reply)));
+}
+
+void ArchiumLocalPasswordManager::VerifyAddedCredential(
+    const GURL& url,
+    const std::u16string& username,
+    const PasswordString& password,
+    OperationReply reply) {
+  store_->GetImportSnapshot(base::BindOnce(
+      [](base::WeakPtr<ArchiumLocalPasswordManager> self, GURL url,
+         std::u16string username, PasswordString password, OperationReply reply,
+         ArchiumImportSnapshotResult snapshot) {
+        if (!self) return;
+        self->writing_ = false;
+        if (!snapshot || !self->Ready()) {
+          std::move(reply).Run(Status::kWriteFailed);
+          return;
+        }
+        const bool found = std::ranges::any_of(
+            snapshot->credentials, [&](const StoredCredential& entry) {
+              return entry.IsUsingProfileStore() && entry.url == url &&
+                     entry.username_value == username &&
+                     entry.password_value == password;
+            });
+        std::move(reply).Run(found ? Status::kSuccess : Status::kWriteFailed);
+      },
+      weak_ptr_factory_.GetWeakPtr(), url, username, password,
+      std::move(reply)));
+}
+
+void ArchiumLocalPasswordManager::VerifyUpdatedCredential(
+    const GURL& url,
+    const std::string& signon_realm,
+    const std::u16string& old_username,
+    const std::u16string& username,
+    const PasswordString& password,
+    OperationReply reply) {
+  store_->GetImportSnapshot(base::BindOnce(
+      [](base::WeakPtr<ArchiumLocalPasswordManager> self, GURL url,
+         std::string signon_realm, std::u16string old_username,
+         std::u16string username, PasswordString password, OperationReply reply,
+         ArchiumImportSnapshotResult snapshot) {
+        if (!self) return;
+        self->writing_ = false;
+        if (!snapshot || !self->Ready()) {
+          std::move(reply).Run(Status::kWriteFailed);
+          return;
+        }
+        const bool updated = std::ranges::any_of(
+            snapshot->credentials, [&](const StoredCredential& entry) {
+              return entry.IsUsingProfileStore() &&
+                     entry.signon_realm == signon_realm && entry.url == url &&
+                     entry.username_value == username &&
+                     entry.password_value == password;
+            });
+        const bool stale_old =
+            old_username != username &&
+            std::ranges::any_of(
+                snapshot->credentials, [&](const StoredCredential& entry) {
+                  return entry.IsUsingProfileStore() &&
+                         entry.signon_realm == signon_realm &&
+                         entry.username_value == old_username;
+                });
+        std::move(reply).Run(updated && !stale_old ? Status::kSuccess
+                                                   : Status::kWriteFailed);
+      },
+      weak_ptr_factory_.GetWeakPtr(), url, signon_realm, old_username, username,
+      password, std::move(reply)));
+}
+
+void ArchiumLocalPasswordManager::VerifyDeletedCredential(
+    const std::string& signon_realm,
+    const std::u16string& username,
+    OperationReply reply) {
+  store_->GetImportSnapshot(base::BindOnce(
+      [](base::WeakPtr<ArchiumLocalPasswordManager> self,
+         std::string signon_realm, std::u16string username,
+         OperationReply reply, ArchiumImportSnapshotResult snapshot) {
+        if (!self) return;
+        self->writing_ = false;
+        if (!snapshot || !self->Ready()) {
+          std::move(reply).Run(Status::kWriteFailed);
+          return;
+        }
+        const bool still_present = std::ranges::any_of(
+            snapshot->credentials, [&](const StoredCredential& entry) {
+              return entry.IsUsingProfileStore() &&
+                     entry.signon_realm == signon_realm &&
+                     entry.username_value == username;
+            });
+        std::move(reply).Run(!still_present ? Status::kSuccess
+                                            : Status::kWriteFailed);
+      },
+      weak_ptr_factory_.GetWeakPtr(), signon_realm, username,
+      std::move(reply)));
 }
 
 void ArchiumLocalPasswordManager::Authenticate(OperationReply reply) {
