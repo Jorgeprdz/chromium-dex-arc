@@ -207,7 +207,8 @@ TEST(ArchiumLocalPasswordManagerWriteFailureTest,
   ON_CALL(*store, GetError()).WillByDefault(Return(ActionableError::kNoError));
   EXPECT_CALL(*store, GetAllLoginsWithAffiliationAndBrandingInformation(_))
       .WillOnce([&](base::WeakPtr<PasswordStoreConsumer> consumer) {
-        consumer->OnGetPasswordStoreResultsFrom(store.get(), {});
+        consumer->OnGetPasswordStoreResultsOrErrorFrom(
+            store.get(), std::vector<StoredCredential>{});
       });
   ON_CALL(*store, AddLogin(_, _))
       .WillByDefault([](StoredCredential, base::OnceClosure completion) {
