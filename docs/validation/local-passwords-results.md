@@ -60,3 +60,13 @@ No se han compilado ni ejecutado en Chromium todavía. Un experimento separado
 con SQLite local verificó únicamente los contadores, no el código C++.
 El gestor nativo visible, autenticación, SAF, review/confirmación CSV y exportación
 siguen pendientes; esta API preparada no significa que ya se pueda importar.
+
+## Corrección de disponibilidad detectada por auditoría
+
+GetError del backend builtin comprobaba únicamente que la DB abrió. Eso hacía
+insuficiente el gate del cliente preparado previamente cuando no había clave.
+El backend local Android ahora registra IsEncryptionAvailable del encryptor y
+rechaza disponibilidad mientras sea false, sin cambiar el comportamiento flag-off.
+Se escribió una regresión con backend real y OSCryptAsync sin proveedores, cuya
+consulta ocurre después de inicializar la DB. Su compilación/ejecución nativa
+sigue pendiente; no se presenta como prueba pasada.

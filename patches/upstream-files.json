@@ -110,8 +110,8 @@
     "components/password_manager/core/browser/password_store/password_store.cc": "3f33188f0cd976e5e3a50f2b89750d4623d193ccceaa2aeaae1070fd73375ca0",
     "components/password_manager/core/browser/password_store/password_store.h": "a5934f71f16e9ab39c146531bbf200e349eb7a8baf345db4f80847b31e3d1e6b",
     "components/password_manager/core/browser/password_store/password_store_backend.h": "dde89804d6dcae80701fb9e98a44ffcb3a9d63ab36325721a2f890b83f95a310",
-    "components/password_manager/core/browser/password_store/password_store_built_in_backend.cc": "e7bbb6ba5704b4b01591b8df8c1582d45ee68009139b6a89d21690169bdb31f5",
-    "components/password_manager/core/browser/password_store/password_store_built_in_backend.h": "b36827b79bd923bad9d994d072c9d546c1844e6cd9de13715e12312e7bca2c86",
+    "components/password_manager/core/browser/password_store/password_store_built_in_backend.cc": "68d0c8009fb930e0e3a0e3e2c09dc64668cc504a308d437a959a13aeb7b26a67",
+    "components/password_manager/core/browser/password_store/password_store_built_in_backend.h": "8dd9043f34361587004a95d69411b23f7ed2925af3a1194a319fb839ef06dcbc",
     "components/password_manager/core/browser/password_store/password_store_interface.h": "5f2455a2b3b4e7b73be25b11e2ab2f6846ddd155753ae0189e5f1500958e20a5",
     "components/password_manager/core/browser/password_store_factory_util.cc": "bd88a97453f819e7896c2ad58b2dd94521e53a74c68de4ab751c30c55bdedb25",
     "components/password_manager/core/browser/password_store_factory_util.h": "e6ad4a6556832d8fb347621b1b3d315e6c125232b9c9e2a55b6ce4ae70ad9875",
@@ -137,8 +137,8 @@
     "chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordKeyBridge.java": "8022f9c4b78bfd2a3a39b469d947ab7ebe99513813b4605bd18d410230bc0142",
     "chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java": "81fce328b46b7c2c84b79eedbb35f7d0ed19f0d6f633967e4166cb0a24c2a073",
     "chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java": "8e282bb7f4949b9ec2ef9f42794e3f47808248ceed490f13d8effa7aa21c5a7f",
-    "components/password_manager/core/browser/password_store/archium_login_database_unittest.cc": "312c3f77db697e012de57cf1193e524e9526ca5dc5ee776e930a7c862f755734",
+    "components/password_manager/core/browser/password_store/archium_login_database_unittest.cc": "a9230cd734d67c4b0067c751fc62d8aac6ef700ae58f7bc2c0e59e3919869241",
     "components/password_manager/core/browser/password_store/archium_password_import_snapshot.h": "85c0a8c44de5edbcddc3fbb4da69edf1c5074914d0af0b5072cfa1981bc41ef9"
   },
-  "patch_sha256": "a1ce3c474ec6292823762a5a484044f01d0c3cc16acd5a8c129eead7469ffb7a"
+  "patch_sha256": "1465d3e479d6e7e031b9159b9af1a88f19240de55cd2e1fa38065e618f7d390d"
 }

@@ -57,11 +57,17 @@ class ArchiumLoginDatabaseTest : public testing::Test {
     }
   }
 
-  void OpenStore() {
+  void OpenStore(bool key_available = true) {
     db_.reset();
     prefs_.registry()->RegisterBooleanPref(prefs::kClearingUndecryptablePasswords,
                                           false);
-    crypt_ = os_crypt_async::GetTestOSCryptAsyncForTesting();
+    if (key_available) {
+      crypt_ = os_crypt_async::GetTestOSCryptAsyncForTesting();
+    } else {
+      crypt_ = std::make_unique<os_crypt_async::OSCryptAsync>(
+          std::vector<std::pair<os_crypt_async::OSCryptAsync::Precedence,
+                               std::unique_ptr<os_crypt_async::KeyProvider>>>{});
+    }
     store_ = base::MakeRefCounted<PasswordStore>(
         std::make_unique<PasswordStoreBuiltInBackend>(
             CreateLoginDatabase(kProfileStore, directory_.GetPath(), &prefs_),
@@ -278,6 +284,17 @@ class CommittedRowsObserver : public PasswordStoreInterface::Observer {
  private:
   base::FilePath path_;
 };
+
+TEST_F(ArchiumLoginDatabaseTest, InitializedDatabaseWithoutKeyIsNotAvailable) {
+  OpenStore(/* key_available= */ false);
+  // The snapshot callback runs after backend initialization, so this checks the
+  // ready-state result rather than just the initial "not initialized" state.
+  base::test::TestFuture<ArchiumImportSnapshotResult> initialized;
+  store_->GetImportSnapshot(initialized.GetCallback());
+  EXPECT_FALSE(initialized.Take().has_value());
+  EXPECT_NE(ActionableError::kNoError, store_->GetError());
+  EXPECT_EQ(0, RowCount());
+}
 
 TEST_F(ArchiumLoginDatabaseTest, AsyncSnapshotQueuesAndRejectsSubsequentWebSave) {
   OpenStore();

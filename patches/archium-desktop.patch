@@ -1519,7 +1519,21 @@ diff --git a/components/password_manager/core/browser/password_store/password_st
  #include "components/password_manager/core/browser/affiliation/affiliated_match_helper.h"
  #include "components/password_manager/core/browser/features/password_features.h"
  #include "components/password_manager/core/browser/password_manager_metrics_util.h"
-@@ -366,6 +367,29 @@
+@@ -239,6 +240,13 @@
+ }
+ 
+ ActionableError PasswordStoreBuiltInBackend::GetError() {
++#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
++  // A usable schema is insufficient for the local Android store. Fail closed
++  // while the Keystore-backed encryption provider is unavailable.
++  if (!is_archium_encryption_available_) {
++    return ActionableError::kInactionable;
++  }
++#endif
+   if (!is_database_initialized_successfully_) {
+     return ActionableError::kInactionable;
+   }
+@@ -366,6 +374,29 @@
            .Then(std::move(callback)));
  }
  
@@ -1549,7 +1563,7 @@ diff --git a/components/password_manager/core/browser/password_store/password_st
  void PasswordStoreBuiltInBackend::UpdateLoginAsync(
      StoredCredential cred,
      PasswordChangesOrErrorReply callback) {
-@@ -441,6 +465,11 @@
+@@ -441,6 +472,11 @@
  PasswordStoreBuiltInBackend::CreateSyncControllerDelegate() {
    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
    DCHECK(helper_);
@@ -1561,7 +1575,7 @@ diff --git a/components/password_manager/core/browser/password_store/password_st
    // Note that a callback is bound for
    // GetSyncControllerDelegate() because this getter itself
    // must also run in the backend sequence, and the proxy object below will take
-@@ -456,8 +485,9 @@
+@@ -456,8 +492,9 @@
  void PasswordStoreBuiltInBackend::OnSyncServiceInitialized(
      syncer::SyncService* sync_service) {
    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -1573,7 +1587,7 @@ diff --git a/components/password_manager/core/browser/password_store/password_st
    // TODO(crbug.com/464228247): Expand this to other platforms.
    if (!is_account_store_.value()) {
      return;
-@@ -472,8 +502,9 @@
+@@ -472,8 +509,9 @@
  
  void PasswordStoreBuiltInBackend::OnStateChanged(syncer::SyncService* sync) {
    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -1585,7 +1599,7 @@ diff --git a/components/password_manager/core/browser/password_store/password_st
    if (!is_account_store_.value()) {
      return;
    }
-@@ -493,8 +524,9 @@
+@@ -493,8 +531,9 @@
  
  void PasswordStoreBuiltInBackend::OnSyncShutdown(syncer::SyncService* sync) {
    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -1597,10 +1611,30 @@ diff --git a/components/password_manager/core/browser/password_store/password_st
    if (!is_account_store_.value()) {
      return;
    }
+@@ -580,6 +619,10 @@
+     base::OnceCallback<void(bool)> completion,
+     scoped_refptr<os_crypt_async::Encryptor> encryptor) {
+   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
++#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
++  is_archium_encryption_available_ = encryptor->IsEncryptionAvailable();
++#endif
++
+ 
+   // Piggyback on |remote_form_changes_received| to record password deletion
+   // coming from sync.
 diff --git a/components/password_manager/core/browser/password_store/password_store_built_in_backend.h b/components/password_manager/core/browser/password_store/password_store_built_in_backend.h
 --- a/components/password_manager/core/browser/password_store/password_store_built_in_backend.h
 +++ b/components/password_manager/core/browser/password_store/password_store_built_in_backend.h
-@@ -92,6 +92,12 @@
+@@ -14,6 +14,8 @@
+ #include "base/scoped_observation.h"
+ #include "base/sequence_checker.h"
+ #include "base/types/expected.h"
++#include "build/build_config.h"
++#include "components/password_manager/core/browser/password_manager_buildflags.h"
+ #include "components/password_manager/core/browser/password_manager_metrics_util.h"
+ #include "components/password_manager/core/browser/password_store/actionable_error.h"
+ #include "components/password_manager/core/browser/password_store/password_store.h"
+@@ -92,6 +94,12 @@
        BackendLoginsOrErrorReply callback) override;
    void AddLoginAsync(StoredCredential cred,
                       PasswordChangesOrErrorReply callback) override;
@@ -1613,6 +1647,16 @@ diff --git a/components/password_manager/core/browser/password_store/password_st
    void UpdateLoginAsync(StoredCredential cred,
                          PasswordChangesOrErrorReply callback) override;
    void RemoveLoginAsync(const base::Location& location,
+@@ -165,6 +173,9 @@
+       GUARDED_BY_CONTEXT(sequence_checker_);
+ 
+   bool is_database_initialized_successfully_ = false;
++#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
++  bool is_archium_encryption_available_ = false;
++#endif
+ 
+   const IsAccountStore is_account_store_ = IsAccountStore(false);
+ 
 diff --git a/components/password_manager/core/browser/password_store/password_store_interface.h b/components/password_manager/core/browser/password_store/password_store_interface.h
 --- a/components/password_manager/core/browser/password_store/password_store_interface.h
 +++ b/components/password_manager/core/browser/password_store/password_store_interface.h
@@ -3803,7 +3847,7 @@ diff --git a/components/password_manager/core/browser/password_store/archium_log
 new file mode 100644
 --- /dev/null
 +++ b/components/password_manager/core/browser/password_store/archium_login_database_unittest.cc
-@@ -0,0 +1,345 @@
+@@ -0,0 +1,362 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -3863,11 +3907,17 @@ new file mode 100644
 +    }
 +  }
 +
-+  void OpenStore() {
++  void OpenStore(bool key_available = true) {
 +    db_.reset();
 +    prefs_.registry()->RegisterBooleanPref(prefs::kClearingUndecryptablePasswords,
 +                                          false);
-+    crypt_ = os_crypt_async::GetTestOSCryptAsyncForTesting();
++    if (key_available) {
++      crypt_ = os_crypt_async::GetTestOSCryptAsyncForTesting();
++    } else {
++      crypt_ = std::make_unique<os_crypt_async::OSCryptAsync>(
++          std::vector<std::pair<os_crypt_async::OSCryptAsync::Precedence,
++                               std::unique_ptr<os_crypt_async::KeyProvider>>>{});
++    }
 +    store_ = base::MakeRefCounted<PasswordStore>(
 +        std::make_unique<PasswordStoreBuiltInBackend>(
 +            CreateLoginDatabase(kProfileStore, directory_.GetPath(), &prefs_),
@@ -4084,6 +4134,17 @@ new file mode 100644
 + private:
 +  base::FilePath path_;
 +};
++
++TEST_F(ArchiumLoginDatabaseTest, InitializedDatabaseWithoutKeyIsNotAvailable) {
++  OpenStore(/* key_available= */ false);
++  // The snapshot callback runs after backend initialization, so this checks the
++  // ready-state result rather than just the initial "not initialized" state.
++  base::test::TestFuture<ArchiumImportSnapshotResult> initialized;
++  store_->GetImportSnapshot(initialized.GetCallback());
++  EXPECT_FALSE(initialized.Take().has_value());
++  EXPECT_NE(ActionableError::kNoError, store_->GetError());
++  EXPECT_EQ(0, RowCount());
++}
 +
 +TEST_F(ArchiumLoginDatabaseTest, AsyncSnapshotQueuesAndRejectsSubsequentWebSave) {
 +  OpenStore();
