@@ -1090,8 +1090,7 @@ public class MainSettings extends ChromeBaseSettingsFragment
                     }
 
                     if (ChromeFeatureList.isEnabled(
-                                    ChromeFeatureList.YOUR_SAVED_INFO_SETTINGS_PAGE_ANDROID)
-                            && !ArchiumPasswordManagerBridge.isLocalEnabled()) {
+                            ChromeFeatureList.YOUR_SAVED_INFO_SETTINGS_PAGE_ANDROID)) {
                         indexData.removeEntry(getUniqueId(PREF_AUTOFILL_SECTION));
                         indexData.removeEntry(getUniqueId(PREF_PASSWORDS));
                         indexData.removeEntry(getUniqueId(PREF_AUTOFILL_PAYMENTS));
