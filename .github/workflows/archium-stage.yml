@@ -9,6 +9,18 @@ on:
         required: false
         default: ''
         type: string
+      source_tag:
+        required: false
+        default: ''
+        type: string
+      source_commit:
+        required: false
+        default: ''
+        type: string
+      validate_native:
+        required: false
+        default: true
+        type: boolean
     outputs:
       complete:
         value: ${{ jobs.build.outputs.complete }}
@@ -28,6 +40,9 @@ jobs:
         id: compile
         env:
           GH_TOKEN: ${{ github.token }}
+          ARCHIUM_SOURCE_TAG: ${{ inputs.source_tag }}
+          ARCHIUM_SOURCE_COMMIT: ${{ inputs.source_commit }}
+          ARCHIUM_VALIDATE_TARGETS: ${{ inputs.validate_native && 'archium_key_provider_tests archium_key_java' || '' }}
           ARCHIUM_PREVIOUS_TAG: ${{ inputs.previous_tag }}
           ARCHIUM_CHECKPOINT_TAG: archium-checkpoint-${{ github.run_id }}-${{ inputs.stage }}
           ARCHIUM_SLICE_MINUTES: '120'

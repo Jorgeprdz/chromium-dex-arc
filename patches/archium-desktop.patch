@@ -372,15 +372,16 @@ diff --git a/chrome/browser/browser_process_impl.cc b/chrome/browser/browser_pro
 diff --git a/chrome/browser/password_manager/android/BUILD.gn b/chrome/browser/password_manager/android/BUILD.gn
 --- a/chrome/browser/password_manager/android/BUILD.gn
 +++ b/chrome/browser/password_manager/android/BUILD.gn
-@@ -4,6 +4,7 @@
+@@ -4,6 +4,8 @@
  
  import("//build/config/android/rules.gni")
  import("//testing/libfuzzer/fuzzer_test.gni")
++import("//testing/test.gni")
 +import("//components/password_manager/core/browser/buildflags.gni")
  import("//third_party/jni_zero/jni_zero.gni")
  import("//third_party/protobuf/proto_library.gni")
  
-@@ -113,7 +114,11 @@
+@@ -113,7 +115,11 @@
  }
  
  android_library("java") {
@@ -393,7 +394,7 @@ diff --git a/chrome/browser/password_manager/android/BUILD.gn b/chrome/browser/p
      ":android_backend_java_enums",
      ":java_resources",
      ":settings_interface_java",
-@@ -616,6 +621,14 @@
+@@ -616,6 +622,14 @@
      "//ui/base",
    ]
  
@@ -408,7 +409,7 @@ diff --git a/chrome/browser/password_manager/android/BUILD.gn b/chrome/browser/p
    # TODO(crbug.com/40031409): Fix code that adds exit-time destructors and
    # enable the diagnostic by removing this line.
    configs += [ "//build/config/compiler:no_exit_time_destructors" ]
-@@ -699,3 +712,36 @@
+@@ -699,3 +713,52 @@
      "//testing/gtest",
    ]
  }
@@ -444,6 +445,22 @@ diff --git a/chrome/browser/password_manager/android/BUILD.gn b/chrome/browser/p
 +      "//third_party/boringssl",
 +    ]
 +  }
++
++  test("archium_key_provider_tests") {
++    use_raw_android_executable = true
++    sources = [
++      "archium_password_key_provider_unittest.cc",
++      "//base/test/run_all_unittests.cc",
++    ]
++    deps = [
++      ":archium_key_provider",
++      "//base",
++      "//base/test:test_support",
++      "//components/os_crypt/async/browser",
++      "//testing/gtest",
++    ]
++  }
++
 +}
 diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java
 --- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java
@@ -1118,7 +1135,7 @@ diff --git a/chrome/browser/password_manager/android/archium_password_key_provid
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/password_manager/android/archium_password_key_provider_unittest.cc
-@@ -0,0 +1,74 @@
+@@ -0,0 +1,77 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -1148,7 +1165,10 @@ new file mode 100644
 +  base::test::TestFuture<std::string,
 +                        base::expected<os_crypt_async::Encryptor::Key,
 +                                       os_crypt_async::KeyProvider::KeyError>> future;
-+  provider.GetKey(future.GetCallback());
++  provider.GetKey(future.GetCallback<
++                  const std::string&,
++                  base::expected<os_crypt_async::Encryptor::Key,
++                                 os_crypt_async::KeyProvider::KeyError>>());
 +  EXPECT_FALSE(future.IsReady());
 +  ASSERT_TRUE(future.Wait());
 +  EXPECT_EQ("apw1", future.Get<0>());

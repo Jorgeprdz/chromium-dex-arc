@@ -45,7 +45,7 @@
     "chrome/browser/autofill/android/BUILD.gn": "00e2d69719b56d99054d6f62e59fd139ac396af4248cd4aa8d9a4ee813749125",
     "chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/AutofillClientProviderUtils.java": "b14949cce15c8cf64a2cf31a202455309419c22b12539a594952ac3eed34e56a",
     "chrome/browser/browser_process_impl.cc": "e92de54791540d6b6be8ccdd820c93d146dbe78c5f96cf8b3bdc00c5ecc324e6",
-    "chrome/browser/password_manager/android/BUILD.gn": "b591343c4eac227daf3ef784edc34e8e1985334f3849a49a498267621117bd98",
+    "chrome/browser/password_manager/android/BUILD.gn": "07330571c49cc524b83f8e40129aa6e0384df45700de72727feee5db042940a1",
     "chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java": "f3b7aef4e7328b9c1712a7b570abc7e3a89d88d92dd53ba509bd551203927087",
     "chrome/browser/ui/vertical_tabs/BUILD.gn": "290cf3490b560fad2d9432a7694b56bb963f1ea3012e9b7ee9ca9a959245b9b5",
     "chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/VerticalTabUtils.java": "7f764bace204e38925f4b5a8cab1a703f0b38786ec9351a3319e841c2275332d",
@@ -58,11 +58,11 @@
     "chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/ArchiumAutofillPolicy.java": "8d8c47803c49da5133a19cf94f113a33081d438ac51543122476635f4100b7ef",
     "chrome/browser/password_manager/android/archium_password_key_provider.cc": "ed44bc262af5c31a50db91518d5d5fbb4483d73c4c425f33eb13dc339f98c5d9",
     "chrome/browser/password_manager/android/archium_password_key_provider.h": "a339ffbe4598a6be9253004ce5b1ec53c18faffea54d47822ccf4bf6f907a50e",
-    "chrome/browser/password_manager/android/archium_password_key_provider_unittest.cc": "f81fb0aa637cbb32cefb302460d61bab364f6458a04376ad6cd6ee77b61ef8c2",
+    "chrome/browser/password_manager/android/archium_password_key_provider_unittest.cc": "0b33421e57e3d716e02f8289e8f9bf71b8eb0c34febd882440ffa951f479fecd",
     "chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordKey.java": "fc375299beed459acdb4d4e92e4e4b8443af5d59600382957e40f2da31f30d53",
     "chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordKeyBridge.java": "8022f9c4b78bfd2a3a39b469d947ab7ebe99513813b4605bd18d410230bc0142",
     "chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java": "b4f3a105981b55aa8a1f1c07d9976d4dbe426bfb192705ca6d8e15ee30d36a23",
     "chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java": "eddec4fae1c70503f3e0dbbbe1b6a6c66e4b895335c2692d4c43890d037f3f37"
   },
-  "patch_sha256": "a696a91619863364ab4d85447281af0409310bb2df90a56a34d5f7c42cefed2b"
+  "patch_sha256": "7e1548040fa6207b182c7e2a0557f6c7ecac81047336930e2cc1d283cd99aa6c"
 }

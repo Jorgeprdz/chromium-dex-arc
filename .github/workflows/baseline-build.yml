@@ -1,6 +1,19 @@
 name: Archium for Android build in resumable stages
 on:
   workflow_dispatch:
+    inputs:
+      source_checkpoint:
+        description: 'Explicit checkpoint tag from the previous implementation; empty for clean build'
+        type: string
+        default: ''
+      source_commit:
+        description: 'Exact 40-character commit that produced source_checkpoint'
+        type: string
+        default: ''
+      validate_native:
+        description: 'Compile targeted native/Java checks before the final APK'
+        type: boolean
+        default: true
 permissions:
   contents: write
 concurrency:
@@ -11,12 +24,16 @@ jobs:
     uses: ./.github/workflows/archium-stage.yml
     with:
       stage: 1
+      source_tag: ${{ inputs.source_checkpoint }}
+      source_commit: ${{ inputs.source_commit }}
+      validate_native: ${{ inputs.validate_native }}
   stage2:
     needs: stage1
     if: needs.stage1.outputs.complete != 'true'
     uses: ./.github/workflows/archium-stage.yml
     with:
       stage: 2
+      validate_native: ${{ inputs.validate_native }}
       previous_tag: archium-checkpoint-${{ github.run_id }}-1
   stage3:
     needs: stage2
@@ -24,6 +41,7 @@ jobs:
     uses: ./.github/workflows/archium-stage.yml
     with:
       stage: 3
+      validate_native: ${{ inputs.validate_native }}
       previous_tag: archium-checkpoint-${{ github.run_id }}-2
   stage4:
     needs: stage3
@@ -31,6 +49,7 @@ jobs:
     uses: ./.github/workflows/archium-stage.yml
     with:
       stage: 4
+      validate_native: ${{ inputs.validate_native }}
       previous_tag: archium-checkpoint-${{ github.run_id }}-3
   stage5:
     needs: stage4
@@ -38,6 +57,7 @@ jobs:
     uses: ./.github/workflows/archium-stage.yml
     with:
       stage: 5
+      validate_native: ${{ inputs.validate_native }}
       previous_tag: archium-checkpoint-${{ github.run_id }}-4
   stage6:
     needs: stage5
@@ -45,6 +65,7 @@ jobs:
     uses: ./.github/workflows/archium-stage.yml
     with:
       stage: 6
+      validate_native: ${{ inputs.validate_native }}
       previous_tag: archium-checkpoint-${{ github.run_id }}-5
   stage7:
     needs: stage6
@@ -52,6 +73,7 @@ jobs:
     uses: ./.github/workflows/archium-stage.yml
     with:
       stage: 7
+      validate_native: ${{ inputs.validate_native }}
       previous_tag: archium-checkpoint-${{ github.run_id }}-6
   stage8:
     needs: stage7
@@ -59,6 +81,7 @@ jobs:
     uses: ./.github/workflows/archium-stage.yml
     with:
       stage: 8
+      validate_native: ${{ inputs.validate_native }}
       previous_tag: archium-checkpoint-${{ github.run_id }}-7
   stage9:
     needs: stage8
@@ -66,6 +89,7 @@ jobs:
     uses: ./.github/workflows/archium-stage.yml
     with:
       stage: 9
+      validate_native: ${{ inputs.validate_native }}
       previous_tag: archium-checkpoint-${{ github.run_id }}-8
   stage10:
     needs: stage9
@@ -73,6 +97,7 @@ jobs:
     uses: ./.github/workflows/archium-stage.yml
     with:
       stage: 10
+      validate_native: ${{ inputs.validate_native }}
       previous_tag: archium-checkpoint-${{ github.run_id }}-9
   stage11:
     needs: stage10
@@ -80,6 +105,7 @@ jobs:
     uses: ./.github/workflows/archium-stage.yml
     with:
       stage: 11
+      validate_native: ${{ inputs.validate_native }}
       previous_tag: archium-checkpoint-${{ github.run_id }}-10
   stage12:
     needs: stage11
@@ -87,6 +113,7 @@ jobs:
     uses: ./.github/workflows/archium-stage.yml
     with:
       stage: 12
+      validate_native: ${{ inputs.validate_native }}
       previous_tag: archium-checkpoint-${{ github.run_id }}-11
   result:
     needs: stage12

@@ -27,7 +27,10 @@ TEST_F(ArchiumPasswordKeyProviderTest, WorkerLoadAndOriginSequenceReply) {
   base::test::TestFuture<std::string,
                         base::expected<os_crypt_async::Encryptor::Key,
                                        os_crypt_async::KeyProvider::KeyError>> future;
-  provider.GetKey(future.GetCallback());
+  provider.GetKey(future.GetCallback<
+                  const std::string&,
+                  base::expected<os_crypt_async::Encryptor::Key,
+                                 os_crypt_async::KeyProvider::KeyError>>());
   EXPECT_FALSE(future.IsReady());
   ASSERT_TRUE(future.Wait());
   EXPECT_EQ("apw1", future.Get<0>());
