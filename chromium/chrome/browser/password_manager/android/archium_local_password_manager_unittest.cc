@@ -72,6 +72,92 @@ TEST_F(ArchiumLocalPasswordManagerTest, MetadataDoesNotRequestAuthenticationOrRe
   EXPECT_EQ(metadata->front().username, u"user");
 }
 
+TEST_F(ArchiumLocalPasswordManagerTest, AddAuthenticatesAndVerifiesPersistedCredential) {
+  base::test::TestFuture<Status> result;
+  manager_->Add(GURL("https://added.test/"), u"new-user",
+                PasswordString(std::u16string(u"new-secret")),
+                result.GetCallback());
+  EXPECT_FALSE(result.IsReady());
+  ASSERT_TRUE(pending_auth_);
+  std::move(pending_auth_).Run(true);
+  tasks_.RunUntilIdle();
+  ASSERT_TRUE(result.IsReady());
+  EXPECT_EQ(result.Get(), Status::kSuccess);
+
+  auto metadata = manager_->GetMetadata();
+  ASSERT_TRUE(metadata.has_value());
+  EXPECT_EQ(metadata->size(), 2u);
+  EXPECT_TRUE(std::ranges::any_of(*metadata, [](const auto& entry) {
+    return entry.url == GURL("https://added.test/") &&
+           entry.username == u"new-user";
+  }));
+}
+
+TEST_F(ArchiumLocalPasswordManagerTest, UpdateRevalidatesIdAndVerifiesPersistedCredential) {
+  const int64_t id = FirstId();
+  base::test::TestFuture<Status> result;
+  manager_->Update(id, u"renamed",
+                   PasswordString(std::u16string(u"new-secret")),
+                   result.GetCallback());
+  ASSERT_TRUE(pending_auth_);
+  std::move(pending_auth_).Run(true);
+  tasks_.RunUntilIdle();
+  ASSERT_TRUE(result.IsReady());
+  EXPECT_EQ(result.Get(), Status::kSuccess);
+
+  auto metadata = manager_->GetMetadata();
+  ASSERT_TRUE(metadata.has_value());
+  ASSERT_EQ(metadata->size(), 1u);
+  EXPECT_EQ(metadata->front().username, u"renamed");
+
+  base::test::TestFuture<Status, PasswordString> reveal;
+  manager_->Reveal(metadata->front().id, reveal.GetCallback());
+  ASSERT_TRUE(pending_auth_);
+  std::move(pending_auth_).Run(true);
+  EXPECT_EQ(reveal.Get<0>(), Status::kSuccess);
+  EXPECT_EQ(reveal.Get<1>(), u"new-secret");
+}
+
+TEST_F(ArchiumLocalPasswordManagerTest, DeleteRevalidatesIdAndVerifiesRemoval) {
+  const int64_t id = FirstId();
+  base::test::TestFuture<Status> result;
+  manager_->Delete(id, result.GetCallback());
+  ASSERT_TRUE(pending_auth_);
+  std::move(pending_auth_).Run(true);
+  tasks_.RunUntilIdle();
+  ASSERT_TRUE(result.IsReady());
+  EXPECT_EQ(result.Get(), Status::kSuccess);
+
+  auto metadata = manager_->GetMetadata();
+  ASSERT_TRUE(metadata.has_value());
+  EXPECT_TRUE(metadata->empty());
+}
+
+TEST_F(ArchiumLocalPasswordManagerTest, StoreChangeDuringUpdateAuthenticationMakesIdStale) {
+  const int64_t id = FirstId();
+  base::test::TestFuture<Status> result;
+  manager_->Update(id, u"renamed",
+                   PasswordString(std::u16string(u"new-secret")),
+                   result.GetCallback());
+  CSVPassword csv(GURL("https://other.test/"), "another", "different", "",
+                  CSVPassword::Status::kOK);
+  store_->AddLogin(
+      SavedPasswordsPresenter::CreateImportedCredential(CredentialUIEntry(csv)));
+  tasks_.RunUntilIdle();
+  ASSERT_TRUE(pending_auth_);
+  std::move(pending_auth_).Run(true);
+  EXPECT_EQ(result.Get(), Status::kStale);
+}
+
+TEST_F(ArchiumLocalPasswordManagerTest, InvalidAddDoesNotReportWriteSuccess) {
+  base::test::TestFuture<Status> result;
+  manager_->Add(GURL("https://invalid.test/"), u"user", PasswordString(),
+                result.GetCallback());
+  ASSERT_TRUE(pending_auth_);
+  std::move(pending_auth_).Run(true);
+  EXPECT_EQ(result.Get(), Status::kInvalid);
+}
+
 TEST_F(ArchiumLocalPasswordManagerTest, RevealWaitsForRealAuthenticatorResult) {
   base::test::TestFuture<Status, PasswordString> result;
   manager_->Reveal(FirstId(), result.GetCallback());
