@@ -99,3 +99,5 @@ comandos nativos createNewTab/pinTab/setIndex/remover/cancelTabClosure, scope de
 modelo activo y limpieza de observers. El controlador pasó JVM con frontera de
 comandos simulada; adapter sólo pasó SDK con contratos stubbed. Todavía NO se
 construyen desde el coordinador Arc y faltan pruebas dentro de Chromium.
+
+Actualización de clave: marcador no secreto de inicialización en filesDir evita regenerar una DEK después de perder simultáneamente KEK y registro. RED/GREEN real en app temporal Android (9 casos + commit/reinicio). Backend GetError también exige disponibilidad de cifrado en el fork Android; regresión C++ pendiente.

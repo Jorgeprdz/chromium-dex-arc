@@ -21,8 +21,8 @@ Branch: feat/arc-desktop
 Origin: https://github.com/Jorgeprdz/chromium-dex-arc.git
 Chromium fijado: cfd94726b7b5fb48aedcc32662f2f3fbdbadec35 (157.0.8086.0)
 Paquete real: app.archium.android
-Commit del código al escribir este prompt: 7ba0e586fa4cb79c8cec5de8f347bd25083db98a
-Fecha UTC: 2026-10-06T04:05:25.689397+00:00
+Commit del código al escribir este prompt: 5a463e1cc8e3d617c225cf163eb0c1762b92ca36
+Fecha UTC: 2026-10-06T04:50:02.624843+00:00
 
 Lee primero docs/archium-current-handoff.md y docs/validation/local-passwords-results.md.
 Después git status y git log; continúa los cambios existentes, no los sobrescribas.
@@ -46,14 +46,19 @@ El checkout nativo completo lo prepara CI; no descargues cientos de GB sin neces
 
 1. Clave aleatoria de datos protegida por Android Keystore, AES-GCM y escritura
    verificada/durable del registro envuelto. Java Keystore en app temporal pasó,
-   incluido reinicio y AtomicFile que oculta fallo de commit. Bloqueo real del
+   incluido reinicio y AtomicFile que oculta fallo de commit. Ahora un marcador
+   no secreto en filesDir impide crear otra DEK cuando se pierden tanto KEK como
+   registro envuelto después de inicializar. La nueva regresión falló antes y pasó
+   después (9 casos reales + commit/reinicio). Bloqueo real del
    dispositivo y proveedor C++ siguen pendientes de validación.
 2. Backend local basado en LoginDatabase/Builtin, con cifrado obligatorio y sin
    borrado de registros ilegibles. Preserva decrypt legacy v10, no lo usa para
    escrituras nuevas. Account/Google no se fingen disponibles. No registra Sync
    PASSWORDS con delegado null. Tests C++ escritos, NO compilados/ejecutados aún.
 3. Save/fill preparados usando rutas reales de PasswordManager; readiness rechaza
-   tienda/clave no disponible. Settings usa prefs locales reales. Fixtures HTML
+   tienda/clave no disponible. Settings usa prefs locales reales. Auditoría corrigió GetError del backend,
+   que no comprobaba disponibilidad de cifrado aunque la DB abriera. Ahora la
+   exige en Android con flag local; regresión C++ escrita y pendiente. Fixtures HTML
    en tests/runtime/passwords. NO validación save/fill de navegador todavía.
 4. ArchiumPasswordCsv parse/write: 18 casos sintéticos JVM pasan. RFC quotes/BOM/
    Unicode, límites y errores sin valores sensibles. Aún NO está conectado a
@@ -75,7 +80,9 @@ El checkout nativo completo lo prepara CI; no descargues cientos de GB sin neces
    anidadas, fijados con URL tras cierre y reconciliación de tab IDs. JVM pasó.
    ArcSidebarProfiles usa UserPrefs + ProfileKeyedMap OWN_INSTANCE: off-the-record
    conserva sólo memoria. Su ciclo de vida nativo aún no está validado.
-9. FALTA conectar ArcTabActions con TabModel/TabCreator y renderizar/componer Arc.
+9. ArcTabActions pasó JVM con comandos simulados; ArcNativeTabSession está
+   preparado contra TabModel/TabCreator y pasó sólo SDK con stubs. Aún falta
+   construirlo desde el coordinador y renderizar/componer Arc.
    El coordinador actual todavía es la cabecera antigua; NO es Arc terminado ni
    visualmente idéntico. Chromium ya tiene TabModel.pinTab/unpinTab: reutilízalos.
    No sustituyas tabs nativas ni inventes ventanas/fullscreen/controles falsos.
@@ -106,7 +113,7 @@ git diff --check -- . ':!patches/archium-desktop.patch'
 .sync-audit/actionlint .github/workflows/baseline-build.yml .github/workflows/archium-stage.yml
 bash -n scripts/build-archium.sh
 
-Último estado: patch de 66 archivos se aplica y coincide con hashes. JVM/SDK-adapters
+Último estado: patch de 68 archivos se aplica y coincide con hashes. JVM/SDK-adapters
 pasan; estos últimos usan contratos Chromium stubbed. 28 Python tests pasaron.
 Tests físicos: scripts/test-android-password-key.py y test-android-window-policy.py
 con --device 192.168.101.105:44641. SDK /opt/android-sdk, android-36/build-tools36.
