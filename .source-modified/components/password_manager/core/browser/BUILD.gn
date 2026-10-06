@@ -170,6 +170,7 @@ static_library("browser") {
   public_deps = [
     ":metrics_util",
     ":passkey_credential",
+    ":password_manager_buildflags",
     "//base",
     "//components/affiliations/core/browser:affiliations",
     "//components/password_manager/core/browser/features:utils",
@@ -185,7 +186,6 @@ static_library("browser") {
     "//components/sync",
   ]
   deps = [
-    ":password_manager_buildflags",
     ":hash_password_manager",
     ":password_hash_data",
     "//build:blink_buildflags",
