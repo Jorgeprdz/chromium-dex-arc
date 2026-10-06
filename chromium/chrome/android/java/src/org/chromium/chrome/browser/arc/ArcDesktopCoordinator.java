@@ -17,22 +17,20 @@ import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
-import android.widget.ScrollView;
 import android.widget.TextView;
 
 import org.chromium.chrome.R;
-import org.chromium.chrome.browser.bookmarks.BookmarkModel;
-import org.chromium.chrome.browser.bookmarks.BookmarkModelObserver;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance;
 import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy;
-import org.chromium.components.bookmarks.BookmarkId;
-import org.chromium.components.bookmarks.BookmarkItem;
 import org.chromium.components.favicon.LargeIconBridge;
 
-import java.util.List;
 import java.util.Locale;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
+import org.chromium.chrome.browser.tab.Tab;
+import org.chromium.chrome.browser.tabmodel.TabCreator;
+import org.chromium.chrome.browser.tabmodel.TabModel;
 import org.chromium.chrome.browser.tabmodel.IncognitoStateProvider;
 import org.chromium.chrome.browser.tabmodel.IncognitoStateProvider.IncognitoStateObserver;
 
@@ -40,40 +38,43 @@ import org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTa
 import org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabRailLayout;
 import org.chromium.chrome.browser.toolbar.top.ToolbarTablet;
 
-/** Adds real bookmark navigation and appearance controls around the native vertical tab rail. */
+/** Composes profile-owned Arc collections around Chromium's real vertical tab rail. */
 public final class ArcDesktopCoordinator {
     private final Activity mActivity;
     private final ViewGroup mRail;
     private final View mNativeTabs;
     private final LinearLayout mColumn;
     private final LinearLayout mHeader;
-    private final LinearLayout mFavorites;
-    private final LinearLayout mFolders;
-    private final ScrollView mBookmarkScroll;
-    private final BookmarkModel mBookmarks;
     private final LargeIconBridge mIcons;
     private final Consumer<String> mNavigate;
-    private final Runnable mOpenBookmarks;
     private final IncognitoStateProvider mIncognitoStateProvider;
     private final IncognitoStateObserver mIncognitoObserver;
     private final SharedPreferences mPreferences;
     private final SharedPreferences.OnSharedPreferenceChangeListener mPreferenceListener;
     private final View.OnLayoutChangeListener mLayoutListener;
-    private final BookmarkModelObserver mBookmarkObserver;
+    private final Supplier<TabModel> mCurrentModel;
+    private final Supplier<TabCreator> mCurrentCreator;
+    private final Supplier<Tab> mCurrentTab;
+    private TabModel mSessionModel;
+    private ArcNativeTabSession mTabSession;
+    private ArcCollectionsController mCollections;
+    private ArcCollectionsView mCollectionsView;
     private boolean mDestroyed;
-    private int mBookmarkGeneration;
     private AlertDialog mColorDialog;
 
-    public ArcDesktopCoordinator(Activity activity, ViewGroup rail, BookmarkModel bookmarks,
+    public ArcDesktopCoordinator(Activity activity, ViewGroup rail,
             Profile profile, Consumer<String> navigate, Runnable openBookmarks,
-            Runnable openAutofillSettings, IncognitoStateProvider incognitoStateProvider) {
+            Runnable openAutofillSettings, IncognitoStateProvider incognitoStateProvider,
+            Supplier<TabModel> currentModel, Supplier<TabCreator> currentCreator,
+            Supplier<Tab> currentTab) {
         mActivity = activity;
         mRail = rail;
-        mBookmarks = bookmarks;
         mNavigate = navigate;
-        mOpenBookmarks = openBookmarks;
         mIncognitoStateProvider = incognitoStateProvider;
-        mIncognitoObserver = incognito -> { if (!mDestroyed) applyAppearance(); };
+        mCurrentModel = currentModel;
+        mCurrentCreator = currentCreator;
+        mCurrentTab = currentTab;
+        mIncognitoObserver = incognito -> { if (!mDestroyed) { rebindCollections(); applyAppearance(); } };
         mIcons = new LargeIconBridge(profile);
         mPreferences = ArcDesktopAppearance.preferences(activity);
         mNativeTabs = rail.getChildAt(0);
@@ -85,10 +86,6 @@ public final class ArcDesktopCoordinator {
                 -1, nativeSpacer.getLayoutParams().height));
         ((VerticalTabRailLayout) mNativeTabs).setDesktopWindowSpacerHost(captionSpacer);
         mHeader = column();
-        mFavorites = new LinearLayout(activity);
-        mFavorites.setGravity(Gravity.CENTER_VERTICAL);
-        mFavorites.setPadding(dp(4), dp(4), dp(4), dp(4));
-        mHeader.addView(mFavorites);
         LinearLayout actions = new LinearLayout(activity);
         Button bookmarksButton = button(activity.getString(R.string.arc_bookmarks), openBookmarks);
         Button googleButton = button("Google", () -> {});
@@ -99,11 +96,6 @@ public final class ArcDesktopCoordinator {
             actions.addView(action, new LinearLayout.LayoutParams(0, dp(44), 1));
         }
         mHeader.addView(actions);
-        mFolders = column();
-        mBookmarkScroll = new ScrollView(activity);
-        mBookmarkScroll.setFillViewport(false);
-        mBookmarkScroll.addView(mFolders);
-        mHeader.addView(mBookmarkScroll, new LinearLayout.LayoutParams(-1, dp(112)));
         mColumn.addView(mHeader);
         mColumn.addView(mNativeTabs, new LinearLayout.LayoutParams(-1, 0, 1));
         rail.addView(mColumn, new ViewGroup.LayoutParams(-1, -1));
@@ -120,14 +112,8 @@ public final class ArcDesktopCoordinator {
             }
         };
         mPreferences.registerOnSharedPreferenceChangeListener(mPreferenceListener);
-        mLayoutListener = (v, l, t, r, b, ol, ot, or, ob) -> applyAppearance();
+        mLayoutListener = (v, l, t, r, b, ol, ot, or, ob) -> { rebindCollections(); applyAppearance(); };
         rail.addOnLayoutChangeListener(mLayoutListener);
-        mBookmarkObserver = new BookmarkModelObserver() {
-            @Override
-            public void bookmarkModelChanged() { rebuildBookmarks(); }
-        };
-        bookmarks.addObserver(mBookmarkObserver);
-        bookmarks.finishLoadingBookmarkModel(this::rebuildBookmarks);
         mIncognitoStateProvider.addIncognitoStateObserverAndTrigger(mIncognitoObserver);
         applyAppearance();
     }
@@ -154,60 +140,50 @@ public final class ArcDesktopCoordinator {
         return button;
     }
 
-    private void rebuildBookmarks() {
-        if (mDestroyed || !mBookmarks.isBookmarkModelLoaded()) return;
-        int generation = ++mBookmarkGeneration;
-        mFavorites.removeAllViews();
-        mFolders.removeAllViews();
-        BookmarkId desktop = mBookmarks.getDesktopFolderId();
-        if (desktop != null) {
-            int count = 0;
-            for (BookmarkId id : mBookmarks.getChildIds(desktop)) {
-                BookmarkItem item = mBookmarks.getBookmarkById(id);
-                if (item == null || item.isFolder()) continue;
-                if (count++ == 4) break;
-                ImageButton favorite = new ImageButton(mActivity);
-                favorite.setImageResource(android.R.drawable.ic_menu_view);
-                favorite.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
-                favorite.setPadding(dp(12), dp(12), dp(12), dp(12));
-                favorite.setContentDescription(item.getTitle());
-                favorite.setTooltipText(item.getTitle());
-                favorite.setOnClickListener(v -> mNavigate.accept(item.getUrl().getSpec()));
-                mFavorites.addView(favorite, new LinearLayout.LayoutParams(0, dp(48), 1));
-                mIcons.getLargeIconForUrl(item.getUrl(), dp(24), (icon, color, fallback, type) -> {
-                    if (!mDestroyed && generation == mBookmarkGeneration && icon != null) {
-                        favorite.setImageBitmap(icon);
-                    }
-                });
-            }
+    private void clearCollections() {
+        if (mCollectionsView != null) {
+            mCollectionsView.destroy();
+            mHeader.removeView(mCollectionsView);
         }
-        showFolder(null);
-        applyAppearance();
+        if (mCollections != null) mCollections.destroy();
+        if (mTabSession != null) mTabSession.destroy();
+        mCollectionsView = null;
+        mCollections = null;
+        mTabSession = null;
+        mSessionModel = null;
     }
 
-    private void showFolder(BookmarkId folder) {
-        if (mDestroyed || !mBookmarks.isBookmarkModelLoaded()) return;
-        mFolders.removeAllViews();
-        if (folder != null) {
-            mFolders.addView(button(mActivity.getString(R.string.arc_bookmark_root),
-                    () -> showFolder(null)), new LinearLayout.LayoutParams(-1, dp(36)));
-        }
-        List<BookmarkId> children = folder == null
-                ? mBookmarks.getTopLevelFolderIds() : mBookmarks.getChildIds(folder);
-        for (BookmarkId id : children) {
-            BookmarkItem item = mBookmarks.getBookmarkById(id);
-            if (item == null) continue;
-            Button row = button((item.isFolder() ? "▸  " : "") + item.getTitle(), () -> {
-                if (item.isFolder()) showFolder(id);
-                else mNavigate.accept(item.getUrl().getSpec());
-            });
-            row.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-            row.setSingleLine(true);
-            row.setEllipsize(android.text.TextUtils.TruncateAt.END);
-            row.setOnLongClickListener(v -> { mOpenBookmarks.run(); return true; });
-            mFolders.addView(row, new LinearLayout.LayoutParams(-1, dp(36)));
-        }
-        applyAppearance();
+    private void rebindCollections() {
+        if (mDestroyed) return;
+        TabModel model = mCurrentModel.get();
+        if (model == mSessionModel && mTabSession != null) return;
+        clearCollections();
+        if (model == null || model.getProfile() == null || model.getProfile().shutdownStarted()) return;
+        TabCreator creator = mCurrentCreator.get();
+        if (creator == null) return;
+        ArcNativeTabSession session = new ArcNativeTabSession(model, creator,
+                () -> mCurrentModel.get() == model, () -> {
+                    if (!mDestroyed && mCollectionsView != null && mSessionModel == model) {
+                        mCollectionsView.refresh();
+                        applyAppearance();
+                    }
+                });
+        mTabSession = session;
+        mSessionModel = model;
+        mCollections = new ArcCollectionsController(session.store(), session.actions(), session);
+        mCollectionsView = new ArcCollectionsView(mActivity, mCollections, () -> {
+            Tab tab = mCurrentTab.get();
+            if (tab == null || mCurrentModel.get() != model || !session.exists(tab.getId())) return null;
+            return new ArcCollectionsView.CurrentTab(tab.getId(), tab.getUrl().getSpec(), tab.getTitle());
+        }, (entry, button) -> {
+            // Avoid issuing regular-profile favicon fetches for private collections.
+            if (model.getProfile().isOffTheRecord()) return;
+            mIcons.getLargeIconForUrl(new org.chromium.url.GURL(entry.url), dp(24),
+                    (icon, color, fallback, type) -> {
+                        if (!mDestroyed && mTabSession == session && icon != null) button.setImageBitmap(icon);
+                    });
+        });
+        mHeader.addView(mCollectionsView, 0);
     }
 
     private void showGoogleMenu(View anchor, Runnable openAutofillSettings) {
@@ -261,11 +237,8 @@ public final class ArcDesktopCoordinator {
         mHeader.setVisibility(desktop && mRail.getWidth() >= dp(100)
                 && mRail.getHeight() >= dp(360) ? View.VISIBLE : View.GONE);
         if (!desktop) return;
-        int bookmarkHeight = Math.max(dp(112), Math.min(dp(320), mRail.getHeight() / 3));
-        ViewGroup.LayoutParams bookmarkParams = mBookmarkScroll.getLayoutParams();
-        if (bookmarkParams.height != bookmarkHeight) {
-            bookmarkParams.height = bookmarkHeight;
-            mBookmarkScroll.setLayoutParams(bookmarkParams);
+        if (mCollectionsView != null) {
+            mCollectionsView.setCollectionHeight(Math.max(dp(80), Math.min(dp(240), mRail.getHeight() / 4)));
         }
         // Leave native tab selection, incognito and favicon rendering to its binders.
         boolean incognito = mIncognitoStateProvider.isIncognitoSelected();
@@ -311,7 +284,7 @@ public final class ArcDesktopCoordinator {
         mDestroyed = true;
         mIncognitoStateProvider.removeObserver(mIncognitoObserver);
         ((VerticalTabRailLayout) mNativeTabs).setDesktopWindowSpacerHost(null);
-        mBookmarks.removeObserver(mBookmarkObserver);
+        clearCollections();
         mPreferences.unregisterOnSharedPreferenceChangeListener(mPreferenceListener);
         mRail.removeOnLayoutChangeListener(mLayoutListener);
         if (mColorDialog != null) mColorDialog.dismiss();

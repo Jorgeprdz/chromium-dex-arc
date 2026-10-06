@@ -21,8 +21,8 @@ Branch: feat/arc-desktop
 Origin: https://github.com/Jorgeprdz/chromium-dex-arc.git
 Chromium fijado: cfd94726b7b5fb48aedcc32662f2f3fbdbadec35 (157.0.8086.0)
 Paquete real: app.archium.android
-Commit del código al escribir este prompt: 5a463e1cc8e3d617c225cf163eb0c1762b92ca36
-Fecha UTC: 2026-10-06T04:50:02.624843+00:00
+Commit del código al escribir este prompt: 3294d6f1efff03f09c96d36d4d68c6582ca60253
+Fecha UTC: 2026-10-06T05:08:13.826404+00:00
 
 Lee primero docs/archium-current-handoff.md y docs/validation/local-passwords-results.md.
 Después git status y git log; continúa los cambios existentes, no los sobrescribas.
@@ -88,12 +88,20 @@ El checkout nativo completo lo prepara CI; no descargues cientos de GB sin neces
    anidadas, fijados con URL tras cierre y reconciliación de tab IDs. JVM pasó.
    ArcSidebarProfiles usa UserPrefs + ProfileKeyedMap OWN_INSTANCE: off-the-record
    conserva sólo memoria. Su ciclo de vida nativo aún no está validado.
-9. ArcTabActions pasó JVM con comandos simulados; ArcNativeTabSession está
-   preparado contra TabModel/TabCreator y pasó sólo SDK con stubs. Aún falta
-   construirlo desde el coordinador y renderizar/componer Arc.
-   El coordinador actual todavía es la cabecera antigua; NO es Arc terminado ni
-   visualmente idéntico. Chromium ya tiene TabModel.pinTab/unpinTab: reutilízalos.
-   No sustituyas tabs nativas ni inventes ventanas/fullscreen/controles falsos.
+9. ArcTabActions/ArcCollectionsController pasaron JVM con comandos simulados.
+   ArcCollectionsView pasó controles de UI reales en Android temporal: fijar,
+   favorito, seleccionar, cambio de colecciones y limpieza. Regresión de datos
+   dañados falló y pasó: error explícito, sin crash ni reemplazo de los bytes.
+   ArcDesktopCoordinator AHORA construye ArcNativeTabSession con suppliers del
+   modelo/creador/tab actual y rebind por incógnito; SDK pasó sólo con contratos.
+   ArcSidebarState.setFavorite conserva ID al cambiar de favorito a fijado.
+   FAVORITOS/FIJADOS/SPACES/CARPETAS están conectados en el patch, pero falta
+   compilación y ejercicio real del perfil/TabModel/GN. El rail nativo de pestañas
+   abiertas todavía es global, SIN FILTRADO por Space. La composición nav/address/
+   omnibox/footer/frame Arc sigue incompleta; NO es visualmente idéntico aún.
+   Archivos nuevos: ArcCollectionsController.java, ArcCollectionsView.java;
+   tests/java/ArcCollectionsControllerTest.java y
+   tests/android/window/ArcCollectionsViewTest.java.
 10. FALTAN partes importantes antes del run: gestor de contraseñas visible seguro,
     JNI/SavedPasswordsPresenter, autenticación nativa, SAF/import/export/CRUD y
     composición Arc (sidebar/nav/address/controles/frame/modelos/estados reales).
@@ -121,7 +129,7 @@ git diff --check -- . ':!patches/archium-desktop.patch'
 .sync-audit/actionlint .github/workflows/baseline-build.yml .github/workflows/archium-stage.yml
 bash -n scripts/build-archium.sh
 
-Último estado: patch de 74 archivos se aplica y coincide con hashes. JVM/SDK-adapters
+Último estado: patch de 76 archivos se aplica y coincide con hashes. JVM/SDK-adapters
 pasan; estos últimos usan contratos Chromium stubbed. 28 Python tests pasaron.
 Tests físicos: scripts/test-android-password-key.py y test-android-window-policy.py
 con --device 192.168.101.105:44641. SDK /opt/android-sdk, android-36/build-tools36.

@@ -21,7 +21,7 @@ Este documento describe preparación; no es una entrega de APK ni aceptación fu
 - CSV independiente: 18 casos sintéticos pasan. La pantalla, autenticación y
   conexión SAF/PasswordStore todavía faltan. No se ha leído el CSV personal.
 - 28 pruebas Python de preparación/checkpoints/routing pasan. El parche de
-  74 archivos aplica y coincide con sus hashes. Los checks
+  76 archivos aplica y coincide con sus hashes. Los checks
   aislados de Java/SDK no equivalen a compilar Chromium.
 - Workflow preparado para restaurar un checkpoint anterior con commit explícito,
   conservar objetos/mtimes y compilar los targets modificados antes de la APK.
@@ -108,5 +108,16 @@ entre contraseñas distintas del CSV, omite duplicados y conserva cada formulari
 existente y sus notas al reemplazar. Mantiene la revisión DB para el commit
 atómico futuro. Nueve pruebas C++ escritas, no compiladas/ejecutadas; se registró
 `archium_password_import_tests` y su retención como artifact. Regresión de
-retención observada RED y luego GREEN; suite Python 28 pasa. Patch de 74 archivos
+retención observada RED y luego GREEN; suite Python 28 pasa. Patch de 76 archivos
 aplica/hashes coinciden. Gestor, JNI, auth, SAF y UI siguen pendientes.
+
+Colecciones Arc conectadas en el patch: `ArcCollectionsController/View` y el
+coordinador construyen `ArcNativeTabSession` para el modelo/creador actual. Los
+botones usan pin/unpin/select/open de Chromium; favoritos compartidos, Spaces y
+carpetas se persisten sin sustituir tabs nativas. Cambiar el modelo privado
+reconstruye la colección y destruye la anterior. JVM de controller/state y vistas
+reales Android pasaron (comandos Chromium simulados). Metadatos dañados muestran
+error y conservan sus bytes: regresión física RED/GREEN. Patch 76 aplica/hashes.
+Todavía: rail de pestañas abiertas global sin filtrado por Space; composición Arc
+nav/omnibox/footer/frame incompleta; integración real TabModel/perfil/GN pendiente.
+No presentar el diseño como terminado o idéntico al render aprobado.

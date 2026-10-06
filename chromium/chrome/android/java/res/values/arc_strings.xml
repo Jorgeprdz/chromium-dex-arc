@@ -11,4 +11,16 @@
     <string name="arc_interface_auto">Automática según la ventana</string>
     <string name="arc_interface_arc">Arc</string>
     <string name="arc_interface_mobile">Móvil</string>
+    <string name="arc_pin_current">Fijar pestaña</string>
+    <string name="arc_favorite_current">Añadir a favoritos</string>
+    <string name="arc_new_space">Nuevo espacio</string>
+    <string name="arc_new_folder">Nueva carpeta</string>
+    <string name="arc_name">Nombre</string>
+    <string name="arc_collection_error">No se pudo actualizar la colección</string>
+    <string name="arc_remove_entry">Quitar de la barra lateral</string>
+    <string name="arc_move_to_folder">Mover a carpeta</string>
+    <string name="arc_folder_root">Sin carpeta</string>
+    <string name="arc_spaces">Espacios</string>
+    <string name="arc_favorites">Favoritos</string>
+    <string name="arc_pinned_tabs">Pestañas fijadas</string>
 </resources>

@@ -15,6 +15,7 @@ public final class ArcTabActions {
         void select(int tabId);
         void close(int tabId);
         void pin(int tabId);
+        void unpin(int tabId);
     }
     public enum Result { OPENED, SELECTED, NOT_OPENED, PERSISTENCE_ERROR }
 

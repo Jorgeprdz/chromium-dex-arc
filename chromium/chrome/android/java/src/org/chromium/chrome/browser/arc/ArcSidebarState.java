@@ -183,6 +183,18 @@ public final class ArcSidebarState {
     }
     public void unpin(String id) { mEntries.remove(entry(id)); }
 
+    /** Changes placement without replacing the canonical entry or native tab identity. */
+    public void setFavorite(String id, boolean favorite) {
+        Entry entry = entry(id);
+        if (entry.favorite == favorite && (favorite || mSelected.equals(entry.spaceId))) return;
+        mEntries.set(mEntries.indexOf(entry), new Entry(entry.id,
+                favorite ? null : mSelected, null, entry.url, entry.title, entry.tabId, favorite));
+        if (entry.tabId != null) {
+            if (favorite) mTabSpaces.remove(entry.tabId);
+            else associateTab(entry.tabId, mSelected);
+        }
+    }
+
     private void requireSpace(String id) { if (!mSpaces.containsKey(id)) throw invalid(); }
     private void requireFolder(String spaceId, String id) {
         requireSpace(spaceId);

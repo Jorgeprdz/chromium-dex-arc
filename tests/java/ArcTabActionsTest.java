@@ -18,6 +18,7 @@ public final class ArcTabActionsTest {
         public void select(int id) { if (!exists(id)) throw new AssertionError("Invalid selection"); selected = id; }
         public void close(int id) { closeRequested = id; }
         public void pin(int id) { pinned = id; }
+        public void unpin(int id) { if (pinned == id) pinned = -1; }
     }
     private static final class Storage implements ArcSidebarStore.Persistence {
         String value = "";

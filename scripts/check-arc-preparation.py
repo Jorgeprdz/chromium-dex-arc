@@ -79,15 +79,17 @@ def main():
         pure += list((ROOT / 'chromium').rglob('ArcSidebarState.java'))
         pure += list((ROOT / 'chromium').rglob('ArcSidebarStore.java'))
         pure += list((ROOT / 'chromium').rglob('ArcTabActions.java'))
+        pure += list((ROOT / 'chromium').rglob('ArcCollectionsController.java'))
         run('javac', '-cp', str(window_jar), '-d', str(classes), *map(str, pure), str(ROOT / 'tests/java/ArcDesktopPolicyTest.java'),
             str(ROOT / 'tests/java/ArchiumAutofillPolicyTest.java'), str(ROOT / 'tests/java/ArchiumWindowClassTest.java'),
             str(ROOT / 'tests/java/ArchiumPasswordCsvTest.java'),
-            str(ROOT / 'tests/java/ArcSidebarStateTest.java'), str(ROOT / 'tests/java/ArcSidebarStoreTest.java'), str(ROOT / 'tests/java/ArcTabActionsTest.java'))
+            str(ROOT / 'tests/java/ArcSidebarStateTest.java'), str(ROOT / 'tests/java/ArcSidebarStoreTest.java'), str(ROOT / 'tests/java/ArcTabActionsTest.java'), str(ROOT / 'tests/java/ArcCollectionsControllerTest.java'))
         run('java', '-cp', str(classes), 'ArchiumWindowClassTest')
         run('java', '-cp', str(classes), 'ArcDesktopPolicyTest')
         run('java', '-cp', str(classes), 'ArcSidebarStateTest')
         run('java', '-cp', str(classes), 'ArcSidebarStoreTest')
         run('java', '-cp', str(classes), 'ArcTabActionsTest')
+        run('java', '-cp', str(classes), 'ArcCollectionsControllerTest')
         run('java', '-cp', str(classes), 'ArchiumAutofillPolicyTest')
         run('java', '-Xmx256m', '-cp', str(classes), 'ArchiumPasswordCsvTest')
         if not args.android_jar.is_file():
@@ -97,7 +99,7 @@ def main():
             'org.chromium.chrome.R': 'public final class R { public static final class string { public static final int arc_bookmarks=1, arc_frame_color=2, arc_bookmark_root=3, arc_google_login=4, arc_autofill=5, arc_reset_color=6, arc_color_format=7, arc_interface=8, arc_interface_auto=9, arc_interface_arc=10, arc_interface_mobile=11; } public static final class id { public static final int toolbar=1, desktop_window_spacer=2; } }',
             'org.chromium.chrome.browser.profiles.Profile': 'public class Profile { public boolean isOffTheRecord(){return false;} public boolean shutdownStarted(){return false;} }',
             'org.chromium.components.bookmarks.BookmarkId': 'public class BookmarkId {}',
-            'org.chromium.url.GURL': 'public class GURL { public String getSpec() { return ""; } }',
+            'org.chromium.url.GURL': 'public class GURL { public GURL(){} public GURL(String url){} public String getSpec() { return ""; } }',
             'org.chromium.components.bookmarks.BookmarkItem': 'public class BookmarkItem { public String getTitle(){return "";} public boolean isFolder(){return false;} public org.chromium.url.GURL getUrl(){return null;} }',
             'org.chromium.chrome.browser.bookmarks.BookmarkModelObserver': 'public abstract class BookmarkModelObserver { public abstract void bookmarkModelChanged(); }',
             'org.chromium.chrome.browser.bookmarks.BookmarkModel': 'public class BookmarkModel { public void addObserver(BookmarkModelObserver o){} public void removeObserver(BookmarkModelObserver o){} public boolean isBookmarkModelLoaded(){return true;} public boolean finishLoadingBookmarkModel(Runnable r){return false;} public org.chromium.components.bookmarks.BookmarkId getDesktopFolderId(){return null;} public java.util.List<org.chromium.components.bookmarks.BookmarkId> getChildIds(org.chromium.components.bookmarks.BookmarkId id){return null;} public java.util.List<org.chromium.components.bookmarks.BookmarkId> getTopLevelFolderIds(){return null;} public org.chromium.components.bookmarks.BookmarkItem getBookmarkById(org.chromium.components.bookmarks.BookmarkId id){return null;} }',
@@ -118,8 +120,12 @@ def main():
             'org.chromium.components.signin.AccessTokenData': 'public class AccessTokenData {}',
             'org.chromium.components.signin.AccountManagerDelegate': 'public interface AccountManagerDelegate { public interface AccountsChangeObserver{} public @interface CapabilityResponse{int EXCEPTION=0;} void attachAccountsChangeObserver(AccountsChangeObserver o); android.accounts.Account[] getAccountsSynchronous(); AccessTokenData getAccessToken(android.accounts.Account a,String s); void invalidateAccessToken(String s) throws AuthException; int hasCapability(android.accounts.Account a,String s); void createAddAccountIntent(String email,org.chromium.base.Callback<android.content.Intent> c); void updateCredentials(android.accounts.Account a,android.app.Activity activity,org.chromium.base.Callback<Boolean> c); org.chromium.google_apis.gaia.GaiaId getAccountGaiaId(String e); void confirmCredentials(android.accounts.Account a,android.app.Activity activity,org.chromium.base.Callback<android.os.Bundle> c); }',
         }
+        resources = ET.parse(ROOT / 'chromium/chrome/android/java/res/values/arc_strings.xml')
+        string_ids = ', '.join(f'{node.attrib["name"]}={i}' for i, node in enumerate(resources.getroot(), 1))
+        definitions['org.chromium.chrome.R'] = ('public final class R { public static final class string { public static final int '
+                + string_ids + '; } public static final class id { public static final int toolbar=1, desktop_window_spacer=2; } }')
         definitions.update({
-            'org.chromium.chrome.browser.tab.Tab': 'public class Tab { public int getId(){return 1;} }',
+            'org.chromium.chrome.browser.tab.Tab': 'public class Tab { public int getId(){return 1;} public org.chromium.url.GURL getUrl(){return new org.chromium.url.GURL();} public String getTitle(){return "Title";} }',
             'org.chromium.chrome.browser.tab.TabLaunchType': 'public class TabLaunchType { public static final int FROM_CHROME_UI=1; }',
             'org.chromium.chrome.browser.tab.TabSelectionType': 'public class TabSelectionType { public static final int FROM_USER=1; }',
             'org.chromium.content_public.browser.LoadUrlParams': 'public class LoadUrlParams { public LoadUrlParams(String url){} }',
@@ -127,7 +133,7 @@ def main():
             'org.chromium.chrome.browser.tabmodel.TabClosureParams': 'public class TabClosureParams { public static Builder closeTab(org.chromium.chrome.browser.tab.Tab t){return new Builder();} public static class Builder { public Builder allowUndo(boolean b){return this;} public TabClosureParams build(){return new TabClosureParams();} } }',
             'org.chromium.chrome.browser.tabmodel.TabRemover': 'public interface TabRemover { void closeTabs(TabClosureParams p,boolean allowDialog); }',
             'org.chromium.chrome.browser.tabmodel.TabModelObserver': 'public interface TabModelObserver { default void tabClosureCommitted(org.chromium.chrome.browser.tab.Tab t){} default void onTabCloseCommitted(java.util.List<org.chromium.chrome.browser.tab.Tab> t,boolean all,boolean restore,int source){} }',
-            'org.chromium.chrome.browser.tabmodel.TabModel': 'public interface TabModel { org.chromium.chrome.browser.profiles.Profile getProfile(); org.chromium.chrome.browser.tab.Tab getTabById(int id); boolean isClosurePending(int id); void cancelTabClosure(int id); int getCount(); org.chromium.chrome.browser.tab.Tab getTabAt(int i); void setIndex(int i,int type); void pinTab(int id,boolean dialog); TabRemover getTabRemover(); void addObserver(TabModelObserver o); void removeObserver(TabModelObserver o); }',
+            'org.chromium.chrome.browser.tabmodel.TabModel': 'public interface TabModel { org.chromium.chrome.browser.profiles.Profile getProfile(); org.chromium.chrome.browser.tab.Tab getTabById(int id); boolean isClosurePending(int id); void cancelTabClosure(int id); int getCount(); org.chromium.chrome.browser.tab.Tab getTabAt(int i); void setIndex(int i,int type); void pinTab(int id,boolean dialog); void unpinTab(int id); TabRemover getTabRemover(); void addObserver(TabModelObserver o); void removeObserver(TabModelObserver o); }',
             'org.chromium.base.ThreadUtils': 'public class ThreadUtils { public static void assertOnUiThread(){} }',
             'org.chromium.components.prefs.PrefService': 'public class PrefService { public String getString(String key){return "";} public void setString(String key,String value){} }',
             'org.chromium.components.user_prefs.UserPrefs': 'public class UserPrefs { public static org.chromium.components.prefs.PrefService get(org.chromium.chrome.browser.profiles.Profile p){return new org.chromium.components.prefs.PrefService();} }',

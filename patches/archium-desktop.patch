@@ -12,10 +12,12 @@ diff --git a/chrome/android/chrome_java_resources.gni b/chrome/android/chrome_ja
 diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java_sources.gni
 --- a/chrome/android/chrome_java_sources.gni
 +++ b/chrome/android/chrome_java_sources.gni
-@@ -5,6 +5,14 @@
+@@ -5,6 +5,16 @@
  import("//content/public/common/features.gni")
  
  chrome_java_sources = [
++  "java/src/org/chromium/chrome/browser/arc/ArcCollectionsController.java",
++  "java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcNativeTabSession.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcTabActions.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcSidebarProfiles.java",
@@ -336,13 +338,12 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
          if (mVerticalTabsPreferenceListener != null) {
              ContextUtils.getAppSharedPreferences()
                      .unregisterOnSharedPreferenceChangeListener(mVerticalTabsPreferenceListener);
-@@ -2501,6 +2518,21 @@
+@@ -2501,6 +2518,24 @@
                                      mBrowserControlsManager,
                                      mBackPressManager),
                              mIsVerticalTabsActiveSupplier);
 +            mArcDesktopCoordinator = new ArcDesktopCoordinator(
 +                    mActivity, (ViewGroup) mVerticalTabsSideUiCoordinator.getView(),
-+                    BookmarkModel.getForProfile(currentlySelectedProfile.getOriginalProfile()),
 +                    currentlySelectedProfile.getOriginalProfile(),
 +                    url -> {
 +                        var creator = mTabCreatorManagerSupplier.asNonNull().get().getTabCreator(
@@ -354,7 +355,11 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
 +                            mActivity, mActivityTabProvider.get(), currentlySelectedProfile),
 +                    () -> SettingsNavigationFactory.createSettingsNavigation().startSettings(
 +                            mActivity, AutofillOptionsFragment.class),
-+                    mIncognitoStateProvider);
++                    mIncognitoStateProvider,
++                    () -> mTabModelSelectorSupplier.asNonNull().get().getCurrentModel(),
++                    () -> mTabCreatorManagerSupplier.asNonNull().get().getTabCreator(
++                            mTabModelSelectorSupplier.asNonNull().get().isIncognitoSelected()),
++                    () -> mActivityTabProvider.get());
              if (mToolbarManager != null) {
                  mToolbarManager.setVerticalTabsAutoHiddenSupplier(
                          mVerticalTabsSideUiCoordinator.getIsAutoHiddenSupplier());
@@ -1980,7 +1985,7 @@ diff --git a/chrome/android/java/res/values/arc_strings.xml b/chrome/android/jav
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/res/values/arc_strings.xml
-@@ -0,0 +1,14 @@
+@@ -0,0 +1,26 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<resources>
 +    <string name="arc_bookmarks">Marcadores</string>
@@ -1994,6 +1999,18 @@ new file mode 100644
 +    <string name="arc_interface_auto">Automática según la ventana</string>
 +    <string name="arc_interface_arc">Arc</string>
 +    <string name="arc_interface_mobile">Móvil</string>
++    <string name="arc_pin_current">Fijar pestaña</string>
++    <string name="arc_favorite_current">Añadir a favoritos</string>
++    <string name="arc_new_space">Nuevo espacio</string>
++    <string name="arc_new_folder">Nueva carpeta</string>
++    <string name="arc_name">Nombre</string>
++    <string name="arc_collection_error">No se pudo actualizar la colección</string>
++    <string name="arc_remove_entry">Quitar de la barra lateral</string>
++    <string name="arc_move_to_folder">Mover a carpeta</string>
++    <string name="arc_folder_root">Sin carpeta</string>
++    <string name="arc_spaces">Espacios</string>
++    <string name="arc_favorites">Favoritos</string>
++    <string name="arc_pinned_tabs">Pestañas fijadas</string>
 +</resources>
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAppearanceDialog.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAppearanceDialog.java
 new file mode 100644
@@ -2042,11 +2059,396 @@ new file mode 100644
 +                .create();
 +    }
 +}
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsController.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsController.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsController.java
+@@ -0,0 +1,92 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++/** Local collection commands scoped to one live native tab model/profile. */
++public final class ArcCollectionsController {
++    private final ArcSidebarStore mStore;
++    private final ArcTabActions mActions;
++    private final ArcTabActions.NativeTabs mTabs;
++    private boolean mDestroyed;
++
++    public ArcCollectionsController(ArcSidebarStore store, ArcTabActions actions,
++            ArcTabActions.NativeTabs tabs) {
++        mStore = store;
++        mActions = actions;
++        mTabs = tabs;
++    }
++
++    private void requireLive() {
++        if (mDestroyed) throw new IllegalStateException("Arc collections are no longer active");
++    }
++
++    public ArcSidebarState state() { requireLive(); return mStore.load(); }
++
++    public void selectSpace(String id) {
++        ArcSidebarState draft = state();
++        draft.selectSpace(id);
++        mStore.save(draft);
++    }
++
++    public String createSpace(String name) {
++        ArcSidebarState draft = state();
++        String id = draft.addSpace(name);
++        draft.selectSpace(id);
++        mStore.save(draft);
++        return id;
++    }
++
++    public String createFolder(String parentId, String name) {
++        ArcSidebarState draft = state();
++        String id = draft.addFolder(draft.selectedSpace(), parentId, name);
++        mStore.save(draft);
++        return id;
++    }
++
++    public String rememberTab(int tabId, String url, String title, boolean favorite) {
++        requireLive();
++        if (!mTabs.exists(tabId)) throw new IllegalStateException("Arc tab is not active");
++        ArcSidebarState draft = state();
++        String existingId = null;
++        for (ArcSidebarState.Entry entry : draft.favorites()) {
++            if (Integer.valueOf(tabId).equals(entry.tabId)) existingId = entry.id;
++        }
++        for (ArcSidebarState.Space space : draft.spaces()) {
++            for (ArcSidebarState.Entry entry : draft.entries(space.id)) {
++                if (Integer.valueOf(tabId).equals(entry.tabId)) existingId = entry.id;
++            }
++        }
++        if (existingId == null) {
++            existingId = favorite ? draft.favorite(url, title, tabId)
++                    : draft.pin(draft.selectedSpace(), null, url, title, tabId);
++        } else {
++            draft.setFavorite(existingId, favorite);
++        }
++        // Publish metadata before changing the native tab; a failed write leaves it untouched.
++        mStore.save(draft);
++        mTabs.pin(tabId);
++        return existingId;
++    }
++
++    public ArcTabActions.Result open(String id) {
++        requireLive();
++        return mActions.selectOrOpen(id);
++    }
++
++    public void remove(String id) {
++        ArcSidebarState draft = state();
++        Integer tabId = draft.entry(id).tabId;
++        draft.unpin(id);
++        mStore.save(draft);
++        if (tabId != null && mTabs.exists(tabId)) mTabs.unpin(tabId);
++    }
++
++    public void move(String id, String space, String folder, int index) {
++        ArcSidebarState draft = state();
++        draft.move(id, space, folder, index);
++        mStore.save(draft);
++    }
++
++    public void destroy() { mDestroyed = true; }
++}
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java
+@@ -0,0 +1,283 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++import android.app.Activity;
++import android.app.AlertDialog;
++import android.text.TextUtils;
++import android.view.Gravity;
++import android.view.View;
++import android.widget.Button;
++import android.widget.EditText;
++import android.widget.HorizontalScrollView;
++import android.widget.ImageButton;
++import android.widget.LinearLayout;
++import android.widget.PopupMenu;
++import android.widget.ScrollView;
++import android.widget.Toast;
++
++import org.chromium.chrome.R;
++
++import java.util.List;
++import java.util.function.BiConsumer;
++import java.util.function.Consumer;
++import java.util.function.Supplier;
++
++/** Real local collection controls; native TabModel continues owning the open tabs. */
++public final class ArcCollectionsView extends LinearLayout {
++    public static final class CurrentTab {
++        public final int id;
++        public final String url;
++        public final String title;
++        public CurrentTab(int id, String url, String title) {
++            this.id = id; this.url = url; this.title = title;
++        }
++    }
++    private final Activity mActivity;
++    private final ArcCollectionsController mController;
++    private final Supplier<CurrentTab> mCurrentTab;
++    private final BiConsumer<ArcSidebarState.Entry, ImageButton> mLoadIcon;
++    private final LinearLayout mFavorites;
++    private final LinearLayout mEntries;
++    private final Button mSpace;
++    private final ScrollView mScroll;
++    private String mOpenFolder;
++    private String mRenderedSpace;
++    private AlertDialog mDialog;
++    private PopupMenu mMenu;
++    private boolean mDestroyed;
++
++    public ArcCollectionsView(Activity activity, ArcCollectionsController controller,
++            Supplier<CurrentTab> currentTab,
++            BiConsumer<ArcSidebarState.Entry, ImageButton> loadIcon) {
++        super(activity);
++        mActivity = activity;
++        mController = controller;
++        mCurrentTab = currentTab;
++        mLoadIcon = loadIcon;
++        setOrientation(VERTICAL);
++        setPadding(dp(8), dp(4), dp(8), dp(4));
++        mFavorites = new LinearLayout(activity);
++        mFavorites.setContentDescription(activity.getString(R.string.arc_favorites));
++        HorizontalScrollView favoritesScroll = new HorizontalScrollView(activity);
++        favoritesScroll.setHorizontalScrollBarEnabled(false);
++        favoritesScroll.addView(mFavorites);
++        addView(favoritesScroll, new LayoutParams(-1, dp(52)));
++        mSpace = button("", this::showSpaces);
++        mSpace.setTag("arc-current-space");
++        mSpace.setContentDescription(activity.getString(R.string.arc_spaces));
++        addView(mSpace, new LayoutParams(-1, dp(36)));
++        mEntries = new LinearLayout(activity);
++        mEntries.setOrientation(VERTICAL);
++        mEntries.setContentDescription(activity.getString(R.string.arc_pinned_tabs));
++        mScroll = new ScrollView(activity);
++        mScroll.addView(mEntries);
++        addView(mScroll, new LayoutParams(-1, dp(112)));
++        LinearLayout controls = new LinearLayout(activity);
++        Button pin = button(activity.getString(R.string.arc_pin_current), () -> remember(false));
++        pin.setTag("arc-pin-current");
++        Button favorite = button(activity.getString(R.string.arc_favorite_current), () -> remember(true));
++        favorite.setTag("arc-favorite-current");
++        controls.addView(pin, new LayoutParams(0, dp(36), 1));
++        controls.addView(favorite, new LayoutParams(0, dp(36), 1));
++        addView(controls);
++        refresh();
++    }
++
++    private int dp(int value) {
++        return Math.round(value * getResources().getDisplayMetrics().density);
++    }
++
++    private Button button(String text, Runnable action) {
++        Button result = new Button(mActivity);
++        result.setText(text);
++        result.setAllCaps(false);
++        result.setTextSize(12);
++        result.setMinWidth(0); result.setMinimumWidth(0);
++        result.setPadding(dp(8), 0, dp(8), 0);
++        result.setSingleLine(true);
++        result.setEllipsize(TextUtils.TruncateAt.END);
++        result.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
++        result.setOnClickListener(view -> runCommand(action));
++        return result;
++    }
++
++    private void runCommand(Runnable command) {
++        if (mDestroyed) return;
++        try { command.run(); refresh(); }
++        catch (RuntimeException failure) {
++            Toast.makeText(mActivity, R.string.arc_collection_error, Toast.LENGTH_SHORT).show();
++        }
++    }
++
++    public void setCollectionHeight(int height) {
++        android.view.ViewGroup.LayoutParams params = mScroll.getLayoutParams();
++        if (params.height != height) { params.height = height; mScroll.setLayoutParams(params); }
++    }
++
++    private void remember(boolean favorite) {
++        CurrentTab tab = mCurrentTab.get();
++        if (tab == null) throw new IllegalStateException("No active tab");
++        String title = tab.title == null || tab.title.isEmpty() ? tab.url : tab.title;
++        if (title.length() > 256) title = title.substring(0, 256);
++        mController.rememberTab(tab.id, tab.url, title, favorite);
++    }
++
++    public void refresh() {
++        if (mDestroyed) return;
++        ArcSidebarState state;
++        try {
++            state = mController.state();
++        } catch (RuntimeException damagedOrUnavailableState) {
++            // Preserve the original bytes for recovery. A metadata read failure
++            // must not crash browser startup or silently replace a user's data.
++            mFavorites.removeAllViews();
++            mEntries.removeAllViews();
++            mSpace.setText(R.string.arc_collection_error);
++            findViewWithTag("arc-pin-current").setEnabled(false);
++            findViewWithTag("arc-favorite-current").setEnabled(false);
++            return;
++        }
++        findViewWithTag("arc-pin-current").setEnabled(true);
++        findViewWithTag("arc-favorite-current").setEnabled(true);
++        if (!state.selectedSpace().equals(mRenderedSpace)) {
++            mOpenFolder = null;
++            mRenderedSpace = state.selectedSpace();
++        }
++        mFavorites.removeAllViews();
++        for (ArcSidebarState.Entry entry : state.favorites()) {
++            ImageButton favorite = new ImageButton(mActivity);
++            favorite.setImageResource(android.R.drawable.ic_menu_view);
++            favorite.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
++            favorite.setPadding(dp(12), dp(12), dp(12), dp(12));
++            favorite.setContentDescription(entry.title);
++            favorite.setTooltipText(entry.title);
++            favorite.setTag("arc-entry:" + entry.id);
++            favorite.setOnClickListener(view -> runCommand(() -> open(entry.id)));
++            favorite.setOnLongClickListener(view -> { showEntryMenu(view, entry); return true; });
++            mFavorites.addView(favorite, new LayoutParams(dp(52), dp(48)));
++            mLoadIcon.accept(entry, favorite);
++        }
++        for (ArcSidebarState.Space space : state.spaces()) {
++            if (space.id.equals(state.selectedSpace())) mSpace.setText(space.name + "  ▾");
++        }
++        mEntries.removeAllViews();
++        List<ArcSidebarState.Folder> folders = state.folders(state.selectedSpace());
++        if (mOpenFolder != null) {
++            ArcSidebarState.Folder current = null;
++            for (ArcSidebarState.Folder folder : folders) {
++                if (folder.id.equals(mOpenFolder)) current = folder;
++            }
++            if (current == null) mOpenFolder = null;
++            else {
++                String parent = current.parentId;
++                mEntries.addView(button("‹  " + current.name, () -> mOpenFolder = parent),
++                        new LayoutParams(-1, dp(36)));
++            }
++        }
++        for (ArcSidebarState.Folder folder : folders) {
++            if (!java.util.Objects.equals(folder.parentId, mOpenFolder)) continue;
++            mEntries.addView(button("▸  " + folder.name, () -> mOpenFolder = folder.id),
++                    new LayoutParams(-1, dp(36)));
++        }
++        for (ArcSidebarState.Entry entry : state.entries(state.selectedSpace())) {
++            if (!java.util.Objects.equals(entry.folderId, mOpenFolder)) continue;
++            Button row = button(entry.title, () -> open(entry.id));
++            row.setTag("arc-entry:" + entry.id);
++            row.setOnLongClickListener(view -> { showEntryMenu(view, entry); return true; });
++            mEntries.addView(row, new LayoutParams(-1, dp(36)));
++        }
++        mEntries.addView(button(mActivity.getString(R.string.arc_new_folder), () -> {
++            String space = state.selectedSpace();
++            String parent = mOpenFolder;
++            requestName(R.string.arc_new_folder, name -> {
++                if (!space.equals(mController.state().selectedSpace())) {
++                    throw new IllegalStateException("Space changed");
++                }
++                mController.createFolder(parent, name);
++            });
++        }), new LayoutParams(-1, dp(36)));
++    }
++
++    private void open(String id) {
++        ArcTabActions.Result result = mController.open(id);
++        if (result == ArcTabActions.Result.NOT_OPENED || result == ArcTabActions.Result.PERSISTENCE_ERROR) {
++            throw new IllegalStateException("Arc entry could not be opened or stored");
++        }
++    }
++
++    private void showSpaces() {
++        if (mDestroyed) return;
++        ArcSidebarState state = mController.state();
++        List<ArcSidebarState.Space> spaces = state.spaces();
++        PopupMenu menu = new PopupMenu(mActivity, mSpace);
++        mMenu = menu;
++        for (int i = 0; i < spaces.size(); i++) menu.getMenu().add(0, i, i, spaces.get(i).name);
++        menu.getMenu().add(0, spaces.size(), spaces.size(), R.string.arc_new_space);
++        menu.setOnMenuItemClickListener(item -> {
++            runCommand(() -> {
++                if (item.getItemId() < spaces.size()) mController.selectSpace(spaces.get(item.getItemId()).id);
++                else requestName(R.string.arc_new_space, mController::createSpace);
++            });
++            return true;
++        });
++        menu.show();
++    }
++
++    private void showEntryMenu(View anchor, ArcSidebarState.Entry entry) {
++        if (mDestroyed) return;
++        PopupMenu menu = new PopupMenu(mActivity, anchor);
++        mMenu = menu;
++        menu.getMenu().add(0, 0, 0, R.string.arc_remove_entry);
++        if (!entry.favorite) menu.getMenu().add(0, 1, 1, R.string.arc_move_to_folder);
++        menu.setOnMenuItemClickListener(item -> {
++            runCommand(() -> {
++                if (item.getItemId() == 0) mController.remove(entry.id);
++                else showFolderChoices(anchor, entry);
++            });
++            return true;
++        });
++        menu.show();
++    }
++
++    private void showFolderChoices(View anchor, ArcSidebarState.Entry entry) {
++        List<ArcSidebarState.Folder> folders = mController.state().folders(entry.spaceId);
++        PopupMenu menu = new PopupMenu(mActivity, anchor);
++        mMenu = menu;
++        menu.getMenu().add(0, 0, 0, R.string.arc_folder_root);
++        for (int i = 0; i < folders.size(); i++) menu.getMenu().add(0, i + 1, i + 1, folders.get(i).name);
++        menu.setOnMenuItemClickListener(item -> {
++            runCommand(() -> mController.move(entry.id, entry.spaceId,
++                    item.getItemId() == 0 ? null : folders.get(item.getItemId() - 1).id, 0));
++            return true;
++        });
++        menu.show();
++    }
++
++    private void requestName(int title, Consumer<String> save) {
++        if (mDestroyed) return;
++        EditText input = new EditText(mActivity);
++        input.setSingleLine(true);
++        input.setHint(R.string.arc_name);
++        input.setFilters(new android.text.InputFilter[] {new android.text.InputFilter.LengthFilter(256)});
++        mDialog = new AlertDialog.Builder(mActivity).setTitle(title).setView(input)
++                .setPositiveButton(android.R.string.ok, null)
++                .setNegativeButton(android.R.string.cancel, null).create();
++        AlertDialog dialog = mDialog;
++        dialog.setOnShowListener(ignored -> dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(view -> {
++            String name = input.getText().toString().trim();
++            if (name.isEmpty()) { input.setError(mActivity.getString(R.string.arc_name)); return; }
++            runCommand(() -> save.accept(name));
++            dialog.dismiss();
++        }));
++        dialog.show();
++    }
++
++    public void destroy() {
++        if (mDestroyed) return;
++        mDestroyed = true;
++        if (mDialog != null) mDialog.dismiss();
++        if (mMenu != null) mMenu.dismiss();
++    }
++}
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
-@@ -0,0 +1,323 @@
+@@ -0,0 +1,296 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -2066,22 +2468,20 @@ new file mode 100644
 +import android.widget.ImageButton;
 +import android.widget.LinearLayout;
 +import android.widget.PopupMenu;
-+import android.widget.ScrollView;
 +import android.widget.TextView;
 +
 +import org.chromium.chrome.R;
-+import org.chromium.chrome.browser.bookmarks.BookmarkModel;
-+import org.chromium.chrome.browser.bookmarks.BookmarkModelObserver;
 +import org.chromium.chrome.browser.profiles.Profile;
 +import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance;
 +import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy;
-+import org.chromium.components.bookmarks.BookmarkId;
-+import org.chromium.components.bookmarks.BookmarkItem;
 +import org.chromium.components.favicon.LargeIconBridge;
 +
-+import java.util.List;
 +import java.util.Locale;
 +import java.util.function.Consumer;
++import java.util.function.Supplier;
++import org.chromium.chrome.browser.tab.Tab;
++import org.chromium.chrome.browser.tabmodel.TabCreator;
++import org.chromium.chrome.browser.tabmodel.TabModel;
 +import org.chromium.chrome.browser.tabmodel.IncognitoStateProvider;
 +import org.chromium.chrome.browser.tabmodel.IncognitoStateProvider.IncognitoStateObserver;
 +
@@ -2089,40 +2489,43 @@ new file mode 100644
 +import org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabRailLayout;
 +import org.chromium.chrome.browser.toolbar.top.ToolbarTablet;
 +
-+/** Adds real bookmark navigation and appearance controls around the native vertical tab rail. */
++/** Composes profile-owned Arc collections around Chromium's real vertical tab rail. */
 +public final class ArcDesktopCoordinator {
 +    private final Activity mActivity;
 +    private final ViewGroup mRail;
 +    private final View mNativeTabs;
 +    private final LinearLayout mColumn;
 +    private final LinearLayout mHeader;
-+    private final LinearLayout mFavorites;
-+    private final LinearLayout mFolders;
-+    private final ScrollView mBookmarkScroll;
-+    private final BookmarkModel mBookmarks;
 +    private final LargeIconBridge mIcons;
 +    private final Consumer<String> mNavigate;
-+    private final Runnable mOpenBookmarks;
 +    private final IncognitoStateProvider mIncognitoStateProvider;
 +    private final IncognitoStateObserver mIncognitoObserver;
 +    private final SharedPreferences mPreferences;
 +    private final SharedPreferences.OnSharedPreferenceChangeListener mPreferenceListener;
 +    private final View.OnLayoutChangeListener mLayoutListener;
-+    private final BookmarkModelObserver mBookmarkObserver;
++    private final Supplier<TabModel> mCurrentModel;
++    private final Supplier<TabCreator> mCurrentCreator;
++    private final Supplier<Tab> mCurrentTab;
++    private TabModel mSessionModel;
++    private ArcNativeTabSession mTabSession;
++    private ArcCollectionsController mCollections;
++    private ArcCollectionsView mCollectionsView;
 +    private boolean mDestroyed;
-+    private int mBookmarkGeneration;
 +    private AlertDialog mColorDialog;
 +
-+    public ArcDesktopCoordinator(Activity activity, ViewGroup rail, BookmarkModel bookmarks,
++    public ArcDesktopCoordinator(Activity activity, ViewGroup rail,
 +            Profile profile, Consumer<String> navigate, Runnable openBookmarks,
-+            Runnable openAutofillSettings, IncognitoStateProvider incognitoStateProvider) {
++            Runnable openAutofillSettings, IncognitoStateProvider incognitoStateProvider,
++            Supplier<TabModel> currentModel, Supplier<TabCreator> currentCreator,
++            Supplier<Tab> currentTab) {
 +        mActivity = activity;
 +        mRail = rail;
-+        mBookmarks = bookmarks;
 +        mNavigate = navigate;
-+        mOpenBookmarks = openBookmarks;
 +        mIncognitoStateProvider = incognitoStateProvider;
-+        mIncognitoObserver = incognito -> { if (!mDestroyed) applyAppearance(); };
++        mCurrentModel = currentModel;
++        mCurrentCreator = currentCreator;
++        mCurrentTab = currentTab;
++        mIncognitoObserver = incognito -> { if (!mDestroyed) { rebindCollections(); applyAppearance(); } };
 +        mIcons = new LargeIconBridge(profile);
 +        mPreferences = ArcDesktopAppearance.preferences(activity);
 +        mNativeTabs = rail.getChildAt(0);
@@ -2134,10 +2537,6 @@ new file mode 100644
 +                -1, nativeSpacer.getLayoutParams().height));
 +        ((VerticalTabRailLayout) mNativeTabs).setDesktopWindowSpacerHost(captionSpacer);
 +        mHeader = column();
-+        mFavorites = new LinearLayout(activity);
-+        mFavorites.setGravity(Gravity.CENTER_VERTICAL);
-+        mFavorites.setPadding(dp(4), dp(4), dp(4), dp(4));
-+        mHeader.addView(mFavorites);
 +        LinearLayout actions = new LinearLayout(activity);
 +        Button bookmarksButton = button(activity.getString(R.string.arc_bookmarks), openBookmarks);
 +        Button googleButton = button("Google", () -> {});
@@ -2148,11 +2547,6 @@ new file mode 100644
 +            actions.addView(action, new LinearLayout.LayoutParams(0, dp(44), 1));
 +        }
 +        mHeader.addView(actions);
-+        mFolders = column();
-+        mBookmarkScroll = new ScrollView(activity);
-+        mBookmarkScroll.setFillViewport(false);
-+        mBookmarkScroll.addView(mFolders);
-+        mHeader.addView(mBookmarkScroll, new LinearLayout.LayoutParams(-1, dp(112)));
 +        mColumn.addView(mHeader);
 +        mColumn.addView(mNativeTabs, new LinearLayout.LayoutParams(-1, 0, 1));
 +        rail.addView(mColumn, new ViewGroup.LayoutParams(-1, -1));
@@ -2169,14 +2563,8 @@ new file mode 100644
 +            }
 +        };
 +        mPreferences.registerOnSharedPreferenceChangeListener(mPreferenceListener);
-+        mLayoutListener = (v, l, t, r, b, ol, ot, or, ob) -> applyAppearance();
++        mLayoutListener = (v, l, t, r, b, ol, ot, or, ob) -> { rebindCollections(); applyAppearance(); };
 +        rail.addOnLayoutChangeListener(mLayoutListener);
-+        mBookmarkObserver = new BookmarkModelObserver() {
-+            @Override
-+            public void bookmarkModelChanged() { rebuildBookmarks(); }
-+        };
-+        bookmarks.addObserver(mBookmarkObserver);
-+        bookmarks.finishLoadingBookmarkModel(this::rebuildBookmarks);
 +        mIncognitoStateProvider.addIncognitoStateObserverAndTrigger(mIncognitoObserver);
 +        applyAppearance();
 +    }
@@ -2203,60 +2591,50 @@ new file mode 100644
 +        return button;
 +    }
 +
-+    private void rebuildBookmarks() {
-+        if (mDestroyed || !mBookmarks.isBookmarkModelLoaded()) return;
-+        int generation = ++mBookmarkGeneration;
-+        mFavorites.removeAllViews();
-+        mFolders.removeAllViews();
-+        BookmarkId desktop = mBookmarks.getDesktopFolderId();
-+        if (desktop != null) {
-+            int count = 0;
-+            for (BookmarkId id : mBookmarks.getChildIds(desktop)) {
-+                BookmarkItem item = mBookmarks.getBookmarkById(id);
-+                if (item == null || item.isFolder()) continue;
-+                if (count++ == 4) break;
-+                ImageButton favorite = new ImageButton(mActivity);
-+                favorite.setImageResource(android.R.drawable.ic_menu_view);
-+                favorite.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
-+                favorite.setPadding(dp(12), dp(12), dp(12), dp(12));
-+                favorite.setContentDescription(item.getTitle());
-+                favorite.setTooltipText(item.getTitle());
-+                favorite.setOnClickListener(v -> mNavigate.accept(item.getUrl().getSpec()));
-+                mFavorites.addView(favorite, new LinearLayout.LayoutParams(0, dp(48), 1));
-+                mIcons.getLargeIconForUrl(item.getUrl(), dp(24), (icon, color, fallback, type) -> {
-+                    if (!mDestroyed && generation == mBookmarkGeneration && icon != null) {
-+                        favorite.setImageBitmap(icon);
-+                    }
-+                });
-+            }
++    private void clearCollections() {
++        if (mCollectionsView != null) {
++            mCollectionsView.destroy();
++            mHeader.removeView(mCollectionsView);
 +        }
-+        showFolder(null);
-+        applyAppearance();
++        if (mCollections != null) mCollections.destroy();
++        if (mTabSession != null) mTabSession.destroy();
++        mCollectionsView = null;
++        mCollections = null;
++        mTabSession = null;
++        mSessionModel = null;
 +    }
 +
-+    private void showFolder(BookmarkId folder) {
-+        if (mDestroyed || !mBookmarks.isBookmarkModelLoaded()) return;
-+        mFolders.removeAllViews();
-+        if (folder != null) {
-+            mFolders.addView(button(mActivity.getString(R.string.arc_bookmark_root),
-+                    () -> showFolder(null)), new LinearLayout.LayoutParams(-1, dp(36)));
-+        }
-+        List<BookmarkId> children = folder == null
-+                ? mBookmarks.getTopLevelFolderIds() : mBookmarks.getChildIds(folder);
-+        for (BookmarkId id : children) {
-+            BookmarkItem item = mBookmarks.getBookmarkById(id);
-+            if (item == null) continue;
-+            Button row = button((item.isFolder() ? "▸  " : "") + item.getTitle(), () -> {
-+                if (item.isFolder()) showFolder(id);
-+                else mNavigate.accept(item.getUrl().getSpec());
-+            });
-+            row.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
-+            row.setSingleLine(true);
-+            row.setEllipsize(android.text.TextUtils.TruncateAt.END);
-+            row.setOnLongClickListener(v -> { mOpenBookmarks.run(); return true; });
-+            mFolders.addView(row, new LinearLayout.LayoutParams(-1, dp(36)));
-+        }
-+        applyAppearance();
++    private void rebindCollections() {
++        if (mDestroyed) return;
++        TabModel model = mCurrentModel.get();
++        if (model == mSessionModel && mTabSession != null) return;
++        clearCollections();
++        if (model == null || model.getProfile() == null || model.getProfile().shutdownStarted()) return;
++        TabCreator creator = mCurrentCreator.get();
++        if (creator == null) return;
++        ArcNativeTabSession session = new ArcNativeTabSession(model, creator,
++                () -> mCurrentModel.get() == model, () -> {
++                    if (!mDestroyed && mCollectionsView != null && mSessionModel == model) {
++                        mCollectionsView.refresh();
++                        applyAppearance();
++                    }
++                });
++        mTabSession = session;
++        mSessionModel = model;
++        mCollections = new ArcCollectionsController(session.store(), session.actions(), session);
++        mCollectionsView = new ArcCollectionsView(mActivity, mCollections, () -> {
++            Tab tab = mCurrentTab.get();
++            if (tab == null || mCurrentModel.get() != model || !session.exists(tab.getId())) return null;
++            return new ArcCollectionsView.CurrentTab(tab.getId(), tab.getUrl().getSpec(), tab.getTitle());
++        }, (entry, button) -> {
++            // Avoid issuing regular-profile favicon fetches for private collections.
++            if (model.getProfile().isOffTheRecord()) return;
++            mIcons.getLargeIconForUrl(new org.chromium.url.GURL(entry.url), dp(24),
++                    (icon, color, fallback, type) -> {
++                        if (!mDestroyed && mTabSession == session && icon != null) button.setImageBitmap(icon);
++                    });
++        });
++        mHeader.addView(mCollectionsView, 0);
 +    }
 +
 +    private void showGoogleMenu(View anchor, Runnable openAutofillSettings) {
@@ -2310,11 +2688,8 @@ new file mode 100644
 +        mHeader.setVisibility(desktop && mRail.getWidth() >= dp(100)
 +                && mRail.getHeight() >= dp(360) ? View.VISIBLE : View.GONE);
 +        if (!desktop) return;
-+        int bookmarkHeight = Math.max(dp(112), Math.min(dp(320), mRail.getHeight() / 3));
-+        ViewGroup.LayoutParams bookmarkParams = mBookmarkScroll.getLayoutParams();
-+        if (bookmarkParams.height != bookmarkHeight) {
-+            bookmarkParams.height = bookmarkHeight;
-+            mBookmarkScroll.setLayoutParams(bookmarkParams);
++        if (mCollectionsView != null) {
++            mCollectionsView.setCollectionHeight(Math.max(dp(80), Math.min(dp(240), mRail.getHeight() / 4)));
 +        }
 +        // Leave native tab selection, incognito and favicon rendering to its binders.
 +        boolean incognito = mIncognitoStateProvider.isIncognitoSelected();
@@ -2360,7 +2735,7 @@ new file mode 100644
 +        mDestroyed = true;
 +        mIncognitoStateProvider.removeObserver(mIncognitoObserver);
 +        ((VerticalTabRailLayout) mNativeTabs).setDesktopWindowSpacerHost(null);
-+        mBookmarks.removeObserver(mBookmarkObserver);
++        clearCollections();
 +        mPreferences.unregisterOnSharedPreferenceChangeListener(mPreferenceListener);
 +        mRail.removeOnLayoutChangeListener(mLayoutListener);
 +        if (mColorDialog != null) mColorDialog.dismiss();
@@ -2444,7 +2819,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcNativeTa
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcNativeTabSession.java
-@@ -0,0 +1,115 @@
+@@ -0,0 +1,122 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -2471,6 +2846,7 @@ new file mode 100644
 +    private final BooleanSupplier mIsCurrentModel;
 +    private final Runnable mOnStateChanged;
 +    private final ArcTabActions mActions;
++    private final ArcSidebarStore mStore;
 +    private final TabModelObserver mObserver;
 +    private boolean mDestroyed;
 +
@@ -2485,7 +2861,8 @@ new file mode 100644
 +        mCreator = creator;
 +        mIsCurrentModel = isCurrentModel;
 +        mOnStateChanged = onStateChanged;
-+        mActions = new ArcTabActions(ArcSidebarProfiles.getForProfile(profile), this);
++        mStore = ArcSidebarProfiles.getForProfile(profile);
++        mActions = new ArcTabActions(mStore, this);
 +        mObserver = new TabModelObserver() {
 +            @Override public void tabClosureCommitted(Tab tab) { confirmedClose(tab.getId()); }
 +            @Override public void onTabCloseCommitted(List<Tab> tabs, boolean isAllTabs,
@@ -2497,6 +2874,7 @@ new file mode 100644
 +    }
 +
 +    public ArcTabActions actions() { return mActions; }
++    public ArcSidebarStore store() { return mStore; }
 +
 +    private boolean active() {
 +        Profile profile = mModel.getProfile();
@@ -2543,6 +2921,10 @@ new file mode 100644
 +        if (restorePendingTab(tabId) != null) {
 +            mModel.pinTab(tabId, /* showUngroupDialog= */ true);
 +        }
++    }
++
++    @Override public void unpin(int tabId) {
++        if (active() && mModel.getTabById(tabId) != null) mModel.unpinTab(tabId);
 +    }
 +
 +    @Override public void close(int tabId) {
@@ -2602,7 +2984,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarS
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarState.java
-@@ -0,0 +1,310 @@
+@@ -0,0 +1,322 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -2788,6 +3170,18 @@ new file mode 100644
 +    }
 +    public void unpin(String id) { mEntries.remove(entry(id)); }
 +
++    /** Changes placement without replacing the canonical entry or native tab identity. */
++    public void setFavorite(String id, boolean favorite) {
++        Entry entry = entry(id);
++        if (entry.favorite == favorite && (favorite || mSelected.equals(entry.spaceId))) return;
++        mEntries.set(mEntries.indexOf(entry), new Entry(entry.id,
++                favorite ? null : mSelected, null, entry.url, entry.title, entry.tabId, favorite));
++        if (entry.tabId != null) {
++            if (favorite) mTabSpaces.remove(entry.tabId);
++            else associateTab(entry.tabId, mSelected);
++        }
++    }
++
 +    private void requireSpace(String id) { if (!mSpaces.containsKey(id)) throw invalid(); }
 +    private void requireFolder(String spaceId, String id) {
 +        requireSpace(spaceId);
@@ -2956,7 +3350,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcTabActio
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcTabActions.java
-@@ -0,0 +1,85 @@
+@@ -0,0 +1,86 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -2974,6 +3368,7 @@ new file mode 100644
 +        void select(int tabId);
 +        void close(int tabId);
 +        void pin(int tabId);
++        void unpin(int tabId);
 +    }
 +    public enum Result { OPENED, SELECTED, NOT_OPENED, PERSISTENCE_ERROR }
 +

@@ -24,6 +24,7 @@ public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
     private final BooleanSupplier mIsCurrentModel;
     private final Runnable mOnStateChanged;
     private final ArcTabActions mActions;
+    private final ArcSidebarStore mStore;
     private final TabModelObserver mObserver;
     private boolean mDestroyed;
 
@@ -38,7 +39,8 @@ public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
         mCreator = creator;
         mIsCurrentModel = isCurrentModel;
         mOnStateChanged = onStateChanged;
-        mActions = new ArcTabActions(ArcSidebarProfiles.getForProfile(profile), this);
+        mStore = ArcSidebarProfiles.getForProfile(profile);
+        mActions = new ArcTabActions(mStore, this);
         mObserver = new TabModelObserver() {
             @Override public void tabClosureCommitted(Tab tab) { confirmedClose(tab.getId()); }
             @Override public void onTabCloseCommitted(List<Tab> tabs, boolean isAllTabs,
@@ -50,6 +52,7 @@ public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
     }
 
     public ArcTabActions actions() { return mActions; }
+    public ArcSidebarStore store() { return mStore; }
 
     private boolean active() {
         Profile profile = mModel.getProfile();
@@ -96,6 +99,10 @@ public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
         if (restorePendingTab(tabId) != null) {
             mModel.pinTab(tabId, /* showUngroupDialog= */ true);
         }
+    }
+
+    @Override public void unpin(int tabId) {
+        if (active() && mModel.getTabById(tabId) != null) mModel.unpinTab(tabId);
     }
 
     @Override public void close(int tabId) {

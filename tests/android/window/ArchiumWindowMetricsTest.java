@@ -112,10 +112,11 @@ public final class ArchiumWindowMetricsTest extends Instrumentation {
             check(width[0] > 0, "actual Activity has measured window width");
             appearanceSelector(activity);
             ArcWindowObserverTest.run(this, (WindowTestActivity) activity);
+            ArcCollectionsViewTest.run(this, activity);
             int displayIndependentWidth = activity.getResources().getConfiguration().screenWidthDp;
             check(width[0] <= displayIndependentWidth + 2,
                     "usable Activity width does not include wider physical display");
-            result.putString("stream", "PASS: Android window/configuration metrics and application-context rejection\n");
+            result.putString("stream", "PASS: Android window/configuration metrics, appearance/observer and collection views; Chromium commands simulated\n");
             finish(-1, result);
         } catch (Throwable error) {
             result.putString("stream", "FAIL: " + error.getClass().getSimpleName() + ": " + error.getMessage() + "\n");

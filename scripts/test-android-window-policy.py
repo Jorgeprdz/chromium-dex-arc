@@ -51,6 +51,12 @@ def main():
     dialog = ROOT / 'chromium/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAppearanceDialog.java'
     if dialog.exists():
         sources.append(dialog)
+    arc = dialog.parent
+    for name in ('ArcSidebarState', 'ArcSidebarStore', 'ArcTabActions',
+                 'ArcCollectionsController', 'ArcCollectionsView'):
+        source = arc / (name + '.java')
+        if source.exists():
+            sources.append(source)
     observer = ROOT / 'chromium/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopWindowObserver.java'
     sources.append(observer)
     lifecycle = work / 'stubs/org/chromium/chrome/browser/lifecycle'
