@@ -87,10 +87,10 @@ bool ShouldForwardSyncErrorToStore(
     case SyncError::kTrustedVaultRecoverabilityDegradedForPasswords:
     case SyncError::kTrustedVaultRecoverabilityDegradedForEverything:
     case SyncError::kBookmarksLimitExceeded:
-#if BUILDFLAG(IS_IOS)
+#if BUILDFLAG(IS_IOS) || BUILDFLAG(IS_ANDROID)
     case SyncError::kDeviceManagementError:
       // TODO(crbug.com/539816393): Update this case if it needs to block saving
-#endif  // BUILDFLAG(IS_IOS)
+#endif  // BUILDFLAG(IS_IOS) || BUILDFLAG(IS_ANDROID)
 
       return false;  // These errors aren't directly actionable (yet).
     case SyncError::kNone:
@@ -98,10 +98,10 @@ bool ShouldForwardSyncErrorToStore(
     case SyncError::kSignInNeedsUpdate:
     case SyncError::kNeedsTrustedVaultKeyForPasswords:
     case SyncError::kNeedsTrustedVaultKeyForEverything:
-#if !BUILDFLAG(IS_IOS)
+#if !BUILDFLAG(IS_IOS) && !BUILDFLAG(IS_ANDROID)
     case SyncError::kNeedsSettingsConfirmation:
     case SyncError::kUnrecoverableError:
-#endif  // !BUILDFLAG(IS_IOS)
+#endif  // !BUILDFLAG(IS_IOS) && !BUILDFLAG(IS_ANDROID)
 #if BUILDFLAG(IS_ANDROID)
     case SyncError::kNeedsUPMBackendUpgrade:
 #endif  // BUILDFLAG(IS_ANDROID)
@@ -121,9 +121,9 @@ SyncErrorToBackendError(syncer::SyncService::UserActionableError error) {
     case SyncError::kBookmarksLimitExceeded:
     case SyncError::kTrustedVaultRecoverabilityDegradedForPasswords:
     case SyncError::kTrustedVaultRecoverabilityDegradedForEverything:
-#if BUILDFLAG(IS_IOS)
+#if BUILDFLAG(IS_IOS) || BUILDFLAG(IS_ANDROID)
     case SyncError::kDeviceManagementError:
-#endif  // BUILDFLAG(IS_IOS)
+#endif  // BUILDFLAG(IS_IOS) || BUILDFLAG(IS_ANDROID)
 
       return std::nullopt;  // These errors aren't directly actionable (yet).
     case SyncError::kNeedsPassphrase:
@@ -136,10 +136,10 @@ SyncErrorToBackendError(syncer::SyncService::UserActionableError error) {
     case SyncError::kNeedsTrustedVaultKeyForEverything:
       return base::unexpected(
           PasswordStoreBackendError(BackendError::kKeyRetrievalRequired));
-#if !BUILDFLAG(IS_IOS)
+#if !BUILDFLAG(IS_IOS) && !BUILDFLAG(IS_ANDROID)
     case SyncError::kNeedsSettingsConfirmation:
     case SyncError::kUnrecoverableError:
-#endif  // !BUILDFLAG(IS_IOS)
+#endif  // !BUILDFLAG(IS_IOS) && !BUILDFLAG(IS_ANDROID)
 #if BUILDFLAG(IS_ANDROID)
     case SyncError::kNeedsUPMBackendUpgrade:
 #endif
@@ -166,18 +166,18 @@ ActionableError SyncErrorToActionableError(
     case SyncError::kTrustedVaultRecoverabilityDegradedForPasswords:
     case SyncError::kTrustedVaultRecoverabilityDegradedForEverything:
       return ActionableError::kNoError;
-#if !BUILDFLAG(IS_IOS)
+#if !BUILDFLAG(IS_IOS) && !BUILDFLAG(IS_ANDROID)
     case SyncError::kNeedsSettingsConfirmation:
     case SyncError::kUnrecoverableError:
-#endif  // !BUILDFLAG(IS_IOS)
+#endif  // !BUILDFLAG(IS_IOS) && !BUILDFLAG(IS_ANDROID)
 #if BUILDFLAG(IS_ANDROID)
     case SyncError::kNeedsUPMBackendUpgrade:
 #endif
     case SyncError::kNeedsClientUpgrade:
     case SyncError::kBookmarksLimitExceeded:
-#if BUILDFLAG(IS_IOS)
+#if BUILDFLAG(IS_IOS) || BUILDFLAG(IS_ANDROID)
     case SyncError::kDeviceManagementError:
-#endif  // BUILDFLAG(IS_IOS)
+#endif  // BUILDFLAG(IS_IOS) || BUILDFLAG(IS_ANDROID)
       return ActionableError::kInactionable;
   }
 }
@@ -270,9 +270,11 @@ void PasswordStoreBuiltInBackend::InitBackend(
   // Users won't reach the flag the normal way since the LoginDB is working
   // correctly and thus flag is never reached.
   // TODO(b/40286735): Remove after this feature is launched.
+#if !BUILDFLAG(IS_ANDROID)
   if (pref_service_->GetBoolean(prefs::kClearingUndecryptablePasswords)) {
     base::FeatureList::IsEnabled(features::kClearUndecryptablePasswords);
   }
+#endif
 
   background_task_runner_->PostTask(
       FROM_HERE, base::BindOnce(&LoginDatabaseAsyncHelper::CreateSyncBackend,
@@ -656,6 +658,7 @@ void PasswordStoreBuiltInBackend::
     SetClearingUndecryptablePasswordsIsEnabledPref(
         IsAccountStore is_account_store) {
   CHECK(pref_service_);
+#if !BUILDFLAG(IS_ANDROID)
   pref_service_->SetBoolean(prefs::kClearingUndecryptablePasswords, true);
   if (base::FeatureList::IsEnabled(features::kClearUndecryptablePasswords)) {
     AddPasswordRemovalReason(
@@ -663,6 +666,7 @@ void PasswordStoreBuiltInBackend::
         metrics_util::PasswordManagerCredentialRemovalReason::
             kDeletingUndecryptablePasswords);
   }
+#endif
 }
 
 void PasswordStoreBuiltInBackend::WritePasswordRemovalReasonPrefs(
