@@ -75,11 +75,14 @@ def main():
         print(f'Pinned patch: all {len(manifest["originals"])} files applied and hashes matched', flush=True)
         classes = work / 'classes'
         pure = list((ROOT / 'chromium').rglob('ArchiumWindowClass.java')) + list((ROOT / 'chromium').rglob('ArcDesktopPolicy.java')) + list((ROOT / 'chromium').rglob('ArchiumAutofillPolicy.java'))
+        pure += list((ROOT / 'chromium').rglob('ArchiumPasswordCsv.java'))
         run('javac', '-cp', str(window_jar), '-d', str(classes), *map(str, pure), str(ROOT / 'tests/java/ArcDesktopPolicyTest.java'),
-            str(ROOT / 'tests/java/ArchiumAutofillPolicyTest.java'), str(ROOT / 'tests/java/ArchiumWindowClassTest.java'))
+            str(ROOT / 'tests/java/ArchiumAutofillPolicyTest.java'), str(ROOT / 'tests/java/ArchiumWindowClassTest.java'),
+            str(ROOT / 'tests/java/ArchiumPasswordCsvTest.java'))
         run('java', '-cp', str(classes), 'ArchiumWindowClassTest')
         run('java', '-cp', str(classes), 'ArcDesktopPolicyTest')
         run('java', '-cp', str(classes), 'ArchiumAutofillPolicyTest')
+        run('java', '-Xmx256m', '-cp', str(classes), 'ArchiumPasswordCsvTest')
         if not args.android_jar.is_file():
             raise SystemExit('Missing Android SDK jar; pass --android-jar')
         stubs = work / 'contracts'

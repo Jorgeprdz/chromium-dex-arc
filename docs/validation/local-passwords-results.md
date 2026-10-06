@@ -7,9 +7,11 @@ This is preparation evidence, not accepted functionality or an APK delivery.
   disposable app.archium.keytests on the physical Samsung Android 36 phone.
   ADB emulator-5554 is another alias for that same phone, not separate coverage.
 - Local Python preparation/build routing: 28 tests passed.
-- Sparse patch applies and all 54 source hashes match.
+- Sparse patch applies and all 55 source hashes match.
 - JVM window classification and color/provider routing checks passed.
 - Native provider/database/backend/JNI/GN compilation and execution: pending.
+- Pure Java CSV reader/writer: 18 synthetic cases passed, including malformed
+  quoting, errors without field contents, duplicates and bounded input.
 - Password save/fill, management screen and CSV integration: pending.
 - Locked-device key behavior: pending; no lock/PIN changes performed.
 
@@ -33,3 +35,8 @@ Required runtime startup checks after build/resume:
 
 The final run has not been dispatched. After dispatch, update the monitors with
 its actual ID and pause as requested; installation/runtime checks wait for resume.
+
+CSV transport limits: 16,777,216 input characters, 100,000 records, 512 columns
+and 1,048,576 characters per field. Exceeding a limit rejects the preview; no
+PasswordStore mutation occurs in this parser. Conflicting passwords remain
+separate rows for native duplicate review; only identical triples are skipped.

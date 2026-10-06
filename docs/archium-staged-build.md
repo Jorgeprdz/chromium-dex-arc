@@ -65,7 +65,8 @@ Con `validate_native=true`, se compilan primero `archium_key_provider_tests` y
 comprueba cifrado, persistencia, errores de clave y rollback de importación en una
 base de datos temporal real. El
 primero es un ejecutable nativo Android con pruebas de Encryptor real; el segundo
-compila las clases de Keystore y el JNI. Comparten con el APK un único presupuesto
+compila las clases de Keystore y el JNI. También se compila
+`archium_password_csv_java`, el transporte CSV sin acceso al almacén. Comparten con el APK un único presupuesto
 de 120 minutos de Ninja por etapa. Un error detiene la cadena; un timeout guarda
 el checkpoint actual. Cuando termina el APK, se conserva también el ejecutable de
 pruebas en el artifact si está disponible. Compilación de esos targets y ejecución
