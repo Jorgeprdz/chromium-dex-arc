@@ -52,6 +52,15 @@ class ArchiumLocalPasswordManager : public SavedPasswordsPresenter::Observer {
   ~ArchiumLocalPasswordManager() override;
 
   base::expected<std::vector<Metadata>, Status> GetMetadata();
+  void Add(GURL url,
+           std::u16string username,
+           PasswordString password,
+           OperationReply reply);
+  void Update(int64_t id,
+              std::u16string username,
+              PasswordString password,
+              OperationReply reply);
+  void Delete(int64_t id, OperationReply reply);
   void Reveal(int64_t id, SecretReply reply);
   void Export(ExportReply reply);
   void PreviewImport(std::vector<CSVPassword> rows, PreviewReply reply);
@@ -64,6 +73,19 @@ class ArchiumLocalPasswordManager : public SavedPasswordsPresenter::Observer {
   bool Ready() const;
   void Authenticate(OperationReply reply);
   void OnAuthenticated(OperationReply reply, bool success);
+  void VerifyAddedCredential(const GURL& url,
+                             const std::u16string& username,
+                             const PasswordString& password,
+                             OperationReply reply);
+  void VerifyUpdatedCredential(const GURL& url,
+                               const std::string& signon_realm,
+                               const std::u16string& old_username,
+                               const std::u16string& username,
+                               const PasswordString& password,
+                               OperationReply reply);
+  void VerifyDeletedCredential(const std::string& signon_realm,
+                               const std::u16string& username,
+                               OperationReply reply);
   void OnSavedPasswordsChanged(const PasswordStoreChangeList& changes) override;
 
   scoped_refptr<PasswordStoreInterface> store_;
