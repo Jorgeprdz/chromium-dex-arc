@@ -91,3 +91,12 @@ atómico futuro. Nueve pruebas C++ escritas, no compiladas/ejecutadas; se regist
 `archium_password_import_tests` y su retención como artifact. Regresión de
 retención observada RED y luego GREEN; suite Python 28 pasa. Patch de 74 archivos
 aplica/hashes coinciden. Gestor, JNI, auth, SAF y UI siguen pendientes.
+
+Núcleo `ArchiumLocalPasswordManager` preparado con SavedPasswordsPresenter local
+sin account store y autenticación real DeviceAuthenticator: metadata sin secretos,
+IDs efímeros, auth serializada, reveal/export protegidos, preview en worker,
+confirmación por `ImportLoginsAtomically` con revisión y shutdown con WeakPtr.
+Accessor nuevo de error de lectura del Presenter impide confundir error con vault
+vacío. Diez pruebas nativas escritas/registradas, NO compiladas/ejecutadas.
+Native profile/JNI/auth factory, UI, CRUD y SAF siguen pendientes: no es aún un
+manager usable. Patch 79 archivos aplica/hashes, SDK/JVM preparación pasa.

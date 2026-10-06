@@ -62,7 +62,19 @@ El checkout nativo completo lo prepara CI; no descargues cientos de GB sin neces
    en tests/runtime/passwords. NO validación save/fill de navegador todavía.
 4. ArchiumPasswordCsv parse/write: 18 casos sintéticos JVM pasan. RFC quotes/BOM/
    Unicode, límites y errores sin valores sensibles. Aún NO está conectado a
-   importación/exportación visible: faltan gestor/JNI, auth, SAF y review/confirm.
+   importación/exportación visible: faltan JNI/UI y SAF. Se preparó
+   ArchiumLocalPasswordManager (native core) que posee SavedPasswordsPresenter
+   profile-only y DeviceAuthenticator real inyectado; serializa auth, lista sólo
+   IDs/URL/usuario, invalida IDs al cambiar el store, revela/exporta tras auth,
+   clasifica preview en ThreadPool, confirma con revisión/commit atómico y cancela
+   callbacks al cerrar. Diez pruebas C++ escritas y registradas; NO compiladas ni
+   ejecutadas. Aún falta el adaptador de perfil/JNI/factory del authenticator,
+   pantalla, CRUD e IO SAF: el core NO es una importación/exportación usable.
+   SavedPasswordsPresenter.HasPasswordStoreReadError evita mostrar como vacío
+   un almacén cuyo descifrado/lectura falló. Archivo native:
+   chrome/browser/password_manager/android/archium_local_password_manager.{h,cc}.
+   Para el bridge futuro: store.ImportLoginsAtomically(..., revision), no llamar
+   al método SQL ApplyImportedLogins desde UI. Auth factory con validez cero.
 5. API de snapshot/revisión DB preparada para prevenir que un CSV viejo sobrescriba
    un guardado web pendiente. Revisión con token de sesión de DB, total_changes,
    data_version; se valida dentro de la transacción con lectura adquirida antes.
@@ -129,7 +141,7 @@ git diff --check -- . ':!patches/archium-desktop.patch'
 .sync-audit/actionlint .github/workflows/baseline-build.yml .github/workflows/archium-stage.yml
 bash -n scripts/build-archium.sh
 
-Último estado: patch de 76 archivos se aplica y coincide con hashes. JVM/SDK-adapters
+Último estado: patch de 79 archivos se aplica y coincide con hashes. JVM/SDK-adapters
 pasan; estos últimos usan contratos Chromium stubbed. 28 Python tests pasaron.
 Tests físicos: scripts/test-android-password-key.py y test-android-window-policy.py
 con --device 192.168.101.105:44641. SDK /opt/android-sdk, android-36/build-tools36.

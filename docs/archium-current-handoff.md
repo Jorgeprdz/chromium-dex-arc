@@ -21,7 +21,7 @@ Este documento describe preparación; no es una entrega de APK ni aceptación fu
 - CSV independiente: 18 casos sintéticos pasan. La pantalla, autenticación y
   conexión SAF/PasswordStore todavía faltan. No se ha leído el CSV personal.
 - 28 pruebas Python de preparación/checkpoints/routing pasan. El parche de
-  76 archivos aplica y coincide con sus hashes. Los checks
+  79 archivos aplica y coincide con sus hashes. Los checks
   aislados de Java/SDK no equivalen a compilar Chromium.
 - Workflow preparado para restaurar un checkpoint anterior con commit explícito,
   conservar objetos/mtimes y compilar los targets modificados antes de la APK.
@@ -108,7 +108,7 @@ entre contraseñas distintas del CSV, omite duplicados y conserva cada formulari
 existente y sus notas al reemplazar. Mantiene la revisión DB para el commit
 atómico futuro. Nueve pruebas C++ escritas, no compiladas/ejecutadas; se registró
 `archium_password_import_tests` y su retención como artifact. Regresión de
-retención observada RED y luego GREEN; suite Python 28 pasa. Patch de 76 archivos
+retención observada RED y luego GREEN; suite Python 28 pasa. Patch de 79 archivos
 aplica/hashes coinciden. Gestor, JNI, auth, SAF y UI siguen pendientes.
 
 Colecciones Arc conectadas en el patch: `ArcCollectionsController/View` y el
@@ -121,3 +121,12 @@ error y conservan sus bytes: regresión física RED/GREEN. Patch 76 aplica/hashe
 Todavía: rail de pestañas abiertas global sin filtrado por Space; composición Arc
 nav/omnibox/footer/frame incompleta; integración real TabModel/perfil/GN pendiente.
 No presentar el diseño como terminado o idéntico al render aprobado.
+
+Núcleo `ArchiumLocalPasswordManager` preparado con SavedPasswordsPresenter local
+sin account store y autenticación real DeviceAuthenticator: metadata sin secretos,
+IDs efímeros, auth serializada, reveal/export protegidos, preview en worker,
+confirmación por `ImportLoginsAtomically` con revisión y shutdown con WeakPtr.
+Accessor nuevo de error de lectura del Presenter impide confundir error con vault
+vacío. Diez pruebas nativas escritas/registradas, NO compiladas/ejecutadas.
+Native profile/JNI/auth factory, UI, CRUD y SAF siguen pendientes: no es aún un
+manager usable. Patch 79 archivos aplica/hashes, SDK/JVM preparación pasa.

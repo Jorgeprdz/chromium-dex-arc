@@ -475,7 +475,32 @@ diff --git a/chrome/browser/browser_process_impl.cc b/chrome/browser/browser_pro
 diff --git a/chrome/browser/password_manager/BUILD.gn b/chrome/browser/password_manager/BUILD.gn
 --- a/chrome/browser/password_manager/BUILD.gn
 +++ b/chrome/browser/password_manager/BUILD.gn
-@@ -457,6 +457,7 @@
+@@ -5,6 +5,7 @@
+ import("//build/config/chrome_build.gni")
+ import("//build/config/ui.gni")
+ import("//components/signin/features.gni")
++import("//components/password_manager/core/browser/buildflags.gni")
+ 
+ source_set("password_manager") {
+   sources = []
+@@ -226,6 +227,16 @@
+       "android/password_store_bridge.cc",
+       "android/save_update_password_message_delegate.cc",
+     ]
++    if (enable_archium_local_passwords) {
++      sources += [
++        "android/archium_local_password_manager.cc",
++        "android/archium_local_password_manager.h",
++      ]
++      deps += [
++        "//components/password_manager/core/browser/import:archium_import_preview",
++        "//components/password_manager/core/browser/ui",
++      ]
++    }
+     deps += [
+       "//chrome/android:chrome_jni_headers",
+       "//chrome/browser/keyboard_accessory/android",
+@@ -457,6 +468,7 @@
      "//components/password_manager/core/browser",
      "//components/password_manager/core/browser:passkey_credential",
      "//components/password_manager/core/browser:password_form",
@@ -483,6 +508,20 @@ diff --git a/chrome/browser/password_manager/BUILD.gn b/chrome/browser/password_
      "//components/password_manager/core/browser:test_support",
      "//components/password_manager/core/browser/features:password_features",
      "//components/password_manager/core/browser/password_store:test_support",
+@@ -486,6 +498,13 @@
+   ]
+ 
+   if (is_android) {
++    if (enable_archium_local_passwords) {
++      sources += [ "android/archium_local_password_manager_unittest.cc" ]
++      deps += [
++        "//components/password_manager/core/browser/import:archium_import_preview",
++        "//components/password_manager/core/browser/ui",
++      ]
++    }
+     deps += [
+       "//chrome/browser/autofill:test_support",
+       "//chrome/browser/keyboard_accessory/android:impl",
 diff --git a/chrome/browser/password_manager/android/BUILD.gn b/chrome/browser/password_manager/android/BUILD.gn
 --- a/chrome/browser/password_manager/android/BUILD.gn
 +++ b/chrome/browser/password_manager/android/BUILD.gn
@@ -1865,7 +1904,15 @@ diff --git a/components/password_manager/core/browser/ui/saved_passwords_present
  bool MergeDeleteAllResultsFromPasswordStores(std::vector<bool> results) {
    return std::ranges::all_of(results, [](bool result) { return result; });
  }
-@@ -236,60 +277,27 @@
+@@ -121,6 +162,7 @@
+ SavedPasswordsPresenter::~SavedPasswordsPresenter() = default;
+ 
+ void SavedPasswordsPresenter::Init(base::OnceClosure completion_callback) {
++  has_password_store_read_error_ = false;
+   init_completion_callback_ = std::move(completion_callback);
+ 
+   // Clear old cache.
+@@ -236,60 +278,27 @@
  SavedPasswordsPresenter::AddResult
  SavedPasswordsPresenter::GetExpectedAddResult(
      const CredentialUIEntry& credential) const {
@@ -1947,6 +1994,14 @@ diff --git a/components/password_manager/core/browser/ui/saved_passwords_present
  }
  
  bool SavedPasswordsPresenter::AddCredential(const CredentialUIEntry& credential,
+@@ -682,6 +691,7 @@
+   DCHECK_GE(pending_store_updates_, 0);
+ 
+   if (!results_or_error) {
++    has_password_store_read_error_ = true;
+     NotifySavedPasswordsChanged(PasswordStoreChangeList());
+     return;
+   }
 diff --git a/components/password_manager/core/browser/ui/saved_passwords_presenter.h b/components/password_manager/core/browser/ui/saved_passwords_presenter.h
 --- a/components/password_manager/core/browser/ui/saved_passwords_presenter.h
 +++ b/components/password_manager/core/browser/ui/saved_passwords_presenter.h
@@ -1966,6 +2021,25 @@ diff --git a/components/password_manager/core/browser/ui/saved_passwords_present
    using AddCredentialsCallback = base::OnceClosure;
    using DuplicatePasswordsMap =
        std::multimap<CredentialSortKey, StoredCredential>;
+@@ -130,6 +139,10 @@
+ 
+   // Returns whether there are ongoing fetch requests to credential stores.
+   bool IsWaitingForPasswordStore() const;
++
++  // Distinguishes a failed read from an honestly empty credential store.
++  bool HasPasswordStoreReadError() const { return has_password_store_read_error_; }
++
+ 
+   // Removes the credential and all its duplicates from the store.
+   bool RemoveCredential(const CredentialUIEntry& credential);
+@@ -283,6 +296,7 @@
+ 
+   // The number of stores from which no updates have been received yet.
+   int pending_store_updates_ = 0;
++  bool has_password_store_read_error_ = false;
+ 
+   std::unique_ptr<PasswordUndoHelper> undo_helper_;
+ 
 diff --git a/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java b/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java
 --- a/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java
 +++ b/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java
@@ -3550,6 +3624,470 @@ new file mode 100644
 +        return configurationWidthDp(context.getResources().getConfiguration());
 +    }
 +}
+diff --git a/chrome/browser/password_manager/android/archium_local_password_manager.cc b/chrome/browser/password_manager/android/archium_local_password_manager.cc
+new file mode 100644
+--- /dev/null
++++ b/chrome/browser/password_manager/android/archium_local_password_manager.cc
+@@ -0,0 +1,188 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++#include "chrome/browser/password_manager/android/archium_local_password_manager.h"
++
++#include <algorithm>
++#include <utility>
++
++#include "base/functional/bind.h"
++#include "base/location.h"
++#include "base/task/thread_pool.h"
++#include "components/password_manager/core/browser/password_store/actionable_error.h"
++
++namespace password_manager {
++
++ArchiumLocalPasswordManager::ArchiumLocalPasswordManager(
++    affiliations::AffiliationService* affiliations,
++    scoped_refptr<PasswordStoreInterface> profile_store,
++    std::unique_ptr<device_reauth::DeviceAuthenticator> authenticator,
++    base::RepeatingClosure on_changed)
++    : store_(std::move(profile_store)),
++      authenticator_(std::move(authenticator)),
++      presenter_(affiliations, store_, /*account_store=*/nullptr),
++      on_changed_(std::move(on_changed)) {
++  observation_.Observe(&presenter_);
++  presenter_.Init();
++}
++
++ArchiumLocalPasswordManager::~ArchiumLocalPasswordManager() { Shutdown(); }
++
++bool ArchiumLocalPasswordManager::Ready() const {
++  return live_ && store_ && store_->GetError() == ActionableError::kNoError &&
++         !presenter_.IsWaitingForPasswordStore() && !presenter_.HasPasswordStoreReadError();
++}
++
++base::expected<std::vector<ArchiumLocalPasswordManager::Metadata>, ArchiumLocalPasswordManager::Status>
++ArchiumLocalPasswordManager::GetMetadata() {
++  if (!Ready()) return base::unexpected(Status::kUnavailable);
++  entries_.clear();
++  std::vector<Metadata> metadata;
++  for (auto& entry : presenter_.GetSavedPasswords()) {
++    const int64_t id = next_id_++;
++    metadata.push_back({id, entry.GetURL(), entry.username});
++    entries_.emplace(id, std::move(entry));
++  }
++  return metadata;
++}
++
++void ArchiumLocalPasswordManager::Authenticate(OperationReply reply) {
++  if (!Ready()) { std::move(reply).Run(Status::kUnavailable); return; }
++  if (authenticating_ || writing_) { std::move(reply).Run(Status::kBusy); return; }
++  if (!authenticator_ || !authenticator_->CanAuthenticateWithBiometricOrScreenLock()) {
++    std::move(reply).Run(Status::kAuthenticationFailed);
++    return;
++  }
++  authenticating_ = true;
++  authenticator_->AuthenticateWithMessage(
++      std::u16string(), base::BindOnce(&ArchiumLocalPasswordManager::OnAuthenticated,
++                                     weak_ptr_factory_.GetWeakPtr(), std::move(reply)));
++}
++
++void ArchiumLocalPasswordManager::OnAuthenticated(OperationReply reply, bool success) {
++  authenticating_ = false;
++  std::move(reply).Run(!success ? Status::kAuthenticationFailed
++                              : Ready() ? Status::kSuccess : Status::kUnavailable);
++}
++
++void ArchiumLocalPasswordManager::Reveal(int64_t id, SecretReply reply) {
++  Authenticate(base::BindOnce(
++      [](base::WeakPtr<ArchiumLocalPasswordManager> self, int64_t id, SecretReply reply, Status status) {
++        if (!self) return;
++        if (status != Status::kSuccess) { std::move(reply).Run(status, PasswordString()); return; }
++        auto found = self->entries_.find(id);
++        if (found == self->entries_.end()) {
++          std::move(reply).Run(Status::kStale, PasswordString());
++          return;
++        }
++        std::move(reply).Run(Status::kSuccess, found->second.password);
++      }, weak_ptr_factory_.GetWeakPtr(), id, std::move(reply)));
++}
++
++void ArchiumLocalPasswordManager::Export(ExportReply reply) {
++  Authenticate(base::BindOnce(
++      [](base::WeakPtr<ArchiumLocalPasswordManager> self, ExportReply reply, Status status) {
++        if (!self) return;
++        if (status != Status::kSuccess) { std::move(reply).Run(status, {}); return; }
++        self->store_->GetImportSnapshot(base::BindOnce(
++            [](base::WeakPtr<ArchiumLocalPasswordManager> self, ExportReply reply,
++               ArchiumImportSnapshotResult snapshot) {
++              if (!self) return;
++              if (!snapshot || !self->Ready()) { std::move(reply).Run(Status::kUnavailable, {}); return; }
++              std::erase_if(snapshot->credentials, [](const StoredCredential& entry) {
++                return entry.blocked_by_user || entry.federation_origin.IsValid() || entry.password_value.empty();
++              });
++              std::move(reply).Run(Status::kSuccess, std::move(snapshot->credentials));
++            }, self, std::move(reply)));
++      }, weak_ptr_factory_.GetWeakPtr(), std::move(reply)));
++}
++
++void ArchiumLocalPasswordManager::PreviewImport(std::vector<CSVPassword> rows, PreviewReply reply) {
++  CancelImport();
++  const uint64_t generation = import_generation_;
++  Authenticate(base::BindOnce(
++      [](base::WeakPtr<ArchiumLocalPasswordManager> self, uint64_t generation,
++         std::vector<CSVPassword> rows, PreviewReply reply, Status status) {
++        if (!self) return;
++        if (status != Status::kSuccess) { std::move(reply).Run(status, {}); return; }
++        if (generation != self->import_generation_) { std::move(reply).Run(Status::kStale, {}); return; }
++        self->store_->GetImportSnapshot(base::BindOnce(
++            [](base::WeakPtr<ArchiumLocalPasswordManager> self, uint64_t generation,
++               std::vector<CSVPassword> rows, PreviewReply reply, ArchiumImportSnapshotResult snapshot) {
++              if (!self) return;
++              if (!snapshot || !self->Ready()) { std::move(reply).Run(Status::kUnavailable, {}); return; }
++              if (generation != self->import_generation_) { std::move(reply).Run(Status::kStale, {}); return; }
++              base::ThreadPool::PostTaskAndReplyWithResult(
++                  FROM_HERE, {base::TaskPriority::USER_VISIBLE},
++                  base::BindOnce([](std::vector<CSVPassword> rows, ArchiumPasswordImportSnapshot snapshot) {
++                    return std::make_unique<ArchiumPasswordImportPreview>(rows, std::move(snapshot));
++                  }, std::move(rows), std::move(*snapshot)),
++                  base::BindOnce([](base::WeakPtr<ArchiumLocalPasswordManager> self,
++                                    uint64_t generation, PreviewReply reply,
++                                    std::unique_ptr<ArchiumPasswordImportPreview> preview) {
++                    if (!self) return;
++                    if (!self->Ready() || generation != self->import_generation_) {
++                      std::move(reply).Run(Status::kStale, {});
++                      return;
++                    }
++                    self->preview_ = std::move(preview);
++                    std::move(reply).Run(Status::kSuccess, self->preview_->rows());
++                  }, self, generation, std::move(reply)));
++            }, self, generation, std::move(rows), std::move(reply)));
++      }, weak_ptr_factory_.GetWeakPtr(), generation, std::move(rows), std::move(reply)));
++}
++
++void ArchiumLocalPasswordManager::ConfirmImport(
++    std::vector<ArchiumPasswordImportPreview::Decision> decisions, OperationReply reply) {
++  if (!preview_) { std::move(reply).Run(Status::kStale); return; }
++  const uint64_t generation = import_generation_;
++  Authenticate(base::BindOnce(
++      [](base::WeakPtr<ArchiumLocalPasswordManager> self, uint64_t generation,
++         std::vector<ArchiumPasswordImportPreview::Decision> decisions, OperationReply reply, Status status) {
++        if (!self) return;
++        if (status != Status::kSuccess) { std::move(reply).Run(status); return; }
++        if (generation != self->import_generation_ || !self->preview_) {
++          std::move(reply).Run(Status::kStale);
++          return;
++        }
++        auto batch = self->preview_->BuildBatch(decisions);
++        if (!batch) { std::move(reply).Run(Status::kInvalid); return; }
++        const auto revision = self->preview_->revision();
++        self->preview_.reset();
++        if (batch->empty()) { std::move(reply).Run(Status::kSuccess); return; }
++        self->writing_ = true;
++        self->store_->ImportLoginsAtomically(std::move(*batch), base::BindOnce(
++            [](base::WeakPtr<ArchiumLocalPasswordManager> self, OperationReply reply,
++               base::expected<void, PasswordStoreBackendError> result) {
++              if (!self) return;
++              self->writing_ = false;
++              std::move(reply).Run(result ? Status::kSuccess : Status::kWriteFailed);
++            }, self, std::move(reply)), revision);
++      }, weak_ptr_factory_.GetWeakPtr(), generation, std::move(decisions), std::move(reply)));
++}
++
++void ArchiumLocalPasswordManager::CancelImport() {
++  ++import_generation_;
++  preview_.reset();
++}
++
++void ArchiumLocalPasswordManager::OnSavedPasswordsChanged(const PasswordStoreChangeList& changes) {
++  if (!live_) return;
++  entries_.clear();
++  CancelImport();
++  if (on_changed_) on_changed_.Run();
++}
++
++void ArchiumLocalPasswordManager::Shutdown() {
++  if (!live_) return;
++  live_ = false;
++  weak_ptr_factory_.InvalidateWeakPtrs();
++  observation_.Reset();
++  entries_.clear();
++  CancelImport();
++  on_changed_.Reset();
++  if (authenticating_ && authenticator_) authenticator_->Cancel();
++  authenticating_ = false;
++}
++
++}  // namespace password_manager
+diff --git a/chrome/browser/password_manager/android/archium_local_password_manager.h b/chrome/browser/password_manager/android/archium_local_password_manager.h
+new file mode 100644
+--- /dev/null
++++ b/chrome/browser/password_manager/android/archium_local_password_manager.h
+@@ -0,0 +1,85 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++#ifndef CHROME_BROWSER_PASSWORD_MANAGER_ANDROID_ARCHIUM_LOCAL_PASSWORD_MANAGER_H_
++#define CHROME_BROWSER_PASSWORD_MANAGER_ANDROID_ARCHIUM_LOCAL_PASSWORD_MANAGER_H_
++
++#include <cstdint>
++#include <map>
++#include <memory>
++#include <vector>
++
++#include "base/functional/callback.h"
++#include "base/memory/weak_ptr.h"
++#include "base/scoped_observation.h"
++#include "components/device_reauth/device_authenticator.h"
++#include "components/password_manager/core/browser/import/archium_password_import_preview.h"
++#include "components/password_manager/core/browser/password_store/password_store_interface.h"
++#include "components/password_manager/core/browser/ui/saved_passwords_presenter.h"
++
++namespace password_manager {
++
++// Native manager core. The profile/JNI owner must supply its real local profile
++// store and platform DeviceAuthenticator (zero authentication validity period),
++// and call Shutdown before that profile or its requesting UI is destroyed.
++// No Java authentication-success input or account-store fallback exists here.
++class ArchiumLocalPasswordManager : public SavedPasswordsPresenter::Observer {
++ public:
++  enum class Status {
++    kSuccess = 0,
++    kUnavailable = 1,
++    kAuthenticationFailed = 2,
++    kBusy = 3,
++    kStale = 4,
++    kInvalid = 5,
++    kWriteFailed = 6,
++  };
++  struct Metadata {
++    int64_t id;
++    GURL url;
++    std::u16string username;
++  };
++  using OperationReply = base::OnceCallback<void(Status)>;
++  using SecretReply = base::OnceCallback<void(Status, PasswordString)>;
++  using ExportReply = base::OnceCallback<void(Status, std::vector<StoredCredential>)>;
++  using PreviewReply = base::OnceCallback<void(Status, std::vector<ArchiumPasswordImportPreview::Row>)>;
++
++  ArchiumLocalPasswordManager(
++      affiliations::AffiliationService* affiliations,
++      scoped_refptr<PasswordStoreInterface> profile_store,
++      std::unique_ptr<device_reauth::DeviceAuthenticator> authenticator,
++      base::RepeatingClosure on_changed);
++  ~ArchiumLocalPasswordManager() override;
++
++  base::expected<std::vector<Metadata>, Status> GetMetadata();
++  void Reveal(int64_t id, SecretReply reply);
++  void Export(ExportReply reply);
++  void PreviewImport(std::vector<CSVPassword> rows, PreviewReply reply);
++  void ConfirmImport(std::vector<ArchiumPasswordImportPreview::Decision> decisions,
++                     OperationReply reply);
++  void CancelImport();
++  void Shutdown();
++
++ private:
++  bool Ready() const;
++  void Authenticate(OperationReply reply);
++  void OnAuthenticated(OperationReply reply, bool success);
++  void OnSavedPasswordsChanged(const PasswordStoreChangeList& changes) override;
++
++  scoped_refptr<PasswordStoreInterface> store_;
++  std::unique_ptr<device_reauth::DeviceAuthenticator> authenticator_;
++  SavedPasswordsPresenter presenter_;
++  base::RepeatingClosure on_changed_;
++  std::map<int64_t, CredentialUIEntry> entries_;
++  int64_t next_id_ = 1;
++  uint64_t import_generation_ = 0;
++  bool live_ = true;
++  bool authenticating_ = false;
++  bool writing_ = false;
++  std::unique_ptr<ArchiumPasswordImportPreview> preview_;
++  base::ScopedObservation<SavedPasswordsPresenter, SavedPasswordsPresenter::Observer> observation_{this};
++  base::WeakPtrFactory<ArchiumLocalPasswordManager> weak_ptr_factory_{this};
++};
++
++}  // namespace password_manager
++#endif  // CHROME_BROWSER_PASSWORD_MANAGER_ANDROID_ARCHIUM_LOCAL_PASSWORD_MANAGER_H_
+diff --git a/chrome/browser/password_manager/android/archium_local_password_manager_unittest.cc b/chrome/browser/password_manager/android/archium_local_password_manager_unittest.cc
+new file mode 100644
+--- /dev/null
++++ b/chrome/browser/password_manager/android/archium_local_password_manager_unittest.cc
+@@ -0,0 +1,176 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++#include "chrome/browser/password_manager/android/archium_local_password_manager.h"
++
++#include <memory>
++#include <utility>
++
++#include "base/functional/bind.h"
++#include "base/functional/callback_helpers.h"
++#include "base/test/bind.h"
++#include "base/test/task_environment.h"
++#include "base/test/test_future.h"
++#include "components/affiliations/core/browser/fake_affiliation_service.h"
++#include "components/device_reauth/mock_device_authenticator.h"
++#include "components/password_manager/core/browser/password_store/actionable_error.h"
++#include "components/password_manager/core/browser/password_store/test_password_store.h"
++#include "components/password_manager/core/browser/password_store/mock_password_store_interface.h"
++#include "components/password_manager/core/browser/ui/saved_passwords_presenter.h"
++#include "testing/gmock/include/gmock/gmock.h"
++#include "testing/gtest/include/gtest/gtest.h"
++
++namespace password_manager {
++namespace {
++using Status = ArchiumLocalPasswordManager::Status;
++using ::testing::_;
++using ::testing::Return;
++
++class ArchiumLocalPasswordManagerTest : public testing::Test {
++ protected:
++  void SetUp() override {
++    store_->Init();
++    CSVPassword csv(GURL("https://example.test/"), "user", "secret", "", CSVPassword::Status::kOK);
++    store_->AddLogin(SavedPasswordsPresenter::CreateImportedCredential(CredentialUIEntry(csv)));
++    auto auth = std::make_unique<testing::NiceMock<device_reauth::MockDeviceAuthenticator>>();
++    auth_ = auth.get();
++    ON_CALL(*auth_, CanAuthenticateWithBiometricOrScreenLock()).WillByDefault(Return(true));
++    ON_CALL(*auth_, AuthenticateWithMessage(_, _)).WillByDefault(
++        [this](const std::u16string&, device_reauth::DeviceAuthenticator::AuthenticateCallback reply) {
++          pending_auth_ = std::move(reply);
++        });
++    manager_ = std::make_unique<ArchiumLocalPasswordManager>(
++        &affiliations_, store_, std::move(auth), base::DoNothing());
++    tasks_.RunUntilIdle();
++  }
++  void TearDown() override {
++    manager_.reset();
++    store_->ShutdownOnUIThread();
++    tasks_.RunUntilIdle();
++  }
++  int64_t FirstId() {
++    auto metadata = manager_->GetMetadata();
++    EXPECT_TRUE(metadata.has_value());
++    if (!metadata || metadata->empty()) return -1;
++    return metadata->front().id;
++  }
++  base::test::SingleThreadTaskEnvironment tasks_;
++  scoped_refptr<TestPasswordStore> store_ = base::MakeRefCounted<TestPasswordStore>();
++  affiliations::FakeAffiliationService affiliations_;
++  device_reauth::MockDeviceAuthenticator* auth_ = nullptr;
++  device_reauth::DeviceAuthenticator::AuthenticateCallback pending_auth_;
++  std::unique_ptr<ArchiumLocalPasswordManager> manager_;
++};
++
++TEST_F(ArchiumLocalPasswordManagerTest, MetadataDoesNotRequestAuthenticationOrRevealSecrets) {
++  EXPECT_CALL(*auth_, AuthenticateWithMessage(_, _)).Times(0);
++  auto metadata = manager_->GetMetadata();
++  ASSERT_TRUE(metadata.has_value());
++  ASSERT_EQ(metadata->size(), 1u);
++  EXPECT_GT(metadata->front().id, 0);
++  EXPECT_EQ(metadata->front().url, GURL("https://example.test/"));
++  EXPECT_EQ(metadata->front().username, u"user");
++}
++
++TEST_F(ArchiumLocalPasswordManagerTest, RevealWaitsForRealAuthenticatorResult) {
++  base::test::TestFuture<Status, PasswordString> result;
++  manager_->Reveal(FirstId(), result.GetCallback());
++  EXPECT_FALSE(result.IsReady());
++  ASSERT_TRUE(pending_auth_);
++  std::move(pending_auth_).Run(true);
++  ASSERT_TRUE(result.IsReady());
++  EXPECT_EQ(result.Get<0>(), Status::kSuccess);
++  EXPECT_EQ(result.Get<1>(), u"secret");
++}
++
++TEST_F(ArchiumLocalPasswordManagerTest, DeniedAuthenticationRevealsNothing) {
++  base::test::TestFuture<Status, PasswordString> result;
++  manager_->Reveal(FirstId(), result.GetCallback());
++  std::move(pending_auth_).Run(false);
++  EXPECT_EQ(result.Get<0>(), Status::kAuthenticationFailed);
++  EXPECT_TRUE(result.Get<1>().empty());
++}
++
++TEST_F(ArchiumLocalPasswordManagerTest, UnavailableScreenLockDoesNotFallBackToUnprotectedReveal) {
++  EXPECT_CALL(*auth_, CanAuthenticateWithBiometricOrScreenLock()).WillOnce(Return(false));
++  EXPECT_CALL(*auth_, AuthenticateWithMessage(_, _)).Times(0);
++  base::test::TestFuture<Status, PasswordString> result;
++  manager_->Reveal(FirstId(), result.GetCallback());
++  EXPECT_EQ(result.Get<0>(), Status::kAuthenticationFailed);
++  EXPECT_TRUE(result.Get<1>().empty());
++}
++
++TEST_F(ArchiumLocalPasswordManagerTest, StoreChangeDuringAuthenticationInvalidatesOpaqueId) {
++  base::test::TestFuture<Status, PasswordString> result;
++  manager_->Reveal(FirstId(), result.GetCallback());
++  CSVPassword csv(GURL("https://other.test/"), "another", "different", "", CSVPassword::Status::kOK);
++  store_->AddLogin(SavedPasswordsPresenter::CreateImportedCredential(CredentialUIEntry(csv)));
++  tasks_.RunUntilIdle();
++  std::move(pending_auth_).Run(true);
++  EXPECT_EQ(result.Get<0>(), Status::kStale);
++  EXPECT_TRUE(result.Get<1>().empty());
++}
++
++TEST_F(ArchiumLocalPasswordManagerTest, ConcurrentSensitiveRequestCannotReusePendingAuthentication) {
++  const int64_t id = FirstId();
++  base::test::TestFuture<Status, PasswordString> first, second;
++  manager_->Reveal(id, first.GetCallback());
++  manager_->Reveal(id, second.GetCallback());
++  EXPECT_EQ(second.Get<0>(), Status::kBusy);
++  EXPECT_TRUE(second.Get<1>().empty());
++  std::move(pending_auth_).Run(true);
++  EXPECT_EQ(first.Get<0>(), Status::kSuccess);
++}
++
++TEST_F(ArchiumLocalPasswordManagerTest, ShutdownDropsLateSensitiveCallbackAndClearsReadiness) {
++  bool delivered = false;
++  manager_->Reveal(FirstId(), base::BindLambdaForTesting(
++      [&](Status, PasswordString) { delivered = true; }));
++  EXPECT_CALL(*auth_, Cancel()).Times(1);
++  manager_->Shutdown();
++  std::move(pending_auth_).Run(true);
++  EXPECT_FALSE(delivered);
++  auto metadata = manager_->GetMetadata();
++  ASSERT_FALSE(metadata.has_value());
++  EXPECT_EQ(metadata.error(), Status::kUnavailable);
++}
++
++TEST_F(ArchiumLocalPasswordManagerTest, DeniedExportNeverReturnsStoreCredentials) {
++  base::test::TestFuture<Status, std::vector<StoredCredential>> result;
++  manager_->Export(result.GetCallback());
++  std::move(pending_auth_).Run(false);
++  EXPECT_EQ(result.Get<0>(), Status::kAuthenticationFailed);
++  EXPECT_TRUE(result.Get<1>().empty());
++}
++
++TEST_F(ArchiumLocalPasswordManagerTest, CancelledImportCannotConfirmAnything) {
++  manager_->CancelImport();
++  EXPECT_CALL(*auth_, AuthenticateWithMessage(_, _)).Times(0);
++  base::test::TestFuture<Status> result;
++  manager_->ConfirmImport({}, result.GetCallback());
++  EXPECT_EQ(result.Get(), Status::kStale);
++}
++
++TEST(ArchiumLocalPasswordManagerReadErrorTest, FailedStoreReadCannotLookLikeAnEmptyVault) {
++  base::test::SingleThreadTaskEnvironment tasks;
++  affiliations::FakeAffiliationService affiliations;
++  auto store = base::MakeRefCounted<testing::NiceMock<MockPasswordStoreInterface>>();
++  ON_CALL(*store, GetError()).WillByDefault(Return(ActionableError::kNoError));
++  EXPECT_CALL(*store, GetAllLoginsWithAffiliationAndBrandingInformation(_)).WillOnce(
++      [&](base::WeakPtr<PasswordStoreConsumer> consumer) {
++        consumer->OnGetPasswordStoreResultsOrErrorFrom(store.get(), base::unexpected(
++            PasswordStoreBackendError(PasswordStoreBackendErrorType::kUncategorized)));
++      });
++  auto auth = std::make_unique<testing::NiceMock<device_reauth::MockDeviceAuthenticator>>();
++  EXPECT_CALL(*auth, AuthenticateWithMessage(_, _)).Times(0);
++  ArchiumLocalPasswordManager manager(&affiliations, store, std::move(auth), base::DoNothing());
++  auto metadata = manager.GetMetadata();
++  ASSERT_FALSE(metadata.has_value());
++  EXPECT_EQ(metadata.error(), Status::kUnavailable);
++  base::test::TestFuture<Status, PasswordString> reveal;
++  manager.Reveal(1, reveal.GetCallback());
++  EXPECT_EQ(reveal.Get<0>(), Status::kUnavailable);
++  EXPECT_TRUE(reveal.Get<1>().empty());
++}
++}  // namespace
++}  // namespace password_manager
 diff --git a/chrome/browser/password_manager/android/archium_password_key_provider.cc b/chrome/browser/password_manager/android/archium_password_key_provider.cc
 new file mode 100644
 --- /dev/null
