@@ -1,20 +1,43 @@
-# Existing monitor scripts preserved for continuation
+# Archium final build monitor
 
-These are snapshots of the workspace monitor scripts, not a newly started monitor.
-Their old default IDs and intervals have intentionally been preserved. After the
-FINAL build dispatch, use its actual ID and 900 seconds (15 minutes), verify
-`--once`, leave one monitor running, then pause the agent.
+The FINAL Arc + local-password/CSV build has been dispatched.
 
-Portable direct invocation from a clone (replace ID_REAL with the actual ID):
+- Run ID: `37426799878`
+- Run URL: https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/37426799878
+- Dispatch commit: `ec22da572623e679d134227d6ff16803cf1871f6`
+- Source checkpoint: `archium-checkpoint-37255997027-7`
+- Source checkpoint commit: `c8ffd13ee7fe1c6baab4913da6a01e8009febe18`
+- Poll interval: **900 seconds / 15 minutes**
+
+The monitor is read-only. It reports GitHub Actions state and never invents a build
+percentage. A completed build is not the same as runtime acceptance: artifact,
+signature, update installation and browser E2E checks remain separate steps.
+
+One-shot verification:
 
 ```bash
-python3 scripts/monitoring/monitor-archium-run.py --run ID_REAL --interval 900 --once --no-window
-python3 scripts/monitoring/monitor-archium-run.py --run ID_REAL --interval 900 --no-window
+python3 scripts/monitoring/monitor-archium-run.py \
+  --run 37426799878 --interval 900 --once --no-window
 ```
 
-The second command runs continuously in the foreground; use a persistent process
-launcher appropriate to the execution environment for background monitoring.
-The legacy launchers have workspace-specific paths and need integration before
-use from this directory. Legacy text still says ten minutes and includes an old
-duration estimate: update those labels at final dispatch, with no duration promise.
-No personal credentials are included; the Python monitor uses the public GitHub API.
+Continuous foreground monitoring:
+
+```bash
+python3 scripts/monitoring/monitor-archium-run.py \
+  --run 37426799878 --interval 900 --no-window
+```
+
+Background launcher:
+
+```bash
+sh scripts/monitoring/start-archium-monitor.sh
+```
+
+Termux watcher:
+
+```bash
+bash scripts/vigilar-compilacion-arc.sh
+```
+
+The repository launchers are now pinned to the current FINAL run. Do not switch them
+to an older build ID or shorten the interval without an explicit reason.
