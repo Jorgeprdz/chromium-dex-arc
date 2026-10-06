@@ -3,7 +3,7 @@
 set -u
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 monitor="$script_dir/macdesk-maintenance/monitor-archium-run.py"
-run_id="${1:-37255997027}"
+run_id="${1:-37426799878}"
 state_dir="$script_dir/.archium-monitor-termux"
 python_bin=$(command -v python3 || command -v python || true)
 if [ -z "$python_bin" ]; then
@@ -21,7 +21,7 @@ while :; do
   "$python_bin" "$monitor" --run "$run_id" --once --no-window --ascii --state-dir "$state_dir"
   if [ "${ARCHIUM_MONITOR_ONCE:-0}" = 1 ]; then exit 0; fi
   printf '\nLog guardado en: %s/actividad.log\n' "$state_dir"
-  if read -r -t 600 -n 1 key; then
+  if read -r -t 900 -n 1 key; then
     case "$key" in q|Q) exit 0 ;; esac
   fi
   printf '\n'
