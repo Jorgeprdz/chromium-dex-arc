@@ -12,6 +12,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.text.Editable;
 import android.text.InputType;
 import android.view.ViewGroup;
 import android.widget.EditText;
@@ -77,6 +78,7 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
     private final Handler mMain = new Handler(Looper.getMainLooper());
     private final Map<Integer, ArchiumPasswordManagerBridge.Entry> mRevealRequests =
             new HashMap<>();
+    private final Set<AlertDialog> mDialogs = new HashSet<>();
 
     private @Nullable ArchiumPasswordManagerBridge mBridge;
     private @Nullable PreferenceCategory mEntriesCategory;
@@ -165,6 +167,24 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
 
     private int nextRequest() {
         return mNextRequest++;
+    }
+
+    private void showTrackedDialog(AlertDialog dialog) {
+        if (mDestroyed) {
+            dialog.dismiss();
+            return;
+        }
+        mDialogs.add(dialog);
+        dialog.setOnDismissListener(ignored -> mDialogs.remove(dialog));
+        showTrackedDialog(dialog);
+    }
+
+    private static char[] consumeSecret(EditText input) {
+        Editable editable = input.getText();
+        char[] secret = new char[editable.length()];
+        editable.getChars(0, editable.length(), secret, 0);
+        editable.clear();
+        return secret;
     }
 
     private void setUnavailable(String message) {
@@ -298,10 +318,7 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
                                             String username =
                                                     field(form, "username").getText().toString();
                                             char[] password =
-                                                    field(form, "password")
-                                                            .getText()
-                                                            .toString()
-                                                            .toCharArray();
+                                                    consumeSecret(field(form, "password"));
                                             if (url.isEmpty() || password.length == 0) {
                                                 Arrays.fill(password, '\0');
                                                 Toast.makeText(
@@ -315,7 +332,7 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
                                                     nextRequest(), url, username, password);
                                             dialog.dismiss();
                                         }));
-        dialog.show();
+        showTrackedDialog(dialog);
     }
 
     private void showEntryActions(ArchiumPasswordManagerBridge.Entry entry) {
@@ -359,10 +376,7 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
                                             String username =
                                                     field(form, "username").getText().toString();
                                             char[] password =
-                                                    field(form, "password")
-                                                            .getText()
-                                                            .toString()
-                                                            .toCharArray();
+                                                    consumeSecret(field(form, "password"));
                                             if (password.length == 0) {
                                                 Arrays.fill(password, '\0');
                                                 Toast.makeText(
@@ -376,7 +390,7 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
                                                     nextRequest(), entry.id, username, password);
                                             dialog.dismiss();
                                         }));
-        dialog.show();
+        showTrackedDialog(dialog);
     }
 
     private void confirmDelete(ArchiumPasswordManagerBridge.Entry entry) {
@@ -508,9 +522,15 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
             }
             if (row.kind == PREVIEW_STORE_CONFLICT || row.kind == PREVIEW_FILE_CONFLICT) {
                 final int next = i + 1;
-                final String identity = row.url + "\u0000" + row.username;
+                final String identity = row.identity + "\u0000" + row.username;
                 if (row.kind == PREVIEW_FILE_CONFLICT
                         && acceptedFileConflicts.contains(identity)) {
+                    decisions[row.index] = DECISION_SKIP;
+                    continue;
+                }
+                final int acceptedDecision = row.requiredDecision;
+                if (acceptedDecision != DECISION_IMPORT
+                        && acceptedDecision != DECISION_REPLACE) {
                     decisions[row.index] = DECISION_SKIP;
                     continue;
                 }
@@ -521,48 +541,111 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
                                 + (row.kind == PREVIEW_STORE_CONFLICT
                                         ? "\n\nA different password is already saved."
                                         : "\n\nThe CSV contains more than one password for this login.");
-                new AlertDialog.Builder(requireContext())
-                        .setTitle("Review import conflict")
-                        .setMessage(message)
-                        .setPositiveButton(
-                                row.kind == PREVIEW_STORE_CONFLICT ? "Replace" : "Use this row",
-                                (dialog, which) -> {
-                                    decisions[row.index] =
-                                            row.kind == PREVIEW_STORE_CONFLICT
-                                                    ? DECISION_REPLACE
-                                                    : DECISION_IMPORT;
-                                    if (row.kind == PREVIEW_FILE_CONFLICT) {
-                                        acceptedFileConflicts.add(identity);
-                                    }
-                                    reviewNextConflict(
-                                            request,
-                                            rows,
-                                            decisions,
-                                            acceptedFileConflicts,
-                                            next);
-                                })
-                        .setNegativeButton(
-                                "Skip",
-                                (dialog, which) -> {
-                                    decisions[row.index] = DECISION_SKIP;
-                                    reviewNextConflict(
-                                            request,
-                                            rows,
-                                            decisions,
-                                            acceptedFileConflicts,
-                                            next);
-                                })
-                        .setOnCancelListener(
-                                dialog -> {
-                                    ArchiumPasswordManagerBridge bridge = mBridge;
-                                    if (bridge != null) bridge.cancelImport();
-                                })
-                        .show();
+                AlertDialog dialog =
+                        new AlertDialog.Builder(requireContext())
+                                .setTitle("Review import conflict")
+                                .setMessage(message)
+                                .setPositiveButton(
+                                        acceptedDecision == DECISION_REPLACE
+                                                ? "Replace"
+                                                : "Use this row",
+                                        (ignored, which) -> {
+                                            decisions[row.index] = acceptedDecision;
+                                            if (row.kind == PREVIEW_FILE_CONFLICT) {
+                                                acceptedFileConflicts.add(identity);
+                                            }
+                                            reviewNextConflict(
+                                                    request,
+                                                    rows,
+                                                    decisions,
+                                                    acceptedFileConflicts,
+                                                    next);
+                                        })
+                                .setNegativeButton(
+                                        "Skip",
+                                        (ignored, which) -> {
+                                            decisions[row.index] = DECISION_SKIP;
+                                            reviewNextConflict(
+                                                    request,
+                                                    rows,
+                                                    decisions,
+                                                    acceptedFileConflicts,
+                                                    next);
+                                        })
+                                .setOnCancelListener(
+                                        ignored -> {
+                                            ArchiumPasswordManagerBridge bridge = mBridge;
+                                            if (bridge != null) bridge.cancelImport();
+                                        })
+                                .create();
+                showTrackedDialog(dialog);
                 return;
             }
         }
-        ArchiumPasswordManagerBridge bridge = mBridge;
-        if (bridge != null) bridge.confirmImport(request, decisions);
+        showImportSummary(request, rows, decisions);
+    }
+
+    private void showImportSummary(
+            int request,
+            List<ArchiumPasswordManagerBridge.ImportRow> rows,
+            int[] decisions) {
+        if (mDestroyed) return;
+        int added = 0;
+        int replaced = 0;
+        int duplicates = 0;
+        int invalid = 0;
+        int skipped = 0;
+        for (ArchiumPasswordManagerBridge.ImportRow row : rows) {
+            if (row.kind == PREVIEW_EXACT || row.kind == PREVIEW_FILE_DUPLICATE) {
+                duplicates++;
+            } else if (row.kind == PREVIEW_INVALID) {
+                invalid++;
+            } else if (decisions[row.index] == DECISION_REPLACE) {
+                replaced++;
+            } else if (decisions[row.index] == DECISION_IMPORT) {
+                added++;
+            } else {
+                skipped++;
+            }
+        }
+
+        String summary =
+                "New: "
+                        + added
+                        + "\nReplacements: "
+                        + replaced
+                        + "\nDuplicates: "
+                        + duplicates
+                        + "\nInvalid: "
+                        + invalid
+                        + "\nSkipped: "
+                        + skipped
+                        + "\n\nNothing will be written until you confirm.";
+        AlertDialog dialog =
+                new AlertDialog.Builder(requireContext())
+                        .setTitle("Review password import")
+                        .setMessage(summary)
+                        .setPositiveButton(
+                                "Confirm import",
+                                (ignored, which) -> {
+                                    ArchiumPasswordManagerBridge bridge = mBridge;
+                                    if (bridge != null) {
+                                        bridge.confirmImport(request, decisions);
+                                    }
+                                })
+                        .setNegativeButton(
+                                android.R.string.cancel,
+                                (ignored, which) -> {
+                                    ArchiumPasswordManagerBridge bridge = mBridge;
+                                    if (bridge != null) bridge.cancelImport();
+                                })
+                        .setOnCancelListener(
+                                ignored -> {
+                                    ArchiumPasswordManagerBridge bridge = mBridge;
+                                    if (bridge != null) bridge.cancelImport();
+                                })
+                        .create();
+        showTrackedDialog(dialog);
     }
 
     private void writeExport(
@@ -696,6 +779,8 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
     @Override
     public void onDestroy() {
         mDestroyed = true;
+        for (AlertDialog dialog : List.copyOf(mDialogs)) dialog.dismiss();
+        mDialogs.clear();
         mRevealRequests.clear();
         ArchiumPasswordManagerBridge bridge = mBridge;
         mBridge = null;
