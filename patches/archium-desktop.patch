@@ -483,24 +483,22 @@ diff --git a/chrome/browser/password_manager/BUILD.gn b/chrome/browser/password_
  
  source_set("password_manager") {
    sources = []
-@@ -226,6 +227,16 @@
+@@ -223,9 +224,14 @@
+       "android/password_manager_error_message_delegate.cc",
+       "android/password_manager_error_message_helper_bridge_impl.cc",
+       "android/password_manager_launcher_android.cc",
++      "android/archium_password_manager_bridge.cc",
++      "android/archium_password_manager_bridge.h",
        "android/password_store_bridge.cc",
        "android/save_update_password_message_delegate.cc",
      ]
 +    if (enable_archium_local_passwords) {
-+      sources += [
-+        "android/archium_local_password_manager.cc",
-+        "android/archium_local_password_manager.h",
-+      ]
-+      deps += [
-+        "//components/password_manager/core/browser/import:archium_import_preview",
-+        "//components/password_manager/core/browser/ui",
-+      ]
++      deps += [ "//chrome/browser/password_manager/android:archium_local_password_manager" ]
 +    }
      deps += [
        "//chrome/android:chrome_jni_headers",
        "//chrome/browser/keyboard_accessory/android",
-@@ -457,6 +468,7 @@
+@@ -457,6 +463,7 @@
      "//components/password_manager/core/browser",
      "//components/password_manager/core/browser:passkey_credential",
      "//components/password_manager/core/browser:password_form",
@@ -508,13 +506,14 @@ diff --git a/chrome/browser/password_manager/BUILD.gn b/chrome/browser/password_
      "//components/password_manager/core/browser:test_support",
      "//components/password_manager/core/browser/features:password_features",
      "//components/password_manager/core/browser/password_store:test_support",
-@@ -486,6 +498,13 @@
+@@ -486,6 +493,14 @@
    ]
  
    if (is_android) {
 +    if (enable_archium_local_passwords) {
 +      sources += [ "android/archium_local_password_manager_unittest.cc" ]
 +      deps += [
++        "//chrome/browser/password_manager/android:archium_local_password_manager",
 +        "//components/password_manager/core/browser/import:archium_import_preview",
 +        "//components/password_manager/core/browser/ui",
 +      ]
@@ -534,23 +533,38 @@ diff --git a/chrome/browser/password_manager/android/BUILD.gn b/chrome/browser/p
  import("//third_party/jni_zero/jni_zero.gni")
  import("//third_party/protobuf/proto_library.gni")
  
-@@ -113,7 +115,14 @@
+@@ -113,7 +115,13 @@
  }
  
  android_library("java") {
 -  deps = [
-+  deps = []
++  deps = [ ":archium_password_csv_java" ]
 +  if (enable_archium_local_passwords) {
 +    deps += [
 +      ":archium_key_java",
-+      ":archium_password_csv_java",
 +    ]
 +  }
 +  deps += [
      ":android_backend_java_enums",
      ":java_resources",
      ":settings_interface_java",
-@@ -616,6 +625,14 @@
+@@ -181,6 +189,7 @@
+     "java/src/org/chromium/chrome/browser/password_manager/PasswordSettingsUpdaterReceiverBridge.java",
+     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreAndroidBackendDispatcherBridgeImpl.java",
+     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreAndroidBackendReceiverBridgeImpl.java",
++    "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordManagerBridge.java",
+     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreBridge.java",
+     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreCredential.java",
+     "java/src/org/chromium/chrome/browser/password_manager/PasswordSyncControllerDelegateBridgeImpl.java",
+@@ -204,6 +213,7 @@
+     "java/src/org/chromium/chrome/browser/password_manager/PasswordSettingsUpdaterReceiverBridge.java",
+     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreAndroidBackendDispatcherBridgeImpl.java",
+     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreAndroidBackendReceiverBridgeImpl.java",
++    "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordManagerBridge.java",
+     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreBridge.java",
+     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreCredential.java",
+     "java/src/org/chromium/chrome/browser/password_manager/PasswordSyncControllerDelegateBridgeImpl.java",
+@@ -616,6 +626,14 @@
      "//ui/base",
    ]
  
@@ -565,7 +579,7 @@ diff --git a/chrome/browser/password_manager/android/BUILD.gn b/chrome/browser/p
    # TODO(crbug.com/40031409): Fix code that adds exit-time destructors and
    # enable the diagnostic by removing this line.
    configs += [ "//build/config/compiler:no_exit_time_destructors" ]
-@@ -699,3 +716,59 @@
+@@ -699,3 +717,93 @@
      "//testing/gtest",
    ]
  }
@@ -586,10 +600,6 @@ diff --git a/chrome/browser/password_manager/android/BUILD.gn b/chrome/browser/p
 +      "//build/android:build_java",
 +      "//third_party/jni_zero:jni_zero_java",
 +    ]
-+  }
-+
-+  android_library("archium_password_csv_java") {
-+    sources = [ "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordCsv.java" ]
 +  }
 +
 +  source_set("archium_key_provider") {
@@ -624,6 +634,44 @@ diff --git a/chrome/browser/password_manager/android/BUILD.gn b/chrome/browser/p
 +    ]
 +  }
 +
++}
++
++if (enable_archium_local_passwords) {
++  source_set("archium_local_password_manager") {
++    sources = [
++      "archium_local_password_manager.cc",
++      "archium_local_password_manager.h",
++    ]
++    public_deps = [
++      "//base",
++      "//components/device_reauth",
++      "//components/password_manager/core/browser/import:archium_import_preview",
++      "//components/password_manager/core/browser/ui",
++      "//components/password_manager/core/browser/password_store:password_store_interface",
++    ]
++  }
++  test("archium_password_manager_tests") {
++    use_raw_android_executable = true
++    sources = [
++      "archium_local_password_manager_unittest.cc",
++      "//base/test/run_all_unittests.cc",
++    ]
++    deps = [
++      ":archium_local_password_manager",
++      "//base/test:test_support",
++      "//components/affiliations/core/browser:test_support",
++      "//components/device_reauth:test_support",
++      "//components/password_manager/core/browser:test_support",
++      "//testing/gmock",
++      "//testing/gtest",
++    ]
++  }
++}
++
++# Pure transport is also compiled with the local store flag off; its UI route is
++# guarded by the native capability and never substitutes for Google's manager.
++android_library("archium_password_csv_java") {
++  sources = [ "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordCsv.java" ]
 +}
 diff --git a/chrome/browser/password_manager/android/password_manager_android_util.cc b/chrome/browser/password_manager/android/password_manager_android_util.cc
 --- a/chrome/browser/password_manager/android/password_manager_android_util.cc
@@ -4331,11 +4379,332 @@ new file mode 100644
 +
 +}  // namespace
 +}  // namespace password_manager
+diff --git a/chrome/browser/password_manager/android/archium_password_manager_bridge.cc b/chrome/browser/password_manager/android/archium_password_manager_bridge.cc
+new file mode 100644
+--- /dev/null
++++ b/chrome/browser/password_manager/android/archium_password_manager_bridge.cc
+@@ -0,0 +1,262 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++#include "chrome/browser/password_manager/android/archium_password_manager_bridge.h"
++
++#include <limits>
++#include <string>
++#include <string_view>
++#include <utility>
++#include <vector>
++
++#include "base/android/jni_android.h"
++#include "base/android/jni_string.h"
++#include "base/functional/bind.h"
++#include "chrome/browser/profiles/profile.h"
++
++#if BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
++#include "chrome/browser/affiliations/affiliation_service_factory.h"
++#include "chrome/browser/device_reauth/chrome_device_authenticator_factory.h"
++// GN cannot evaluate this buildflag conditional. The matching module dependency
++// is present exactly when the flag is enabled.
++#include "chrome/browser/password_manager/android/archium_local_password_manager.h"  // nogncheck
++#include "chrome/browser/password_manager/factories/profile_password_store_factory.h"
++#include "base/strings/utf_string_conversions.h"
++#include "base/time/time.h"
++#include "components/device_reauth/device_reauth_metrics_util.h"
++#endif
++
++// Must follow Profile and string conversion declarations used by @JniType.
++#include "chrome/browser/password_manager/android/jni_headers/ArchiumPasswordManagerBridge_jni.h"
++
++namespace {
++constexpr int kUnavailable = 1;
++#if BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
++using Manager = password_manager::ArchiumLocalPasswordManager;
++constexpr int kInvalid = 5;
++
++base::android::ScopedJavaLocalRef<jcharArray> SecretArray(
++    JNIEnv* env, const password_manager::PasswordString& password) {
++  auto secret = password.secure_value();
++  if (secret.size() > static_cast<size_t>(std::numeric_limits<jsize>::max())) return {};
++  auto result = base::android::ScopedJavaLocalRef<jcharArray>(
++      env, env->NewCharArray(static_cast<jsize>(secret.size())));
++  if (!result.is_null() && !secret.empty()) {
++    env->SetCharArrayRegion(result.obj(), 0, static_cast<jsize>(secret.size()),
++                           reinterpret_cast<const jchar*>(secret.data()));
++  }
++  return result;
++}
++#endif
++}  // namespace
++
++static bool JNI_ArchiumPasswordManagerBridge_IsLocalEnabled(JNIEnv* env) {
++  return BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS);
++}
++
++static int64_t JNI_ArchiumPasswordManagerBridge_Init(
++    JNIEnv* env, const base::android::JavaRef<jobject>& peer, Profile* profile,
++    const base::android::JavaRef<jobject>& activity) {
++#if BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
++  if (!profile || activity.is_null() || profile->ShutdownStarted()) return 0;
++  return reinterpret_cast<intptr_t>(new ArchiumPasswordManagerBridge(
++      peer, profile->GetOriginalProfile(), activity));
++#else
++  return 0;
++#endif
++}
++
++ArchiumPasswordManagerBridge::ArchiumPasswordManagerBridge(
++    const base::android::JavaRef<jobject>& peer, Profile* profile,
++    const base::android::JavaRef<jobject>& activity)
++    : peer_(peer), profile_(profile) {
++#if BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
++  profile_observation_.Observe(profile);
++  auto authenticator = ChromeDeviceAuthenticatorFactory::GetForProfile(
++      profile, activity, device_reauth::DeviceAuthParams(
++          base::TimeDelta(), device_reauth::DeviceAuthSource::kPasswordManager));
++  manager_ = std::make_unique<Manager>(
++      AffiliationServiceFactory::GetForProfile(profile),
++      ProfilePasswordStoreFactory::GetForProfile(profile, ServiceAccessType::EXPLICIT_ACCESS),
++      std::move(authenticator), base::BindRepeating(
++          [](base::WeakPtr<ArchiumPasswordManagerBridge> self) {
++            if (self && self->manager_) self->Refresh(base::android::AttachCurrentThread());
++          }, weak_ptr_factory_.GetWeakPtr()));
++#endif
++}
++
++ArchiumPasswordManagerBridge::~ArchiumPasswordManagerBridge() {
++  weak_ptr_factory_.InvalidateWeakPtrs();
++#if BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
++  if (manager_) manager_->Shutdown();
++#endif
++}
++
++void ArchiumPasswordManagerBridge::Refresh(JNIEnv* env) {
++  Java_ArchiumPasswordManagerBridge_onListStart(env, peer_);
++#if BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
++  auto result = manager_->GetMetadata();
++  if (result) {
++    for (const auto& entry : *result) {
++      Java_ArchiumPasswordManagerBridge_onEntry(env, peer_, entry.id, entry.url.spec(), entry.username);
++    }
++  }
++  Java_ArchiumPasswordManagerBridge_onListEnd(env, peer_, result ? 0 : static_cast<int>(result.error()));
++#else
++  Java_ArchiumPasswordManagerBridge_onListEnd(env, peer_, kUnavailable);
++#endif
++}
++
++void ArchiumPasswordManagerBridge::Reveal(JNIEnv* env, int32_t request, int64_t id) {
++#if BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
++  manager_->Reveal(id, base::BindOnce(
++      [](base::WeakPtr<ArchiumPasswordManagerBridge> self, int32_t request,
++         Manager::Status status, password_manager::PasswordString password) {
++        if (!self) return;
++        JNIEnv* env = base::android::AttachCurrentThread();
++        auto array = SecretArray(env, password);
++        if (array.is_null() && env->ExceptionCheck()) return;
++        Java_ArchiumPasswordManagerBridge_onSecret(env, self->peer_, request,
++            !array.is_null() ? static_cast<int>(status) : kUnavailable, array);
++      }, weak_ptr_factory_.GetWeakPtr(), request));
++#else
++  Java_ArchiumPasswordManagerBridge_onSecret(env, peer_, request, kUnavailable, base::android::ScopedJavaLocalRef<jcharArray>());
++#endif
++}
++
++void ArchiumPasswordManagerBridge::Export(JNIEnv* env, int32_t request) {
++#if BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
++  manager_->Export(base::BindOnce(
++      [](base::WeakPtr<ArchiumPasswordManagerBridge> self, int32_t request,
++         Manager::Status status, std::vector<password_manager::StoredCredential> entries) {
++        if (!self) return;
++        JNIEnv* env = base::android::AttachCurrentThread();
++        Java_ArchiumPasswordManagerBridge_onExportStart(env, self->peer_, request);
++        if (status == Manager::Status::kSuccess) {
++          for (const auto& entry : entries) {
++            auto array = SecretArray(env, entry.password_value);
++            if (array.is_null()) {
++              if (env->ExceptionCheck()) return;
++              status = Manager::Status::kUnavailable;
++              break;
++            }
++            Java_ArchiumPasswordManagerBridge_onExportRow(env, self->peer_, request,
++                entry.url.spec(), entry.username_value, array);
++          }
++        }
++        Java_ArchiumPasswordManagerBridge_onExportEnd(env, self->peer_, request, static_cast<int>(status));
++      }, weak_ptr_factory_.GetWeakPtr(), request));
++#else
++  Java_ArchiumPasswordManagerBridge_onExportStart(env, peer_, request);
++  Java_ArchiumPasswordManagerBridge_onExportEnd(env, peer_, request, kUnavailable);
++#endif
++}
++
++void ArchiumPasswordManagerBridge::PreviewImport(
++    JNIEnv* env, int32_t request, const base::android::JavaRef<jobjectArray>& urls,
++    const base::android::JavaRef<jobjectArray>& users,
++    const base::android::JavaRef<jobjectArray>& passwords) {
++#if BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
++  if (urls.is_null() || users.is_null() || passwords.is_null() || env->GetArrayLength(urls.obj()) > 100000 ||
++      env->GetArrayLength(urls.obj()) != env->GetArrayLength(users.obj()) ||
++      env->GetArrayLength(urls.obj()) != env->GetArrayLength(passwords.obj())) {
++    Java_ArchiumPasswordManagerBridge_onPreviewStart(env, peer_, request);
++    Java_ArchiumPasswordManagerBridge_onPreviewEnd(env, peer_, request, kInvalid);
++    return;
++  }
++  std::vector<password_manager::CSVPassword> rows;
++  const jsize count = env->GetArrayLength(urls.obj());
++  size_t total_chars = 0;
++  for (jsize i = 0; i < count; ++i) {
++    auto url = base::android::ScopedJavaLocalRef<jstring>(env,
++        static_cast<jstring>(env->GetObjectArrayElement(urls.obj(), i)));
++    auto user = base::android::ScopedJavaLocalRef<jstring>(env,
++        static_cast<jstring>(env->GetObjectArrayElement(users.obj(), i)));
++    auto password = base::android::ScopedJavaLocalRef<jcharArray>(env,
++        static_cast<jcharArray>(env->GetObjectArrayElement(passwords.obj(), i)));
++    if (url.is_null() || user.is_null() || password.is_null()) {
++      Java_ArchiumPasswordManagerBridge_onPreviewStart(env, peer_, request);
++      Java_ArchiumPasswordManagerBridge_onPreviewEnd(env, peer_, request, kInvalid);
++      return;
++    }
++    const jsize length = env->GetArrayLength(password.obj());
++    total_chars += static_cast<size_t>(env->GetStringLength(url.obj()));
++    total_chars += static_cast<size_t>(env->GetStringLength(user.obj()));
++    total_chars += static_cast<size_t>(length);
++    if (length > 1048576 || total_chars > 16777216) {
++      Java_ArchiumPasswordManagerBridge_onPreviewStart(env, peer_, request);
++      Java_ArchiumPasswordManagerBridge_onPreviewEnd(env, peer_, request, kInvalid);
++      return;
++    }
++    crypto::SecureU16String secret;
++    secret.resize(length);
++    if (length) env->GetCharArrayRegion(password.obj(), 0, length, reinterpret_cast<jchar*>(secret.data()));
++    rows.emplace_back(GURL(base::android::ConvertJavaStringToUTF8(env, url)),
++        base::android::ConvertJavaStringToUTF8(env, user),
++        base::UTF16ToUTF8(std::u16string_view(secret.data(), secret.size())), "",
++        password_manager::CSVPassword::Status::kOK);
++  }
++  manager_->PreviewImport(std::move(rows), base::BindOnce(
++      [](base::WeakPtr<ArchiumPasswordManagerBridge> self, int32_t request,
++         Manager::Status status, std::vector<password_manager::ArchiumPasswordImportPreview::Row> rows) {
++        if (!self) return;
++        JNIEnv* env = base::android::AttachCurrentThread();
++        Java_ArchiumPasswordManagerBridge_onPreviewStart(env, self->peer_, request);
++        for (size_t i = 0; i < rows.size(); ++i) {
++          Java_ArchiumPasswordManagerBridge_onPreviewRow(env, self->peer_, request, static_cast<int32_t>(i),
++              static_cast<int32_t>(rows[i].kind), rows[i].url.spec(), rows[i].username);
++        }
++        Java_ArchiumPasswordManagerBridge_onPreviewEnd(env, self->peer_, request, static_cast<int>(status));
++      }, weak_ptr_factory_.GetWeakPtr(), request));
++#else
++  Java_ArchiumPasswordManagerBridge_onPreviewStart(env, peer_, request);
++  Java_ArchiumPasswordManagerBridge_onPreviewEnd(env, peer_, request, kUnavailable);
++#endif
++}
++
++void ArchiumPasswordManagerBridge::ConfirmImport(
++    JNIEnv* env, int32_t request, const base::android::JavaRef<jintArray>& decisions) {
++#if BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
++  if (decisions.is_null() || env->GetArrayLength(decisions.obj()) > 100000) {
++    Java_ArchiumPasswordManagerBridge_onOperation(env, peer_, request, kInvalid);
++    return;
++  }
++  std::vector<jint> raw(env->GetArrayLength(decisions.obj()));
++  if (!raw.empty()) env->GetIntArrayRegion(decisions.obj(), 0, static_cast<jsize>(raw.size()), raw.data());
++  std::vector<password_manager::ArchiumPasswordImportPreview::Decision> choices;
++  for (jint value : raw) {
++    if (value < 0 || value > 2) {
++      Java_ArchiumPasswordManagerBridge_onOperation(env, peer_, request, kInvalid);
++      return;
++    }
++    choices.push_back(static_cast<password_manager::ArchiumPasswordImportPreview::Decision>(value));
++  }
++  manager_->ConfirmImport(std::move(choices), base::BindOnce(
++      [](base::WeakPtr<ArchiumPasswordManagerBridge> self, int32_t request, Manager::Status status) {
++        if (self) Java_ArchiumPasswordManagerBridge_onOperation(
++            base::android::AttachCurrentThread(), self->peer_, request, static_cast<int>(status));
++      }, weak_ptr_factory_.GetWeakPtr(), request));
++#else
++  Java_ArchiumPasswordManagerBridge_onOperation(env, peer_, request, kUnavailable);
++#endif
++}
++
++void ArchiumPasswordManagerBridge::CancelImport(JNIEnv* env) {
++#if BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
++  manager_->CancelImport();
++#endif
++}
++
++void ArchiumPasswordManagerBridge::OnProfileWillBeDestroyed(Profile* profile) {
++  weak_ptr_factory_.InvalidateWeakPtrs();
++  profile_observation_.Reset();
++  profile_ = nullptr;
++#if BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
++  manager_->Shutdown();
++#endif
++  Refresh(base::android::AttachCurrentThread());
++}
++
++void ArchiumPasswordManagerBridge::Destroy(JNIEnv* env) { delete this; }
++
++DEFINE_JNI(ArchiumPasswordManagerBridge)
+diff --git a/chrome/browser/password_manager/android/archium_password_manager_bridge.h b/chrome/browser/password_manager/android/archium_password_manager_bridge.h
+new file mode 100644
+--- /dev/null
++++ b/chrome/browser/password_manager/android/archium_password_manager_bridge.h
+@@ -0,0 +1,49 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++#ifndef CHROME_BROWSER_PASSWORD_MANAGER_ANDROID_ARCHIUM_PASSWORD_MANAGER_BRIDGE_H_
++#define CHROME_BROWSER_PASSWORD_MANAGER_ANDROID_ARCHIUM_PASSWORD_MANAGER_BRIDGE_H_
++
++#include <jni.h>
++#include <cstdint>
++#include <memory>
++
++#include "base/android/scoped_java_ref.h"
++#include "base/memory/raw_ptr.h"
++#include "base/memory/weak_ptr.h"
++#include "base/scoped_observation.h"
++#include "chrome/browser/profiles/profile_observer.h"
++#include "components/password_manager/core/browser/password_manager_buildflags.h"
++
++class Profile;
++namespace password_manager { class ArchiumLocalPasswordManager; }
++
++class ArchiumPasswordManagerBridge : public ProfileObserver {
++ public:
++  ArchiumPasswordManagerBridge(const base::android::JavaRef<jobject>& peer,
++                               Profile* profile,
++                               const base::android::JavaRef<jobject>& activity);
++  ~ArchiumPasswordManagerBridge() override;
++  void Refresh(JNIEnv* env);
++  void Reveal(JNIEnv* env, int32_t request, int64_t id);
++  void Export(JNIEnv* env, int32_t request);
++  void PreviewImport(JNIEnv* env, int32_t request,
++                     const base::android::JavaRef<jobjectArray>& urls,
++                     const base::android::JavaRef<jobjectArray>& users,
++                     const base::android::JavaRef<jobjectArray>& passwords);
++  void ConfirmImport(JNIEnv* env, int32_t request,
++                     const base::android::JavaRef<jintArray>& decisions);
++  void CancelImport(JNIEnv* env);
++  void Destroy(JNIEnv* env);
++
++ private:
++  void OnProfileWillBeDestroyed(Profile* profile) override;
++  base::android::ScopedJavaGlobalRef<jobject> peer_;
++  raw_ptr<Profile> profile_;
++#if BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
++  std::unique_ptr<password_manager::ArchiumLocalPasswordManager> manager_;
++#endif
++  base::ScopedObservation<Profile, ProfileObserver> profile_observation_{this};
++  base::WeakPtrFactory<ArchiumPasswordManagerBridge> weak_ptr_factory_{this};
++};
++#endif  // CHROME_BROWSER_PASSWORD_MANAGER_ANDROID_ARCHIUM_PASSWORD_MANAGER_BRIDGE_H_
 diff --git a/chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordCsv.java b/chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordCsv.java
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordCsv.java
-@@ -0,0 +1,293 @@
+@@ -0,0 +1,342 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -4347,6 +4716,7 @@ new file mode 100644
 +import java.io.Reader;
 +import java.io.Writer;
 +import java.util.ArrayList;
++import java.util.Arrays;
 +import java.util.Collections;
 +import java.util.HashSet;
 +import java.util.List;
@@ -4360,6 +4730,25 @@ new file mode 100644
 +    private static final int MAX_INPUT_CHARS = 16_777_216;
 +    private static final int MAX_COLUMNS = 512;
 +    private static final int MAX_RECORDS = 100_000;
++
++    /** Owned export buffer. The authorized SAF job must close every row in its finally block. */
++    public static final class SecretRow implements AutoCloseable {
++        public final String url;
++        public final String username;
++        private final char[] mPassword;
++        private boolean mClosed;
++
++        public SecretRow(String url, String username, char[] password) {
++            this.url = Objects.requireNonNull(url);
++            this.username = Objects.requireNonNull(username);
++            mPassword = Objects.requireNonNull(password).clone();
++        }
++
++        @Override public synchronized void close() {
++            Arrays.fill(mPassword, '\0');
++            mClosed = true;
++        }
++    }
 +
 +    /** Contains secrets for a user-authorized preview/commit/export; never pass rows to logging. */
 +    public static final class Row {
@@ -4627,6 +5016,35 @@ new file mode 100644
 +        }
 +    }
 +
++    /** Streams authenticated export buffers without creating password String objects. */
++    public static void writeSecrets(Writer output, List<SecretRow> rows) throws IOException {
++        Objects.requireNonNull(output);
++        Objects.requireNonNull(rows);
++        for (SecretRow row : rows) {
++            synchronized (row) {
++                if (row.mClosed) throw new IOException("Export credentials no longer available");
++            }
++        }
++        output.write("url,username,password\r\n");
++        for (SecretRow row : rows) {
++            // Closing cannot zero a password halfway through writing its field.
++            synchronized (row) {
++                if (row.mClosed) throw new IOException("Export credentials no longer available");
++                writeField(output, row.url);
++                output.write(',');
++                writeField(output, row.username);
++                output.write(',');
++                output.write('"');
++                for (char value : row.mPassword) {
++                    if (value == '"') output.write('"');
++                    output.write(value);
++                }
++                output.write('"');
++                output.write("\r\n");
++            }
++        }
++    }
++
 +    private ArchiumPasswordCsv() {}
 +}
 diff --git a/chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordKey.java b/chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordKey.java
@@ -4849,6 +5267,193 @@ new file mode 100644
 +            // Native maps this to temporary unavailability and preserves encrypted records.
 +            return null;
 +        }
++    }
++}
+diff --git a/chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordManagerBridge.java b/chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordManagerBridge.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordManagerBridge.java
+@@ -0,0 +1,182 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.password_manager;
++
++import android.app.Activity;
++
++import org.jni_zero.CalledByNative;
++import org.jni_zero.JniType;
++import org.jni_zero.NativeMethods;
++import org.chromium.build.annotations.NullMarked;
++import org.chromium.build.annotations.Nullable;
++import org.chromium.chrome.browser.profiles.Profile;
++
++import java.util.ArrayList;
++import java.util.Arrays;
++import java.util.HashMap;
++import java.util.List;
++import java.util.Map;
++
++/** Local native manager transport. It cannot provide an authentication-success boolean. */
++@NullMarked
++public final class ArchiumPasswordManagerBridge {
++    public static final int SUCCESS = 0;
++    public static final int UNAVAILABLE = 1;
++    public static final int AUTHENTICATION_FAILED = 2;
++    public static final int BUSY = 3;
++    public static final int STALE = 4;
++    public static final int INVALID = 5;
++    public static final int WRITE_FAILED = 6;
++
++    public static final class Entry {
++        public final long id;
++        public final String url;
++        public final String username;
++        private Entry(long id, String url, String username) {
++            this.id = id; this.url = url; this.username = username;
++        }
++    }
++    public static final class ImportRow {
++        public final int index;
++        public final int kind;
++        public final String url;
++        public final String username;
++        private ImportRow(int index, int kind, String url, String username) {
++            this.index = index; this.kind = kind; this.url = url; this.username = username;
++        }
++    }
++    public interface Listener {
++        void onMetadata(List<Entry> entries, int status);
++        /** Buffer is borrowed for this synchronous callback and erased immediately afterwards. */
++        void onSecret(int request, int status, char[] password);
++        /** Successful export transfers ownership; consumer must close every row in finally. */
++        void onExport(int request, int status, List<ArchiumPasswordCsv.SecretRow> rows);
++        void onPreview(int request, int status, List<ImportRow> rows);
++        void onOperation(int request, int status);
++    }
++
++    private long mNativePtr;
++    private boolean mStarted;
++    private @Nullable Listener mListener;
++    private final List<Entry> mEntries = new ArrayList<>();
++    private final Map<Integer, List<ArchiumPasswordCsv.SecretRow>> mExports = new HashMap<>();
++    private final Map<Integer, List<ImportRow>> mPreviews = new HashMap<>();
++
++    public ArchiumPasswordManagerBridge(Activity activity, Profile profile, Listener listener) {
++        mListener = listener;
++        mNativePtr = ArchiumPasswordManagerBridgeJni.get().init(this, profile, activity);
++    }
++
++    public static boolean isLocalEnabled() {
++        return ArchiumPasswordManagerBridgeJni.get().isLocalEnabled();
++    }
++    public void start() {
++        if (mStarted || mListener == null) return;
++        mStarted = true;
++        if (mNativePtr == 0) mListener.onMetadata(List.of(), UNAVAILABLE);
++        else refresh();
++    }
++    private boolean active() { return mStarted && mNativePtr != 0 && mListener != null; }
++    public void refresh() { if (active()) ArchiumPasswordManagerBridgeJni.get().refresh(mNativePtr); }
++    public void reveal(int request, long id) {
++        if (active()) ArchiumPasswordManagerBridgeJni.get().reveal(mNativePtr, request, id);
++    }
++    public void export(int request) {
++        if (active()) ArchiumPasswordManagerBridgeJni.get().export(mNativePtr, request);
++    }
++    /** Input password buffers are consumed/erased, including cancellation or a JNI exception. */
++    public void previewImport(int request, String[] urls, String[] users, char[][] passwords) {
++        try {
++            if (active()) ArchiumPasswordManagerBridgeJni.get().previewImport(mNativePtr, request, urls, users, passwords);
++        } finally {
++            for (char[] password : passwords) if (password != null) Arrays.fill(password, '\0');
++        }
++    }
++    public void confirmImport(int request, int[] decisions) {
++        if (active()) ArchiumPasswordManagerBridgeJni.get().confirmImport(mNativePtr, request, decisions);
++    }
++    public void cancelImport() {
++        if (active()) ArchiumPasswordManagerBridgeJni.get().cancelImport(mNativePtr);
++        mPreviews.clear();
++    }
++
++    @CalledByNative private void onListStart() { mEntries.clear(); }
++    @CalledByNative private void onEntry(long id, @JniType("std::string") String url,
++            @JniType("std::u16string") String username) {
++        if (mListener != null) mEntries.add(new Entry(id, url, username));
++    }
++    @CalledByNative private void onListEnd(int status) {
++        if (mStarted && mListener != null) mListener.onMetadata(List.copyOf(mEntries), status);
++    }
++    @CalledByNative private void onSecret(int request, int status, @Nullable char[] password) {
++        char[] buffer = password == null ? new char[0] : password;
++        try {
++            if (mStarted && mListener != null) mListener.onSecret(request, status, buffer);
++        } finally { Arrays.fill(buffer, '\0'); }
++    }
++    @CalledByNative private void onExportStart(int request) {
++        closeRows(mExports.remove(request));
++        if (mListener != null) mExports.put(request, new ArrayList<>());
++    }
++    @CalledByNative private void onExportRow(int request, @JniType("std::string") String url,
++            @JniType("std::u16string") String username, char[] password) {
++        try {
++            List<ArchiumPasswordCsv.SecretRow> rows = mExports.get(request);
++            if (rows != null && mListener != null) rows.add(new ArchiumPasswordCsv.SecretRow(url, username, password));
++        } finally { Arrays.fill(password, '\0'); }
++    }
++    @CalledByNative private void onExportEnd(int request, int status) {
++        List<ArchiumPasswordCsv.SecretRow> rows = mExports.remove(request);
++        boolean transferred = false;
++        try {
++            if (status != SUCCESS) { closeRows(rows); rows = null; }
++            if (mStarted && mListener != null) {
++                mListener.onExport(request, status, rows == null ? List.of() : List.copyOf(rows));
++                transferred = true;
++            }
++        } finally { if (!transferred) closeRows(rows); }
++    }
++    @CalledByNative private void onPreviewStart(int request) {
++        if (mListener != null) mPreviews.put(request, new ArrayList<>());
++    }
++    @CalledByNative private void onPreviewRow(int request, int index, int kind,
++            @JniType("std::string") String url, @JniType("std::u16string") String username) {
++        List<ImportRow> rows = mPreviews.get(request);
++        if (rows != null && mListener != null) rows.add(new ImportRow(index, kind, url, username));
++    }
++    @CalledByNative private void onPreviewEnd(int request, int status) {
++        List<ImportRow> rows = mPreviews.remove(request);
++        if (mStarted && mListener != null) mListener.onPreview(request, status, rows == null ? List.of() : List.copyOf(rows));
++    }
++    @CalledByNative private void onOperation(int request, int status) {
++        if (mStarted && mListener != null) mListener.onOperation(request, status);
++    }
++
++    private static void closeRows(@Nullable List<ArchiumPasswordCsv.SecretRow> rows) {
++        if (rows != null) for (ArchiumPasswordCsv.SecretRow row : rows) row.close();
++    }
++    public void destroy() {
++        mStarted = false;
++        mListener = null;
++        mEntries.clear();
++        mPreviews.clear();
++        for (List<ArchiumPasswordCsv.SecretRow> rows : mExports.values()) closeRows(rows);
++        mExports.clear();
++        long pointer = mNativePtr;
++        mNativePtr = 0;
++        if (pointer != 0) ArchiumPasswordManagerBridgeJni.get().destroy(pointer);
++    }
++
++    @NativeMethods public interface Natives {
++        boolean isLocalEnabled();
++        long init(ArchiumPasswordManagerBridge bridge, @JniType("Profile*") Profile profile, Activity activity);
++        void refresh(long nativeArchiumPasswordManagerBridge);
++        void reveal(long nativeArchiumPasswordManagerBridge, int request, long id);
++        void export(long nativeArchiumPasswordManagerBridge, int request);
++        void previewImport(long nativeArchiumPasswordManagerBridge, int request, String[] urls, String[] users, char[][] passwords);
++        void confirmImport(long nativeArchiumPasswordManagerBridge, int request, int[] decisions);
++        void cancelImport(long nativeArchiumPasswordManagerBridge);
++        void destroy(long nativeArchiumPasswordManagerBridge);
 +    }
 +}
 diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java

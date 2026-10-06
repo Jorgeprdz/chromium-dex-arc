@@ -137,6 +137,7 @@ native_tests=(
     out/Archium/obj/chrome/browser/password_manager/android/archium_key_provider_tests/archium_key_provider_tests
     out/Archium/obj/components/password_manager/core/browser/password_store/archium_login_database_tests/archium_login_database_tests
     out/Archium/obj/components/password_manager/core/browser/import/archium_password_import_tests/archium_password_import_tests
+    out/Archium/obj/chrome/browser/password_manager/android/archium_password_manager_tests/archium_password_manager_tests
 )
 for native_test in "${native_tests[@]}"; do
     if [[ -s "$native_test" ]]; then

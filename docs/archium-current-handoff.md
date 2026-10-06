@@ -18,10 +18,10 @@ Este documento describe preparación; no es una entrega de APK ni aceptación fu
   se sincroniza, se verifica después del commit y se sincroniza su directorio.
 - Backend LoginDatabase local, importación atómica y readiness de save/fill escritos
   en el parche. Su compilación y ejecución nativas permanecen pendientes.
-- CSV independiente: 18 casos sintéticos pasan. La pantalla, autenticación y
+- CSV independiente: 21 casos sintéticos pasan. La pantalla, autenticación y
   conexión SAF/PasswordStore todavía faltan. No se ha leído el CSV personal.
 - 28 pruebas Python de preparación/checkpoints/routing pasan. El parche de
-  79 archivos aplica y coincide con sus hashes. Los checks
+  82 archivos aplica y coincide con sus hashes. Los checks
   aislados de Java/SDK no equivalen a compilar Chromium.
 - Workflow preparado para restaurar un checkpoint anterior con commit explícito,
   conservar objetos/mtimes y compilar los targets modificados antes de la APK.
@@ -108,7 +108,7 @@ entre contraseñas distintas del CSV, omite duplicados y conserva cada formulari
 existente y sus notas al reemplazar. Mantiene la revisión DB para el commit
 atómico futuro. Nueve pruebas C++ escritas, no compiladas/ejecutadas; se registró
 `archium_password_import_tests` y su retención como artifact. Regresión de
-retención observada RED y luego GREEN; suite Python 28 pasa. Patch de 79 archivos
+retención observada RED y luego GREEN; suite Python 28 pasa. Patch de 82 archivos
 aplica/hashes coinciden. Gestor, JNI, auth, SAF y UI siguen pendientes.
 
 Colecciones Arc conectadas en el patch: `ArcCollectionsController/View` y el
@@ -129,4 +129,12 @@ confirmación por `ImportLoginsAtomically` con revisión y shutdown con WeakPtr.
 Accessor nuevo de error de lectura del Presenter impide confundir error con vault
 vacío. Diez pruebas nativas escritas/registradas, NO compiladas/ejecutadas.
 Native profile/JNI/auth factory, UI, CRUD y SAF siguen pendientes: no es aún un
-manager usable. Patch 79 archivos aplica/hashes, SDK/JVM preparación pasa.
+manager usable. Patch 82 archivos aplica/hashes, SDK/JVM preparación pasa.
+
+Transporte de gestor preparado: bridge C++ Profile/JNI/factory de autenticación
+real con validez cero; Java metadata sin password y buffers char[] con lifecycle.
+Prueba física de protocolo Java pasó con JNI/Profile simulados, no prueba JNI/C++.
+CSV export SecretRow/writeSecrets pasa 21 casos (incluye buffer realmente borrado).
+Nuevo target raw archium_password_manager_tests y retención registrados; pendiente
+compilar/ejecutar. Patch 82 aplica/hashes. Faltan CRUD, settings/SAF/routing,
+composición Arc y validación nativa. No se lanzó run ni se actualizó monitor.

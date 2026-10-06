@@ -57,6 +57,21 @@ def main():
         source = arc / (name + '.java')
         if source.exists():
             sources.append(source)
+    passwords = ROOT / 'chromium/chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager'
+    for name in ('ArchiumPasswordCsv', 'ArchiumPasswordManagerBridge'):
+        source = passwords / (name + '.java')
+        if source.exists(): sources.append(source)
+    protocol_stubs = {
+        'org/chromium/chrome/browser/profiles/Profile.java': 'package org.chromium.chrome.browser.profiles; public class Profile {}',
+        'org/jni_zero/CalledByNative.java': 'package org.jni_zero; public @interface CalledByNative {}',
+        'org/jni_zero/NativeMethods.java': 'package org.jni_zero; public @interface NativeMethods {}',
+        'org/jni_zero/JniType.java': 'package org.jni_zero; public @interface JniType { String value(); }',
+        'org/chromium/build/annotations/NullMarked.java': 'package org.chromium.build.annotations; public @interface NullMarked {}',
+        'org/chromium/build/annotations/Nullable.java': 'package org.chromium.build.annotations; @java.lang.annotation.Target({java.lang.annotation.ElementType.TYPE_USE,java.lang.annotation.ElementType.FIELD,java.lang.annotation.ElementType.PARAMETER}) public @interface Nullable {}',
+    }
+    for name, body in protocol_stubs.items():
+        source = work / 'stubs' / name
+        source.parent.mkdir(parents=True, exist_ok=True); source.write_text(body); sources.append(source)
     observer = ROOT / 'chromium/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopWindowObserver.java'
     sources.append(observer)
     lifecycle = work / 'stubs/org/chromium/chrome/browser/lifecycle'

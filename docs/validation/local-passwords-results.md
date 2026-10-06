@@ -100,3 +100,11 @@ Accessor nuevo de error de lectura del Presenter impide confundir error con vaul
 vacío. Diez pruebas nativas escritas/registradas, NO compiladas/ejecutadas.
 Native profile/JNI/auth factory, UI, CRUD y SAF siguen pendientes: no es aún un
 manager usable. Patch 79 archivos aplica/hashes, SDK/JVM preparación pasa.
+
+Transporte de gestor preparado: bridge C++ Profile/JNI/factory de autenticación
+real con validez cero; Java metadata sin password y buffers char[] con lifecycle.
+Prueba física de protocolo Java pasó con JNI/Profile simulados, no prueba JNI/C++.
+CSV export SecretRow/writeSecrets pasa 21 casos (incluye buffer realmente borrado).
+Nuevo target raw archium_password_manager_tests y retención registrados; pendiente
+compilar/ejecutar. Patch 82 aplica/hashes. Faltan CRUD, settings/SAF/routing,
+composición Arc y validación nativa. No se lanzó run ni se actualizó monitor.

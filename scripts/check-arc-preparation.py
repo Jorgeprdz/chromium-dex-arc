@@ -112,6 +112,8 @@ def main():
             'org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher': 'public interface ActivityLifecycleDispatcher { void register(ConfigurationChangedObserver o); void unregister(ConfigurationChangedObserver o); }',
             'androidx.recyclerview.widget.RecyclerView': 'public class RecyclerView extends android.view.ViewGroup { public RecyclerView(android.content.Context c){super(c);} public abstract static class Adapter<T> { public void notifyDataSetChanged(){} } public Adapter<?> getAdapter(){return null;} protected void onLayout(boolean c,int l,int t,int r,int b){} }',
             'org.chromium.base.ContextUtils': 'public class ContextUtils { public static android.content.Context getApplicationContext(){return null;} }',
+            'org.jni_zero.JniType': '@java.lang.annotation.Target({java.lang.annotation.ElementType.TYPE_USE,java.lang.annotation.ElementType.PARAMETER,java.lang.annotation.ElementType.METHOD}) public @interface JniType { String value(); }',
+            'org.jni_zero.NativeMethods': 'public @interface NativeMethods {}',
             'org.jni_zero.CalledByNative': '@java.lang.annotation.Target(java.lang.annotation.ElementType.METHOD) public @interface CalledByNative {}',
             'org.jni_zero.JNINamespace': '@java.lang.annotation.Target(java.lang.annotation.ElementType.TYPE) public @interface JNINamespace { String value(); }',
             'org.chromium.base.Callback': 'public interface Callback<T> { void onResult(T value); }',
@@ -149,7 +151,7 @@ def main():
         account_path = 'components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java'
         account = (ROOT / '.source-reference' if args.test_original_account_delegate else checkout) / account_path
         run('javac', '-cp', str(args.android_jar) + ':' + str(window_jar), '-d', str(classes),
-            *map(str, stubs.rglob('*.java')), *map(str, new_java), str(account), str(ROOT / 'tests/java/NullAccountDelegateTest.java'))
+            *map(str, stubs.rglob('*.java')), *map(str, new_java), str(account), str(ROOT / 'tests/java/NullAccountDelegateTest.java'), str(ROOT / 'tests/android/window/ArchiumPasswordManagerBridgeJni.java'))
         print('New Android adapters: isolated SDK API compilation passed (dependency contracts stubbed)', flush=True)
         run('java', '-cp', str(classes) + ':' + str(args.android_jar), 'NullAccountDelegateTest')
         print('Full Chromium build/native tests and browser password/Arc/adaptive/input acceptance remain pending', flush=True)

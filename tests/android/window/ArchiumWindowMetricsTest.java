@@ -113,10 +113,16 @@ public final class ArchiumWindowMetricsTest extends Instrumentation {
             appearanceSelector(activity);
             ArcWindowObserverTest.run(this, (WindowTestActivity) activity);
             ArcCollectionsViewTest.run(this, activity);
+            Throwable[] protocolFailure = new Throwable[1];
+            runOnMainSync(() -> {
+                try { ArchiumPasswordBridgeProtocolTest.run(window); }
+                catch (Throwable failure) { protocolFailure[0] = failure; }
+            });
+            if (protocolFailure[0] != null) throw new AssertionError(protocolFailure[0]);
             int displayIndependentWidth = activity.getResources().getConfiguration().screenWidthDp;
             check(width[0] <= displayIndependentWidth + 2,
                     "usable Activity width does not include wider physical display");
-            result.putString("stream", "PASS: Android window/configuration metrics, appearance/observer and collection views; Chromium commands simulated\n");
+            result.putString("stream", "PASS: Android window/configuration metrics, appearance/observer and collection views and password transport buffers; Chromium/JNI boundaries simulated\n");
             finish(-1, result);
         } catch (Throwable error) {
             result.putString("stream", "FAIL: " + error.getClass().getSimpleName() + ": " + error.getMessage() + "\n");

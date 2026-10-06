@@ -137,6 +137,7 @@ elif name=='autoninja':sys.exit(int(os.environ.get('MOCK_NINJA_RESULT','0')))
             'out/Archium/obj/chrome/browser/password_manager/android/archium_key_provider_tests/archium_key_provider_tests',
             'out/Archium/obj/components/password_manager/core/browser/password_store/archium_login_database_tests/archium_login_database_tests',
             'out/Archium/obj/components/password_manager/core/browser/import/archium_password_import_tests/archium_password_import_tests',
+            'out/Archium/obj/chrome/browser/password_manager/android/archium_password_manager_tests/archium_password_manager_tests',
         ]
         result = self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
                                 MOCK_NATIVE_TEST_PATHS=':'.join(binaries))

@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
@@ -22,6 +23,25 @@ public final class ArchiumPasswordCsv {
     private static final int MAX_INPUT_CHARS = 16_777_216;
     private static final int MAX_COLUMNS = 512;
     private static final int MAX_RECORDS = 100_000;
+
+    /** Owned export buffer. The authorized SAF job must close every row in its finally block. */
+    public static final class SecretRow implements AutoCloseable {
+        public final String url;
+        public final String username;
+        private final char[] mPassword;
+        private boolean mClosed;
+
+        public SecretRow(String url, String username, char[] password) {
+            this.url = Objects.requireNonNull(url);
+            this.username = Objects.requireNonNull(username);
+            mPassword = Objects.requireNonNull(password).clone();
+        }
+
+        @Override public synchronized void close() {
+            Arrays.fill(mPassword, '\0');
+            mClosed = true;
+        }
+    }
 
     /** Contains secrets for a user-authorized preview/commit/export; never pass rows to logging. */
     public static final class Row {
@@ -286,6 +306,35 @@ public final class ArchiumPasswordCsv {
             output.write(',');
             writeField(output, row.password);
             output.write("\r\n");
+        }
+    }
+
+    /** Streams authenticated export buffers without creating password String objects. */
+    public static void writeSecrets(Writer output, List<SecretRow> rows) throws IOException {
+        Objects.requireNonNull(output);
+        Objects.requireNonNull(rows);
+        for (SecretRow row : rows) {
+            synchronized (row) {
+                if (row.mClosed) throw new IOException("Export credentials no longer available");
+            }
+        }
+        output.write("url,username,password\r\n");
+        for (SecretRow row : rows) {
+            // Closing cannot zero a password halfway through writing its field.
+            synchronized (row) {
+                if (row.mClosed) throw new IOException("Export credentials no longer available");
+                writeField(output, row.url);
+                output.write(',');
+                writeField(output, row.username);
+                output.write(',');
+                output.write('"');
+                for (char value : row.mPassword) {
+                    if (value == '"') output.write('"');
+                    output.write(value);
+                }
+                output.write('"');
+                output.write("\r\n");
+            }
         }
     }
 

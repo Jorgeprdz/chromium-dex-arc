@@ -21,8 +21,8 @@ Branch: feat/arc-desktop
 Origin: https://github.com/Jorgeprdz/chromium-dex-arc.git
 Chromium fijado: cfd94726b7b5fb48aedcc32662f2f3fbdbadec35 (157.0.8086.0)
 Paquete real: app.archium.android
-Commit del código al escribir este prompt: 3294d6f1efff03f09c96d36d4d68c6582ca60253
-Fecha UTC: 2026-10-06T05:08:13.826404+00:00
+Commit del código al escribir este prompt: 38bc6c2ff5abf0fb2a8f5c1cdcd73b90c5c044ab
+Fecha UTC: 2026-10-06T05:37:32.390062+00:00
 
 Lee primero docs/archium-current-handoff.md y docs/validation/local-passwords-results.md.
 Después git status y git log; continúa los cambios existentes, no los sobrescribas.
@@ -60,7 +60,7 @@ El checkout nativo completo lo prepara CI; no descargues cientos de GB sin neces
    que no comprobaba disponibilidad de cifrado aunque la DB abriera. Ahora la
    exige en Android con flag local; regresión C++ escrita y pendiente. Fixtures HTML
    en tests/runtime/passwords. NO validación save/fill de navegador todavía.
-4. ArchiumPasswordCsv parse/write: 18 casos sintéticos JVM pasan. RFC quotes/BOM/
+4. ArchiumPasswordCsv parse/write: 21 casos sintéticos JVM pasan. RFC quotes/BOM/
    Unicode, límites y errores sin valores sensibles. Aún NO está conectado a
    importación/exportación visible: faltan JNI/UI y SAF. Se preparó
    ArchiumLocalPasswordManager (native core) que posee SavedPasswordsPresenter
@@ -68,8 +68,25 @@ El checkout nativo completo lo prepara CI; no descargues cientos de GB sin neces
    IDs/URL/usuario, invalida IDs al cambiar el store, revela/exporta tras auth,
    clasifica preview en ThreadPool, confirma con revisión/commit atómico y cancela
    callbacks al cerrar. Diez pruebas C++ escritas y registradas; NO compiladas ni
-   ejecutadas. Aún falta el adaptador de perfil/JNI/factory del authenticator,
-   pantalla, CRUD e IO SAF: el core NO es una importación/exportación usable.
+   ejecutadas. Se preparó el adaptador de perfil/JNI/factory del authenticator; faltan sus gates,
+   pantalla, CRUD e IO SAF: NO es una importación/exportación usable.
+   ArchiumPasswordManagerBridge.{h,cc}/.java conecta core con Profile original,
+   profile store, AffiliationServiceFactory y ChromeDeviceAuthenticatorFactory con
+   validez cero. Java tiene metadata sin password y transporte char[] limpiado.
+   Export usa SecretRow/writeSecrets borrables sin password Strings nuevos; parser
+   ahora pasa 21 casos sintéticos. Protocolo Java en Android temporal pasó con JNI
+   y Profile simulados; NO JNI real ni C++ generado/compilado aún. El raw target
+   archium_password_manager_tests también se compila/retiene en CI, aún no corrido.
+   JNI bridge es Java/module normal con respuesta unavailable cuando flag off;
+   CSV transporte puro se compila también flag off; Google no se sustituye.
+   Archivos: chrome/browser/password_manager/android/archium_password_manager_bridge.*
+   y java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordManagerBridge.java.
+   Punto siguiente: implementar CRUD core y facade, fragment nativo en el módulo
+   password_manager (ya tiene chrome/browser/settings:java + ChromeBaseSettingsFragment),
+   SAF/auth/preview/confirm/export y routing PasswordManagerHelper/MainSettings/Arc.
+   Evitar dependencia circular con chrome/android; fragment en módulo propio.
+   SettingsNavigation acepta Class<Fragment>, no un String de nombre.
+
    SavedPasswordsPresenter.HasPasswordStoreReadError evita mostrar como vacío
    un almacén cuyo descifrado/lectura falló. Archivo native:
    chrome/browser/password_manager/android/archium_local_password_manager.{h,cc}.
@@ -115,7 +132,7 @@ El checkout nativo completo lo prepara CI; no descargues cientos de GB sin neces
    tests/java/ArcCollectionsControllerTest.java y
    tests/android/window/ArcCollectionsViewTest.java.
 10. FALTAN partes importantes antes del run: gestor de contraseñas visible seguro,
-    JNI/SavedPasswordsPresenter, autenticación nativa, SAF/import/export/CRUD y
+    adaptador de perfil/JNI/auth factory, SAF/import/export/CRUD y
     composición Arc (sidebar/nav/address/controles/frame/modelos/estados reales).
     Luego revisar toda la integración, patch, GN y compilar. NO despaches esto
     como entrega completa simplemente porque el patch se aplica.
@@ -141,7 +158,7 @@ git diff --check -- . ':!patches/archium-desktop.patch'
 .sync-audit/actionlint .github/workflows/baseline-build.yml .github/workflows/archium-stage.yml
 bash -n scripts/build-archium.sh
 
-Último estado: patch de 79 archivos se aplica y coincide con hashes. JVM/SDK-adapters
+Último estado: patch de 82 archivos se aplica y coincide con hashes. JVM/SDK-adapters
 pasan; estos últimos usan contratos Chromium stubbed. 28 Python tests pasaron.
 Tests físicos: scripts/test-android-password-key.py y test-android-window-policy.py
 con --device 192.168.101.105:44641. SDK /opt/android-sdk, android-36/build-tools36.
@@ -163,7 +180,7 @@ identidad/hashes/paths y rollback; no saltes controles de checkpoint ni caches.
 Workflow baseline-build.yml usa etapas de 2 horas/checkpoints. No prometas duración
 corta: se intentará incremental pero todavía no se midió el nuevo build.
 Targets nativos preparados: archium_key_provider_tests, archium_key_java,
-archium_login_database_tests, archium_password_import_tests, archium_password_csv_java,
+archium_login_database_tests, archium_password_import_tests, archium_password_manager_tests, archium_password_csv_java,
 chrome/browser/password_manager:unit_tests. Compilar el source_set de tests del
 cliente no es ejecutar esos tests. Binarios de las dos suites se conservan en artifact.
 

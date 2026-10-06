@@ -147,6 +147,33 @@ public final class ArchiumPasswordCsvTest {
                 cases++;
             }
         }
+        Class<?> secretRow = Class.forName(csv.getName() + "$SecretRow");
+        char[] source = "quote\",comma\n🔒".toCharArray();
+        Object secret = secretRow.getConstructor(String.class, String.class, char[].class)
+                .newInstance("https://export.example/", "user", source);
+        String expectedPassword = new String(source);
+        java.util.Arrays.fill(source, 'x');
+        StringWriter exported = new StringWriter();
+        csv.getMethod("writeSecrets", Writer.class, List.class)
+                .invoke(null, exported, List.of(secret));
+        check(field(rows(parse(exported.toString())).get(0), "password").equals(expectedPassword),
+                "owned export buffer preserves quotes, newline and Unicode independently of caller buffer");
+        cases++;
+        secretRow.getMethod("close").invoke(secret);
+        java.lang.reflect.Field owned = secretRow.getDeclaredField("mPassword");
+        owned.setAccessible(true);
+        for (char value : (char[]) owned.get(secret)) check(value == 0, "closed export buffer was not erased");
+        cases++;
+        StringWriter closedOutput = new StringWriter();
+        try {
+            csv.getMethod("writeSecrets", Writer.class, List.class)
+                    .invoke(null, closedOutput, List.of(secret));
+            throw new AssertionError("Closed credentials exported again");
+        } catch (InvocationTargetException expected) {
+            check(expected.getCause() instanceof IOException, "closed secret has wrong failure type");
+            check(closedOutput.toString().isEmpty(), "closed export wrote a partial header");
+        }
+        cases++;
         System.out.println("ArchiumPasswordCsv: " + cases + " synthetic cases passed");
     }
 }
