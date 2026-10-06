@@ -40,7 +40,12 @@ class ArchiumPasswordImportPreview {
   struct Row {
     GURL url;
     std::u16string username;
+    // Canonical Chromium identity used by BuildBatch. The UI must never
+    // reimplement realm canonicalization from the display URL.
+    std::string identity;
     Kind kind;
+    // The only non-skip decision that BuildBatch accepts for this row.
+    Decision required_decision;
   };
 
   ArchiumPasswordImportPreview(base::span<const CSVPassword> input,
