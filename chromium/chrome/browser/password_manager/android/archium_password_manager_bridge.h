@@ -25,6 +25,17 @@ class ArchiumPasswordManagerBridge : public ProfileObserver {
                                const base::android::JavaRef<jobject>& activity);
   ~ArchiumPasswordManagerBridge() override;
   void Refresh(JNIEnv* env);
+  void Add(JNIEnv* env,
+           int32_t request,
+           const base::android::JavaRef<jstring>& url,
+           const base::android::JavaRef<jstring>& username,
+           const base::android::JavaRef<jcharArray>& password);
+  void Update(JNIEnv* env,
+              int32_t request,
+              int64_t id,
+              const base::android::JavaRef<jstring>& username,
+              const base::android::JavaRef<jcharArray>& password);
+  void Delete(JNIEnv* env, int32_t request, int64_t id);
   void Reveal(JNIEnv* env, int32_t request, int64_t id);
   void Export(JNIEnv* env, int32_t request);
   void PreviewImport(JNIEnv* env, int32_t request,
