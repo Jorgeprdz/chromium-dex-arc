@@ -1,0 +1,61 @@
+name: Archium preflight and patch refresh
+
+on:
+  push:
+    branches:
+      - feat/arc-desktop
+    paths:
+      - .archium-preflight
+
+permissions:
+  contents: write
+
+concurrency:
+  group: archium-preflight
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout exact feature branch
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          ref: feat/arc-desktop
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Install Android 36 platform if needed
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$SDKMANAGER" ]]; then
+            SDKMANAGER="$(command -v sdkmanager)"
+          fi
+          yes | "$SDKMANAGER" "platforms;android-36" >/dev/null
+
+      - name: Regenerate pinned Archium patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/generate-arc-patch.py
+          python3 scripts/check-arc-preparation.py \
+            --android-jar "${ANDROID_HOME}/platforms/android-36/android.jar"
+          python3 -m unittest discover -s tests -p 'test_*.py'
+          git diff --check -- . ':!patches/archium-desktop.patch'
+          bash -n scripts/build-archium.sh
+
+      - name: Commit refreshed patch and manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          git add patches/archium-desktop.patch patches/upstream-files.json
+          if git diff --cached --quiet; then
+            echo "Patch already current."
+            exit 0
+          fi
+          git config user.name "Archium CI"
+          git config user.email "actions@users.noreply.github.com"
+          git commit -m "build: refresh Archium pinned patch"
+          git push origin HEAD:feat/arc-desktop
