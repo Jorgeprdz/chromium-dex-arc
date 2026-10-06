@@ -16,13 +16,35 @@ The project has two immediate goals:
 
 The intention is not to paint a desktop skin over a mobile browser. Archium aims to reuse Chromium's native browser behavior wherever possible and only replace or extend the layers that need to be different.
 
+## Contributors wanted
+
+Archium is looking for collaborators who want to help build a **Chrome + Arc experience designed for Android desktop environments**.
+
+The goal is a browser that feels at home when Android is used like a computer: **Samsung DeX, Android Desktop Mode, Googlebook-style environments, tablets, freeform windows and external displays**—while still remaining a real Chromium browser underneath.
+
+Areas where contributions are especially welcome:
+
+- Chromium Android / Android Desktop internals;
+- Java, C++, JNI, GN and Ninja;
+- browser UI, compositor and window-management work;
+- Arc-inspired sidebar, tabs, Spaces and interaction design;
+- keyboard and mouse behavior;
+- extensions on Android Desktop;
+- local password management and Android Keystore;
+- tablet, DeX, Desktop Mode, Googlebook and external-display testing;
+- build infrastructure, reproducible patches and CI.
+
+We are not looking to make a WebView wrapper or a visual mock-up. The challenge is to make Chromium itself deliver a convincing desktop browsing experience on Android.
+
+If that sounds interesting, **issues, testing, code review, implementation help and pull requests are welcome**.
+
 ## Base
 
 - **Chromium:** 157.0.8086.0
 - **Pinned revision:** `cfd94726b7b5fb48aedcc32662f2f3fbdbadec35`
 - **Android package:** `app.archium.android`
 - **Current implementation branch:** `feat/arc-desktop`
-- **Target:** Android phones, tablets, freeform windows, external displays and desktop-style environments
+- **Target:** Android phones, tablets, Samsung DeX, Android Desktop Mode, Googlebook-style environments, freeform windows and external displays
 - **Root / Shizuku / ADB at runtime:** not required
 
 Archium preserves Chromium's underlying navigation, profiles, tabs, incognito model and extension infrastructure instead of recreating them in a WebView.
