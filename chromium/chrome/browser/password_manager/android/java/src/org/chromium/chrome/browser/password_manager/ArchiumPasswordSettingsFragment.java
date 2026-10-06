@@ -6,6 +6,7 @@ package org.chromium.chrome.browser.password_manager;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ContentResolver;
 import android.content.Intent;
 import android.net.Uri;
 import android.os.Bundle;
@@ -425,9 +426,10 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
     }
 
     private void parseImport(Uri uri) {
+        ContentResolver resolver = requireContext().getContentResolver();
         mIo.execute(
                 () -> {
-                    try (InputStream stream = requireContext().getContentResolver().openInputStream(uri)) {
+                    try (InputStream stream = resolver.openInputStream(uri)) {
                         if (stream == null) throw new java.io.IOException("Unable to open selected file");
                         var decoder =
                                 StandardCharsets.UTF_8
@@ -565,11 +567,11 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
 
     private void writeExport(
             Uri uri, List<ArchiumPasswordCsv.SecretRow> rows) {
+        ContentResolver resolver = requireContext().getContentResolver();
         mIo.execute(
                 () -> {
                     String error = null;
-                    try (OutputStream stream =
-                                    requireContext().getContentResolver().openOutputStream(uri, "wt");
+                    try (OutputStream stream = resolver.openOutputStream(uri, "wt");
                             BufferedWriter writer =
                                     stream == null
                                             ? null
