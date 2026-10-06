@@ -1,0 +1,707 @@
+// Copyright 2026 The Chromium Authors
+// Use of this source code is governed by a BSD-style license that can be
+// found in the LICENSE file.
+
+package org.chromium.chrome.browser.password_manager;
+
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.Intent;
+import android.net.Uri;
+import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
+import android.text.InputType;
+import android.view.ViewGroup;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.Toast;
+
+import androidx.preference.Preference;
+import androidx.preference.PreferenceCategory;
+import androidx.preference.PreferenceScreen;
+
+import org.chromium.base.supplier.ObservableSuppliers;
+import org.chromium.base.supplier.SettableMonotonicObservableSupplier;
+import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
+import org.chromium.chrome.browser.settings.ChromeBaseSettingsFragment;
+import org.chromium.components.browser_ui.settings.SettingsFragment;
+
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.io.OutputStreamWriter;
+import java.nio.charset.CodingErrorAction;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+/**
+ * Native settings surface for Archium's profile-local password vault.
+ *
+ * <p>Metadata is safe to list without device authentication. Reveal, CRUD, import confirmation and
+ * export are authenticated by the native manager. SAF is the only file transport.
+ */
+@NullMarked
+public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFragment
+        implements ArchiumPasswordManagerBridge.Listener {
+    private static final int REQUEST_OPEN_CSV = 7401;
+    private static final int REQUEST_CREATE_CSV = 7402;
+
+    private static final int PREVIEW_NEW = 0;
+    private static final int PREVIEW_EXACT = 1;
+    private static final int PREVIEW_STORE_CONFLICT = 2;
+    private static final int PREVIEW_INVALID = 3;
+    private static final int PREVIEW_FILE_DUPLICATE = 4;
+    private static final int PREVIEW_FILE_CONFLICT = 5;
+
+    private static final int DECISION_SKIP = 0;
+    private static final int DECISION_IMPORT = 1;
+    private static final int DECISION_REPLACE = 2;
+
+    private final SettableMonotonicObservableSupplier<String> mPageTitle =
+            ObservableSuppliers.createMonotonic();
+    private final ExecutorService mIo = Executors.newSingleThreadExecutor();
+    private final Handler mMain = new Handler(Looper.getMainLooper());
+    private final Map<Integer, ArchiumPasswordManagerBridge.Entry> mRevealRequests =
+            new HashMap<>();
+
+    private @Nullable ArchiumPasswordManagerBridge mBridge;
+    private @Nullable PreferenceCategory mEntriesCategory;
+    private @Nullable Uri mPendingExportUri;
+    private int mPendingExportRequest;
+    private int mNextRequest = 1;
+    private String mQuery = "";
+    private List<ArchiumPasswordManagerBridge.Entry> mEntries = List.of();
+    private boolean mDestroyed;
+
+    @Override
+    public void onCreate(@Nullable Bundle savedInstanceState) {
+        super.onCreate(savedInstanceState);
+        mPageTitle.set("Local passwords");
+        if (!ArchiumPasswordManagerBridge.isLocalEnabled()) return;
+        mBridge =
+                new ArchiumPasswordManagerBridge(
+                        requireActivity(), getProfile().getOriginalProfile(), this);
+    }
+
+    @Override
+    public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
+        PreferenceScreen screen = getPreferenceManager().createPreferenceScreen(requireContext());
+        setPreferenceScreen(screen);
+
+        Preference search = new Preference(requireContext());
+        search.setTitle("Search");
+        search.setSummary("Filter by site or username");
+        search.setOnPreferenceClickListener(
+                preference -> {
+                    showSearchDialog();
+                    return true;
+                });
+        screen.addPreference(search);
+
+        Preference add = new Preference(requireContext());
+        add.setTitle("Add password");
+        add.setSummary("Save a credential in this device profile");
+        add.setOnPreferenceClickListener(
+                preference -> {
+                    showAddDialog();
+                    return true;
+                });
+        screen.addPreference(add);
+
+        Preference importCsv = new Preference(requireContext());
+        importCsv.setTitle("Import CSV");
+        importCsv.setSummary("Review before anything is written");
+        importCsv.setOnPreferenceClickListener(
+                preference -> {
+                    launchImportPicker();
+                    return true;
+                });
+        screen.addPreference(importCsv);
+
+        Preference exportCsv = new Preference(requireContext());
+        exportCsv.setTitle("Export CSV");
+        exportCsv.setSummary("Device authentication is required before secrets are read");
+        exportCsv.setOnPreferenceClickListener(
+                preference -> {
+                    launchExportPicker();
+                    return true;
+                });
+        screen.addPreference(exportCsv);
+
+        mEntriesCategory = new PreferenceCategory(requireContext());
+        mEntriesCategory.setTitle("Saved passwords");
+        screen.addPreference(mEntriesCategory);
+
+        if (mBridge == null) {
+            setUnavailable("Local password storage is unavailable in this build.");
+        } else {
+            mBridge.start();
+        }
+    }
+
+    @Override
+    public SettableMonotonicObservableSupplier<String> getPageTitle() {
+        return mPageTitle;
+    }
+
+    @Override
+    public @SettingsFragment.AnimationType int getAnimationType() {
+        return SettingsFragment.AnimationType.PROPERTY;
+    }
+
+    private int nextRequest() {
+        return mNextRequest++;
+    }
+
+    private void setUnavailable(String message) {
+        if (mEntriesCategory == null) return;
+        mEntriesCategory.removeAll();
+        Preference row = new Preference(requireContext());
+        row.setTitle(message);
+        row.setEnabled(false);
+        mEntriesCategory.addPreference(row);
+    }
+
+    private void rebuildEntries() {
+        if (mEntriesCategory == null || mDestroyed) return;
+        mEntriesCategory.removeAll();
+        String query = mQuery.trim().toLowerCase(Locale.ROOT);
+        int shown = 0;
+        for (ArchiumPasswordManagerBridge.Entry entry : mEntries) {
+            String haystack = (entry.url + "\n" + entry.username).toLowerCase(Locale.ROOT);
+            if (!query.isEmpty() && !haystack.contains(query)) continue;
+            Preference row = new Preference(requireContext());
+            row.setTitle(entry.username.isEmpty() ? "(no username)" : entry.username);
+            row.setSummary(entry.url);
+            row.setOnPreferenceClickListener(
+                    preference -> {
+                        showEntryActions(entry);
+                        return true;
+                    });
+            mEntriesCategory.addPreference(row);
+            shown++;
+        }
+        if (shown == 0) {
+            Preference empty = new Preference(requireContext());
+            empty.setTitle(query.isEmpty() ? "No saved passwords" : "No matching passwords");
+            empty.setEnabled(false);
+            mEntriesCategory.addPreference(empty);
+        }
+    }
+
+    private void showSearchDialog() {
+        EditText input = new EditText(requireContext());
+        input.setSingleLine(true);
+        input.setText(mQuery);
+        input.setSelectAllOnFocus(true);
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Search saved passwords")
+                .setView(input)
+                .setPositiveButton(
+                        android.R.string.ok,
+                        (dialog, which) -> {
+                            mQuery = input.getText().toString();
+                            rebuildEntries();
+                        })
+                .setNegativeButton(android.R.string.cancel, null)
+                .setNeutralButton(
+                        "Clear",
+                        (dialog, which) -> {
+                            mQuery = "";
+                            rebuildEntries();
+                        })
+                .show();
+    }
+
+    private LinearLayout credentialForm(
+            @Nullable String url, @Nullable String username, boolean editableUrl) {
+        LinearLayout layout = new LinearLayout(requireContext());
+        layout.setOrientation(LinearLayout.VERTICAL);
+        int padding = Math.round(20 * getResources().getDisplayMetrics().density);
+        layout.setPadding(padding, 0, padding, 0);
+
+        EditText urlInput = new EditText(requireContext());
+        urlInput.setTag("url");
+        urlInput.setHint("https://example.com");
+        urlInput.setSingleLine(true);
+        urlInput.setEnabled(editableUrl);
+        if (url != null) urlInput.setText(url);
+        layout.addView(
+                urlInput,
+                new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        EditText usernameInput = new EditText(requireContext());
+        usernameInput.setTag("username");
+        usernameInput.setHint("Username");
+        usernameInput.setSingleLine(true);
+        if (username != null) usernameInput.setText(username);
+        layout.addView(
+                usernameInput,
+                new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+
+        EditText passwordInput = new EditText(requireContext());
+        passwordInput.setTag("password");
+        passwordInput.setHint("Password");
+        passwordInput.setSingleLine(true);
+        passwordInput.setInputType(
+                InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        layout.addView(
+                passwordInput,
+                new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        return layout;
+    }
+
+    private static EditText field(LinearLayout layout, String tag) {
+        for (int i = 0; i < layout.getChildCount(); i++) {
+            if (layout.getChildAt(i) instanceof EditText
+                    && tag.equals(layout.getChildAt(i).getTag())) {
+                return (EditText) layout.getChildAt(i);
+            }
+        }
+        throw new IllegalStateException("Missing credential field " + tag);
+    }
+
+    private void showAddDialog() {
+        ArchiumPasswordManagerBridge bridge = mBridge;
+        if (bridge == null) return;
+        LinearLayout form = credentialForm(null, null, true);
+        AlertDialog dialog =
+                new AlertDialog.Builder(requireContext())
+                        .setTitle("Add password")
+                        .setView(form)
+                        .setPositiveButton("Save", null)
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .create();
+        dialog.setOnShowListener(
+                ignored ->
+                        dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                                .setOnClickListener(
+                                        view -> {
+                                            String url = field(form, "url").getText().toString().trim();
+                                            String username =
+                                                    field(form, "username").getText().toString();
+                                            char[] password =
+                                                    field(form, "password")
+                                                            .getText()
+                                                            .toString()
+                                                            .toCharArray();
+                                            if (url.isEmpty() || password.length == 0) {
+                                                Arrays.fill(password, '\0');
+                                                Toast.makeText(
+                                                                requireContext(),
+                                                                "Site and password are required.",
+                                                                Toast.LENGTH_SHORT)
+                                                        .show();
+                                                return;
+                                            }
+                                            bridge.add(
+                                                    nextRequest(), url, username, password);
+                                            dialog.dismiss();
+                                        }));
+        dialog.show();
+    }
+
+    private void showEntryActions(ArchiumPasswordManagerBridge.Entry entry) {
+        new AlertDialog.Builder(requireContext())
+                .setTitle(entry.username.isEmpty() ? entry.url : entry.username)
+                .setItems(
+                        new String[] {"Reveal password", "Edit", "Delete"},
+                        (dialog, which) -> {
+                            if (which == 0) reveal(entry);
+                            else if (which == 1) showEditDialog(entry);
+                            else confirmDelete(entry);
+                        })
+                .show();
+    }
+
+    private void reveal(ArchiumPasswordManagerBridge.Entry entry) {
+        ArchiumPasswordManagerBridge bridge = mBridge;
+        if (bridge == null) return;
+        int request = nextRequest();
+        mRevealRequests.put(request, entry);
+        bridge.reveal(request, entry.id);
+    }
+
+    private void showEditDialog(ArchiumPasswordManagerBridge.Entry entry) {
+        ArchiumPasswordManagerBridge bridge = mBridge;
+        if (bridge == null) return;
+        LinearLayout form = credentialForm(entry.url, entry.username, false);
+        AlertDialog dialog =
+                new AlertDialog.Builder(requireContext())
+                        .setTitle("Edit password")
+                        .setMessage("Enter the new password. The site cannot be changed in-place.")
+                        .setView(form)
+                        .setPositiveButton("Save", null)
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .create();
+        dialog.setOnShowListener(
+                ignored ->
+                        dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                                .setOnClickListener(
+                                        view -> {
+                                            String username =
+                                                    field(form, "username").getText().toString();
+                                            char[] password =
+                                                    field(form, "password")
+                                                            .getText()
+                                                            .toString()
+                                                            .toCharArray();
+                                            if (password.length == 0) {
+                                                Arrays.fill(password, '\0');
+                                                Toast.makeText(
+                                                                requireContext(),
+                                                                "Enter a new password.",
+                                                                Toast.LENGTH_SHORT)
+                                                        .show();
+                                                return;
+                                            }
+                                            bridge.update(
+                                                    nextRequest(), entry.id, username, password);
+                                            dialog.dismiss();
+                                        }));
+        dialog.show();
+    }
+
+    private void confirmDelete(ArchiumPasswordManagerBridge.Entry entry) {
+        ArchiumPasswordManagerBridge bridge = mBridge;
+        if (bridge == null) return;
+        new AlertDialog.Builder(requireContext())
+                .setTitle("Delete password?")
+                .setMessage(entry.url)
+                .setPositiveButton(
+                        "Delete",
+                        (dialog, which) -> bridge.delete(nextRequest(), entry.id))
+                .setNegativeButton(android.R.string.cancel, null)
+                .show();
+    }
+
+    private void launchImportPicker() {
+        Intent intent =
+                new Intent(Intent.ACTION_OPEN_DOCUMENT)
+                        .addCategory(Intent.CATEGORY_OPENABLE)
+                        .setType("text/*");
+        startActivityForResult(intent, REQUEST_OPEN_CSV);
+    }
+
+    private void launchExportPicker() {
+        Intent intent =
+                new Intent(Intent.ACTION_CREATE_DOCUMENT)
+                        .addCategory(Intent.CATEGORY_OPENABLE)
+                        .setType("text/csv")
+                        .putExtra(Intent.EXTRA_TITLE, "archium-passwords.csv");
+        startActivityForResult(intent, REQUEST_CREATE_CSV);
+    }
+
+    @Override
+    @SuppressWarnings("deprecation")
+    public void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+        if (resultCode != Activity.RESULT_OK || data == null || data.getData() == null) return;
+        Uri uri = data.getData();
+        if (requestCode == REQUEST_OPEN_CSV) {
+            parseImport(uri);
+        } else if (requestCode == REQUEST_CREATE_CSV) {
+            mPendingExportUri = uri;
+            mPendingExportRequest = nextRequest();
+            ArchiumPasswordManagerBridge bridge = mBridge;
+            if (bridge != null) bridge.export(mPendingExportRequest);
+        }
+    }
+
+    private void parseImport(Uri uri) {
+        mIo.execute(
+                () -> {
+                    try (InputStream stream = requireContext().getContentResolver().openInputStream(uri)) {
+                        if (stream == null) throw new java.io.IOException("Unable to open selected file");
+                        var decoder =
+                                StandardCharsets.UTF_8
+                                        .newDecoder()
+                                        .onMalformedInput(CodingErrorAction.REPORT)
+                                        .onUnmappableCharacter(CodingErrorAction.REPORT);
+                        ArchiumPasswordCsv.ParseResult result;
+                        try (BufferedReader reader =
+                                new BufferedReader(new InputStreamReader(stream, decoder))) {
+                            result = ArchiumPasswordCsv.parse(reader);
+                        }
+                        mMain.post(() -> startImportPreview(result));
+                    } catch (Exception error) {
+                        mMain.post(() -> showError("Import failed", error.getMessage()));
+                    }
+                });
+    }
+
+    private void startImportPreview(ArchiumPasswordCsv.ParseResult parsed) {
+        if (mDestroyed) return;
+        if (!parsed.errors.isEmpty()) {
+            showError(
+                    "CSV needs attention",
+                    parsed.errors.size()
+                            + " row(s) could not be read. Nothing was imported.");
+            return;
+        }
+        if (parsed.rows.isEmpty()) {
+            Toast.makeText(requireContext(), "No passwords found in the CSV.", Toast.LENGTH_SHORT)
+                    .show();
+            return;
+        }
+        String[] urls = new String[parsed.rows.size()];
+        String[] users = new String[parsed.rows.size()];
+        char[][] passwords = new char[parsed.rows.size()][];
+        for (int i = 0; i < parsed.rows.size(); i++) {
+            ArchiumPasswordCsv.Row row = parsed.rows.get(i);
+            urls[i] = row.url;
+            users[i] = row.username;
+            passwords[i] = row.password.toCharArray();
+        }
+        ArchiumPasswordManagerBridge bridge = mBridge;
+        if (bridge != null) bridge.previewImport(nextRequest(), urls, users, passwords);
+        else for (char[] password : passwords) Arrays.fill(password, '\0');
+    }
+
+    private void reviewImport(
+            int request, List<ArchiumPasswordManagerBridge.ImportRow> rows) {
+        int maxIndex = -1;
+        for (ArchiumPasswordManagerBridge.ImportRow row : rows) {
+            maxIndex = Math.max(maxIndex, row.index);
+        }
+        int[] decisions = new int[maxIndex + 1];
+        Set<String> acceptedFileConflicts = new HashSet<>();
+        reviewNextConflict(request, rows, decisions, acceptedFileConflicts, 0);
+    }
+
+    private void reviewNextConflict(
+            int request,
+            List<ArchiumPasswordManagerBridge.ImportRow> rows,
+            int[] decisions,
+            Set<String> acceptedFileConflicts,
+            int position) {
+        if (mDestroyed) return;
+        for (int i = position; i < rows.size(); i++) {
+            ArchiumPasswordManagerBridge.ImportRow row = rows.get(i);
+            if (row.kind == PREVIEW_NEW) {
+                decisions[row.index] = DECISION_IMPORT;
+                continue;
+            }
+            if (row.kind == PREVIEW_EXACT
+                    || row.kind == PREVIEW_INVALID
+                    || row.kind == PREVIEW_FILE_DUPLICATE) {
+                decisions[row.index] = DECISION_SKIP;
+                continue;
+            }
+            if (row.kind == PREVIEW_STORE_CONFLICT || row.kind == PREVIEW_FILE_CONFLICT) {
+                final int next = i + 1;
+                final String identity = row.url + "\u0000" + row.username;
+                if (row.kind == PREVIEW_FILE_CONFLICT
+                        && acceptedFileConflicts.contains(identity)) {
+                    decisions[row.index] = DECISION_SKIP;
+                    continue;
+                }
+                String message =
+                        row.url
+                                + "\n"
+                                + (row.username.isEmpty() ? "(no username)" : row.username)
+                                + (row.kind == PREVIEW_STORE_CONFLICT
+                                        ? "\n\nA different password is already saved."
+                                        : "\n\nThe CSV contains more than one password for this login.");
+                new AlertDialog.Builder(requireContext())
+                        .setTitle("Review import conflict")
+                        .setMessage(message)
+                        .setPositiveButton(
+                                row.kind == PREVIEW_STORE_CONFLICT ? "Replace" : "Use this row",
+                                (dialog, which) -> {
+                                    decisions[row.index] =
+                                            row.kind == PREVIEW_STORE_CONFLICT
+                                                    ? DECISION_REPLACE
+                                                    : DECISION_IMPORT;
+                                    if (row.kind == PREVIEW_FILE_CONFLICT) {
+                                        acceptedFileConflicts.add(identity);
+                                    }
+                                    reviewNextConflict(
+                                            request,
+                                            rows,
+                                            decisions,
+                                            acceptedFileConflicts,
+                                            next);
+                                })
+                        .setNegativeButton(
+                                "Skip",
+                                (dialog, which) -> {
+                                    decisions[row.index] = DECISION_SKIP;
+                                    reviewNextConflict(
+                                            request,
+                                            rows,
+                                            decisions,
+                                            acceptedFileConflicts,
+                                            next);
+                                })
+                        .setOnCancelListener(
+                                dialog -> {
+                                    ArchiumPasswordManagerBridge bridge = mBridge;
+                                    if (bridge != null) bridge.cancelImport();
+                                })
+                        .show();
+                return;
+            }
+        }
+        ArchiumPasswordManagerBridge bridge = mBridge;
+        if (bridge != null) bridge.confirmImport(request, decisions);
+    }
+
+    private void writeExport(
+            Uri uri, List<ArchiumPasswordCsv.SecretRow> rows) {
+        mIo.execute(
+                () -> {
+                    String error = null;
+                    try (OutputStream stream =
+                                    requireContext().getContentResolver().openOutputStream(uri, "wt");
+                            BufferedWriter writer =
+                                    stream == null
+                                            ? null
+                                            : new BufferedWriter(
+                                                    new OutputStreamWriter(
+                                                            stream, StandardCharsets.UTF_8))) {
+                        if (writer == null) throw new java.io.IOException("Unable to open destination");
+                        ArchiumPasswordCsv.writeSecrets(writer, rows);
+                        writer.flush();
+                    } catch (Exception failure) {
+                        error = failure.getMessage();
+                    } finally {
+                        for (ArchiumPasswordCsv.SecretRow row : rows) row.close();
+                    }
+                    String finalError = error;
+                    mMain.post(
+                            () -> {
+                                if (mDestroyed) return;
+                                if (finalError == null) {
+                                    Toast.makeText(
+                                                    requireContext(),
+                                                    "Passwords exported.",
+                                                    Toast.LENGTH_SHORT)
+                                            .show();
+                                } else {
+                                    showError("Export failed", finalError);
+                                }
+                            });
+                });
+    }
+
+    private void showError(String title, @Nullable String detail) {
+        if (mDestroyed || !isAdded()) return;
+        new AlertDialog.Builder(requireContext())
+                .setTitle(title)
+                .setMessage(detail == null || detail.isEmpty() ? "Operation failed." : detail)
+                .setPositiveButton(android.R.string.ok, null)
+                .show();
+    }
+
+    private static String statusMessage(int status) {
+        return switch (status) {
+            case ArchiumPasswordManagerBridge.AUTHENTICATION_FAILED ->
+                    "Device authentication failed.";
+            case ArchiumPasswordManagerBridge.BUSY -> "Another protected operation is running.";
+            case ArchiumPasswordManagerBridge.STALE ->
+                    "The password list changed. Refresh and try again.";
+            case ArchiumPasswordManagerBridge.INVALID -> "The requested change is not valid.";
+            case ArchiumPasswordManagerBridge.WRITE_FAILED ->
+                    "The password store did not confirm the change.";
+            default -> "Local password storage is unavailable.";
+        };
+    }
+
+    @Override
+    public void onMetadata(List<ArchiumPasswordManagerBridge.Entry> entries, int status) {
+        if (mDestroyed) return;
+        if (status != ArchiumPasswordManagerBridge.SUCCESS) {
+            setUnavailable(statusMessage(status));
+            return;
+        }
+        mEntries = entries;
+        rebuildEntries();
+    }
+
+    @Override
+    public void onSecret(int request, int status, char[] password) {
+        ArchiumPasswordManagerBridge.Entry entry = mRevealRequests.remove(request);
+        if (mDestroyed || entry == null) return;
+        if (status != ArchiumPasswordManagerBridge.SUCCESS) {
+            showError("Couldn't reveal password", statusMessage(status));
+            return;
+        }
+        String shown = new String(password);
+        new AlertDialog.Builder(requireContext())
+                .setTitle(entry.username.isEmpty() ? entry.url : entry.username)
+                .setMessage(shown)
+                .setPositiveButton(android.R.string.ok, null)
+                .show();
+    }
+
+    @Override
+    public void onExport(
+            int request, int status, List<ArchiumPasswordCsv.SecretRow> rows) {
+        Uri destination =
+                request == mPendingExportRequest ? mPendingExportUri : null;
+        mPendingExportUri = null;
+        mPendingExportRequest = 0;
+        if (mDestroyed || status != ArchiumPasswordManagerBridge.SUCCESS || destination == null) {
+            for (ArchiumPasswordCsv.SecretRow row : rows) row.close();
+            if (!mDestroyed && status != ArchiumPasswordManagerBridge.SUCCESS) {
+                showError("Couldn't export passwords", statusMessage(status));
+            }
+            return;
+        }
+        writeExport(destination, rows);
+    }
+
+    @Override
+    public void onPreview(
+            int request, int status, List<ArchiumPasswordManagerBridge.ImportRow> rows) {
+        if (mDestroyed) return;
+        if (status != ArchiumPasswordManagerBridge.SUCCESS) {
+            showError("Couldn't review import", statusMessage(status));
+            return;
+        }
+        reviewImport(request, rows);
+    }
+
+    @Override
+    public void onOperation(int request, int status) {
+        if (mDestroyed) return;
+        if (status == ArchiumPasswordManagerBridge.SUCCESS) {
+            Toast.makeText(requireContext(), "Password store updated.", Toast.LENGTH_SHORT).show();
+            ArchiumPasswordManagerBridge bridge = mBridge;
+            if (bridge != null) bridge.refresh();
+        } else {
+            showError("Password operation failed", statusMessage(status));
+        }
+    }
+
+    @Override
+    public void onDestroy() {
+        mDestroyed = true;
+        mRevealRequests.clear();
+        ArchiumPasswordManagerBridge bridge = mBridge;
+        mBridge = null;
+        if (bridge != null) {
+            bridge.cancelImport();
+            bridge.destroy();
+        }
+        mIo.shutdownNow();
+        super.onDestroy();
+    }
+}
