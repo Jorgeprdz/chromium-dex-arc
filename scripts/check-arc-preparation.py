@@ -87,7 +87,7 @@ def main():
             raise SystemExit('Missing Android SDK jar; pass --android-jar')
         stubs = work / 'contracts'
         definitions = {
-            'org.chromium.chrome.R': 'public final class R { public static final class string { public static final int arc_bookmarks=1, arc_frame_color=2, arc_bookmark_root=3, arc_google_login=4, arc_autofill=5, arc_reset_color=6, arc_color_format=7; } public static final class id { public static final int toolbar=1, desktop_window_spacer=2; } }',
+            'org.chromium.chrome.R': 'public final class R { public static final class string { public static final int arc_bookmarks=1, arc_frame_color=2, arc_bookmark_root=3, arc_google_login=4, arc_autofill=5, arc_reset_color=6, arc_color_format=7, arc_interface=8, arc_interface_auto=9, arc_interface_arc=10, arc_interface_mobile=11; } public static final class id { public static final int toolbar=1, desktop_window_spacer=2; } }',
             'org.chromium.chrome.browser.profiles.Profile': 'public class Profile {}',
             'org.chromium.components.bookmarks.BookmarkId': 'public class BookmarkId {}',
             'org.chromium.url.GURL': 'public class GURL { public String getSpec() { return ""; } }',

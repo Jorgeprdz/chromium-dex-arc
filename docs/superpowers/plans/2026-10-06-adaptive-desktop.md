@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Estado de ejecución:** El usuario aplazó las partes no implementadas al próximo update el 2026-10-06. Se conserva el clasificador de ventana ya implementado para la interfaz Arc.
+
 **Goal:** Activar comportamiento real desktop por tamaño de ventana, conservando móvil compacto y preferencias por sitio.
 
 **Architecture:** Un módulo pequeño de clasificación/metrics con constantes AndroidX ya fijadas alimenta RDS y Arc. DesktopSiteUtils conserva el almacenamiento de content settings; el observer native y TabImpl usan la misma resolución por URL/ventana. Zoom conserva HostZoomMap y ChromeZoomLevelPrefs.

@@ -8,6 +8,7 @@
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListViewBinder.java": "1a27410bc0400f7cdd8b23c6724461fe06e1b6701333999a1b784f31359d982a",
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabRailLayout.java": "e4200ed0f1c4aecb23c640d8975829400e48cbb75c45b76cef71e80a9c7e2889",
     "chrome/android/java/res_chromium_base/values/channel_constants.xml": "bfbe36ebd7f5a4737cf059abd48c0a4df0b84b4dd277350fb55e4b925561beb6",
+    "chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java": "b0875738519be1f5f9e301f6e676919aa027738174087d353c901525ff352348",
     "chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java": "df443b67fcd9ef61433f21dc19b1147478f3312c822d881a5b5a486bea6bea2d",
     "chrome/browser/BUILD.gn": "4d06881a2c2a111fef61e304b367b7131e6fea6d0936e0c50bb010287a348e61",
     "chrome/browser/autofill/android/BUILD.gn": "185f8cc78ff078b3cbf64118f95f5aa5279db9e6a379c937e7b51174fdd6db31",
@@ -45,6 +46,7 @@
     "components/password_manager/core/browser/password_store_factory_util.h": "5335d9b97892db088b8dc67061013329ebd697f1ccf9bc4bd7c14f07958f95d4",
     "components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java": "add06fd34e11906f980abae66c786e8996d82bb3b4cb065a9387db3cdb28c32c",
     "chrome/android/java/res/values/arc_strings.xml": null,
+    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAppearanceDialog.java": null,
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java": null,
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopWindowObserver.java": null,
     "chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/ArchiumAutofillPolicy.java": null,
@@ -63,12 +65,13 @@
   },
   "modified": {
     "chrome/android/chrome_java_resources.gni": "c4ce973725968badfa1486af494f70f21946d90b576fd033c19699a2502c179c",
-    "chrome/android/chrome_java_sources.gni": "7539cced6d3bf47d45df2895154ee8bd078d4195008a6a77af9842fa26840e23",
+    "chrome/android/chrome_java_sources.gni": "70537551be3cf8ba5667a28ec71c7dcea412da40190a4e5ff011dee0c6991f01",
     "chrome/android/features/tab_ui/java/res/values/dimens.xml": "28df17073fd1a88fb4a658d918a8ac92d654e67d2f239d7428b50cff6b4e4670",
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinder.java": "bb51879e1770f1e7b7e46a86ba8af92430a4ff4aeb9bbc5d413682be4dc23cd0",
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListViewBinder.java": "8e8a5e79b6a8b3cb62bcb195b51241b576c959f03ade79416432ef4d61f62950",
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabRailLayout.java": "977b4100eb5ea83993b87237bb3353e8a35ba48fc78486e80e3a98d6d01d8561",
     "chrome/android/java/res_chromium_base/values/channel_constants.xml": "e4909d3f5731496c09e1fb02be7f16c348a522d00c620346f95967df2ca68a83",
+    "chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java": "d53586a7e3d53783dce1fe3aba5d5adf0e1eb6dc45228bc8d2a92fb84412da71",
     "chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java": "ad77ccb1d37f1d46b513da38624422494b495d243ba518b7d58645174f16d253",
     "chrome/browser/BUILD.gn": "48b9c964ed8ac56546d3d32248cde6638c00a182def11d9a7d5531e428599c2c",
     "chrome/browser/autofill/android/BUILD.gn": "00e2d69719b56d99054d6f62e59fd139ac396af4248cd4aa8d9a4ee813749125",
@@ -105,9 +108,10 @@
     "components/password_manager/core/browser/password_store_factory_util.cc": "bd88a97453f819e7896c2ad58b2dd94521e53a74c68de4ab751c30c55bdedb25",
     "components/password_manager/core/browser/password_store_factory_util.h": "e6ad4a6556832d8fb347621b1b3d315e6c125232b9c9e2a55b6ce4ae70ad9875",
     "components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java": "a9faf05fad2ac86ababc815d12dd98f4e5bf6c2f1badb36adee86d66edbbb248",
-    "chrome/android/java/res/values/arc_strings.xml": "d6f302050d84145531f43ef106a1df2883a6f5133fb328a80958e8bf4637942d",
+    "chrome/android/java/res/values/arc_strings.xml": "1256640243cf43cb5b25d65c0792309d140262aacd4d24ffebf6b2b30de0fc44",
+    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAppearanceDialog.java": "466f7bd99df2721b289905b7662268c1f82811bf08fc2a1537661a582641a33a",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java": "e1380104f0b9f2a051009e54a34634c90ca37f2286cc6f3e315e0bdc8474951b",
-    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopWindowObserver.java": "8a238360c3c85c799e63266df6100c9cacd704f6555d43120b0c7a1f07d7c021",
+    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopWindowObserver.java": "0cdde8640e59b8d5d5349a18ba19556bbc7f10e7c6d3ab32820c03064705258c",
     "chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/ArchiumAutofillPolicy.java": "8d8c47803c49da5133a19cf94f113a33081d438ac51543122476635f4100b7ef",
     "chrome/browser/desktop_policy/android/BUILD.gn": "0fb70c913943466d344c3c2726a409c66409c58fc33f75976f12968f92a55db5",
     "chrome/browser/desktop_policy/android/java/src/org/chromium/chrome/browser/desktop_policy/ArchiumWindowClass.java": "93a7e3ed1ae260b7470c8fff667a6364577bd3ef880257285a739d926873b14e",
@@ -122,5 +126,5 @@
     "chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java": "8e282bb7f4949b9ec2ef9f42794e3f47808248ceed490f13d8effa7aa21c5a7f",
     "components/password_manager/core/browser/password_store/archium_login_database_unittest.cc": "bd2d761f79347a82c9486e122465f621d3ef81dea40e6e8b946304820f58dec8"
   },
-  "patch_sha256": "17ca0ceb10c4042b0fa9b9b5367ad50436f39ad97631755e1a9d1da1be6c519f"
+  "patch_sha256": "a9356fde5fd5e7b10a0b45990cce0215175598ae975f27ad53dc0385a48dd0cd"
 }

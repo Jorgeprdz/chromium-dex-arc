@@ -13,6 +13,8 @@ import java.lang.reflect.Method;
 /** Exercises production metrics on Android and rejects application-context display guessing. */
 public final class ArchiumWindowMetricsTest extends Instrumentation {
     public static final class WindowTestActivity extends Activity {
+        public int recreations;
+        @Override public void recreate() { recreations++; }
         @Override public void onCreate(Bundle state) {
             super.onCreate(state);
             TextView view = new TextView(this);
@@ -21,6 +23,7 @@ public final class ArchiumWindowMetricsTest extends Instrumentation {
         }
     }
     private String mPhase;
+
     @Override public void onCreate(Bundle args) {
         super.onCreate(args);
         mPhase = args == null ? "suite" : args.getString("phase", "suite");
@@ -107,6 +110,8 @@ public final class ArchiumWindowMetricsTest extends Instrumentation {
                 catch (Exception error) { throw new RuntimeException(error); }
             });
             check(width[0] > 0, "actual Activity has measured window width");
+            appearanceSelector(activity);
+            ArcWindowObserverTest.run(this, (WindowTestActivity) activity);
             int displayIndependentWidth = activity.getResources().getConfiguration().screenWidthDp;
             check(width[0] <= displayIndependentWidth + 2,
                     "usable Activity width does not include wider physical display");
@@ -121,6 +126,48 @@ public final class ArchiumWindowMetricsTest extends Instrumentation {
                 runOnMainSync(window::finish);
             }
         }
+    }
+    private void appearanceSelector(Activity activity) throws Exception {
+        Class<?> selector;
+        try {
+            selector = Class.forName("org.chromium.chrome.browser.arc.ArcAppearanceDialog");
+        } catch (ClassNotFoundException missing) {
+            throw new AssertionError("Visible Arc appearance selector is missing");
+        }
+        Class<?> appearance = Class.forName(
+                "org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance");
+        Method mode = appearance.getMethod("getUiMode", Context.class);
+        Method setMode = appearance.getMethod("setUiMode", Context.class, int.class);
+        Method create = selector.getMethod("create", Context.class, Runnable.class);
+        int[] notifications = {0};
+        android.app.AlertDialog[] dialog = {null};
+        Throwable[] failure = {null};
+        runOnMainSync(() -> {
+            try {
+                setMode.invoke(null, activity, 0);
+                dialog[0] = (android.app.AlertDialog) create.invoke(null, activity,
+                        (Runnable) () -> notifications[0]++);
+                dialog[0].show();
+                check(dialog[0].getListView().getCheckedItemPosition() == 0, "AUTO selected");
+                dialog[0].cancel();
+                check((Integer) mode.invoke(null, activity) == 0, "cancel keeps appearance");
+                check(notifications[0] == 0, "cancel does not notify browser");
+                for (int choice : new int[] {1, 2, 0}) {
+                    dialog[0] = (android.app.AlertDialog) create.invoke(null, activity,
+                            (Runnable) () -> notifications[0]++);
+                    dialog[0].show();
+                    android.widget.ListView list = dialog[0].getListView();
+                    list.performItemClick(list.getChildAt(choice), choice,
+                            list.getAdapter().getItemId(choice));
+                    check((Integer) mode.invoke(null, activity) == choice, "choice persisted");
+                    check(!dialog[0].isShowing(), "selection dismisses dialog");
+                }
+                check(notifications[0] == 3, "one callback per accepted selection");
+                setMode.invoke(null, activity, 1);
+            } catch (Throwable error) { failure[0] = error; }
+            finally { if (dialog[0] != null) dialog[0].dismiss(); }
+        });
+        if (failure[0] != null) throw new AssertionError(failure[0]);
     }
     private static void check(boolean condition, String message) {
         if (!condition) throw new AssertionError(message);

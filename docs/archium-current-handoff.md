@@ -71,3 +71,20 @@ Las pruebas de formularios deben usar un APK/perfil aislado: jamás ejecutar
 Resultados: `docs/validation/local-passwords-results.md`.
 Formularios: `tests/runtime/passwords/README.md`.
 Ledgers/briefs locales de tareas: `.superpowers/sdd/` (ignorados por Git).
+
+## Ajuste de alcance del usuario (2026-10-06)
+
+El siguiente run se limita a la interfaz Arc y las contraseñas locales/CSV.
+Se conserva la clasificación efectiva de ventana y AUTO/ARC/MÓVIL ya avanzados,
+porque gobiernan la interfaz. La nueva política automática de navegación desktop,
+zoom/autosizing y la capa adicional de teclado/mouse se aplazan al siguiente update.
+Los comandos e interacciones nativos existentes se conservan.
+Esto no elimina los requisitos de contraseñas ni los controles reales de la interfaz.
+No se ha lanzado el run final ni actualizado sus monitores.
+
+Selector de interfaz preparado en Ajustes: diálogo nativo AUTO/ARC/MÓVIL,
+resumen del modo, cierre al destruir Settings y observador de preferencias en
+la ventana del navegador. Pruebas del diálogo real Android y cola UI pasan en
+la app temporal. La recreación se contó con una Activity de prueba; todavía no
+prueba restauración de pestañas/formularios en la APK Chromium ni la compilación
+completa de MainSettings.

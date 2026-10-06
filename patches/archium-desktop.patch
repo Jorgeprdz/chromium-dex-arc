@@ -12,10 +12,11 @@ diff --git a/chrome/android/chrome_java_resources.gni b/chrome/android/chrome_ja
 diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java_sources.gni
 --- a/chrome/android/chrome_java_sources.gni
 +++ b/chrome/android/chrome_java_sources.gni
-@@ -5,6 +5,8 @@
+@@ -5,6 +5,9 @@
  import("//content/public/common/features.gni")
  
  chrome_java_sources = [
++  "java/src/org/chromium/chrome/browser/arc/ArcAppearanceDialog.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcDesktopWindowObserver.java",
    "java/src/com/google/android/apps/chrome/appwidget/bookmarks/BookmarkThumbnailWidgetProvider.java",
@@ -201,6 +202,89 @@ diff --git a/chrome/android/java/res_chromium_base/values/channel_constants.xml 
 +    <string name="search_widget_title" translatable="false">Archium search</string>
 +    <string name="quick_action_search_widget_title" translatable="false">Archium quick action search</string>
  </resources>
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
+@@ -7,6 +7,7 @@
+ import static org.chromium.build.NullUtil.assumeNonNull;
+ 
+ import android.app.Activity;
++import android.app.AlertDialog;
+ import android.content.Context;
+ import android.content.Intent;
+ import android.content.SharedPreferences;
+@@ -36,6 +37,8 @@
+ import org.chromium.build.annotations.NullMarked;
+ import org.chromium.build.annotations.Nullable;
+ import org.chromium.chrome.R;
++import org.chromium.chrome.browser.arc.ArcAppearanceDialog;
++import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance;
+ import org.chromium.chrome.browser.appearance.settings.AppearanceSettingsFragment;
+ import org.chromium.chrome.browser.autofill.settings.SettingsNavigationHelper;
+ import org.chromium.chrome.browser.autofill.settings.options.AutofillOptionsFragment;
+@@ -130,6 +133,9 @@
+     public static final String PREF_AUTOFILL_PAYMENTS = "autofill_payment_methods";
+     public static final String PREF_SAFETY_HUB = "safety_hub";
+     public static final String PREF_ADDRESS_BAR = "address_bar";
++    private static final String PREF_ARC_INTERFACE = "archium_interface";
++    private @Nullable AlertDialog mArcAppearanceDialog;
++
+     public static final String PREF_APPEARANCE = "appearance";
+     public static final String PREF_DEFAULT_BROWSER = "default_browser";
+     public static final String PREF_GLIC = "glic";
+@@ -256,6 +262,10 @@
+ 
+     @Override
+     public void onDestroy() {
++        if (mArcAppearanceDialog != null) {
++            mArcAppearanceDialog.dismiss();
++            mArcAppearanceDialog = null;
++        }
+         super.onDestroy();
+         setMultiColumnSettings(null, null);
+         mCallbackController.destroy();
+@@ -370,6 +380,20 @@
+         mManagedPreferenceDelegate = createManagedPreferenceDelegate();
+ 
+         SettingsUtils.addPreferencesFromResource(this, R.xml.main_preferences);
++        ChromeBasePreference arcInterface = new ChromeBasePreference(requireContext());
++        arcInterface.setKey(PREF_ARC_INTERFACE);
++        arcInterface.setTitle(R.string.arc_interface);
++        Preference appearancePreference = findPreference(PREF_APPEARANCE);
++        arcInterface.setOrder(appearancePreference.getOrder() + 1);
++        arcInterface.setOnPreferenceClickListener(preference -> {
++            if (mArcAppearanceDialog != null) mArcAppearanceDialog.dismiss();
++            mArcAppearanceDialog = ArcAppearanceDialog.create(
++                    requireContext(), this::updateArcAppearancePreference);
++            mArcAppearanceDialog.show();
++            return true;
++        });
++        getPreferenceScreen().addPreference(arcInterface);
++        updateArcAppearancePreference();
+ 
+         IdentityManager identityManager =
+                 IdentityServicesProvider.get().getIdentityManager(getProfile());
+@@ -603,6 +627,7 @@
+         updateAutofillPreferences();
+         updateAddressBarPreference();
+         updateAppearancePreference();
++        updateArcAppearancePreference();
+         addPreferenceIfAbsent(PREF_TABS);
+ 
+         updateHomepagePreference();
+@@ -853,6 +878,12 @@
+                         || !DeviceFormFactor.isNonMultiDisplayContextOnTablet(context));
+     }
+ 
++    private void updateArcAppearancePreference() {
++        Preference pref = findPreference(PREF_ARC_INTERFACE);
++        pref.setSummary(ArcAppearanceDialog.labelForMode(
++                ArcDesktopAppearance.getUiMode(requireContext())));
++    }
++
+     private void updateAppearancePreference() {
+         Preference pref = findPreference(PREF_APPEARANCE);
+         pref.setTitle(AppearanceSettingsFragment.getTitle(getContext()));
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java
 --- a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java
@@ -1478,7 +1562,7 @@ diff --git a/chrome/android/java/res/values/arc_strings.xml b/chrome/android/jav
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/res/values/arc_strings.xml
-@@ -0,0 +1,10 @@
+@@ -0,0 +1,14 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<resources>
 +    <string name="arc_bookmarks">Marcadores</string>
@@ -1488,7 +1572,58 @@ new file mode 100644
 +    <string name="arc_color_format">Introduce un color como #336699</string>
 +    <string name="arc_google_login">Iniciar sesión en la web de Google</string>
 +    <string name="arc_autofill">Autocompletado de Android</string>
++    <string name="arc_interface">Interfaz de Archium</string>
++    <string name="arc_interface_auto">Automática según la ventana</string>
++    <string name="arc_interface_arc">Arc</string>
++    <string name="arc_interface_mobile">Móvil</string>
 +</resources>
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAppearanceDialog.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAppearanceDialog.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAppearanceDialog.java
+@@ -0,0 +1,42 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++import android.app.AlertDialog;
++import android.content.Context;
++
++import org.chromium.chrome.R;
++import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance;
++import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy;
++
++/** Native appearance selector, reachable from settings in both Arc and mobile layouts. */
++public final class ArcAppearanceDialog {
++    private ArcAppearanceDialog() {}
++
++    public static int labelForMode(int mode) {
++        return switch (mode) {
++            case ArcDesktopPolicy.MODE_ARC -> R.string.arc_interface_arc;
++            case ArcDesktopPolicy.MODE_MOBILE -> R.string.arc_interface_mobile;
++            default -> R.string.arc_interface_auto;
++        };
++    }
++
++    public static AlertDialog create(Context context, Runnable onChanged) {
++        CharSequence[] choices = {
++            context.getString(R.string.arc_interface_auto),
++            context.getString(R.string.arc_interface_arc),
++            context.getString(R.string.arc_interface_mobile)
++        };
++        return new AlertDialog.Builder(context)
++                .setTitle(R.string.arc_interface)
++                .setSingleChoiceItems(choices, ArcDesktopAppearance.getUiMode(context),
++                        (dialog, which) -> {
++                            ArcDesktopAppearance.setUiMode(context, which);
++                            dialog.dismiss();
++                            onChanged.run();
++                        })
++                .setNegativeButton(android.R.string.cancel, null)
++                .create();
++    }
++}
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
 new file mode 100644
 --- /dev/null
@@ -1821,7 +1956,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopW
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopWindowObserver.java
-@@ -0,0 +1,49 @@
+@@ -0,0 +1,65 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -1829,6 +1964,7 @@ new file mode 100644
 +
 +import android.app.Activity;
 +import android.content.res.Configuration;
++import android.content.SharedPreferences;
 +
 +import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
 +import org.chromium.chrome.browser.lifecycle.ConfigurationChangedObserver;
@@ -1839,6 +1975,9 @@ new file mode 100644
 +    private final Activity mActivity;
 +    private final ActivityLifecycleDispatcher mDispatcher;
 +    private final boolean mDesktopAtCreation;
++    private final SharedPreferences mPreferences;
++    private final SharedPreferences.OnSharedPreferenceChangeListener mPreferenceListener;
++    private final Runnable mRecreateUi = this::recreateUiIfNeeded;
 +    private boolean mDestroyed;
 +    private boolean mRecreationScheduled;
 +
@@ -1846,28 +1985,40 @@ new file mode 100644
 +        mActivity = activity;
 +        mDispatcher = dispatcher;
 +        mDesktopAtCreation = ArcDesktopAppearance.isDesktopWindow(activity);
++        mPreferences = ArcDesktopAppearance.preferences(activity);
++        mPreferenceListener = (preferences, key) -> {
++            if (ArcDesktopAppearance.UI_MODE_KEY.equals(key)) scheduleUiUpdate();
++        };
++        mPreferences.registerOnSharedPreferenceChangeListener(mPreferenceListener);
 +        dispatcher.register(this);
 +    }
 +
 +    @Override
 +    public void onConfigurationChanged(Configuration newConfig) {
 +        // Dispatch happens after the activity's resources receive the new configuration.
++        scheduleUiUpdate();
++    }
++
++    private void scheduleUiUpdate() {
 +        if (mDestroyed || mRecreationScheduled
 +                || mDesktopAtCreation == ArcDesktopAppearance.isDesktopWindow(mActivity)) return;
 +        mRecreationScheduled = true;
-+        mActivity.getWindow().getDecorView().post(() -> {
-+            if (mDestroyed || mActivity.isFinishing() || mActivity.isDestroyed()) return;
-+            if (mDesktopAtCreation == ArcDesktopAppearance.isDesktopWindow(mActivity)) {
-+                mRecreationScheduled = false;
-+                return;
-+            }
-+            // Use normal Activity save/restore rather than mutating tab models during reparenting.
-+            mActivity.recreate();
-+        });
++        mActivity.getWindow().getDecorView().post(mRecreateUi);
++    }
++
++    private void recreateUiIfNeeded() {
++        mRecreationScheduled = false;
++        if (mDestroyed || mActivity.isFinishing() || mActivity.isDestroyed()) return;
++        if (mDesktopAtCreation == ArcDesktopAppearance.isDesktopWindow(mActivity)) return;
++        // Use the existing Chromium Activity restoration path without mutating tab models.
++        mActivity.recreate();
 +    }
 +
 +    public void destroy() {
++        if (mDestroyed) return;
 +        mDestroyed = true;
++        mPreferences.unregisterOnSharedPreferenceChangeListener(mPreferenceListener);
++        mActivity.getWindow().getDecorView().removeCallbacks(mRecreateUi);
 +        mDispatcher.unregister(this);
 +    }
 +}

@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+**Estado de ejecución:** El usuario aplazó las partes no implementadas al próximo update el 2026-10-06. Se conserva el clasificador de ventana ya implementado para la interfaz Arc.
+
 **Goal:** Integrar interacción real de teclado/mouse conservando los controladores de Chromium y el diseño Arc aprobado.
 
 **Architecture:** Reutilizar KeyboardShortcuts, MenuOrKeyboardActionController, TabModel y EventForwarder/Blink. Añadir únicamente integración de sidebar y gesto medio en rail; probar la cadena ya existente de zoom/dispositions/back-forward. No duplicar atajos ni interceptar eventos web globalmente.

@@ -31,13 +31,37 @@ def main():
     dex.mkdir()
     tools = args.sdk / 'build-tools/36.0.0'
     android = args.sdk / 'platforms/android-36/android.jar'
-    sources = [ROOT / 'tests/android/window/ArchiumWindowMetricsTest.java']
+    generated = work / 'generated'
+    generated.mkdir(exist_ok=True)
+    resource = work / 'resources.zip'
+    modern_aapt2 = args.sdk / 'build-tools/37.0.0/aapt2'
+    aapt2 = str(modern_aapt2) if modern_aapt2.is_file() else (shutil.which('aapt2') or str(tools / 'aapt2'))
+    run(aapt2, 'compile', '--dir', ROOT / 'chromium/chrome/android/java/res', '-o', resource)
+    apk = work / 'unsigned.apk'
+    run(aapt2, 'link', '-I', android, '--manifest', ROOT / 'tests/android/window/AndroidManifest.xml',
+        '--custom-package', 'org.chromium.chrome', '--java', generated, '-o', apk, resource)
+    sources = list((ROOT / 'tests/android/window').glob('*.java'))
     module = ROOT / ('chromium/chrome/browser/desktop_policy/android/java/src/'
                      'org/chromium/chrome/browser/desktop_policy')
     sources += list(module.glob('*.java')) if module.exists() else []
     appearance = ROOT / ('chromium/chrome/browser/ui/vertical_tabs/android/java/src/'
                          'org/chromium/chrome/browser/ui/vertical_tabs')
     sources += [appearance / 'ArcDesktopAppearance.java', appearance / 'ArcDesktopPolicy.java']
+    sources += list(generated.rglob('*.java'))
+    dialog = ROOT / 'chromium/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAppearanceDialog.java'
+    if dialog.exists():
+        sources.append(dialog)
+    observer = ROOT / 'chromium/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopWindowObserver.java'
+    sources.append(observer)
+    lifecycle = work / 'stubs/org/chromium/chrome/browser/lifecycle'
+    lifecycle.mkdir(parents=True, exist_ok=True)
+    for name, body in {
+        'ConfigurationChangedObserver': 'public interface ConfigurationChangedObserver { void onConfigurationChanged(android.content.res.Configuration c); }',
+        'ActivityLifecycleDispatcher': 'public interface ActivityLifecycleDispatcher { void register(ConfigurationChangedObserver o); void unregister(ConfigurationChangedObserver o); }',
+    }.items():
+        source = lifecycle / (name + '.java')
+        source.write_text('package org.chromium.chrome.browser.lifecycle;\n' + body + '\n')
+        sources.append(source)
     spec = importlib.util.spec_from_file_location('window_core', ROOT / 'scripts/fetch-window-core.py')
     window_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(window_module)
@@ -47,11 +71,6 @@ def main():
     jar = work / 'tests.jar'
     run('jar', 'cf', jar, '-C', classes, '.')
     run(tools / 'd8', '--min-api', '29', '--lib', android, '--output', dex, jar)
-    apk = work / 'unsigned.apk'
-    modern_aapt2 = args.sdk / 'build-tools/37.0.0/aapt2'
-    aapt2 = str(modern_aapt2) if modern_aapt2.is_file() else (shutil.which('aapt2') or str(tools / 'aapt2'))
-    run(aapt2, 'link', '-I', android, '--manifest', ROOT / 'tests/android/window/AndroidManifest.xml',
-        '-o', apk)
     with zipfile.ZipFile(apk, 'a') as archive:
         archive.write(dex / 'classes.dex', 'classes.dex')
     keystore = work / 'test.keystore'

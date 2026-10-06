@@ -7,4 +7,8 @@
     <string name="arc_color_format">Introduce un color como #336699</string>
     <string name="arc_google_login">Iniciar sesión en la web de Google</string>
     <string name="arc_autofill">Autocompletado de Android</string>
+    <string name="arc_interface">Interfaz de Archium</string>
+    <string name="arc_interface_auto">Automática según la ventana</string>
+    <string name="arc_interface_arc">Arc</string>
+    <string name="arc_interface_mobile">Móvil</string>
 </resources>
