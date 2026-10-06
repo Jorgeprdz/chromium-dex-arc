@@ -1,13 +1,13 @@
 # Archium preflight
 
 Result: PASS
-Trigger commit: 9907b97c56b91219be9a09cc7a4d21624bc27159
+Trigger commit: 1b5f63fb9e6094aab68f2f9dd3c3400072fc17d9
 
 ```text
 + python3 scripts/generate-arc-patch.py
-Generated Archium patch: 83 files
+Generated Archium patch: 85 files
 + python3 scripts/check-arc-preparation.py --android-jar /usr/local/lib/android/sdk/platforms/android-36/android.jar
-Pinned patch: all 83 files applied and hashes matched
+Pinned patch: all 85 files applied and hashes matched
 ArchiumWindowClass: boundaries, reversible resize and repeated layout passed
 ArcDesktopPolicy: AUTO/ARC/MOBILE, independent navigation and 4,238 palette cases passed
 ArcSidebarState: identity, Spaces, closed pins, folders, roundtrip and invalid operations passed
@@ -27,12 +27,12 @@ Checkpoint part 3: 64 bytes uploaded
 Checkpoint part 4: 64 bytes uploaded
 Checkpoint part 5: 64 bytes uploaded
 Checkpoint part 6: 64 bytes uploaded
-Checkpoint part 7: 54 bytes uploaded
+Checkpoint part 7: 49 bytes uploaded
 Checkpoint complete: 8 parts
 Complete workspace restored, including timestamps and Ninja state
 ..................
 ----------------------------------------------------------------------
-Ran 28 tests in 1.504s
+Ran 28 tests in 2.179s
 
 OK
 + git diff --check -- . ':!patches/archium-desktop.patch'

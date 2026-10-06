@@ -1242,7 +1242,23 @@ diff --git a/components/password_manager/core/browser/password_store/BUILD.gn b/
      "interactions_stats.h",
      "password_form_converters.cc",
      "password_form_converters.h",
-@@ -87,7 +91,8 @@
+@@ -14,6 +18,7 @@
+     "password_store_change.h",
+     "password_store_consumer.cc",
+     "password_store_consumer.h",
++    "password_store_interface.cc",
+     "password_store_interface.h",
+     "password_store_util.cc",
+     "password_store_util.h",
+@@ -39,6 +44,7 @@
+     "get_logins_with_affiliations_request_handler.h",
+     "password_store.cc",
+     "password_store.h",
++    "password_store_backend.cc",
+     "password_store_backend.h",
+     "password_store_backend_metrics_recorder.cc",
+     "password_store_backend_metrics_recorder.h",
+@@ -87,7 +93,8 @@
        "//components/sync/base",
        "//components/sync/service",
      ]
@@ -1252,7 +1268,7 @@ diff --git a/components/password_manager/core/browser/password_store/BUILD.gn b/
      sources += [
        "insecure_credentials_table.cc",
        "insecure_credentials_table.h",
-@@ -114,6 +119,12 @@
+@@ -114,6 +121,12 @@
      if (is_win) {
        sources += [ "login_database_win.cc" ]
      }
@@ -1265,7 +1281,7 @@ diff --git a/components/password_manager/core/browser/password_store/BUILD.gn b/
    }
    configs += [ "//build/config/compiler:wexit_time_destructors" ]
  }
-@@ -200,3 +211,26 @@
+@@ -200,3 +213,26 @@
    ]
    configs += [ "//build/config/compiler:wexit_time_destructors" ]
  }
@@ -1723,24 +1739,18 @@ diff --git a/components/password_manager/core/browser/password_store/password_st
  #include "components/password_manager/core/browser/password_form_digest.h"
  #include "components/password_manager/core/browser/password_store/actionable_error.h"
  #include "components/password_manager/core/browser/password_store/password_store_backend_error.h"
-@@ -130,6 +134,20 @@
+@@ -130,6 +134,14 @@
    // required to know the current state of the backend.
    virtual void AddLoginAsync(StoredCredential cred,
                               PasswordChangesOrErrorReply callback) = 0;
-+  virtual void GetImportSnapshotAsync(ArchiumImportSnapshotReply callback) {
-+    std::move(callback).Run(base::unexpected(PasswordStoreBackendError(
-+        PasswordStoreBackendErrorType::kUncategorized)));
-+  }
++  virtual void GetImportSnapshotAsync(ArchiumImportSnapshotReply callback);
 +  // Only a backend with a real transactional implementation may accept imports.
 +  // The default rejects without changing any row or notifying observers.
 +  virtual void ImportLoginsAtomicallyAsync(
 +      std::vector<StoredCredential> credentials,
 +      PasswordChangesOrErrorReply callback,
 +      std::optional<ArchiumPasswordImportRevision> expected_revision =
-+          std::nullopt) {
-+    std::move(callback).Run(base::unexpected(PasswordStoreBackendError(
-+        PasswordStoreBackendErrorType::kUncategorized)));
-+  }
++          std::nullopt);
    virtual void UpdateLoginAsync(StoredCredential cred,
                                  PasswordChangesOrErrorReply callback) = 0;
    virtual void RemoveLoginAsync(const base::Location& location,
@@ -1909,7 +1919,7 @@ diff --git a/components/password_manager/core/browser/password_store/password_st
  
  #include "base/functional/callback_helpers.h"
  #include "base/memory/weak_ptr.h"
-@@ -96,6 +102,23 @@
+@@ -96,6 +102,18 @@
    virtual void AddLogins(std::vector<StoredCredential> forms,
                           base::OnceClosure completion = base::DoNothing()) = 0;
  
@@ -1918,17 +1928,12 @@ diff --git a/components/password_manager/core/browser/password_store/password_st
 +
 +  // An accepted local import is all-or-nothing. Implementations without an
 +  // atomic backend must reject it, never fall back to AddLogins().
-+  virtual void GetImportSnapshot(ArchiumImportSnapshotReply callback) {
-+    std::move(callback).Run(base::unexpected(PasswordStoreBackendError(
-+        PasswordStoreBackendErrorType::kUncategorized)));
-+  }
-+  virtual void ImportLoginsAtomically(std::vector<StoredCredential> credentials,
-+                                     ImportCompletion completion,
-+                                     std::optional<ArchiumPasswordImportRevision> expected_revision =
-+          std::nullopt) {
-+    std::move(completion).Run(base::unexpected(PasswordStoreBackendError(
-+        PasswordStoreBackendErrorType::kUncategorized)));
-+  }
++  virtual void GetImportSnapshot(ArchiumImportSnapshotReply callback);
++  virtual void ImportLoginsAtomically(
++      std::vector<StoredCredential> credentials,
++      ImportCompletion completion,
++      std::optional<ArchiumPasswordImportRevision> expected_revision =
++          std::nullopt);
 +
    // Updates the matching StoredCredential in the secure password store (async).
    // If any of the primary key fields (signon_realm, url, username_element,
@@ -7787,3 +7792,63 @@ new file mode 100644
 +
 +}  // namespace password_manager
 +#endif  // COMPONENTS_PASSWORD_MANAGER_CORE_BROWSER_PASSWORD_STORE_ARCHIUM_PASSWORD_IMPORT_SNAPSHOT_H_
+diff --git a/components/password_manager/core/browser/password_store/password_store_backend.cc b/components/password_manager/core/browser/password_store/password_store_backend.cc
+new file mode 100644
+--- /dev/null
++++ b/components/password_manager/core/browser/password_store/password_store_backend.cc
+@@ -0,0 +1,25 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++#include "components/password_manager/core/browser/password_store/password_store_backend.h"
++
++#include <utility>
++
++namespace password_manager {
++
++void PasswordStoreBackend::GetImportSnapshotAsync(
++    ArchiumImportSnapshotReply callback) {
++  std::move(callback).Run(base::unexpected(PasswordStoreBackendError(
++      PasswordStoreBackendErrorType::kUncategorized)));
++}
++
++void PasswordStoreBackend::ImportLoginsAtomicallyAsync(
++    std::vector<StoredCredential> credentials,
++    PasswordChangesOrErrorReply callback,
++    std::optional<ArchiumPasswordImportRevision> expected_revision) {
++  std::move(callback).Run(base::unexpected(PasswordStoreBackendError(
++      PasswordStoreBackendErrorType::kUncategorized)));
++}
++
++}  // namespace password_manager
+diff --git a/components/password_manager/core/browser/password_store/password_store_interface.cc b/components/password_manager/core/browser/password_store/password_store_interface.cc
+new file mode 100644
+--- /dev/null
++++ b/components/password_manager/core/browser/password_store/password_store_interface.cc
+@@ -0,0 +1,25 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++#include "components/password_manager/core/browser/password_store/password_store_interface.h"
++
++#include <utility>
++
++namespace password_manager {
++
++void PasswordStoreInterface::GetImportSnapshot(
++    ArchiumImportSnapshotReply callback) {
++  std::move(callback).Run(base::unexpected(PasswordStoreBackendError(
++      PasswordStoreBackendErrorType::kUncategorized)));
++}
++
++void PasswordStoreInterface::ImportLoginsAtomically(
++    std::vector<StoredCredential> credentials,
++    ImportCompletion completion,
++    std::optional<ArchiumPasswordImportRevision> expected_revision) {
++  std::move(completion).Run(base::unexpected(PasswordStoreBackendError(
++      PasswordStoreBackendErrorType::kUncategorized)));
++}
++
++}  // namespace password_manager
