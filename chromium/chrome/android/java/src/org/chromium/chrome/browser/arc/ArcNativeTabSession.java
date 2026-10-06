@@ -14,7 +14,9 @@ import org.chromium.chrome.browser.tabmodel.TabModel;
 import org.chromium.chrome.browser.tabmodel.TabModelObserver;
 import org.chromium.content_public.browser.LoadUrlParams;
 
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.BooleanSupplier;
 
 /** Adapter to one real Chromium model/creator; never acts on an inactive profile's UI. */
@@ -42,6 +44,18 @@ public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
         mStore = ArcSidebarProfiles.getForProfile(profile);
         mActions = new ArcTabActions(mStore, this);
         mObserver = new TabModelObserver() {
+            @Override
+            public void didAddTab(
+                    Tab tab, int type, int creationState, boolean markedForSelection) {
+                adoptTab(tab.getId());
+                if (active()) mOnStateChanged.run();
+            }
+
+            @Override public void restoreCompleted() {
+                reconcileTabs();
+                if (active()) mOnStateChanged.run();
+            }
+
             @Override public void tabClosureCommitted(Tab tab) { confirmedClose(tab.getId()); }
             @Override public void onTabCloseCommitted(List<Tab> tabs, boolean isAllTabs,
                     boolean canRestore, int closingSource) {
@@ -49,6 +63,7 @@ public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
             }
         };
         model.addObserver(mObserver);
+        reconcileTabs();
     }
 
     public ArcTabActions actions() { return mActions; }
@@ -58,6 +73,40 @@ public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
         Profile profile = mModel.getProfile();
         return !mDestroyed && mIsCurrentModel.getAsBoolean()
                 && profile != null && !profile.shutdownStarted();
+    }
+
+    private void adoptTab(int tabId) {
+        if (mDestroyed || tabId < 0) return;
+        try {
+            ArcSidebarState state = mStore.load();
+            if (state.isFavoriteTab(tabId) || state.hasTabSpace(tabId)) return;
+            state.associateTab(tabId, state.selectedSpace());
+            mStore.save(state);
+        } catch (RuntimeException ignored) {
+            // A metadata failure must never mutate or close the native tab.
+        }
+    }
+
+    private void reconcileTabs() {
+        if (mDestroyed) return;
+        try {
+            ArcSidebarState state = mStore.load();
+            Set<Integer> live = new HashSet<>();
+            for (int i = 0; i < mModel.getCount(); i++) {
+                Tab tab = mModel.getTabAt(i);
+                if (tab != null) live.add(tab.getId());
+            }
+            String before = state.serialize();
+            state.reconcileTabs(live);
+            for (int tabId : live) {
+                if (!state.isFavoriteTab(tabId) && !state.hasTabSpace(tabId)) {
+                    state.associateTab(tabId, state.selectedSpace());
+                }
+            }
+            if (!before.equals(state.serialize())) mStore.save(state);
+        } catch (RuntimeException ignored) {
+            // Keep Chromium's TabModel authoritative if Arc metadata is unavailable.
+        }
     }
 
     private void confirmedClose(int tabId) {
@@ -103,6 +152,30 @@ public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
 
     @Override public void unpin(int tabId) {
         if (active() && mModel.getTabById(tabId) != null) mModel.unpinTab(tabId);
+    }
+
+    @Override
+    public void onSpaceChanged(ArcSidebarState state) {
+        if (!active()) return;
+        Tab current = mModel.getCurrentTabSupplier().get();
+        if (current != null && state.visibleTab(current.getId())) {
+            mOnStateChanged.run();
+            return;
+        }
+        for (int i = 0; i < mModel.getCount(); i++) {
+            Tab tab = mModel.getTabAt(i);
+            if (tab != null && state.visibleTab(tab.getId())) {
+                select(tab.getId());
+                mOnStateChanged.run();
+                return;
+            }
+        }
+        int created = open("chrome://newtab/");
+        if (created >= 0) {
+            adoptTab(created);
+            select(created);
+        }
+        mOnStateChanged.run();
     }
 
     @Override public void close(int tabId) {
