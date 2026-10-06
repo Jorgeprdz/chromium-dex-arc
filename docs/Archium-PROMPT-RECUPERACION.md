@@ -27,6 +27,15 @@ termine la compilación; luego se necesita validación real de la APK.
 
 ## Continuación directamente desde GitHub (publicación solicitada)
 
+PUBLICACIÓN VERIFICADA: 2026-10-06T06:28:57.423553+00:00.
+Commit de publicación de fuentes/ledgers: `aad0b1994914c01aff1c4bf076b31bc0aa641709`.
+Rama remota: https://github.com/Jorgeprdz/chromium-dex-arc/tree/feat/arc-desktop
+Se verificó igualdad HEAD local/remoto y un clone NUEVO directamente de GitHub:
+82 hashes de fuentes preparadas, originales fijados, hash del patch, ledger y
+monitor están presentes y correctos. Verificación de preparación también pasó;
+JNI/C++/APK siguen pendientes. El commit documental posterior actualiza esta
+confirmación sin cambiar fuentes. Su hash final está en el JSON de Download.
+
 El usuario pidió subir TODO lo realizado para continuar desde el repo de GitHub.
 Esta publicación conserva la rama feat/arc-desktop; NO lanza un run ni reanuda
 features. Se publica el historial local, código nuevo, patch/hash manifest,
