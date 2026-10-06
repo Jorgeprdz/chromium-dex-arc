@@ -1,3 +1,18 @@
+## Estado autoritativo al detenerse — 2026-10-06
+
+Usuario ordenó guardar prompt detallado y detenerse. Código checkpoint
+`e7563e4ed569a425ab587957c3dd32aa48b859cf`. NO hay run nuevo. JNI/profile bridge
+ya está preparado, pero no compilado/ejecutado nativamente. UI/SAF/CRUD y acabado
+Arc siguen pendientes. 82 paths del patch, CSV 21 casos JVM, Python 28 tests pasan;
+protocolo Java Android pasó con JNI/Profile simulados. No equivale a una APK.
+
+Última instrucción: después del futuro dispatch FINAL, actualizar/crear script
+con ID real, refresh cada 15 minutos (900 s), comprobar --once, dejar seguimiento
+activo en background, guardar estado en Download y pausar el agente. No iniciar
+otro run durante este cierre. Detalle completo en Archium-PROMPT-RECUPERACION.md.
+Los apartados históricos de abajo documentan estados anteriores; el prompt y este
+bloque prevalecen para pendientes/contadores actuales.
+
 # Local passwords — work in progress
 
 This is preparation evidence, not accepted functionality or an APK delivery.
