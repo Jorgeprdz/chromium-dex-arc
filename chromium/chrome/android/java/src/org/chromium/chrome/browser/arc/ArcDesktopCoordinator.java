@@ -68,7 +68,7 @@ public final class ArcDesktopCoordinator {
     public ArcDesktopCoordinator(Activity activity, ViewGroup rail,
             Profile profile, Consumer<String> navigate, Runnable focusOmnibox,
             Runnable openBookmarks, Runnable openPasswordSettings,
-            IncognitoStateProvider incognitoStateProvider,
+            boolean localPasswordsEnabled, IncognitoStateProvider incognitoStateProvider,
             Supplier<TabModel> currentModel, Supplier<TabCreator> currentCreator,
             Supplier<Tab> currentTab) {
         mActivity = activity;
@@ -132,8 +132,10 @@ public final class ArcDesktopCoordinator {
         mColumn.addView(mNativeTabs, new LinearLayout.LayoutParams(-1, 0, 1));
 
         mFooter = new LinearLayout(activity);
-        Button passwordButton = button("Passwords", openPasswordSettings);
-        passwordButton.setContentDescription("Local passwords");
+        Button passwordButton = button(localPasswordsEnabled ? "Passwords" : "Autofill",
+                openPasswordSettings);
+        passwordButton.setContentDescription(
+                localPasswordsEnabled ? "Local passwords" : "Autofill settings");
         Button newTabButton = button("+ New tab", () -> {
             TabCreator creator = mCurrentCreator.get();
             if (creator != null) {
