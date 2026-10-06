@@ -3,6 +3,7 @@ package app.archium.windowtests;
 import android.app.Activity;
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicReference;
 import org.chromium.chrome.browser.password_manager.ArchiumPasswordCsv;
 import org.chromium.chrome.browser.password_manager.ArchiumPasswordManagerBridge;
 import org.chromium.chrome.browser.password_manager.ArchiumPasswordManagerBridgeJni;
@@ -22,7 +23,8 @@ public final class ArchiumPasswordBridgeProtocolTest {
         int[] secrets = {0};
         int[] metadata = {0};
         List<?>[] exports = {null};
-        List<ArchiumPasswordManagerBridge.ImportRow>[] previews = new List[] {null};
+        AtomicReference<List<ArchiumPasswordManagerBridge.ImportRow>> previews =
+                new AtomicReference<>();
         ArchiumPasswordManagerBridge peer = new ArchiumPasswordManagerBridge(activity, new Profile(),
                 new ArchiumPasswordManagerBridge.Listener() {
                     public void onMetadata(List<ArchiumPasswordManagerBridge.Entry> rows, int status) {
@@ -40,7 +42,7 @@ public final class ArchiumPasswordBridgeProtocolTest {
                             int request,
                             int status,
                             List<ArchiumPasswordManagerBridge.ImportRow> rows) {
-                        previews[0] = rows;
+                        previews.set(rows);
                     }
                     public void onOperation(int request, int status) {}
                 });
@@ -86,8 +88,8 @@ public final class ArchiumPasswordBridgeProtocolTest {
                 "https://test.example/",
                 2);
         call(peer, "onPreviewEnd", new Class<?>[] {int.class, int.class}, 20, 0);
-        check(previews[0] != null && previews[0].size() == 1, "native preview row delivered");
-        ArchiumPasswordManagerBridge.ImportRow preview = previews[0].get(0);
+        check(previews.get() != null && previews.get().size() == 1, "native preview row delivered");
+        ArchiumPasswordManagerBridge.ImportRow preview = previews.get().get(0);
         check(preview.identity.equals("https://test.example/"), "canonical native identity preserved");
         check(preview.requiredDecision == 2, "native replacement decision preserved");
 
