@@ -3,8 +3,10 @@
 This is preparation evidence, not accepted functionality or an APK delivery.
 
 - Pinned source: Chromium 157, cfd94726b7b5fb48aedcc32662f2f3fbdbadec35.
-- Actual Android Keystore tests: eight cases and process reopen passed in the
+- Actual Android Keystore tests: eight cases, a suppressed-commit failure regression and process reopen passed in the
   disposable app.archium.keytests on the physical Samsung Android 36 phone.
+  The initial durability regression failed before implementation; file sync,
+  committed-record verification and directory sync then passed on Android.
   ADB emulator-5554 is another alias for that same phone, not separate coverage.
 - Local Python preparation/build routing: 28 tests passed.
 - Sparse patch applies and all 59 source hashes match.

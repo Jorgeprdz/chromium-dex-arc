@@ -3,6 +3,10 @@ package app.archium.keytests;
 import android.app.Instrumentation;
 import android.content.Context;
 import android.os.Bundle;
+import android.util.AtomicFile;
+
+import java.io.FileOutputStream;
+import java.io.IOException;
 
 import java.io.File;
 import java.lang.reflect.InvocationTargetException;
@@ -41,7 +45,7 @@ public final class ArchiumPasswordKeyTest extends Instrumentation {
                 result.putString("stream", "PASS: persisted key reopened after process restart\n");
             } else {
                 runSuite();
-                result.putString("stream", "PASS: 8 real Keystore cases\n");
+                result.putString("stream", "PASS: 8 real Keystore cases plus verified-commit failure regression\n");
             }
             finish(-1, result);
         } catch (Throwable error) {
@@ -101,6 +105,38 @@ public final class ArchiumPasswordKeyTest extends Instrumentation {
             for (Future<byte[]> value : keys) check(Arrays.equals(first, value.get()), "concurrent init");
         } finally { pool.shutdown(); }
         check(Arrays.equals(first, key()), "concurrent key persisted");
+
+        // Break caught: AtomicFile.finishWrite() may suppress sync/rename failures.
+        // This injects only the suppressed commit failure; actual file I/O remains Android's.
+        File failedCommit = new File(context.getNoBackupFilesDir(), "commit-failure-fixture");
+        Files.write(failedCommit.toPath(), new byte[] {1, 2, 3});
+        AtomicFile suppressedRename = new AtomicFile(failedCommit) {
+            @Override public void finishWrite(FileOutputStream output) {
+                try { output.close(); }
+                catch (IOException error) { throw new IllegalStateException(error); }
+                // Deliberately leave the previous base file in place, like failed rename.
+            }
+        };
+        boolean rejected = false;
+        try {
+            Class<?> type = Class.forName(
+                    "org.chromium.chrome.browser.password_manager.ArchiumPasswordKey");
+            java.lang.reflect.Method persist = type.getDeclaredMethod(
+                    "writeWrappedRecord", AtomicFile.class, byte[].class);
+            persist.setAccessible(true);
+            persist.invoke(null, suppressedRename, new byte[] {4, 5, 6});
+        } catch (NoSuchMethodException missing) {
+            throw new AssertionError("Wrapped key persistence lacks a verified commit");
+        } catch (InvocationTargetException expected) {
+            rejected = expected.getCause() instanceof IOException;
+        }
+        check(rejected, "suppressed commit failure must reject the data key");
+        check(Arrays.equals(new byte[] {1, 2, 3}, Files.readAllBytes(failedCommit.toPath())),
+                "commit failure preserves previous record");
+        for (String suffix : new String[] {"", ".new", ".bak"}) {
+            File fixture = new File(failedCommit.getPath() + suffix);
+            if (fixture.exists()) check(fixture.delete(), "remove commit test fixture");
+        }
 
         // The next instrumentation run executes in a new process and checks the same key.
         check(context.getSharedPreferences("test", 0).edit().putString("hash", hash(first)).commit(),

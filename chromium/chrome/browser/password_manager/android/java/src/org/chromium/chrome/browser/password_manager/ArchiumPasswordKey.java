@@ -7,9 +7,13 @@ import android.content.Context;
 import android.security.keystore.KeyGenParameterSpec;
 import android.security.keystore.KeyProperties;
 import android.util.AtomicFile;
+import android.system.ErrnoException;
+import android.system.Os;
+import android.system.OsConstants;
 
 import java.io.File;
 import java.io.FileOutputStream;
+import java.io.FileDescriptor;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
@@ -100,7 +104,6 @@ public final class ArchiumPasswordKey {
         SecretKey kek = generator.generateKey();
         byte[] dataKey = new byte[DATA_KEY_BYTES];
         new SecureRandom().nextBytes(dataKey);
-        FileOutputStream output = null;
         try {
             Cipher cipher = Cipher.getInstance("AES/GCM/NoPadding");
             cipher.init(Cipher.ENCRYPT_MODE, kek);
@@ -112,17 +115,53 @@ public final class ArchiumPasswordKey {
             }
             byte[] record = ByteBuffer.allocate(RECORD_BYTES).putInt(MAGIC)
                     .put(nonce).put(encrypted).array();
-            output = storage.startWrite();
-            output.write(record);
-            storage.finishWrite(output);
-            output = null;
+            writeWrappedRecord(storage, record);
             return dataKey;
         } catch (IOException | GeneralSecurityException | RuntimeException exception) {
-            if (output != null) storage.failWrite(output);
             Arrays.fill(dataKey, (byte) 0);
             // Keep the KEK/state for explicit recovery. Automatic replacement would conceal
             // a failed key initialization and risks losing already encrypted data.
             throw exception;
         }
     }
+
+    private static void writeWrappedRecord(AtomicFile storage, byte[] record) throws IOException {
+        FileOutputStream output = null;
+        try {
+            output = storage.startWrite();
+            output.write(record);
+            // AtomicFile.finishWrite() logs some sync/rename errors without throwing.
+            // Explicitly flush the file and verify the committed record before vending a DEK.
+            output.getFD().sync();
+            storage.finishWrite(output);
+            output = null;
+            if (!Arrays.equals(record, storage.readFully())) {
+                throw new IOException("Password key record was not committed");
+            }
+            File directory = storage.getBaseFile().getParentFile();
+            if (directory == null) throw new IOException("Password key directory unavailable");
+            FileDescriptor descriptor = null;
+            try {
+                descriptor = Os.open(directory.getAbsolutePath(),
+                        OsConstants.O_RDONLY, 0);
+                if (!OsConstants.S_ISDIR(Os.fstat(descriptor).st_mode)) {
+                    throw new IOException("Password key storage is not a directory");
+                }
+                Os.fsync(descriptor);  // Persist the rename, not just the contents of .new.
+            } catch (ErrnoException error) {
+                throw new IOException("Password key directory commit failed", error);
+            } finally {
+                if (descriptor != null) {
+                    try { Os.close(descriptor); }
+                    catch (ErrnoException error) {
+                        throw new IOException("Password key directory close failed", error);
+                    }
+                }
+            }
+        } catch (IOException | RuntimeException error) {
+            if (output != null) storage.failWrite(output);
+            throw error;
+        }
+    }
+
 }
