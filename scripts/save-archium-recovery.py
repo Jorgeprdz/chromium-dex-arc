@@ -35,9 +35,19 @@ def main():
         'branch': branch,
         'status': run('git', 'status', '--short', capture=True),
         'patch_sha256': hashlib.sha256((ROOT / 'patches/archium-desktop.patch').read_bytes()).hexdigest(),
-        'native_build_completed': False,
+        'build_status_observed': None,
+        'build_status_note': 'This backup script does not query CI; see the updated recovery prompt.',
         'note': 'Tar captures preparation directories including WIP; bundle records committed history. No quota counter.',
     }
+    manifest = json.loads((ROOT / 'patches/upstream-files.json').read_text())
+    differences = []
+    for name, expected in manifest['modified'].items():
+        folder = 'chromium' if manifest['originals'][name] is None else '.source-modified'
+        source = ROOT / folder / name
+        actual = hashlib.sha256(source.read_bytes()).hexdigest() if source.is_file() else None
+        if actual != expected:
+            differences.append({'path': name, 'expected': expected, 'actual': actual})
+    snapshot['prepared_sources_different_from_committed_patch'] = differences
     destination = ROOT / '.sync-audit/recovery'
     destination.mkdir(parents=True, exist_ok=True)
     with tempfile.TemporaryDirectory(dir=destination) as temporary:
