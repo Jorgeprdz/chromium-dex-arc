@@ -27,6 +27,7 @@ public final class ArcCollectionsController {
         ArcSidebarState draft = state();
         draft.selectSpace(id);
         mStore.save(draft);
+        mTabs.onSpaceChanged(draft);
     }
 
     public String createSpace(String name) {
@@ -34,6 +35,7 @@ public final class ArcCollectionsController {
         String id = draft.addSpace(name);
         draft.selectSpace(id);
         mStore.save(draft);
+        mTabs.onSpaceChanged(draft);
         return id;
     }
 
