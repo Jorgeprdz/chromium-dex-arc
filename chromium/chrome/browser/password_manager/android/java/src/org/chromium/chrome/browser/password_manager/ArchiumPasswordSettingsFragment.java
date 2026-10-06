@@ -17,6 +17,7 @@ import android.text.InputType;
 import android.view.ViewGroup;
 import android.widget.EditText;
 import android.widget.LinearLayout;
+import android.widget.TextView;
 import android.widget.Toast;
 
 import androidx.preference.Preference;
@@ -46,8 +47,10 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Native settings surface for Archium's profile-local password vault.
@@ -79,6 +82,7 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
     private final Map<Integer, ArchiumPasswordManagerBridge.Entry> mRevealRequests =
             new HashMap<>();
     private final Set<AlertDialog> mDialogs = new HashSet<>();
+    private final Set<ExportWriteTask> mPendingExportTasks = ConcurrentHashMap.newKeySet();
 
     private @Nullable ArchiumPasswordManagerBridge mBridge;
     private @Nullable PreferenceCategory mEntriesCategory;
@@ -176,7 +180,7 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
         }
         mDialogs.add(dialog);
         dialog.setOnDismissListener(ignored -> mDialogs.remove(dialog));
-        showTrackedDialog(dialog);
+        dialog.show();
     }
 
     private static char[] consumeSecret(EditText input) {
@@ -228,23 +232,25 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
         input.setSingleLine(true);
         input.setText(mQuery);
         input.setSelectAllOnFocus(true);
-        new AlertDialog.Builder(requireContext())
-                .setTitle("Search saved passwords")
-                .setView(input)
-                .setPositiveButton(
-                        android.R.string.ok,
-                        (dialog, which) -> {
-                            mQuery = input.getText().toString();
-                            rebuildEntries();
-                        })
-                .setNegativeButton(android.R.string.cancel, null)
-                .setNeutralButton(
-                        "Clear",
-                        (dialog, which) -> {
-                            mQuery = "";
-                            rebuildEntries();
-                        })
-                .show();
+        AlertDialog dialog =
+                new AlertDialog.Builder(requireContext())
+                        .setTitle("Search saved passwords")
+                        .setView(input)
+                        .setPositiveButton(
+                                android.R.string.ok,
+                                (ignored, which) -> {
+                                    mQuery = input.getText().toString();
+                                    rebuildEntries();
+                                })
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .setNeutralButton(
+                                "Clear",
+                                (ignored, which) -> {
+                                    mQuery = "";
+                                    rebuildEntries();
+                                })
+                        .create();
+        showTrackedDialog(dialog);
     }
 
     private LinearLayout credentialForm(
@@ -336,16 +342,18 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
     }
 
     private void showEntryActions(ArchiumPasswordManagerBridge.Entry entry) {
-        new AlertDialog.Builder(requireContext())
-                .setTitle(entry.username.isEmpty() ? entry.url : entry.username)
-                .setItems(
-                        new String[] {"Reveal password", "Edit", "Delete"},
-                        (dialog, which) -> {
-                            if (which == 0) reveal(entry);
-                            else if (which == 1) showEditDialog(entry);
-                            else confirmDelete(entry);
-                        })
-                .show();
+        AlertDialog dialog =
+                new AlertDialog.Builder(requireContext())
+                        .setTitle(entry.username.isEmpty() ? entry.url : entry.username)
+                        .setItems(
+                                new String[] {"Reveal password", "Edit", "Delete"},
+                                (ignored, which) -> {
+                                    if (which == 0) reveal(entry);
+                                    else if (which == 1) showEditDialog(entry);
+                                    else confirmDelete(entry);
+                                })
+                        .create();
+        showTrackedDialog(dialog);
     }
 
     private void reveal(ArchiumPasswordManagerBridge.Entry entry) {
@@ -396,14 +404,16 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
     private void confirmDelete(ArchiumPasswordManagerBridge.Entry entry) {
         ArchiumPasswordManagerBridge bridge = mBridge;
         if (bridge == null) return;
-        new AlertDialog.Builder(requireContext())
-                .setTitle("Delete password?")
-                .setMessage(entry.url)
-                .setPositiveButton(
-                        "Delete",
-                        (dialog, which) -> bridge.delete(nextRequest(), entry.id))
-                .setNegativeButton(android.R.string.cancel, null)
-                .show();
+        AlertDialog dialog =
+                new AlertDialog.Builder(requireContext())
+                        .setTitle("Delete password?")
+                        .setMessage(entry.url)
+                        .setPositiveButton(
+                                "Delete",
+                                (ignored, which) -> bridge.delete(nextRequest(), entry.id))
+                        .setNegativeButton(android.R.string.cancel, null)
+                        .create();
+        showTrackedDialog(dialog);
     }
 
     private void launchImportPicker() {
@@ -648,51 +658,88 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
         showTrackedDialog(dialog);
     }
 
-    private void writeExport(
-            Uri uri, List<ArchiumPasswordCsv.SecretRow> rows) {
-        ContentResolver resolver = requireContext().getContentResolver();
-        mIo.execute(
-                () -> {
-                    String error = null;
-                    try (OutputStream stream = resolver.openOutputStream(uri, "wt");
-                            BufferedWriter writer =
-                                    stream == null
-                                            ? null
-                                            : new BufferedWriter(
-                                                    new OutputStreamWriter(
-                                                            stream, StandardCharsets.UTF_8))) {
-                        if (writer == null) throw new java.io.IOException("Unable to open destination");
-                        ArchiumPasswordCsv.writeSecrets(writer, rows);
-                        writer.flush();
-                    } catch (Exception failure) {
-                        error = failure.getMessage();
-                    } finally {
-                        for (ArchiumPasswordCsv.SecretRow row : rows) row.close();
-                    }
-                    String finalError = error;
-                    mMain.post(
-                            () -> {
-                                if (mDestroyed) return;
-                                if (finalError == null) {
-                                    Toast.makeText(
-                                                    requireContext(),
-                                                    "Passwords exported.",
-                                                    Toast.LENGTH_SHORT)
-                                            .show();
-                                } else {
-                                    showError("Export failed", finalError);
-                                }
-                            });
-                });
+    private final class ExportWriteTask implements Runnable {
+        private final ContentResolver mResolver;
+        private final Uri mUri;
+        private final List<ArchiumPasswordCsv.SecretRow> mRows;
+        private final AtomicBoolean mClaimed = new AtomicBoolean();
+
+        ExportWriteTask(
+                ContentResolver resolver,
+                Uri uri,
+                List<ArchiumPasswordCsv.SecretRow> rows) {
+            mResolver = resolver;
+            mUri = uri;
+            mRows = rows;
+        }
+
+        @Override
+        public void run() {
+            if (!mClaimed.compareAndSet(false, true)) return;
+            mPendingExportTasks.remove(this);
+            String error = null;
+            try (OutputStream stream = mResolver.openOutputStream(mUri, "wt");
+                    BufferedWriter writer =
+                            stream == null
+                                    ? null
+                                    : new BufferedWriter(
+                                            new OutputStreamWriter(
+                                                    stream, StandardCharsets.UTF_8))) {
+                if (writer == null) {
+                    throw new java.io.IOException("Unable to open destination");
+                }
+                ArchiumPasswordCsv.writeSecrets(writer, mRows);
+                writer.flush();
+            } catch (Exception failure) {
+                error = failure.getMessage();
+            } finally {
+                for (ArchiumPasswordCsv.SecretRow row : mRows) row.close();
+            }
+
+            String finalError = error;
+            mMain.post(
+                    () -> {
+                        if (mDestroyed) return;
+                        if (finalError == null) {
+                            Toast.makeText(
+                                            requireContext(),
+                                            "Passwords exported.",
+                                            Toast.LENGTH_SHORT)
+                                    .show();
+                        } else {
+                            showError("Export failed", finalError);
+                        }
+                    });
+        }
+
+        void cancelWithoutRunning() {
+            if (!mClaimed.compareAndSet(false, true)) return;
+            mPendingExportTasks.remove(this);
+            for (ArchiumPasswordCsv.SecretRow row : mRows) row.close();
+        }
+    }
+
+    private void writeExport(Uri uri, List<ArchiumPasswordCsv.SecretRow> rows) {
+        ExportWriteTask task = new ExportWriteTask(
+                requireContext().getContentResolver(), uri, rows);
+        mPendingExportTasks.add(task);
+        try {
+            mIo.execute(task);
+        } catch (RuntimeException rejected) {
+            task.cancelWithoutRunning();
+            if (!mDestroyed) showError("Export failed", rejected.getMessage());
+        }
     }
 
     private void showError(String title, @Nullable String detail) {
         if (mDestroyed || !isAdded()) return;
-        new AlertDialog.Builder(requireContext())
-                .setTitle(title)
-                .setMessage(detail == null || detail.isEmpty() ? "Operation failed." : detail)
-                .setPositiveButton(android.R.string.ok, null)
-                .show();
+        AlertDialog dialog =
+                new AlertDialog.Builder(requireContext())
+                        .setTitle(title)
+                        .setMessage(detail == null || detail.isEmpty() ? "Operation failed." : detail)
+                        .setPositiveButton(android.R.string.ok, null)
+                        .create();
+        showTrackedDialog(dialog);
     }
 
     private static String statusMessage(int status) {
@@ -728,12 +775,30 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
             showError("Couldn't reveal password", statusMessage(status));
             return;
         }
-        String shown = new String(password);
-        new AlertDialog.Builder(requireContext())
-                .setTitle(entry.username.isEmpty() ? entry.url : entry.username)
-                .setMessage(shown)
-                .setPositiveButton(android.R.string.ok, null)
-                .show();
+
+        TextView secret = new TextView(requireContext());
+        int padding = Math.round(20 * getResources().getDisplayMetrics().density);
+        secret.setPadding(padding, padding, padding, padding);
+        secret.setTextIsSelectable(true);
+        secret.setText(password, 0, password.length);
+        AlertDialog dialog =
+                new AlertDialog.Builder(requireContext())
+                        .setTitle(entry.username.isEmpty() ? entry.url : entry.username)
+                        .setView(secret)
+                        .setPositiveButton(android.R.string.ok, null)
+                        .create();
+        if (mDestroyed) {
+            secret.setText("");
+            dialog.dismiss();
+            return;
+        }
+        mDialogs.add(dialog);
+        dialog.setOnDismissListener(
+                ignored -> {
+                    secret.setText("");
+                    mDialogs.remove(dialog);
+                });
+        dialog.show();
     }
 
     @Override
@@ -789,6 +854,10 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
             bridge.destroy();
         }
         mIo.shutdownNow();
+        for (ExportWriteTask task : List.copyOf(mPendingExportTasks)) {
+            task.cancelWithoutRunning();
+        }
+        mPendingExportTasks.clear();
         super.onDestroy();
     }
 }
