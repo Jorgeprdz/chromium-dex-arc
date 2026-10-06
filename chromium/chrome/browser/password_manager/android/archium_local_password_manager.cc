@@ -314,7 +314,16 @@ void ArchiumLocalPasswordManager::Export(ExportReply reply) {
       }, weak_ptr_factory_.GetWeakPtr(), std::move(reply)));
 }
 
-void ArchiumLocalPasswordManager::PreviewImport(std::vector<CSVPassword> rows, PreviewReply reply) {
+void ArchiumLocalPasswordManager::PreviewImport(
+    std::vector<CSVPassword> rows,
+    PreviewReply reply) {
+  // A rejected concurrent request must not invalidate an already accepted
+  // import flow. Authenticate() also checks this, but cancellation has to
+  // happen only after the request has won the sensitive-operation slot.
+  if (authenticating_ || writing_) {
+    std::move(reply).Run(Status::kBusy, {});
+    return;
+  }
   CancelImport();
   const uint64_t generation = import_generation_;
   Authenticate(base::BindOnce(
