@@ -12,12 +12,31 @@ import org.chromium.chrome.browser.desktop_policy.ArchiumWindowMetrics;
 /** Arc styling follows the current usable window; independent of vendor or desktop service. */
 public final class ArcDesktopAppearance {
     public static final String COLOR_KEY = "frame_color";
+    public static final String UI_MODE_KEY = "ui_mode";
     public static final int DEFAULT_COLOR = 0xff53657b;
 
     private ArcDesktopAppearance() {}
 
     public static boolean isDesktopWindow(Context context) {
-        return ArcDesktopPolicy.isDesktopWindow(ArchiumWindowMetrics.currentWidthDp(context));
+        return ArcDesktopPolicy.isArcWindow(getUiMode(context),
+                ArchiumWindowMetrics.currentWidthDp(context));
+    }
+
+    public static int getUiMode(Context context) {
+        int preference = preferences(context).getInt(UI_MODE_KEY, ArcDesktopPolicy.MODE_AUTO);
+        if (preference != ArcDesktopPolicy.MODE_ARC
+                && preference != ArcDesktopPolicy.MODE_MOBILE) {
+            return ArcDesktopPolicy.MODE_AUTO;
+        }
+        return preference;
+    }
+
+    public static void setUiMode(Context context, int preference) {
+        if (preference != ArcDesktopPolicy.MODE_AUTO && preference != ArcDesktopPolicy.MODE_ARC
+                && preference != ArcDesktopPolicy.MODE_MOBILE) {
+            throw new IllegalArgumentException("Invalid Arc appearance mode");
+        }
+        preferences(context).edit().putInt(UI_MODE_KEY, preference).apply();
     }
 
     @SuppressWarnings("UseSharedPreferencesManagerFromChromeCheck")

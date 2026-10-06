@@ -2734,7 +2734,7 @@ diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrom
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java
-@@ -0,0 +1,42 @@
+@@ -0,0 +1,61 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -2749,12 +2749,31 @@ new file mode 100644
 +/** Arc styling follows the current usable window; independent of vendor or desktop service. */
 +public final class ArcDesktopAppearance {
 +    public static final String COLOR_KEY = "frame_color";
++    public static final String UI_MODE_KEY = "ui_mode";
 +    public static final int DEFAULT_COLOR = 0xff53657b;
 +
 +    private ArcDesktopAppearance() {}
 +
 +    public static boolean isDesktopWindow(Context context) {
-+        return ArcDesktopPolicy.isDesktopWindow(ArchiumWindowMetrics.currentWidthDp(context));
++        return ArcDesktopPolicy.isArcWindow(getUiMode(context),
++                ArchiumWindowMetrics.currentWidthDp(context));
++    }
++
++    public static int getUiMode(Context context) {
++        int preference = preferences(context).getInt(UI_MODE_KEY, ArcDesktopPolicy.MODE_AUTO);
++        if (preference != ArcDesktopPolicy.MODE_ARC
++                && preference != ArcDesktopPolicy.MODE_MOBILE) {
++            return ArcDesktopPolicy.MODE_AUTO;
++        }
++        return preference;
++    }
++
++    public static void setUiMode(Context context, int preference) {
++        if (preference != ArcDesktopPolicy.MODE_AUTO && preference != ArcDesktopPolicy.MODE_ARC
++                && preference != ArcDesktopPolicy.MODE_MOBILE) {
++            throw new IllegalArgumentException("Invalid Arc appearance mode");
++        }
++        preferences(context).edit().putInt(UI_MODE_KEY, preference).apply();
 +    }
 +
 +    @SuppressWarnings("UseSharedPreferencesManagerFromChromeCheck")
@@ -2781,7 +2800,7 @@ diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrom
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java
-@@ -0,0 +1,55 @@
+@@ -0,0 +1,66 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -2791,7 +2810,18 @@ new file mode 100644
 +
 +/** Window eligibility and accessible colors, independent of Android and tab models. */
 +public final class ArcDesktopPolicy {
++    public static final int MODE_AUTO = 0;
++    public static final int MODE_ARC = 1;
++    public static final int MODE_MOBILE = 2;
++
 +    private ArcDesktopPolicy() {}
++
++    /** UI preference only. Native desktop navigation always uses the actual window class. */
++    public static boolean isArcWindow(int preference, int currentWidthDp) {
++        if (preference == MODE_ARC) return true;
++        if (preference == MODE_MOBILE) return false;
++        return isDesktopWindow(currentWidthDp);
++    }
 +
 +    public static boolean isDesktopWindow(int currentWidthDp) {
 +        return ArchiumWindowClass.classify(currentWidthDp).usesDesktopNavigation();

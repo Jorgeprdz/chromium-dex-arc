@@ -35,6 +35,9 @@ def main():
     module = ROOT / ('chromium/chrome/browser/desktop_policy/android/java/src/'
                      'org/chromium/chrome/browser/desktop_policy')
     sources += list(module.glob('*.java')) if module.exists() else []
+    appearance = ROOT / ('chromium/chrome/browser/ui/vertical_tabs/android/java/src/'
+                         'org/chromium/chrome/browser/ui/vertical_tabs')
+    sources += [appearance / 'ArcDesktopAppearance.java', appearance / 'ArcDesktopPolicy.java']
     spec = importlib.util.spec_from_file_location('window_core', ROOT / 'scripts/fetch-window-core.py')
     window_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(window_module)
@@ -60,12 +63,16 @@ def main():
     run(tools / 'apksigner', 'sign', '--ks', keystore, '--ks-pass', 'pass:test-only',
         '--out', signed, apk)
     run('adb', '-s', args.device, 'install', '-r', signed)
-    result = subprocess.run(['adb', '-s', args.device, 'shell', 'am', 'instrument', '-w',
-                             'app.archium.windowtests/app.archium.windowtests.ArchiumWindowMetricsTest'],
-                            capture_output=True, text=True, check=True)
-    print(result.stdout)
-    if 'PASS:' not in result.stdout or 'FAIL:' in result.stdout:
-        raise SystemExit('Android window-policy test failed')
+    for phase in ('suite', 'reopen'):
+        if phase == 'reopen':
+            run('adb', '-s', args.device, 'shell', 'am', 'force-stop', 'app.archium.windowtests')
+        result = subprocess.run(['adb', '-s', args.device, 'shell', 'am', 'instrument', '-w',
+                                 '-e', 'phase', phase,
+                                 'app.archium.windowtests/app.archium.windowtests.ArchiumWindowMetricsTest'],
+                                capture_output=True, text=True, check=True)
+        print(result.stdout)
+        if 'PASS:' not in result.stdout or 'FAIL:' in result.stdout:
+            raise SystemExit('Android window-policy test failed')
 
 
 

@@ -7,7 +7,18 @@ import org.chromium.chrome.browser.desktop_policy.ArchiumWindowClass;
 
 /** Window eligibility and accessible colors, independent of Android and tab models. */
 public final class ArcDesktopPolicy {
+    public static final int MODE_AUTO = 0;
+    public static final int MODE_ARC = 1;
+    public static final int MODE_MOBILE = 2;
+
     private ArcDesktopPolicy() {}
+
+    /** UI preference only. Native desktop navigation always uses the actual window class. */
+    public static boolean isArcWindow(int preference, int currentWidthDp) {
+        if (preference == MODE_ARC) return true;
+        if (preference == MODE_MOBILE) return false;
+        return isDesktopWindow(currentWidthDp);
+    }
 
     public static boolean isDesktopWindow(int currentWidthDp) {
         return ArchiumWindowClass.classify(currentWidthDp).usesDesktopNavigation();
