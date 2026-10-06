@@ -81,6 +81,7 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
     private final Handler mMain = new Handler(Looper.getMainLooper());
     private final Map<Integer, ArchiumPasswordManagerBridge.Entry> mRevealRequests =
             new HashMap<>();
+    private final Map<Integer, Integer> mPreviewParseErrors = new HashMap<>();
     private final Set<AlertDialog> mDialogs = new HashSet<>();
     private final Set<ExportWriteTask> mPendingExportTasks = ConcurrentHashMap.newKeySet();
 
@@ -474,18 +475,22 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
 
     private void startImportPreview(ArchiumPasswordCsv.ParseResult parsed) {
         if (mDestroyed) return;
-        if (!parsed.errors.isEmpty()) {
-            showError(
-                    "CSV needs attention",
-                    parsed.errors.size()
-                            + " row(s) could not be read. Nothing was imported.");
-            return;
-        }
         if (parsed.rows.isEmpty()) {
-            Toast.makeText(requireContext(), "No passwords found in the CSV.", Toast.LENGTH_SHORT)
-                    .show();
+            if (!parsed.errors.isEmpty()) {
+                showError(
+                        "CSV needs attention",
+                        parsed.errors.size()
+                                + " invalid row(s) found. There are no valid passwords to import.");
+            } else {
+                Toast.makeText(
+                                requireContext(),
+                                "No passwords found in the CSV.",
+                                Toast.LENGTH_SHORT)
+                        .show();
+            }
             return;
         }
+
         String[] urls = new String[parsed.rows.size()];
         String[] users = new String[parsed.rows.size()];
         char[][] passwords = new char[parsed.rows.size()][];
@@ -495,24 +500,35 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
             users[i] = row.username;
             passwords[i] = row.password.toCharArray();
         }
+
+        int request = nextRequest();
+        mPreviewParseErrors.put(request, parsed.errors.size());
         ArchiumPasswordManagerBridge bridge = mBridge;
-        if (bridge != null) bridge.previewImport(nextRequest(), urls, users, passwords);
-        else for (char[] password : passwords) Arrays.fill(password, '\0');
+        if (bridge != null) {
+            bridge.previewImport(request, urls, users, passwords);
+        } else {
+            mPreviewParseErrors.remove(request);
+            for (char[] password : passwords) Arrays.fill(password, '\0');
+        }
     }
 
     private void reviewImport(
-            int request, List<ArchiumPasswordManagerBridge.ImportRow> rows) {
+            int request,
+            int sourceInvalidRows,
+            List<ArchiumPasswordManagerBridge.ImportRow> rows) {
         int maxIndex = -1;
         for (ArchiumPasswordManagerBridge.ImportRow row : rows) {
             maxIndex = Math.max(maxIndex, row.index);
         }
         int[] decisions = new int[maxIndex + 1];
         Set<String> acceptedFileConflicts = new HashSet<>();
-        reviewNextConflict(request, rows, decisions, acceptedFileConflicts, 0);
+        reviewNextConflict(
+                request, sourceInvalidRows, rows, decisions, acceptedFileConflicts, 0);
     }
 
     private void reviewNextConflict(
             int request,
+            int sourceInvalidRows,
             List<ArchiumPasswordManagerBridge.ImportRow> rows,
             int[] decisions,
             Set<String> acceptedFileConflicts,
@@ -566,6 +582,7 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
                                             }
                                             reviewNextConflict(
                                                     request,
+                                                    sourceInvalidRows,
                                                     rows,
                                                     decisions,
                                                     acceptedFileConflicts,
@@ -577,6 +594,7 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
                                             decisions[row.index] = DECISION_SKIP;
                                             reviewNextConflict(
                                                     request,
+                                                    sourceInvalidRows,
                                                     rows,
                                                     decisions,
                                                     acceptedFileConflicts,
@@ -592,18 +610,19 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
                 return;
             }
         }
-        showImportSummary(request, rows, decisions);
+        showImportSummary(request, sourceInvalidRows, rows, decisions);
     }
 
     private void showImportSummary(
             int request,
+            int sourceInvalidRows,
             List<ArchiumPasswordManagerBridge.ImportRow> rows,
             int[] decisions) {
         if (mDestroyed) return;
         int added = 0;
         int replaced = 0;
         int duplicates = 0;
-        int invalid = 0;
+        int invalid = sourceInvalidRows;
         int skipped = 0;
         for (ArchiumPasswordManagerBridge.ImportRow row : rows) {
             if (row.kind == PREVIEW_EXACT || row.kind == PREVIEW_FILE_DUPLICATE) {
@@ -821,12 +840,14 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
     @Override
     public void onPreview(
             int request, int status, List<ArchiumPasswordManagerBridge.ImportRow> rows) {
+        Integer parseErrors = mPreviewParseErrors.remove(request);
+        int sourceInvalidRows = parseErrors == null ? 0 : parseErrors;
         if (mDestroyed) return;
         if (status != ArchiumPasswordManagerBridge.SUCCESS) {
             showError("Couldn't review import", statusMessage(status));
             return;
         }
-        reviewImport(request, rows);
+        reviewImport(request, sourceInvalidRows, rows);
     }
 
     @Override
@@ -847,6 +868,7 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
         for (AlertDialog dialog : List.copyOf(mDialogs)) dialog.dismiss();
         mDialogs.clear();
         mRevealRequests.clear();
+        mPreviewParseErrors.clear();
         ArchiumPasswordManagerBridge bridge = mBridge;
         mBridge = null;
         if (bridge != null) {
