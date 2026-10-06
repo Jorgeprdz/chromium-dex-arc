@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 #include "chrome/browser/password_manager/android/archium_password_manager_bridge.h"
 
+#include <algorithm>
 #include <limits>
 #include <optional>
 #include <string>
