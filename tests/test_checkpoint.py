@@ -40,12 +40,35 @@ class CheckpointTests(unittest.TestCase):
                 # Remove fixture files only, then restore at the exact original path.
                 for path in workspace.iterdir():
                     path.unlink()
-                checkpoint.restore(workspace, 'tag', 'repo')
+                with patch.dict(os.environ, {'GITHUB_SHA': 'new-implementation'}):
+                    with self.assertRaises(ValueError):
+                        checkpoint.restore(workspace, 'tag', 'repo')
+                    self.assertEqual(list(workspace.iterdir()), [])
+                    checkpoint.restore(workspace, 'tag', 'repo', source_commit='test-commit')
             self.assertEqual(ninja.read_text(), 'recorded compilation\n')
             self.assertEqual(ninja.stat().st_mtime_ns, 1234567890123456789)
             self.assertEqual(executable.stat().st_mode & 0o777, 0o755)
             self.assertTrue((workspace / 'compiler-link').is_symlink())
             self.assertGreater(len(assets), 2)
+
+    def test_old_checkpoint_requires_explicit_source_commit(self):
+        with patch.dict(os.environ, {'GITHUB_SHA': 'new-implementation'}):
+            workspace = Path('/same')
+            manifest = {**checkpoint.identity(workspace), 'commit': 'old-implementation',
+                        'parts': [{'name': 'checkpoint-0000.tar.gz.part', 'bytes': 1,
+                                   'sha256': hashlib.sha256(b'x').hexdigest()}]}
+            with self.assertRaises(ValueError):
+                checkpoint.validate_manifest(manifest, checkpoint.identity(workspace))
+            checkpoint.validate_manifest(manifest,
+                checkpoint.identity(workspace, source_commit='old-implementation'))
+            with self.assertRaises(ValueError):
+                checkpoint.validate_manifest(manifest,
+                    checkpoint.identity(workspace, source_commit='different'))
+            # Selecting an old source never relaxes revision or workspace checks.
+            expected = checkpoint.identity(workspace, source_commit='old-implementation')
+            for key in ['workspace', 'revision']:
+                with self.assertRaises(ValueError):
+                    checkpoint.validate_manifest({**manifest, key: 'wrong'}, expected)
 
     def test_rejects_incompatible_or_unordered_checkpoint(self):
         expected = {'schema': 1, 'workspace': '/same', 'commit': 'abc', 'revision': 'rev'}

@@ -15,9 +15,9 @@ def run(*args):
     subprocess.run(args, check=True)
 
 
-def identity(workspace):
+def identity(workspace, *, source_commit=None):
     return {'schema': 1, 'workspace': str(workspace.resolve()),
-            'commit': os.environ['GITHUB_SHA'],
+            'commit': source_commit if source_commit is not None else os.environ['GITHUB_SHA'],
             'revision': 'cfd94726b7b5fb48aedcc32662f2f3fbdbadec35'}
 
 
@@ -68,14 +68,14 @@ def pack(workspace, tag, repo):
     print(f'Checkpoint complete: {len(manifest["parts"])} parts', flush=True)
 
 
-def restore(workspace, tag, repo):
+def restore(workspace, tag, repo, *, source_commit=None):
     if workspace.exists() and any(workspace.iterdir()):
         raise ValueError('Restore requires an empty dedicated workspace')
     with tempfile.TemporaryDirectory(prefix='archium-transfer-') as temporary:
         run('gh', 'release', 'download', tag, '--repo', repo, '--pattern',
             'checkpoint.json', '--dir', temporary)
         manifest = json.loads((Path(temporary) / 'checkpoint.json').read_text())
-        validate_manifest(manifest, identity(workspace))
+        validate_manifest(manifest, identity(workspace, source_commit=source_commit))
         workspace.mkdir(parents=True, exist_ok=True)
         process = subprocess.Popen(['tar', '-C', str(workspace), '-xzf', '-'],
                                    stdin=subprocess.PIPE)
@@ -125,8 +125,13 @@ if __name__ == '__main__':
     parser.add_argument('workspace', type=Path)
     parser.add_argument('tag')
     parser.add_argument('--repo', default='Jorgeprdz/chromium-dex-arc')
+    parser.add_argument('--source-commit', help='Explicit commit that produced a source checkpoint; restore only')
     args = parser.parse_args()
     if os.environ.get('GITHUB_ACTIONS') != 'true' \
             or os.environ.get('GITHUB_REPOSITORY') != args.repo:
         raise SystemExit('Only supported in the dedicated disposable CI runner')
-    (pack if args.mode == 'pack' else restore)(args.workspace, args.tag, args.repo)
+    if args.mode == 'pack':
+        if args.source_commit: raise SystemExit('Source identity is only accepted for restore')
+        pack(args.workspace, args.tag, args.repo)
+    else:
+        restore(args.workspace, args.tag, args.repo, source_commit=args.source_commit)
