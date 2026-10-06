@@ -72,24 +72,14 @@ void ArchiumLocalPasswordManager::Add(
 
         self->writing_ = true;
         const bool accepted = self->presenter_.AddCredential(
-            credential, PasswordForm::Type::kManuallyAdded,
-            base::BindOnce(
-                [](base::WeakPtr<ArchiumLocalPasswordManager> self, GURL url,
-                   std::u16string username, PasswordString password,
-                   OperationReply reply) {
-                  if (self) {
-                    self->VerifyAddedCredential(url, username, password,
-                                                std::move(reply));
-                  }
-                },
-                self, url, username, password, std::move(reply)));
+            credential, PasswordForm::Type::kManuallyAdded, base::DoNothing());
         std::fill(credential.password.begin(), credential.password.end(), u'\0');
         if (!accepted) {
           self->writing_ = false;
-          // AddCredential runs its completion synchronously on rejection, so the
-          // callback above owns the reply in both accepted and rejected cases.
+          std::move(reply).Run(Status::kInvalid);
           return;
         }
+        self->VerifyAddedCredential(url, username, password, std::move(reply));
       },
       weak_ptr_factory_.GetWeakPtr(), std::move(url), std::move(username),
       std::move(password), std::move(reply)));
