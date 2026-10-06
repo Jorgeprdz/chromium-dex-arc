@@ -27,6 +27,17 @@ using Status = ArchiumLocalPasswordManager::Status;
 using ::testing::_;
 using ::testing::Return;
 
+class SnapshotFailingStore : public MockPasswordStoreInterface {
+ public:
+  void GetImportSnapshot(ArchiumImportSnapshotReply callback) override {
+    std::move(callback).Run(base::unexpected(PasswordStoreBackendError(
+        PasswordStoreBackendErrorType::kUncategorized)));
+  }
+
+ protected:
+  ~SnapshotFailingStore() override = default;
+};
+
 class ArchiumLocalPasswordManagerTest : public testing::Test {
  protected:
   void SetUp() override {
@@ -157,6 +168,79 @@ TEST_F(ArchiumLocalPasswordManagerTest, InvalidAddDoesNotReportWriteSuccess) {
   ASSERT_TRUE(pending_auth_);
   std::move(pending_auth_).Run(true);
   EXPECT_EQ(result.Get(), Status::kInvalid);
+}
+
+TEST_F(ArchiumLocalPasswordManagerTest,
+       StoreChangeAfterPreviewMakesConfirmationStale) {
+  std::vector<CSVPassword> rows;
+  rows.emplace_back(GURL("https://import.test/"), "import-user",
+                    "import-secret", "", CSVPassword::Status::kOK);
+  base::test::TestFuture<
+      Status, std::vector<ArchiumPasswordImportPreview::Row>>
+      preview;
+  manager_->PreviewImport(std::move(rows), preview.GetCallback());
+  ASSERT_TRUE(pending_auth_);
+  std::move(pending_auth_).Run(true);
+  tasks_.RunUntilIdle();
+  ASSERT_EQ(preview.Get<0>(), Status::kSuccess);
+
+  CSVPassword changed(GURL("https://changed.test/"), "other", "changed", "",
+                      CSVPassword::Status::kOK);
+  store_->AddLogin(
+      SavedPasswordsPresenter::CreateImportedCredential(
+          CredentialUIEntry(changed)));
+  tasks_.RunUntilIdle();
+
+  EXPECT_CALL(*auth_, AuthenticateWithMessage(_, _)).Times(0);
+  base::test::TestFuture<Status> confirm;
+  manager_->ConfirmImport(
+      {ArchiumPasswordImportPreview::Decision::kImport},
+      confirm.GetCallback());
+  EXPECT_EQ(confirm.Get(), Status::kStale);
+}
+
+TEST(ArchiumLocalPasswordManagerWriteFailureTest,
+     AcceptedAddDoesNotReportSuccessWhenSnapshotVerificationFails) {
+  base::test::SingleThreadTaskEnvironment tasks;
+  affiliations::FakeAffiliationService affiliations;
+  auto store = base::MakeRefCounted<SnapshotFailingStore>();
+  ON_CALL(*store, GetError()).WillByDefault(Return(ActionableError::kNoError));
+  EXPECT_CALL(*store, GetAllLoginsWithAffiliationAndBrandingInformation(_))
+      .WillOnce([&](base::WeakPtr<PasswordStoreConsumer> consumer) {
+        consumer->OnGetPasswordStoreResultsFrom(store.get(), {});
+      });
+  ON_CALL(*store, AddLogin(_, _))
+      .WillByDefault([](StoredCredential, base::OnceClosure completion) {
+        if (completion) std::move(completion).Run();
+      });
+
+  auto auth =
+      std::make_unique<
+          testing::NiceMock<device_reauth::MockDeviceAuthenticator>>();
+  auto* auth_ptr = auth.get();
+  ON_CALL(*auth_ptr, CanAuthenticateWithBiometricOrScreenLock())
+      .WillByDefault(Return(true));
+  device_reauth::DeviceAuthenticator::AuthenticateCallback pending;
+  ON_CALL(*auth_ptr, AuthenticateWithMessage(_, _))
+      .WillByDefault(
+          [&](const std::u16string&,
+              device_reauth::DeviceAuthenticator::AuthenticateCallback reply) {
+            pending = std::move(reply);
+          });
+
+  ArchiumLocalPasswordManager manager(
+      &affiliations, store, std::move(auth), base::DoNothing());
+  tasks.RunUntilIdle();
+
+  base::test::TestFuture<Status> result;
+  manager.Add(GURL("https://write-fails.test/"), u"user",
+              PasswordString(std::u16string(u"secret")),
+              result.GetCallback());
+  ASSERT_TRUE(pending);
+  std::move(pending).Run(true);
+  tasks.RunUntilIdle();
+  EXPECT_EQ(result.Get(), Status::kWriteFailed);
+  manager.Shutdown();
 }
 
 TEST_F(ArchiumLocalPasswordManagerTest, RevealWaitsForRealAuthenticatorResult) {
