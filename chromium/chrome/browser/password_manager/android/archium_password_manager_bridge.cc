@@ -4,6 +4,7 @@
 #include "chrome/browser/password_manager/android/archium_password_manager_bridge.h"
 
 #include <limits>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <utility>
@@ -46,6 +47,23 @@ base::android::ScopedJavaLocalRef<jcharArray> SecretArray(
                            reinterpret_cast<const jchar*>(secret.data()));
   }
   return result;
+}
+
+std::optional<password_manager::PasswordString> PasswordFromJava(
+    JNIEnv* env, const base::android::JavaRef<jcharArray>& password) {
+  if (password.is_null()) return std::nullopt;
+  const jsize length = env->GetArrayLength(password.obj());
+  if (length < 0 || length > 1048576) return std::nullopt;
+  std::u16string value(static_cast<size_t>(length), u'\0');
+  if (length) {
+    env->GetCharArrayRegion(password.obj(), 0, length,
+                            reinterpret_cast<jchar*>(value.data()));
+    if (env->ExceptionCheck()) {
+      std::fill(value.begin(), value.end(), u'\0');
+      return std::nullopt;
+    }
+  }
+  return password_manager::PasswordString(std::move(value));
 }
 #endif
 }  // namespace
@@ -104,6 +122,90 @@ void ArchiumPasswordManagerBridge::Refresh(JNIEnv* env) {
   Java_ArchiumPasswordManagerBridge_onListEnd(env, peer_, result ? 0 : static_cast<int>(result.error()));
 #else
   Java_ArchiumPasswordManagerBridge_onListEnd(env, peer_, kUnavailable);
+#endif
+}
+
+void ArchiumPasswordManagerBridge::Add(
+    JNIEnv* env,
+    int32_t request,
+    const base::android::JavaRef<jstring>& url,
+    const base::android::JavaRef<jstring>& username,
+    const base::android::JavaRef<jcharArray>& password) {
+#if BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
+  auto secret = PasswordFromJava(env, password);
+  if (url.is_null() || username.is_null() || !secret) {
+    Java_ArchiumPasswordManagerBridge_onOperation(env, peer_, request, kInvalid);
+    return;
+  }
+  manager_->Add(
+      GURL(base::android::ConvertJavaStringToUTF8(env, url)),
+      base::android::ConvertJavaStringToUTF16(env, username),
+      std::move(*secret),
+      base::BindOnce(
+          [](base::WeakPtr<ArchiumPasswordManagerBridge> self,
+             int32_t request, Manager::Status status) {
+            if (self) {
+              Java_ArchiumPasswordManagerBridge_onOperation(
+                  base::android::AttachCurrentThread(), self->peer_, request,
+                  static_cast<int>(status));
+            }
+          },
+          weak_ptr_factory_.GetWeakPtr(), request));
+#else
+  Java_ArchiumPasswordManagerBridge_onOperation(env, peer_, request,
+                                                kUnavailable);
+#endif
+}
+
+void ArchiumPasswordManagerBridge::Update(
+    JNIEnv* env,
+    int32_t request,
+    int64_t id,
+    const base::android::JavaRef<jstring>& username,
+    const base::android::JavaRef<jcharArray>& password) {
+#if BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
+  auto secret = PasswordFromJava(env, password);
+  if (username.is_null() || !secret) {
+    Java_ArchiumPasswordManagerBridge_onOperation(env, peer_, request, kInvalid);
+    return;
+  }
+  manager_->Update(
+      id, base::android::ConvertJavaStringToUTF16(env, username),
+      std::move(*secret),
+      base::BindOnce(
+          [](base::WeakPtr<ArchiumPasswordManagerBridge> self,
+             int32_t request, Manager::Status status) {
+            if (self) {
+              Java_ArchiumPasswordManagerBridge_onOperation(
+                  base::android::AttachCurrentThread(), self->peer_, request,
+                  static_cast<int>(status));
+            }
+          },
+          weak_ptr_factory_.GetWeakPtr(), request));
+#else
+  Java_ArchiumPasswordManagerBridge_onOperation(env, peer_, request,
+                                                kUnavailable);
+#endif
+}
+
+void ArchiumPasswordManagerBridge::Delete(
+    JNIEnv* env, int32_t request, int64_t id) {
+#if BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
+  manager_->Delete(
+      id,
+      base::BindOnce(
+          [](base::WeakPtr<ArchiumPasswordManagerBridge> self,
+             int32_t request, Manager::Status status) {
+            if (self) {
+              Java_ArchiumPasswordManagerBridge_onOperation(
+                  base::android::AttachCurrentThread(), self->peer_, request,
+                  static_cast<int>(status));
+            }
+          },
+          weak_ptr_factory_.GetWeakPtr(), request));
+#else
+  Java_ArchiumPasswordManagerBridge_onOperation(env, peer_, request,
+                                                kUnavailable);
 #endif
 }
 
