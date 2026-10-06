@@ -24,7 +24,7 @@
 
 #if !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
 #include "components/password_manager/core/browser/password_store/login_database.h"
-#endif  // !BUILDFLAG(IS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
 
 namespace password_manager {
 
@@ -44,7 +44,7 @@ LoginDatabase::DeletingUndecryptablePasswordsEnabled GetPolicyFromPrefs(
   return LoginDatabase::DeletingUndecryptablePasswordsEnabled(true);
 #endif
 }
-#endif  // !BUILDFLAG(IS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
 
 }  // namespace
 
@@ -59,7 +59,7 @@ std::unique_ptr<LoginDatabase> CreateLoginDatabase(
   return std::make_unique<LoginDatabase>(login_db_file_path, is_account_store,
                                          GetPolicyFromPrefs(prefs));
 }
-#endif  // !BUILDFLAG(IS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
 
 // TODO(http://crbug.com/890318): Add unitests to check cleaners are correctly
 // created.
