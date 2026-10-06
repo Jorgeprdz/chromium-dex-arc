@@ -16,7 +16,7 @@
 
 #if !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
 #include "components/password_manager/core/browser/password_store/login_database.h"
-#endif  // !BUILDFLAG(IS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
 
 namespace network::mojom {
 class NetworkContext;
@@ -36,7 +36,7 @@ std::unique_ptr<LoginDatabase> CreateLoginDatabase(
     password_manager::IsAccountStore is_account_store,
     const base::FilePath& db_directory,
     PrefService* prefs);
-#endif  // !BUILDFLAG(IS_ANDROID)
+#endif  // !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
 
 // This function handles the following clean-ups of credentials:
 // (1) Removing blocklisted duplicates: if two blocklisted credentials have the
