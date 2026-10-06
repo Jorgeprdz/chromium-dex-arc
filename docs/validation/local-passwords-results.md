@@ -44,3 +44,19 @@ CSV transport limits: 16,777,216 input characters, 100,000 records, 512 columns
 and 1,048,576 characters per field. Exceeding a limit rejects the preview; no
 PasswordStore mutation occurs in this parser. Conflicting passwords remain
 separate rows for native duplicate review; only identical triples are skipped.
+
+## Protección de vistas previas preparada (no validación nativa)
+
+Se agregó un snapshot de credenciales sobre la secuencia real de DB, con token
+único por inicialización de LoginDatabase, total_changes y data_version de SQLite.
+La importación puede exigir la revisión del preview y la comprueba dentro de la
+transacción, con snapshot de lectura adquirido antes de validar. Una escritura
+posterior invalida el preview; no se deben reutilizar revisiones después de reabrir
+el backend. El callback pendiente se cancela con el WeakPtr del PasswordStore.
+
+Se añadieron seis regresiones C++: guardado web posterior, lecturas sucesivas,
+reapertura, escritura por otra conexión, cola async y cierre durante snapshot.
+No se han compilado ni ejecutado en Chromium todavía. Un experimento separado
+con SQLite local verificó únicamente los contadores, no el código C++.
+El gestor nativo visible, autenticación, SAF, review/confirmación CSV y exportación
+siguen pendientes; esta API preparada no significa que ya se pueda importar.

@@ -90,3 +90,5 @@ prueba restauración de pestañas/formularios en la APK Chromium ni la compilaci
 completa de MainSettings.
 
 Modelo de sidebar y almacenamiento preparados: identidades estables, Spaces, Favorites compartidos, carpetas anidadas, fijados que conservan URL al cerrar su pestaña, recuperación de asociación ausente y persistencia versionada. Pruebas JVM de modelo/almacenamiento pasan. El adaptador utiliza UserPrefs y ProfileKeyedMap OWN_INSTANCE; el almacenamiento privado es en memoria. Todavía falta conectar TabModel, renderizar las colecciones y verificar el ciclo de vida nativo/perfiles. No se ha compilado otra APK.
+
+Preparada la API de snapshot/revisión de importación en la DB y su ruta async. Seis nuevas regresiones C++ escritas, pendientes de compilación/ejecución. Ver `docs/validation/local-passwords-results.md`. El gestor visible, autenticación y SAF siguen sin implementar. No hay run nuevo.

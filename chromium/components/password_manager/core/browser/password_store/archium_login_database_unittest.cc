@@ -8,6 +8,7 @@
 
 #include "base/files/scoped_temp_dir.h"
 #include "base/functional/callback_helpers.h"
+#include "base/functional/bind.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_future.h"
 #include "components/password_manager/core/browser/password_store/password_store.h"
@@ -92,6 +93,62 @@ class ArchiumLoginDatabaseTest : public testing::Test {
   std::unique_ptr<os_crypt_async::OSCryptAsync> crypt_;
   scoped_refptr<PasswordStore> store_;
 };
+
+TEST_F(ArchiumLoginDatabaseTest, StaleImportPreviewCannotOverwriteLaterWebSave) {
+  auto snapshot = db_->GetImportSnapshot();
+  ASSERT_TRUE(snapshot.has_value());
+  ASSERT_TRUE(snapshot->credentials.empty());
+  auto web_save = db_->AddLogin(Credential("later.example", u"web-secret"));
+  ASSERT_FALSE(web_save.empty());
+  std::vector<StoredCredential> imported;
+  imported.push_back(Credential("later.example", u"csv-secret"));
+  auto result = db_->ApplyImportedLogins(imported, snapshot->revision);
+  EXPECT_FALSE(result.has_value());
+  std::vector<StoredCredential> actual;
+  ASSERT_EQ(FormRetrievalResult::kSuccess, db_->GetAllLogins(&actual));
+  ASSERT_EQ(1u, actual.size());
+  EXPECT_EQ(u"web-secret", actual[0].password_value.value());
+}
+
+TEST_F(ArchiumLoginDatabaseTest, SnapshotReadDoesNotInvalidatePreviewAndCommitDoes) {
+  auto first = db_->GetImportSnapshot();
+  ASSERT_TRUE(first.has_value());
+  auto second = db_->GetImportSnapshot();
+  ASSERT_TRUE(second.has_value());
+  EXPECT_EQ(first->revision, second->revision);
+  std::vector<StoredCredential> rows;
+  rows.push_back(Credential("one.example", u"import-secret"));
+  ASSERT_TRUE(db_->ApplyImportedLogins(rows, first->revision).has_value());
+  std::vector<StoredCredential> later;
+  later.push_back(Credential("two.example", u"second-secret"));
+  EXPECT_FALSE(db_->ApplyImportedLogins(later, second->revision).has_value());
+  EXPECT_EQ(1, RowCount());
+}
+
+TEST_F(ArchiumLoginDatabaseTest, ImportPreviewCannotBeReplayedOnReopenedDatabase) {
+  auto snapshot = db_->GetImportSnapshot();
+  ASSERT_TRUE(snapshot.has_value());
+  Reopen(encryptor_);
+  std::vector<StoredCredential> rows;
+  rows.push_back(Credential("one.example", u"synthetic-secret"));
+  EXPECT_FALSE(db_->ApplyImportedLogins(rows, snapshot->revision).has_value());
+  EXPECT_EQ(0, RowCount());
+}
+
+TEST_F(ArchiumLoginDatabaseTest, OtherConnectionWriteInvalidatesImportPreview) {
+  ASSERT_FALSE(db_->AddLogin(Credential("one.example", u"original-secret")).empty());
+  auto snapshot = db_->GetImportSnapshot();
+  ASSERT_TRUE(snapshot.has_value());
+  {
+    sql::Database external(sql::test::kTestTag);
+    ASSERT_TRUE(external.Open(path_));
+    ASSERT_TRUE(external.Execute("UPDATE logins SET times_used = times_used + 1"));
+  }
+  std::vector<StoredCredential> rows;
+  rows.push_back(Credential("two.example", u"import-secret"));
+  EXPECT_FALSE(db_->ApplyImportedLogins(rows, snapshot->revision).has_value());
+  EXPECT_EQ(1, RowCount());
+}
 
 TEST_F(ArchiumLoginDatabaseTest, AtomicImportPersistsEncryptedPasswordsAfterReopen) {
   std::vector<StoredCredential> rows;
@@ -221,6 +278,40 @@ class CommittedRowsObserver : public PasswordStoreInterface::Observer {
  private:
   base::FilePath path_;
 };
+
+TEST_F(ArchiumLoginDatabaseTest, AsyncSnapshotQueuesAndRejectsSubsequentWebSave) {
+  OpenStore();
+  base::test::TestFuture<ArchiumImportSnapshotResult> preview;
+  store_->GetImportSnapshot(preview.GetCallback());
+  auto snapshot = preview.Take();
+  ASSERT_TRUE(snapshot.has_value());
+  EXPECT_TRUE(snapshot->credentials.empty());
+  store_->AddLogin(Credential("one.example", u"web-secret"));
+  std::vector<StoredCredential> imported;
+  imported.push_back(Credential("one.example", u"csv-secret"));
+  base::test::TestFuture<base::expected<void, PasswordStoreBackendError>> result;
+  store_->ImportLoginsAtomically(std::move(imported), result.GetCallback(),
+                                 snapshot->revision);
+  EXPECT_FALSE(result.Take().has_value());
+  base::test::TestFuture<ArchiumImportSnapshotResult> current;
+  store_->GetImportSnapshot(current.GetCallback());
+  auto actual = current.Take();
+  ASSERT_TRUE(actual.has_value());
+  ASSERT_EQ(1u, actual->credentials.size());
+  EXPECT_EQ(u"web-secret", actual->credentials[0].password_value.value());
+}
+
+TEST_F(ArchiumLoginDatabaseTest, ShutdownDropsPendingSnapshotReply) {
+  OpenStore();
+  bool replied = false;
+  store_->GetImportSnapshot(base::BindOnce(
+      [](bool* replied, ArchiumImportSnapshotResult) { *replied = true; },
+      &replied));
+  store_->ShutdownOnUIThread();
+  task_environment_.RunUntilIdle();
+  EXPECT_FALSE(replied);
+  store_.reset();
+}
 
 TEST_F(ArchiumLoginDatabaseTest, AsyncStoreNotifiesOnlyAfterCompleteCommit) {
   OpenStore();
