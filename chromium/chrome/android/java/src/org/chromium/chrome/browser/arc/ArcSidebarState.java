@@ -16,6 +16,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.function.IntPredicate;
 
 /** Profile-owned Arc metadata. Native TabModel remains the owner of every real tab. */
 public final class ArcSidebarState {
@@ -145,18 +146,18 @@ public final class ArcSidebarState {
         mTabSpaces.remove(tabId);
     }
     /**
-     * Reconciles persisted native IDs against the authoritative live set. Callers must invoke this
-     * only after Chromium reports restoreCompleted() (or when TabModel.isTabModelRestored() was
-     * already true at session construction). Closed pinned entries keep their canonical URL/title.
+     * Clears IDs only when profile-wide native authority confirms they may be forgotten. A local
+     * Activity's restored tab list cannot prove another window's persisted IDs absent. Closed
+     * pinned entries keep their canonical URL/title, and pending closures retain their bindings.
      */
-    public void reconcileTabsAfterRestore(Set<Integer> realTabIds) {
+    public void reconcileTabsAfterRestore(IntPredicate mayForgetTabId) {
         for (int i = 0; i < mEntries.size(); i++) {
             Entry entry = mEntries.get(i);
-            if (entry.tabId != null && !realTabIds.contains(entry.tabId)) {
+            if (entry.tabId != null && mayForgetTabId.test(entry.tabId)) {
                 mEntries.set(i, entry.withTab(null));
             }
         }
-        mTabSpaces.keySet().retainAll(realTabIds);
+        mTabSpaces.keySet().removeIf(mayForgetTabId::test);
         // Favorites are global collection entries, not Space-owned open-tab rows. Repair any
         // residual ownership left by a synchronous didAddTab() or older persisted state.
         for (Entry entry : mEntries) {

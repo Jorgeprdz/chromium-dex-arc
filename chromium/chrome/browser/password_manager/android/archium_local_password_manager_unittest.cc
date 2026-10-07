@@ -7,6 +7,7 @@
 #include <memory>
 #include <utility>
 
+#include "base/files/scoped_temp_dir.h"
 #include "base/functional/bind.h"
 #include "base/functional/callback_helpers.h"
 #include "base/test/bind.h"
@@ -14,10 +15,16 @@
 #include "base/test/test_future.h"
 #include "components/affiliations/core/browser/fake_affiliation_service.h"
 #include "components/device_reauth/mock_device_authenticator.h"
+#include "components/os_crypt/async/browser/test_utils.h"
+#include "components/password_manager/core/browser/affiliation/affiliated_match_helper.h"
 #include "components/password_manager/core/browser/password_store/actionable_error.h"
-#include "components/password_manager/core/browser/password_store/test_password_store.h"
+#include "components/password_manager/core/browser/password_store/login_database.h"
 #include "components/password_manager/core/browser/password_store/mock_password_store_interface.h"
+#include "components/password_manager/core/browser/password_store/password_store.h"
+#include "components/password_manager/core/browser/password_store/password_store_built_in_backend.h"
 #include "components/password_manager/core/browser/ui/saved_passwords_presenter.h"
+#include "components/password_manager/core/common/password_manager_pref_names.h"
+#include "components/prefs/testing_pref_service.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
 
@@ -41,9 +48,33 @@ class SnapshotFailingStore : public MockPasswordStoreInterface {
 class ArchiumLocalPasswordManagerTest : public testing::Test {
  protected:
   void SetUp() override {
+    ASSERT_TRUE(directory_.CreateUniqueTempDir());
+    prefs_.registry()->RegisterBooleanPref(prefs::kClearingUndecryptablePasswords,
+                                          false);
+    prefs_.registry()->RegisterIntegerPref(prefs::kPasswordRemovalReasonForAccount,
+                                          0);
+    prefs_.registry()->RegisterIntegerPref(prefs::kPasswordRemovalReasonForProfile,
+                                          0);
+    crypt_ = os_crypt_async::GetTestOSCryptAsyncForTesting();
+    // Exercise the same asynchronous SQLite snapshot/import implementation as
+    // production. TestPasswordStore's FakePasswordStoreBackend does not implement
+    // these APIs and cannot be used to test a successful authenticated operation.
+    store_ = base::MakeRefCounted<PasswordStore>(
+        std::make_unique<PasswordStoreBuiltInBackend>(
+            std::make_unique<LoginDatabase>(
+                directory_.GetPath().AppendASCII("Login Data"),
+                IsAccountStore(false)),
+            syncer::WipeModelUponSyncDisabledBehavior::kNever, &prefs_,
+            crypt_.get(), nullptr));
     store_->Init();
-    CSVPassword csv(GURL("https://example.test/"), "user", "secret", "", CSVPassword::Status::kOK);
-    store_->AddLogin(SavedPasswordsPresenter::CreateImportedCredential(CredentialUIEntry(csv)));
+    CSVPassword csv(GURL("https://example.test/"), "user", "secret", "",
+                    CSVPassword::Status::kOK);
+    base::test::TestFuture<void> seeded;
+    store_->AddLogin(
+        SavedPasswordsPresenter::CreateImportedCredential(CredentialUIEntry(csv)),
+        seeded.GetCallback());
+    tasks_.RunUntilIdle();
+    ASSERT_TRUE(seeded.IsReady());
     auto auth = std::make_unique<testing::NiceMock<device_reauth::MockDeviceAuthenticator>>();
     auth_ = auth.get();
     ON_CALL(*auth_, CanAuthenticateWithBiometricOrScreenLock()).WillByDefault(Return(true));
@@ -57,8 +88,11 @@ class ArchiumLocalPasswordManagerTest : public testing::Test {
   }
   void TearDown() override {
     manager_.reset();
-    store_->ShutdownOnUIThread();
+    if (store_) {
+      store_->ShutdownOnUIThread();
+    }
     tasks_.RunUntilIdle();
+    store_.reset();
   }
   int64_t FirstId() {
     auto metadata = manager_->GetMetadata();
@@ -66,13 +100,68 @@ class ArchiumLocalPasswordManagerTest : public testing::Test {
     if (!metadata || metadata->empty()) return -1;
     return metadata->front().id;
   }
-  base::test::SingleThreadTaskEnvironment tasks_;
-  scoped_refptr<TestPasswordStore> store_ = base::MakeRefCounted<TestPasswordStore>();
+  // Both the built-in DB backend and PreviewImport's parsing worker use ThreadPool.
+  base::test::TaskEnvironment tasks_;
+  base::ScopedTempDir directory_;
+  TestingPrefServiceSimple prefs_;
+  std::unique_ptr<os_crypt_async::OSCryptAsync> crypt_;
+  scoped_refptr<PasswordStore> store_;
   affiliations::FakeAffiliationService affiliations_;
   device_reauth::MockDeviceAuthenticator* auth_ = nullptr;
   device_reauth::DeviceAuthenticator::AuthenticateCallback pending_auth_;
   std::unique_ptr<ArchiumLocalPasswordManager> manager_;
 };
+
+TEST_F(ArchiumLocalPasswordManagerTest,
+       FixtureSupportsRealSnapshotsAndAtomicImport) {
+  base::test::TestFuture<ArchiumImportSnapshotResult> before;
+  store_->GetImportSnapshot(before.GetCallback());
+  tasks_.RunUntilIdle();
+  ASSERT_TRUE(before.IsReady());
+  ASSERT_TRUE(before.Get().has_value());
+  ASSERT_EQ(before.Get()->credentials.size(), 1u);
+  EXPECT_FALSE(before.Get()->revision.session.is_empty());
+  EXPECT_EQ(before.Get()->credentials.front().password_value, u"secret");
+
+  CSVPassword csv(GURL("https://fixture-import.test/"), "import-user",
+                  "import-secret", "", CSVPassword::Status::kOK);
+  std::vector<StoredCredential> imported;
+  imported.push_back(
+      SavedPasswordsPresenter::CreateImportedCredential(CredentialUIEntry(csv)));
+  base::test::TestFuture<base::expected<void, ArchiumImportFailure>> committed;
+  store_->ImportLoginsAtomically(std::move(imported), committed.GetCallback(),
+                                before.Get()->revision);
+  tasks_.RunUntilIdle();
+  ASSERT_TRUE(committed.IsReady());
+  ASSERT_TRUE(committed.Get().has_value());
+
+  base::test::TestFuture<ArchiumImportSnapshotResult> after;
+  store_->GetImportSnapshot(after.GetCallback());
+  tasks_.RunUntilIdle();
+  ASSERT_TRUE(after.IsReady());
+  ASSERT_TRUE(after.Get().has_value());
+  EXPECT_EQ(after.Get()->credentials.size(), 2u);
+  EXPECT_NE(after.Get()->revision, before.Get()->revision);
+  EXPECT_TRUE(std::ranges::any_of(after.Get()->credentials, [](const auto& cred) {
+    return cred.url == GURL("https://fixture-import.test/") &&
+           cred.username_value == u"import-user" &&
+           cred.password_value == u"import-secret";
+  }));
+}
+
+TEST_F(ArchiumLocalPasswordManagerTest,
+       AuthenticatedExportReadsPersistedSnapshot) {
+  base::test::TestFuture<Status, std::vector<StoredCredential>> result;
+  manager_->Export(result.GetCallback());
+  EXPECT_FALSE(result.IsReady());
+  ASSERT_TRUE(pending_auth_);
+  std::move(pending_auth_).Run(true);
+  tasks_.RunUntilIdle();
+  ASSERT_TRUE(result.IsReady());
+  ASSERT_EQ(result.Get<0>(), Status::kSuccess);
+  ASSERT_EQ(result.Get<1>().size(), 1u);
+  EXPECT_EQ(result.Get<1>().front().password_value, u"secret");
+}
 
 TEST_F(ArchiumLocalPasswordManagerTest, MetadataDoesNotRequestAuthenticationOrRevealSecrets) {
   EXPECT_CALL(*auth_, AuthenticateWithMessage(_, _)).Times(0);

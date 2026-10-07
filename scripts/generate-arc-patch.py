@@ -32,9 +32,12 @@ def main():
             chunks.append('diff --git a/' + name + ' b/' + name + '\n')
             if base == new_sources:
                 chunks.append('new file mode 100644\n')
-            chunks.extend(difflib.unified_diff(before.decode().splitlines(True),
+            diff = difflib.unified_diff(before.decode().splitlines(True),
                 after.decode().splitlines(True),
-                fromfile='a/' + name if base == modified else '/dev/null', tofile='b/' + name))
+                fromfile='a/' + name if base == modified else '/dev/null', tofile='b/' + name)
+            # Git accepts an empty context line without the optional space marker.
+            # Avoid trailing whitespace in the patch file while preserving source bytes.
+            chunks.extend('\n' if line == ' \n' else line for line in diff)
     if not originals:
         raise ValueError('no source changes found')
     patch = ''.join(chunks)

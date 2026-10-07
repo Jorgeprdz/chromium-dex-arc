@@ -4,32 +4,43 @@
 package org.chromium.chrome.browser.arc;
 
 import org.chromium.base.ThreadUtils;
+import org.chromium.chrome.browser.app.tabwindow.TabWindowManagerSingleton;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabLaunchType;
 import org.chromium.chrome.browser.tab.TabSelectionType;
 import org.chromium.chrome.browser.tabmodel.TabClosureParams;
 import org.chromium.chrome.browser.tabmodel.TabCreator;
+import org.chromium.chrome.browser.tabmodel.TabList;
 import org.chromium.chrome.browser.tabmodel.TabModel;
 import org.chromium.chrome.browser.tabmodel.TabModelObserver;
+import org.chromium.chrome.browser.tabmodel.TabModelSelector;
+import org.chromium.chrome.browser.tabwindow.TabWindowManager;
 import org.chromium.content_public.browser.LoadUrlParams;
 
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.function.BooleanSupplier;
+import java.util.function.IntPredicate;
 
 /** Adapter to one real Chromium model/creator; never acts on an inactive profile's UI. */
 public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
     private enum RestoreState { RESTORE_PENDING, RESTORE_COMPLETE }
 
     private final TabModel mModel;
+    private final Profile mProfile;
     private final TabCreator mCreator;
     private final BooleanSupplier mIsCurrentModel;
     private final Runnable mOnStateChanged;
     private final ArcTabActions mActions;
     private final ArcSidebarStore mStore;
     private final TabModelObserver mObserver;
+    private final TabWindowManager mWindowManager;
+    private final TabWindowManager.Observer mWindowObserver;
     private RestoreState mRestoreState;
     private boolean mDestroyed;
 
@@ -41,6 +52,7 @@ public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
             throw new IllegalStateException("Arc tab profile is not initialized");
         }
         mModel = model;
+        mProfile = profile;
         mCreator = creator;
         mIsCurrentModel = isCurrentModel;
         mOnStateChanged = onStateChanged;
@@ -71,6 +83,12 @@ public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
                 if (active()) mOnStateChanged.run();
             }
 
+            @Override public void tabClosureUndone(Tab tab) {
+                if (mDestroyed) return;
+                if (restoreComplete()) adoptTab(tab.getId());
+                if (active()) mOnStateChanged.run();
+            }
+
             @Override public void tabClosureCommitted(Tab tab) { confirmedClose(tab.getId()); }
             @Override public void onTabCloseCommitted(List<Tab> tabs, boolean isAllTabs,
                     boolean canRestore, int closingSource) {
@@ -78,6 +96,19 @@ public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
             }
         };
         model.addObserver(mObserver);
+        mWindowManager = TabWindowManagerSingleton.getInstance();
+        mWindowObserver = new TabWindowManager.Observer() {
+            @Override public void onAllTabModelStateInitialized() {
+                if (mDestroyed) return;
+                // This event establishes absence authority, not a local Space selection. Never
+                // create or choose a tab just because another window finished restoring.
+                reconcileTabsAfterRestore();
+                if (active()) mOnStateChanged.run();
+            }
+        };
+        // addObserver() does not replay the all-model event. The reconciliation below explicitly
+        // checks the latch, so attaching after that event is equally safe.
+        mWindowManager.addObserver(mWindowObserver);
         // If this session attaches after Chromium already completed restore, the model itself is
         // authoritative and the restoreCompleted callback is not required to arrive again.
         if (restoreComplete()) {
@@ -92,11 +123,12 @@ public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
     private boolean active() {
         Profile profile = mModel.getProfile();
         return !mDestroyed && mIsCurrentModel.getAsBoolean()
-                && profile != null && !profile.shutdownStarted();
+                && profile == mProfile && !profile.shutdownStarted();
     }
 
     private void adoptTab(int tabId) {
-        if (mDestroyed || tabId < 0) return;
+        if (mDestroyed || tabId < 0 || mProfile.shutdownStarted()
+                || mModel.getProfile() != mProfile) return;
         try {
             ArcSidebarState state = mStore.load();
             if (state.isFavoriteTab(tabId) || state.hasTabSpace(tabId)) return;
@@ -111,22 +143,79 @@ public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
         return mRestoreState == RestoreState.RESTORE_COMPLETE;
     }
 
-    private Set<Integer> liveTabIds() {
+    private static Set<Integer> comprehensiveTabIds(TabModel model) {
         Set<Integer> live = new HashSet<>();
-        for (int i = 0; i < mModel.getCount(); i++) {
-            Tab tab = mModel.getTabAt(i);
-            if (tab != null) live.add(tab.getId());
+        TabList comprehensive = model.getComprehensiveModel();
+        for (int i = 0; i < comprehensive.getCount(); i++) {
+            Tab tab = comprehensive.getTabAt(i);
+            if (tab == null || tab.getId() < 0) {
+                throw new IllegalStateException("Arc tab authority is incomplete");
+            }
+            live.add(tab.getId());
         }
         return live;
     }
 
+    private IntPredicate tabDeletionAuthority(Set<Integer> localIds) {
+        try {
+            // Headless regular restoration deliberately ignores persisted incognito state. Its
+            // all-window latch cannot prove absence in an exact OTR profile's in-memory store.
+            if (mProfile.isOffTheRecord() || mProfile.shutdownStarted()
+                    || !mModel.isTabModelRestored()
+                    || !mWindowManager.isAllTabStateInitialized()) return id -> false;
+            TabModelSelector archive = mWindowManager.getArchivedTabModelSelector();
+            if (archive == null || !archive.isTabStateInitialized()) return id -> false;
+            // Manager collections are live; take UI-thread snapshots before inspecting models.
+            List<TabModelSelector> selectors =
+                    new ArrayList<>(mWindowManager.getAllTabModelSelectors());
+            selectors.addAll(new ArrayList<>(mWindowManager.getCustomTabsTabModelSelectors()));
+            selectors.add(archive);
+            Set<Integer> protectedIds = new HashSet<>(localIds);
+            for (TabModelSelector selector : selectors) {
+                if (!selector.isTabStateInitialized()) return id -> false;
+                List<TabModel> models = new ArrayList<>(selector.getModels());
+                if (models.isEmpty()) return id -> false;
+                for (TabModel model : models) {
+                    Profile candidate = model.getProfile();
+                    if (candidate == null) {
+                        // Incognito's unused empty stub has no native Profile. It cannot own a
+                        // regular ID; any unknown regular/nonempty state remains conservative.
+                        if (model.isOffTheRecord() && model.getCount() == 0
+                                && model.getComprehensiveModel().getCount() == 0) continue;
+                        return id -> false;
+                    }
+                    if (candidate != mProfile) continue;
+                    if (candidate.shutdownStarted() || !model.isTabModelRestored()) {
+                        return id -> false;
+                    }
+                    protectedIds.addAll(comprehensiveTabIds(model));
+                }
+            }
+            // Cache each decision for this reconciliation: bindings and owners for the same ID
+            // must see the same answer, even if a manager lookup fails partway through.
+            Map<Integer, Boolean> decisions = new HashMap<>();
+            return id -> decisions.computeIfAbsent(id, candidate -> {
+                if (protectedIds.contains(candidate)) return false;
+                try {
+                    return mWindowManager.canTabStateBeDeleted(candidate);
+                } catch (RuntimeException ignored) {
+                    return false;
+                }
+            });
+        } catch (RuntimeException ignored) {
+            // Unknown window/profile/archive state never authorizes negative reconciliation.
+            return id -> false;
+        }
+    }
+
     private void reconcileTabsAfterRestore() {
-        if (mDestroyed || !restoreComplete()) return;
+        if (mDestroyed || !restoreComplete() || mProfile.shutdownStarted()
+                || mModel.getProfile() != mProfile) return;
         try {
             ArcSidebarState state = mStore.load();
-            Set<Integer> live = liveTabIds();
+            Set<Integer> live = comprehensiveTabIds(mModel);
             String before = state.serialize();
-            state.reconcileTabsAfterRestore(live);
+            state.reconcileTabsAfterRestore(tabDeletionAuthority(live));
             for (int tabId : live) {
                 if (!state.isFavoriteTab(tabId) && !state.hasTabSpace(tabId)) {
                     state.associateTab(tabId, state.selectedSpace());
@@ -247,6 +336,7 @@ public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
         if (mDestroyed) return;
         mDestroyed = true;
         mModel.removeObserver(mObserver);
+        mWindowManager.removeObserver(mWindowObserver);
         mActions.destroy();
     }
 }

@@ -3,7 +3,7 @@ diff --git a/chrome/android/chrome_java_resources.gni b/chrome/android/chrome_ja
 +++ b/chrome/android/chrome_java_resources.gni
 @@ -8,6 +8,7 @@
  # git cl format
- 
+
  chrome_java_resources = [
 +  "java/res/values/arc_strings.xml",
    "java/res/anim/accelerate_quart.xml",
@@ -14,7 +14,7 @@ diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java
 +++ b/chrome/android/chrome_java_sources.gni
 @@ -5,6 +5,16 @@
  import("//content/public/common/features.gni")
- 
+
  chrome_java_sources = [
 +  "java/src/org/chromium/chrome/browser/arc/ArcCollectionsController.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java",
@@ -34,13 +34,174 @@ diff --git a/chrome/android/features/tab_ui/java/res/values/dimens.xml b/chrome/
 +++ b/chrome/android/features/tab_ui/java/res/values/dimens.xml
 @@ -184,7 +184,7 @@
      <dimen name="pinned_tab_strip_height">72dp</dimen>
- 
+
      <!-- Dimens for Vertical Tabs (Desktop / Default) -->
 -    <dimen name="vertical_tabs_rail_horizontal_margin">12dp</dimen>
 +    <dimen name="vertical_tabs_rail_horizontal_margin">4dp</dimen>
      <dimen name="vertical_tabs_hover_overlay_corner_radius">12dp</dimen>
      <dimen name="vertical_tabs_scrollbar_margin_end">-9dp</dimen>
      <dimen name="vertical_tabs_scrollbar_padding_end">9dp</dimen>
+diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/NestedLayoutDelegate.java b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/NestedLayoutDelegate.java
+--- a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/NestedLayoutDelegate.java
++++ b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/NestedLayoutDelegate.java
+@@ -22,7 +22,6 @@
+ import org.chromium.build.annotations.Nullable;
+ import org.chromium.chrome.browser.tab.Tab;
+ import org.chromium.chrome.browser.tab.TabLaunchType;
+-import org.chromium.chrome.browser.tabmodel.TabGroupUtils;
+ import org.chromium.chrome.browser.tabmodel.TabList;
+ import org.chromium.chrome.browser.tabmodel.TabModel;
+ import org.chromium.chrome.browser.tasks.tab_management.TabListModel.CardProperties.ModelType;
+@@ -76,7 +75,9 @@
+      */
+     @Override
+     int getInsertionIndexOfTab(Tab tab) {
+-        if (tab == null) return TabList.INVALID_TAB_INDEX;
++        if (tab == null || mMediator.isTabHiddenForPresentation(tab)) {
++            return TabList.INVALID_TAB_INDEX;
++        }
+
+         TabModel tabModel = mMediator.getCurrentTabModelChecked();
+         Token targetTabGroupId = tab.getTabGroupId();
+@@ -269,7 +270,7 @@
+         PropertyModel headerModel = mModelList.get(sourceUiIndex).model;
+         boolean isCollapsed = TabProperties.isTabGroupCollapsed(headerModel);
+         if (!isCollapsed) {
+-            itemsToMove += tabCount;
++            itemsToMove += getPresentedChildCount(tabGroupId);
+         }
+
+         int destinationUiIndex = getInsertionIndexOfGroup(tabModel, tabModelNewIndex, tabCount);
+@@ -375,19 +376,36 @@
+         int headerIndex = mModelList.indexFromTabGroupId(tabGroupId);
+         if (headerIndex == TabModel.INVALID_TAB_INDEX) return;
+
+-        int firstTabId =
+-                TabGroupUtils.getFirstTabIdInGroup(
+-                        mMediator.getCurrentTabModelChecked(), tabGroupId);
++        int firstTabId = Tab.INVALID_TAB_ID;
++        for (Tab child : mMediator.getCurrentTabModelChecked().getTabsInGroup(tabGroupId)) {
++            if (!mMediator.isTabHiddenForPresentation(child)) {
++                firstTabId = child.getId();
++                break;
++            }
++        }
+         if (firstTabId != Tab.INVALID_TAB_ID) {
+             mModelList.get(headerIndex).model.set(TabProperties.TAB_ID, firstTabId);
+         }
++    }
++
++    /** Count the contiguous child rows actually represented, including filtered groups. */
++    private int getPresentedChildCount(Token tabGroupId) {
++        int headerIndex = mModelList.indexFromTabGroupId(tabGroupId);
++        if (headerIndex == TabModel.INVALID_TAB_INDEX) return 0;
++        int count = 0;
++        for (int i = headerIndex + 1; i < mModelList.size(); i++) {
++            PropertyModel model = mModelList.get(i).model;
++            if (!TabProperties.isTabInGroup(model)
++                    || !tabGroupId.equals(model.get(TabProperties.TAB_GROUP_ID))) break;
++            count++;
++        }
++        return count;
+     }
+
+     private void removeChildTabs(Token tabGroupId) {
+         int headerIndex = mModelList.indexFromTabGroupId(tabGroupId);
+         if (headerIndex == TabModel.INVALID_TAB_INDEX) return;
+-        TabModel tabModel = mMediator.getCurrentTabModelChecked();
+-        int childCount = tabModel.getTabsInGroup(tabGroupId).size();
++        int childCount = getPresentedChildCount(tabGroupId);
+
+         for (int i = 0; i < childCount; i++) {
+             if (headerIndex + 1 < mModelList.size()) {
+@@ -407,21 +425,17 @@
+     private int getInsertionIndexOfGroup(TabModel tabModel, int firstTabIndex, int tabCount) {
+         if (firstTabIndex < 0) return TabModel.INVALID_TAB_INDEX;
+
+-        int tabAfterIndex = firstTabIndex + tabCount;
+-        Tab tabAfter = tabModel.getTabAt(tabAfterIndex);
+-
+-        if (tabAfter == null) {
+-            return mModelList.size();
+-        }
+-
+-        // If the anchor tab belongs to another group, we must anchor our moving block relative to
+-        // that group's header card. If it's a standalone tab, we simply map it to its direct UI
+-        // index.
+-        Token tabAfterGroupId = tabAfter.getTabGroupId();
+-        if (tabAfterGroupId != null) {
+-            return mModelList.indexFromTabGroupId(tabAfterGroupId);
+-        }
+-        return getIndexFromTabId(tabAfter.getId());
++        // A native tab following the group may belong to another Space. Find the first
++        // represented anchor instead of treating that hidden native index as a UI index.
++        for (int tabAfterIndex = firstTabIndex + tabCount; ; tabAfterIndex++) {
++            Tab tabAfter = tabModel.getTabAt(tabAfterIndex);
++            if (tabAfter == null) return mModelList.size();
++            Token tabAfterGroupId = tabAfter.getTabGroupId();
++            int uiIndex = tabAfterGroupId != null
++                    ? mModelList.indexFromTabGroupId(tabAfterGroupId)
++                    : getIndexFromTabId(tabAfter.getId());
++            if (uiIndex != TabModel.INVALID_TAB_INDEX) return uiIndex;
++        }
+     }
+
+     /**
+diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/TabListMediator.java b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/TabListMediator.java
+--- a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/TabListMediator.java
++++ b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/TabListMediator.java
+@@ -154,6 +154,7 @@
+ import java.util.Objects;
+ import java.util.Set;
+ import java.util.TreeMap;
++import java.util.function.IntPredicate;
+ import java.util.function.Supplier;
+
+ /**
+@@ -375,6 +376,7 @@
+     private final @Nullable DataSharingTabManager mDataSharingTabManager;
+     private final TabModelObserver mTabModelObserver;
+     private final TabListLayoutDelegate mTabListLayoutDelegate;
++    private @Nullable IntPredicate mTabVisibilityPredicate;
+     private final TabListObserverManager mObserverManager;
+     private final TabActionListener mTabClosedListener;
+     private final TabGridItemTouchHelperCallback mTabGridItemTouchHelperCallback;
+@@ -1939,6 +1941,15 @@
+         updateThumbnailFetcherForSavedTabGroup(tabGroupInfo, savedTabGroup);
+     }
+
++    /** Applies an Arc presentation predicate; the native TabModel remains unchanged. */
++    public void setTabVisibilityPredicate(@Nullable IntPredicate predicate) {
++        mTabVisibilityPredicate = predicate;
++    }
++
++    boolean isTabHiddenForPresentation(Tab tab) {
++        return mTabVisibilityPredicate != null && !mTabVisibilityPredicate.test(tab.getId());
++    }
++
+     /**
+      * Inserts the child tabs of a group into the list model.
+      *
+@@ -1949,12 +1960,13 @@
+     int insertChildTabs(Token tabGroupId, int headerIndex) {
+         TabModel tabModel = getCurrentTabModelChecked();
+         List<Tab> children = tabModel.getTabsInGroup(tabGroupId);
+-        for (int i = 0; i < children.size(); i++) {
+-            Tab childTab = children.get(i);
+-            int childIndex = headerIndex + 1 + i;
+-            addTabInfoToModelForTab(childTab, childIndex);
+-        }
+-        return children.size();
++        int inserted = 0;
++        for (Tab childTab : children) {
++            if (isTabHiddenForPresentation(childTab)) continue;
++            addTabInfoToModelForTab(childTab, headerIndex + 1 + inserted);
++            inserted++;
++        }
++        return inserted;
+     }
+
+     /**
 diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinder.java b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinder.java
 --- a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinder.java
 +++ b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinder.java
@@ -89,15 +250,23 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinator.java b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinator.java
 --- a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinator.java
 +++ b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinator.java
-@@ -136,6 +136,7 @@
+@@ -77,6 +77,7 @@
+ import org.chromium.chrome.browser.tabmodel.TabGroupMergeNotificationType;
+ import org.chromium.chrome.browser.tabmodel.TabGroupMetadata;
+ import org.chromium.chrome.browser.tabmodel.TabGroupUtils.TabGroupCreationCallback;
++import org.chromium.chrome.browser.tabmodel.TabGroupObserver;
+ import org.chromium.chrome.browser.tabmodel.TabList;
+ import org.chromium.chrome.browser.tabmodel.TabModel;
+ import org.chromium.chrome.browser.tabmodel.TabModelSelector;
+@@ -136,6 +137,7 @@
  import java.util.Collections;
  import java.util.List;
  import java.util.function.BooleanSupplier;
 +import java.util.function.IntPredicate;
  import java.util.function.Supplier;
- 
+
  /** Coordinator to manage and display the Vertical Tab List. */
-@@ -167,7 +168,7 @@
+@@ -167,7 +169,7 @@
      private final VerticalTabGroupSpineDecoration mSpineDecoration;
      private final VerticalTabDropIndicatorDecoration mDropIndicatorDecoration;
      private final VerticalTabPinnedDropIndicatorDecoration mPinnedDropIndicatorDecoration;
@@ -106,24 +275,52 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
      private final NonNullObservableSupplier<Boolean> mVerticalTabsActiveSupplier;
      private final VerticalTabRailCollapseController mCollapseController;
      private final VerticalTabRailHoverController mRailHoverController;
-@@ -203,6 +204,8 @@
+@@ -203,6 +205,36 @@
      private @Nullable View mDragEndRelayView;
- 
+
      private boolean mIsActive;
 +    // Optional presentation-only filter. The underlying TabModel always remains global.
 +    private @Nullable IntPredicate mTabVisibilityPredicate;
- 
++    private @Nullable TabModel mPresentationGroupModel;
++    private final TabGroupObserver mPresentationGroupObserver = new TabGroupObserver() {
++        @Override
++        public void didChangeTabGroupCollapsed(Token id, boolean collapsed, boolean animate) {
++            refreshTabPresentationIfFiltered();
++        }
++
++        @Override
++        public void didMergeTabToGroup(Tab tab, boolean isDestinationTab) {
++            refreshTabPresentationIfFiltered();
++        }
++
++        @Override
++        public void didMoveTabOutOfGroup(Tab tab, Token oldGroupId) {
++            refreshTabPresentationIfFiltered();
++        }
++
++        @Override
++        public void didMoveTabGroup(Token id, int oldIndex, int newIndex) {
++            refreshTabPresentationIfFiltered();
++        }
++
++        @Override
++        public void didMoveWithinGroup(Tab tab, int oldIndex, int newIndex) {
++            refreshTabPresentationIfFiltered();
++        }
++    };
++
+
      private class VerticalTabListClickHandler implements TabListItemOnClickListenerProvider {
          private final TabActionListener mTabGroupClickedListener =
-@@ -763,6 +766,7 @@
- 
+@@ -763,6 +795,7 @@
+
                      @Override
                      public void didChangePinState(Tab tab) {
 +                        refreshTabPresentationIfFiltered();
                          // Scroll the newly unpinned active tab into view.
                          if (!tab.getIsPinned()
                                  && tab.getId() == mTabModelSelector.getCurrentTabId()) {
-@@ -777,18 +781,21 @@
+@@ -777,18 +810,21 @@
                              @TabLaunchType int type,
                              @TabCreationState int creationState,
                              boolean markedForSelection) {
@@ -131,22 +328,22 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
                          updateIncognitoButtonVisibility();
                          updatePinnedTabsSeparatorVisibility();
                      }
- 
+
                      @Override
                      public void tabRemoved(Tab tab) {
 +                        refreshTabPresentationIfFiltered();
                          updateIncognitoButtonVisibility();
                          updatePinnedTabsSeparatorVisibility();
                      }
- 
+
                      @Override
                      public void didRemoveTabForClosure(Tab tab) {
 +                        refreshTabPresentationIfFiltered();
                          updateIncognitoButtonVisibility();
                          updatePinnedTabsSeparatorVisibility();
                      }
-@@ -806,7 +813,18 @@
- 
+@@ -806,7 +842,18 @@
+
                      @Override
                      public void tabClosureCommitted(Tab tab) {
 +                        refreshTabPresentationIfFiltered();
@@ -162,20 +359,20 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 +                    public void didMoveTab(Tab tab, int newIndex, int curIndex) {
 +                        refreshTabPresentationIfFiltered();
                      }
- 
+
                      @Override
-@@ -814,6 +832,7 @@
+@@ -814,6 +861,7 @@
                          mTabItemHoverController.resetHoverState();
                      }
                  };
 +        ensurePresentationObserverRunsAfterMediators(mTabModelSelector.getCurrentModel());
- 
+
          mVerticalTabsActiveSupplier.addSyncObserverAndCallIfNonNull(mActiveObserver);
- 
-@@ -863,8 +882,8 @@
+
+@@ -863,8 +911,8 @@
              return;
          }
- 
+
 -        View collapseButton = mContainerView.findViewById(R.id.collapse_button);
 -        if (collapseButton != null && KeyboardFocusUtil.setFocus(collapseButton)) {
 +        View collapseButton = mContainerView.getCollapseButton();
@@ -183,9 +380,20 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
              return;
          }
          KeyboardFocusUtil.setFocusOnFirstFocusableDescendant(mContainerView);
-@@ -903,7 +922,9 @@
+@@ -881,6 +929,10 @@
+         mModelList.clear();
+         mTabModelSelector.removeObserver(mTabModelSelectorObserver);
+         mTabModelSelector.getCurrentTabModelSupplier().removeObserver(mCurrentTabModelObserver);
++        if (mPresentationGroupModel != null) {
++            mPresentationGroupModel.removeTabGroupObserver(mPresentationGroupObserver);
++            mPresentationGroupModel = null;
++        }
+         mTabListFaviconProvider.destroy();
+
+         if (mTabStripContextMenuCoordinator != null) {
+@@ -903,7 +955,9 @@
          }
- 
+
          mSpineDecoration.destroy();
 -        mTabModelSelectorTabModelObserver.destroy();
 +        if (mTabModelSelectorTabModelObserver != null) {
@@ -194,7 +402,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          mVerticalTabsActiveSupplier.removeObserver(mActiveObserver);
          if (mBackPressManager.has(BackPressHandler.Type.CANCEL_TAB_SWITCHER_DRAG)) {
              mBackPressManager.removeHandler(BackPressHandler.Type.CANCEL_TAB_SWITCHER_DRAG);
-@@ -1116,6 +1137,91 @@
+@@ -1116,6 +1170,98 @@
          if (mTabModelSelector.isTabStateInitialized()) {
              resetWithListOfTabs(tabModel);
          }
@@ -210,6 +418,12 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 +        if (tabModel == null || mTabModelSelectorTabModelObserver == null) return;
 +        tabModel.removeObserver(mTabModelSelectorTabModelObserver);
 +        tabModel.addObserver(mTabModelSelectorTabModelObserver);
++        if (mPresentationGroupModel != null) {
++            mPresentationGroupModel.removeTabGroupObserver(mPresentationGroupObserver);
++        }
++        mPresentationGroupModel = tabModel;
++        // Group membership/expansion events also require a final synchronous projection.
++        tabModel.addTabGroupObserver(mPresentationGroupObserver);
 +    }
 +
 +    /**
@@ -220,6 +434,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 +     */
 +    public void setTabVisibilityPredicate(@Nullable IntPredicate predicate) {
 +        mTabVisibilityPredicate = predicate;
++        mMediator.setTabVisibilityPredicate(predicate);
 +        refreshTabPresentation();
 +    }
 +
@@ -284,11 +499,11 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 +            mModelList.removeAt(i);
 +        }
      }
- 
+
      /**
-@@ -1126,9 +1232,10 @@
+@@ -1126,9 +1272,10 @@
          if (tabModel == null) return;
- 
+
          mMediator.resetWithListOfTabs(
 -                tabModel.getRepresentativeTabList(),
 +                getTabsForPresentation(tabModel),
@@ -298,9 +513,9 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          mPinnedTabsMediator.updateTabModel(tabModel);
          boolean isIncognito =
                  !IncognitoUtils.shouldOpenIncognitoAsWindow() && tabModel.isIncognitoBranded();
-@@ -2373,9 +2480,21 @@
+@@ -2373,9 +2520,21 @@
                                  mContainerModel.get(VerticalTabListProperties.COLLAPSE_STATE));
- 
+
          TabModel model = mTabModelSelector.getCurrentModel();
 -        int pinnedCount = model != null ? model.getPinnedTabsCount() : 0;
 -        int totalCount = model != null ? model.getCount() : 0;
@@ -321,15 +536,15 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 +            }
 +        }
          boolean shouldShow = isCollapsed && pinnedCount > 0 && regularCount > 0;
- 
+
          mContainerView.setPinnedTabsSeparatorVisible(shouldShow);
 diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinatorUnitTest.java b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinatorUnitTest.java
 --- a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinatorUnitTest.java
 +++ b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinatorUnitTest.java
-@@ -4027,6 +4027,78 @@
+@@ -4027,6 +4027,117 @@
          assertEquals(View.VISIBLE, separator.getVisibility());
      }
- 
+
 +    // SIMULATED_BOUNDARY: production VerticalTabListCoordinator with a mocked Chromium TabModel.
 +    @Test
 +    public void testTabVisibilityPredicate_FiltersPresentationWithoutMutatingTabModel() {
@@ -398,7 +613,46 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 +                mCoordinator.getView().findViewById(R.id.tab_list_recycler_view);
 +        SimpleRecyclerViewAdapter adapter = (SimpleRecyclerViewAdapter) recycler.getAdapter();
 +        assertEquals(2, adapter.getModelList().size());
-+        assertEquals(TabModel.INVALID_TAB_INDEX, adapter.getModelList().indexFromTabId(TAB_ID_3));
++        for (int i = 0; i < adapter.getModelList().size(); i++) {
++            assertFalse(TAB_ID_3 == adapter.getModelList().get(i).model.get(TabProperties.TAB_ID));
++        }
++        assertEquals(3, mTabModel.getCount());
++    }
++
++    @Test
++    public void testTabVisibilityPredicate_GroupExpansionPreservesFollowingVisibleTab() {
++        Token groupId = new Token(1L, 2L);
++        Tab visible = prepareMockTab(mMockTab1, TAB_ID_1);
++        Tab hidden = prepareMockTab(mMockTab2, TAB_ID_2);
++        Tab following = prepareMockTab(mMockTab3, TAB_ID_3);
++        setupMockTabGroup(groupId, List.of(visible, hidden));
++        when(mTabModel.getRepresentativeTabList()).thenReturn(List.of(visible, following));
++        when(mTabModel.getCount()).thenReturn(3);
++        when(mTabModel.iterator()).thenAnswer(inv -> List.of(visible, hidden, following).iterator());
++        final boolean[] collapsed = {false};
++        when(mTabModel.getTabGroupCollapsed(groupId)).thenAnswer(inv -> collapsed[0]);
++        doAnswer(inv -> {
++            collapsed[0] = inv.getArgument(1);
++            for (TabGroupObserver observer : List.copyOf(mTabGroupObservers)) {
++                observer.didChangeTabGroupCollapsed(groupId, collapsed[0], false);
++            }
++            return null;
++        }).when(mTabModel).setTabGroupCollapsed(eq(groupId), anyBoolean(), anyBoolean());
++        createCoordinator();
++        mCoordinator.setTabVisibilityPredicate(id -> id != TAB_ID_2);
++        TabListRecyclerView recycler = mCoordinator.getView().findViewById(R.id.tab_list_recycler_view);
++        SimpleRecyclerViewAdapter adapter = (SimpleRecyclerViewAdapter) recycler.getAdapter();
++        assertEquals(3, adapter.getModelList().size());
++        assertEquals(TAB_ID_3, adapter.getModelList().get(2).model.get(TabProperties.TAB_ID));
++
++        mCoordinator.toggleTabGroupExpansion(TAB_ID_1);
++        assertEquals(2, adapter.getModelList().size());
++        assertEquals(TAB_ID_3, adapter.getModelList().get(1).model.get(TabProperties.TAB_ID));
++
++        mCoordinator.toggleTabGroupExpansion(TAB_ID_1);
++        assertEquals(3, adapter.getModelList().size());
++        assertEquals(TAB_ID_1, adapter.getModelList().get(1).model.get(TabProperties.TAB_ID));
++        assertEquals(TAB_ID_3, adapter.getModelList().get(2).model.get(TabProperties.TAB_ID));
 +        assertEquals(3, mTabModel.getCount());
 +    }
 +
@@ -431,12 +685,12 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 +                ? ArcDesktopAppearance.surface(context, isIncognito)
 +                : TabUiThemeUtil.getTabStripBackgroundColor(context, isIncognito);
          view.setBackgroundColor(backgroundColor);
- 
+
          ColorStateList iconTint =
 @@ -97,6 +101,9 @@
                          ? context.getColorStateList(R.color.incognito_tab_action_button_color)
                          : ColorStateList.valueOf(SemanticColorUtils.getDefaultIconColor(context));
- 
+
 +        if (ArcDesktopAppearance.isDesktopWindow(context)) {
 +            iconTint = ColorStateList.valueOf(ArcDesktopAppearance.foreground(context, isIncognito));
 +        }
@@ -456,7 +710,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 @@ -121,6 +131,11 @@
          ViewCompat.setBackgroundTintList(incognitoButton, buttonBgTint);
      }
- 
+
 +    /** Reapply Arc or upstream palette after an appearance-mode change without mutating tab state. */
 +    public static void refreshArcAppearance(VerticalTabRailLayout view, boolean isIncognito) {
 +        updateIncognitoColors(view, isIncognito);
@@ -485,10 +739,10 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 +        }
          mRecyclerView = findViewById(R.id.tab_list_recycler_view);
          assert mRecyclerView != null;
- 
+
 @@ -282,8 +286,22 @@
      }
- 
+
      /** Sets the visibility of the desktop window top spacer. */
 +    private @Nullable View mDesktopWindowSpacerHost;
 +
@@ -508,13 +762,13 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 +            mDesktopWindowSpacerHost.setVisibility(visible ? View.VISIBLE : View.GONE);
 +        }
      }
- 
+
      /** Sets the listener that receives the raw pointer events dispatched to the rail. */
 diff --git a/chrome/android/java/res_chromium_base/values/channel_constants.xml b/chrome/android/java/res_chromium_base/values/channel_constants.xml
 --- a/chrome/android/java/res_chromium_base/values/channel_constants.xml
 +++ b/chrome/android/java/res_chromium_base/values/channel_constants.xml
 @@ -7,8 +7,8 @@
- 
+
  <resources xmlns:android="http://schemas.android.com/apk/res/android">
      <!-- The application name displayed to the user. -->
 -    <string name="app_name" translatable="false">Chromium</string>
@@ -531,7 +785,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSe
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
 @@ -7,6 +7,7 @@
  import static org.chromium.build.NullUtil.assumeNonNull;
- 
+
  import android.app.Activity;
 +import android.app.AlertDialog;
  import android.content.Context;
@@ -566,7 +820,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSe
      public static final String PREF_DEFAULT_BROWSER = "default_browser";
      public static final String PREF_GLIC = "glic";
 @@ -256,6 +264,10 @@
- 
+
      @Override
      public void onDestroy() {
 +        if (mArcAppearanceDialog != null) {
@@ -578,7 +832,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSe
          mCallbackController.destroy();
 @@ -370,6 +382,20 @@
          mManagedPreferenceDelegate = createManagedPreferenceDelegate();
- 
+
          SettingsUtils.addPreferencesFromResource(this, R.xml.main_preferences);
 +        ChromeBasePreference arcInterface = new ChromeBasePreference(requireContext());
 +        arcInterface.setKey(PREF_ARC_INTERFACE);
@@ -594,7 +848,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSe
 +        });
 +        getPreferenceScreen().addPreference(arcInterface);
 +        updateArcAppearancePreference();
- 
+
          IdentityManager identityManager =
                  IdentityServicesProvider.get().getIdentityManager(getProfile());
 @@ -603,6 +629,7 @@
@@ -603,11 +857,11 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSe
          updateAppearancePreference();
 +        updateArcAppearancePreference();
          addPreferenceIfAbsent(PREF_TABS);
- 
+
          updateHomepagePreference();
 @@ -681,7 +708,13 @@
      }
- 
+
      private void updateAutofillPreferences() {
 -        if (ChromeFeatureList.isEnabled(ChromeFeatureList.YOUR_SAVED_INFO_SETTINGS_PAGE_ANDROID)) {
 +        if (ArchiumPasswordManagerBridge.isLocalEnabled()) {
@@ -647,7 +901,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSe
 +        SettingsNavigationFactory.createSettingsNavigation(context)
 +                .startSettings(context, ArchiumPasswordSettingsFragment.class);
      }
- 
+
      private static void openAutofillOptions(Context context) {
 @@ -790,6 +833,10 @@
              ModalDialogManager modalDialogManager,
@@ -661,7 +915,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSe
              // Open an external activity. Keep the state as is.
              return false;
 @@ -812,6 +859,10 @@
- 
+
      private static void showPasswordSettings(
              Context context, Profile profile, ModalDialogManager modalDialogManager) {
 +        if (ArchiumPasswordManagerBridge.isLocalEnabled()) {
@@ -682,7 +936,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSe
 +        pref.setSummary(ArcAppearanceDialog.labelForMode(
 +                ArcDesktopAppearance.getUiMode(requireContext())));
      }
- 
+
      private void updateAppearancePreference() {
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java
 --- a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java
@@ -715,13 +969,13 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
      private @Nullable BookmarkBarIphController mBookmarkBarIphController;
      private @Nullable BookmarkBarVisibilityProvider mBookmarkBarVisibilityProvider;
 @@ -507,13 +520,13 @@
- 
+
      private static class BottomSheetContainerMarginAdjusterForSideUi
              extends ViewMarginAdjusterForSideUi implements LayoutStateProvider.LayoutStateObserver {
 -        private final Supplier<@Nullable SideUiCoordinator> mSideUiCoordinatorSupplier;
 +        private final Supplier<@Nullable SideUiStateProvider> mSideUiStateProviderSupplier;
          private boolean mIsInHub;
- 
+
          BottomSheetContainerMarginAdjusterForSideUi(
 -                View view, Supplier<@Nullable SideUiCoordinator> sideUiCoordinatorSupplier) {
 +                View view, Supplier<@Nullable SideUiStateProvider> sideUiStateProviderSupplier) {
@@ -729,7 +983,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
 -            mSideUiCoordinatorSupplier = sideUiCoordinatorSupplier;
 +            mSideUiStateProviderSupplier = sideUiStateProviderSupplier;
          }
- 
+
          @Override
 @@ -539,9 +552,9 @@
          public void onStartedHiding(@LayoutType int layoutType) {
@@ -750,7 +1004,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
          }
 +        mArcWindowObserver = new ArcDesktopWindowObserver(mActivity, mActivityLifecycleDispatcher);
      }
- 
+
      @Override
      @SuppressWarnings({"NullAway", "UseSharedPreferencesManagerFromChromeCheck"})
      public void onDestroy() {
@@ -768,7 +1022,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
 @@ -1977,6 +1999,38 @@
          return mGlicPromoCoordinator != null;
      }
- 
+
 +    private void setArcToolbarSuppressed(boolean suppressed) {
 +        if (mToolbarManager == null || mArcToolbarSuppressed == suppressed) return;
 +        View toolbarView = mActivity.findViewById(R.id.toolbar);
@@ -806,7 +1060,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
      }
 @@ -2473,34 +2527,75 @@
          }
- 
+
          if (VerticalTabUtils.isVerticalTabsEligible(mActivity)) {
 +            if (mToolbarManager == null) {
 +                throw new IllegalStateException(
@@ -923,14 +1177,14 @@ diff --git a/chrome/browser/BUILD.gn b/chrome/browser/BUILD.gn
 @@ -2,6 +2,7 @@
  # Use of this source code is governed by a BSD-style license that can be
  # found in the LICENSE file.
- 
+
 +import("//components/password_manager/core/browser/buildflags.gni")
  import("//base/allocator/allocator.gni")
  import("//build/buildflag_header.gni")
  import("//build/config/buildflags_paint_preview.gni")
 @@ -834,6 +835,10 @@
  }
- 
+
  source_set("core") {
 +  deps = [ "//components/password_manager/core/browser:password_manager_buildflags" ]
 +  if (is_android && enable_archium_local_passwords) {
@@ -942,7 +1196,7 @@ diff --git a/chrome/browser/BUILD.gn b/chrome/browser/BUILD.gn
 @@ -885,7 +890,7 @@
      defines += [ "USE_OFFICIAL_ENTERPRISE_CONNECTORS_API_KEYS=1" ]
    }
- 
+
 -  deps = [
 +  deps += [
      ":active_use_util",
@@ -1004,7 +1258,7 @@ diff --git a/chrome/browser/browser_process_impl.cc b/chrome/browser/browser_pro
 @@ -1648,11 +1653,24 @@
            password_store, l10n_util::GetStringUTF8(IDS_PRODUCT_NAME), nullptr));
  #endif  // BUILDFLAG(IS_LINUX)
- 
+
 +#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
 +  providers.emplace_back(
 +      /*precedence=*/20u,
@@ -1024,7 +1278,7 @@ diff --git a/chrome/browser/browser_process_impl.cc b/chrome/browser/browser_pro
        /*precedence=*/5u, std::make_unique<os_crypt_async::PosixKeyProvider>());
 +#endif  // BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
  #endif  // BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_LINUX)
- 
+
  #if BUILDFLAG(IS_MAC)
 diff --git a/chrome/browser/password_manager/BUILD.gn b/chrome/browser/password_manager/BUILD.gn
 --- a/chrome/browser/password_manager/BUILD.gn
@@ -1034,7 +1288,7 @@ diff --git a/chrome/browser/password_manager/BUILD.gn b/chrome/browser/password_
  import("//build/config/ui.gni")
  import("//components/signin/features.gni")
 +import("//components/password_manager/core/browser/buildflags.gni")
- 
+
  source_set("password_manager") {
    sources = []
 @@ -223,9 +224,14 @@
@@ -1062,7 +1316,7 @@ diff --git a/chrome/browser/password_manager/BUILD.gn b/chrome/browser/password_
      "//components/password_manager/core/browser/password_store:test_support",
 @@ -486,6 +493,16 @@
    ]
- 
+
    if (is_android) {
 +    if (enable_archium_local_passwords) {
 +      sources += [
@@ -1081,17 +1335,17 @@ diff --git a/chrome/browser/password_manager/android/BUILD.gn b/chrome/browser/p
 --- a/chrome/browser/password_manager/android/BUILD.gn
 +++ b/chrome/browser/password_manager/android/BUILD.gn
 @@ -4,6 +4,8 @@
- 
+
  import("//build/config/android/rules.gni")
  import("//testing/libfuzzer/fuzzer_test.gni")
 +import("//testing/test.gni")
 +import("//components/password_manager/core/browser/buildflags.gni")
  import("//third_party/jni_zero/jni_zero.gni")
  import("//third_party/protobuf/proto_library.gni")
- 
+
 @@ -113,7 +115,13 @@
  }
- 
+
  android_library("java") {
 -  deps = [
 +  deps = [ ":archium_password_csv_java" ]
@@ -1124,7 +1378,7 @@ diff --git a/chrome/browser/password_manager/android/BUILD.gn b/chrome/browser/p
 @@ -616,6 +627,14 @@
      "//ui/base",
    ]
- 
+
 +  if (enable_archium_local_passwords) {
 +    sources += [ "archium_password_key_provider_unittest.cc" ]
 +    deps += [
@@ -1136,7 +1390,7 @@ diff --git a/chrome/browser/password_manager/android/BUILD.gn b/chrome/browser/p
    # TODO(crbug.com/40031409): Fix code that adds exit-time destructors and
    # enable the diagnostic by removing this line.
    configs += [ "//build/config/compiler:no_exit_time_destructors" ]
-@@ -699,3 +718,96 @@
+@@ -699,3 +718,104 @@
      "//testing/gtest",
    ]
  }
@@ -1218,10 +1472,18 @@ diff --git a/chrome/browser/password_manager/android/BUILD.gn b/chrome/browser/p
 +      ":archium_local_password_manager",
 +      "//base/test:test_support",
 +      "//chrome/browser/password_manager",
++      "//chrome/browser/password_manager:impl",
 +      "//chrome/test/base:testing_profile_impl",
 +      "//components/affiliations/core/browser:test_support",
 +      "//components/device_reauth:test_support",
++      "//components/os_crypt/async/browser:test_support",
 +      "//components/password_manager/core/browser:test_support",
++      "//components/password_manager/core/browser/affiliation:affiliation_match_helper",
++      "//components/password_manager/core/browser/password_store:password_store_impl",
++      "//components/password_manager/core/browser/password_store:test_support",
++      "//components/password_manager/core/common",
++      "//components/prefs:test_support",
++      "//components/sync/model",
 +      "//testing/gmock",
 +      "//testing/gtest",
 +    ]
@@ -1238,16 +1500,16 @@ diff --git a/chrome/browser/password_manager/android/password_manager_android_ut
 +++ b/chrome/browser/password_manager/android/password_manager_android_util.cc
 @@ -5,6 +5,9 @@
  #include "chrome/browser/password_manager/android/password_manager_android_util.h"
- 
+
  #include <string>
 +#include <utility>
 +
 +#include "components/password_manager/core/browser/password_manager_buildflags.h"
- 
+
  #include "base/android/device_info.h"
  #include "base/strings/string_number_conversions.h"
 @@ -28,10 +31,23 @@
- 
+
  bool IsPasswordManagerAvailable(
      std::unique_ptr<PasswordManagerUtilBridgeInterface> util_bridge) {
 -  return IsPasswordManagerAvailable(util_bridge->IsInternalBackendPresent());
@@ -1263,7 +1525,7 @@ diff --git a/chrome/browser/password_manager/android/password_manager_android_ut
 +  return util_bridge->IsInternalBackendPresent() &&
 +         HasMinGmsVersionForFullUpmSupport();
  }
- 
+
  bool IsPasswordManagerAvailable(bool is_internal_backend_present) {
 +#if BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
 +  return true;  // Never reports the Google internal backend as present.
@@ -1273,11 +1535,11 @@ diff --git a/chrome/browser/password_manager/android/password_manager_android_ut
    }
 @@ -41,6 +57,7 @@
    }
- 
+
    return true;
 +#endif
  }
- 
+
  }  // namespace password_manager_android_util
 diff --git a/chrome/browser/password_manager/android/password_manager_android_util.h b/chrome/browser/password_manager/android/password_manager_android_util.h
 --- a/chrome/browser/password_manager/android/password_manager_android_util.h
@@ -1289,9 +1551,9 @@ diff --git a/chrome/browser/password_manager/android/password_manager_android_ut
 +// Google capability is distinct from Archium local profile storage.
 +bool IsGooglePasswordManagerAvailable(
 +    std::unique_ptr<PasswordManagerUtilBridgeInterface> util_bridge);
- 
+
  }  // namespace password_manager_android_util
- 
+
 diff --git a/chrome/browser/password_manager/chrome_password_manager_client.cc b/chrome/browser/password_manager/chrome_password_manager_client.cc
 --- a/chrome/browser/password_manager/chrome_password_manager_client.cc
 +++ b/chrome/browser/password_manager/chrome_password_manager_client.cc
@@ -1305,7 +1567,7 @@ diff --git a/chrome/browser/password_manager/chrome_password_manager_client.cc b
  #include "components/prefs/pref_service.h"
 @@ -334,9 +335,17 @@
    }
- 
+
    // Filling is impossible if password store in unavailable.
 -  if (!GetProfilePasswordStore()) {
 +  auto* profile_store = GetProfilePasswordStore();
@@ -1319,7 +1581,7 @@ diff --git a/chrome/browser/password_manager/chrome_password_manager_client.cc b
 +    return false;
 +  }
 +#endif
- 
+
    const bool ssl_errors = net::IsCertStatusError(GetMainFrameCertStatus());
    autofill::LogManager* log_manager = GetOrCreateLogManager();
 diff --git a/chrome/browser/password_manager/chrome_password_manager_client_unittest.cc b/chrome/browser/password_manager/chrome_password_manager_client_unittest.cc
@@ -1336,7 +1598,7 @@ diff --git a/chrome/browser/password_manager/chrome_password_manager_client_unit
 @@ -626,6 +627,26 @@
    EXPECT_FALSE(client->IsSavingAndFillingEnabled(url::Origin::Create(kUrlOn)));
  }
- 
+
 +#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
 +TEST_F(ChromePasswordManagerClientTest, LocalVaultNotReadyBlocksSavingAndFilling) {
 +  auto* client = GetClient();
@@ -1372,7 +1634,7 @@ diff --git a/chrome/browser/password_manager/factories/password_manager_settings
  #include "components/password_manager/core/browser/password_manager_settings_service_impl.h"
  #include "components/password_manager/core/common/password_manager_features.h"
 @@ -83,7 +84,12 @@
- 
+
  std::unique_ptr<password_manager::PasswordManagerSettingsService>
  PasswordManagerSettingsServiceFactory::CreateService(Profile* profile) const {
 -#if BUILDFLAG(IS_ANDROID)
@@ -1389,7 +1651,7 @@ diff --git a/chrome/browser/password_manager/factories/password_store_backend_fa
 --- a/chrome/browser/password_manager/factories/password_store_backend_factory.cc
 +++ b/chrome/browser/password_manager/factories/password_store_backend_factory.cc
 @@ -6,6 +6,7 @@
- 
+
  #include "base/trace_event/trace_event.h"
  #include "build/build_config.h"
 +#include "components/password_manager/core/browser/password_manager_buildflags.h"
@@ -1410,7 +1672,7 @@ diff --git a/chrome/browser/password_manager/factories/password_store_backend_fa
 @@ -55,9 +58,20 @@
                                  ? "AccountPasswordStoreBackendCreation"
                                  : "ProfilePasswordStoreBackendCreation");
- 
+
 +#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
 +  if (!is_account_store) {
 +    CHECK(affiliation_service);
@@ -1442,13 +1704,13 @@ diff --git a/chrome/browser/password_manager/factories/profile_password_store_fa
  #include "chrome/browser/password_manager/factories/credentials_cleaner_runner_factory.h"
 @@ -47,7 +48,7 @@
    DCHECK(!profile->IsOffTheRecord());
- 
+
    affiliations::AffiliationService* affiliation_service = nullptr;
 -#if !BUILDFLAG(IS_ANDROID)
 +#if !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
    affiliation_service = AffiliationServiceFactory::GetForProfile(profile);
  #endif
- 
+
 @@ -63,7 +64,7 @@
        CredentialsCleanerRunnerFactory::GetForProfile(profile), ps,
        password_manager::kProfileStore, profile->GetPrefs(), base::Seconds(60),
@@ -1534,7 +1796,7 @@ diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/brow
          if (mOptionalButton != null && mOptionalButtonUsesTint) {
              ImageViewCompat.setImageTintList(mOptionalButton, activityFocusTint);
 @@ -314,6 +319,17 @@
- 
+
      @Override
      public void onThemeColorChanged(@ColorInt int color, boolean shouldAnimate) {
 +        if (ArcDesktopAppearance.isDesktopWindow(getContext())) {
@@ -1556,7 +1818,7 @@ diff --git a/chrome/browser/ui/vertical_tabs/BUILD.gn b/chrome/browser/ui/vertic
 +++ b/chrome/browser/ui/vertical_tabs/BUILD.gn
 @@ -5,11 +5,16 @@
  import("//build/config/android/rules.gni")
- 
+
  android_library("java") {
 -  sources = [ "android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/VerticalTabUtils.java" ]
 +  sources = [
@@ -1564,9 +1826,9 @@ diff --git a/chrome/browser/ui/vertical_tabs/BUILD.gn b/chrome/browser/ui/vertic
 +    "android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java",
 +    "android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/VerticalTabUtils.java",
 +  ]
- 
+
    resources_package = "org.chromium.chrome"
- 
+
    deps = [
 +    "//chrome/browser/desktop_policy/android:java",
      "//base:build_info_java",
@@ -1577,11 +1839,11 @@ diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrom
 +++ b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/VerticalTabUtils.java
 @@ -43,7 +43,7 @@
      public static final int SIDE_UI_CONTAINER_WIDTH_DP = 240;
- 
+
      /** The width of the collapsed vertical tabs SideUiContainer in dp. */
 -    public static final int SIDE_UI_CONTAINER_COLLAPSED_WIDTH_DP = 76;
 +    public static final int SIDE_UI_CONTAINER_COLLAPSED_WIDTH_DP = 52;
- 
+
      /**
       * Minimum width in dp required for the expanded vertical tabs rail before snapping to collapsed
 @@ -158,9 +158,7 @@
@@ -1593,7 +1855,7 @@ diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrom
 -                && DeviceFormFactor.isNonMultiDisplayContextOnTablet(context);
 +        return context != null && ArcDesktopAppearance.isDesktopWindow(context);
      }
- 
+
      /**
 @@ -174,7 +172,14 @@
          if (!isVerticalTabsEligible(context)) {
@@ -1623,7 +1885,7 @@ diff --git a/components/password_manager/core/browser/BUILD.gn b/components/pass
      "//components/affiliations/core/browser:affiliations",
      "//components/password_manager/core/browser/features:utils",
 @@ -668,5 +669,8 @@
- 
+
  buildflag_header("password_manager_buildflags") {
    header = "password_manager_buildflags.h"
 -  flags = [ "PASSWORD_MANAGER_USE_INTERNAL_ANDROID_RESOURCES=$password_manager_use_internal_android_resources" ]
@@ -1639,7 +1901,7 @@ diff --git a/components/password_manager/core/browser/buildflags.gni b/component
 @@ -5,6 +5,11 @@
  import("//build/config/android/config.gni")
  import("//build/config/chrome_build.gni")
- 
+
 +declare_args() {
 +  # Native local password storage in Archium; upstream behavior stays opt-in.
 +  enable_archium_local_passwords = false
@@ -1653,11 +1915,11 @@ diff --git a/components/password_manager/core/browser/import/BUILD.gn b/componen
 +++ b/components/password_manager/core/browser/import/BUILD.gn
 @@ -3,6 +3,8 @@
  # found in the LICENSE file.
- 
+
  import("//testing/libfuzzer/fuzzer_test.gni")
 +import("//testing/test.gni")
 +import("//components/password_manager/core/browser/buildflags.gni")
- 
+
  if (is_android) {
    import("//build/config/android/config.gni")
 @@ -109,3 +111,30 @@
@@ -1695,9 +1957,9 @@ diff --git a/components/password_manager/core/browser/password_manager_constants
 --- a/components/password_manager/core/browser/password_manager_constants.cc
 +++ b/components/password_manager/core/browser/password_manager_constants.cc
 @@ -8,7 +8,7 @@
- 
+
  namespace password_manager {
- 
+
 -#if !BUILDFLAG(IS_ANDROID)
 +#if !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
  const base::FilePath::CharType kLoginDataForProfileFileName[] =
@@ -1709,7 +1971,7 @@ diff --git a/components/password_manager/core/browser/password_manager_constants
      FILE_PATH_LITERAL("Login Data For Account-journal");
 -#endif  // !BUILDFLAG(IS_ANDROID)
 +#endif  // !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
- 
+
  const char kPasswordManagerAccountDashboardURL[] =
      "https://passwords.google.com";
 diff --git a/components/password_manager/core/browser/password_manager_constants.h b/components/password_manager/core/browser/password_manager_constants.h
@@ -1720,9 +1982,9 @@ diff --git a/components/password_manager/core/browser/password_manager_constants
  #include "base/time/time.h"
  #include "build/build_config.h"
 +#include "components/password_manager/core/browser/password_manager_buildflags.h"
- 
+
  namespace password_manager {
- 
+
 -#if !BUILDFLAG(IS_ANDROID)
 +#if !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
  extern const base::FilePath::CharType kLoginDataForProfileFileName[];
@@ -1731,7 +1993,7 @@ diff --git a/components/password_manager/core/browser/password_manager_constants
  extern const base::FilePath::CharType kLoginDataJournalForAccountFileName[];
 -#endif  // !BUILDFLAG(IS_ANDROID)
 +#endif  // !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
- 
+
  // URL to the password manager account dashboard.
  extern const char kPasswordManagerAccountDashboardURL[];
 diff --git a/components/password_manager/core/browser/password_store/BUILD.gn b/components/password_manager/core/browser/password_store/BUILD.gn
@@ -1740,7 +2002,7 @@ diff --git a/components/password_manager/core/browser/password_store/BUILD.gn b/
 @@ -2,9 +2,13 @@
  # Use of this source code is governed by a BSD-style license that can be
  # found in the LICENSE file.
- 
+
 +import("//testing/test.gni")
 +import("//components/password_manager/core/browser/buildflags.gni")
 +
@@ -1928,7 +2190,7 @@ diff --git a/components/password_manager/core/browser/password_store/login_datab
 +  }
 +  return committed_changes;
  }
- 
+
  PasswordStoreChangeList LoginDatabase::AddLogin(StoredCredential cred,
 diff --git a/components/password_manager/core/browser/password_store/login_database.h b/components/password_manager/core/browser/password_store/login_database.h
 --- a/components/password_manager/core/browser/password_store/login_database.h
@@ -1938,7 +2200,7 @@ diff --git a/components/password_manager/core/browser/password_store/login_datab
  #include <string>
  #include <vector>
 +#include <optional>
- 
+
  #include "base/files/file_path.h"
  #include "base/functional/callback.h"
  #include "base/functional/callback_helpers.h"
@@ -1956,7 +2218,7 @@ diff --git a/components/password_manager/core/browser/password_store/login_datab
 @@ -97,6 +101,14 @@
        StoredCredential cred,
        AddCredentialError* error = nullptr);
- 
+
 +  // Inserts/replaces an accepted import as one transaction. Failure preserves
 +  // all previous rows; returned changes may be notified only after success.
 +  base::expected<PasswordStoreChangeList, ArchiumImportFailure>
@@ -1970,7 +2232,7 @@ diff --git a/components/password_manager/core/browser/password_store/login_datab
    // username_element, username_value, password_element, signon_realm}. These
 @@ -223,6 +235,8 @@
    }
- 
+
   private:
 +  std::optional<ArchiumPasswordImportRevision> ReadImportRevision();
 +  base::UnguessableToken archium_import_session_;
@@ -1991,7 +2253,7 @@ diff --git a/components/password_manager/core/browser/password_store/login_datab
 @@ -46,6 +47,11 @@
  void LoginDatabaseAsyncHelper::CreateSyncBackend() {
    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
- 
+
 +#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
 +  if (!login_db_->is_account_store()) {
 +    return;  // This profile vault is local, independent of account/Sync state.
@@ -2013,7 +2275,7 @@ diff --git a/components/password_manager/core/browser/password_store/login_datab
 @@ -187,6 +194,33 @@
    return changes;
  }
- 
+
 +ArchiumImportSnapshotResult LoginDatabaseAsyncHelper::GetImportSnapshot() {
 +  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 +  if (!login_db_ || login_db_->is_account_store() || password_sync_bridge_ ||
@@ -2088,7 +2350,7 @@ diff --git a/components/password_manager/core/browser/password_store/login_datab
 +#include "components/password_manager/core/browser/password_manager_buildflags.h"
  #include "components/password_manager/core/browser/password_store/login_database.h"
  #include "components/password_manager/core/browser/password_string.h"
- 
+
 @@ -39,6 +40,11 @@
  EncryptionResult LoginDatabase::EncryptedString(
      const std::u16string& plain_text,
@@ -2107,7 +2369,7 @@ diff --git a/components/password_manager/core/browser/password_store/password_st
 @@ -130,6 +130,79 @@
    }
  }
- 
+
 +void PasswordStore::GetImportSnapshot(ArchiumImportSnapshotReply callback) {
 +  DCHECK(main_task_runner_->RunsTasksInCurrentSequence());
 +  if (!backend_) {
@@ -2187,10 +2449,10 @@ diff --git a/components/password_manager/core/browser/password_store/password_st
 @@ -417,6 +490,7 @@
  void PasswordStore::ShutdownOnUIThread() {
    DCHECK(main_task_runner_->RunsTasksInCurrentSequence());
- 
+
 +  weak_ptr_factory_.InvalidateWeakPtrs();
    post_init_callback_.Reset();
- 
+
    // Prevent in-flight tasks posted from the backend to invoke the callback
 diff --git a/components/password_manager/core/browser/password_store/password_store.h b/components/password_manager/core/browser/password_store/password_store.h
 --- a/components/password_manager/core/browser/password_store/password_store.h
@@ -2210,7 +2472,7 @@ diff --git a/components/password_manager/core/browser/password_store/password_st
 @@ -139,6 +144,12 @@
        base::expected<std::optional<PasswordStoreChangeList>,
                       PasswordStoreBackendError>);
- 
+
 +  void OnImportSnapshot(ArchiumImportSnapshotReply callback,
 +                        ArchiumImportSnapshotResult result);
 +  void OnImportedLogins(
@@ -2228,20 +2490,20 @@ diff --git a/components/password_manager/core/browser/password_store/password_st
 +  // Import replies must not outlive this store or its profile shutdown.
 +  base::WeakPtrFactory<PasswordStore> weak_ptr_factory_{this};
  };
- 
+
  }  // namespace password_manager
 diff --git a/components/password_manager/core/browser/password_store/password_store_backend.h b/components/password_manager/core/browser/password_store/password_store_backend.h
 --- a/components/password_manager/core/browser/password_store/password_store_backend.h
 +++ b/components/password_manager/core/browser/password_store/password_store_backend.h
 @@ -6,11 +6,15 @@
  #define COMPONENTS_PASSWORD_MANAGER_CORE_BROWSER_PASSWORD_STORE_PASSWORD_STORE_BACKEND_H_
- 
+
  #include <optional>
 +#include <utility>
 +
 +#include "base/functional/callback.h"
  #include <vector>
- 
+
  #include "base/functional/callback_forward.h"
  #include "base/memory/weak_ptr.h"
  #include "base/types/expected.h"
@@ -2285,7 +2547,7 @@ diff --git a/components/password_manager/core/browser/password_store/password_st
        // TODO(crbug.com/539816393): Update this case if it needs to block saving
 -#endif  // BUILDFLAG(IS_IOS)
 +#endif  // BUILDFLAG(IS_IOS) || BUILDFLAG(IS_ANDROID)
- 
+
        return false;  // These errors aren't directly actionable (yet).
      case SyncError::kNone:
 @@ -97,10 +98,10 @@
@@ -2310,7 +2572,7 @@ diff --git a/components/password_manager/core/browser/password_store/password_st
      case SyncError::kDeviceManagementError:
 -#endif  // BUILDFLAG(IS_IOS)
 +#endif  // BUILDFLAG(IS_IOS) || BUILDFLAG(IS_ANDROID)
- 
+
        return std::nullopt;  // These errors aren't directly actionable (yet).
      case SyncError::kNeedsPassphrase:
 @@ -135,10 +136,10 @@
@@ -2351,7 +2613,7 @@ diff --git a/components/password_manager/core/browser/password_store/password_st
  }
 @@ -239,6 +240,13 @@
  }
- 
+
  ActionableError PasswordStoreBuiltInBackend::GetError() {
 +#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
 +  // A usable schema is insufficient for the local Android store. Fail closed
@@ -2372,13 +2634,13 @@ diff --git a/components/password_manager/core/browser/password_store/password_st
      base::FeatureList::IsEnabled(features::kClearUndecryptablePasswords);
    }
 +#endif
- 
+
    background_task_runner_->PostTask(
        FROM_HERE, base::BindOnce(&LoginDatabaseAsyncHelper::CreateSyncBackend,
 @@ -366,6 +376,29 @@
            .Then(std::move(callback)));
  }
- 
+
 +void PasswordStoreBuiltInBackend::GetImportSnapshotAsync(
 +    ArchiumImportSnapshotReply callback) {
 +  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -2430,7 +2692,7 @@ diff --git a/components/password_manager/core/browser/password_store/password_st
    if (!is_account_store_.value()) {
      return;
 @@ -472,8 +511,9 @@
- 
+
  void PasswordStoreBuiltInBackend::OnStateChanged(syncer::SyncService* sync) {
    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 -#if BUILDFLAG(IS_IOS)
@@ -2442,7 +2704,7 @@ diff --git a/components/password_manager/core/browser/password_store/password_st
      return;
    }
 @@ -493,8 +533,9 @@
- 
+
  void PasswordStoreBuiltInBackend::OnSyncShutdown(syncer::SyncService* sync) {
    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
 -#if BUILDFLAG(IS_IOS)
@@ -2461,7 +2723,7 @@ diff --git a/components/password_manager/core/browser/password_store/password_st
 +  is_archium_encryption_available_ = encryptor->IsEncryptionAvailable();
 +#endif
 +
- 
+
    // Piggyback on |remote_form_changes_received| to record password deletion
    // coming from sync.
 @@ -613,6 +658,7 @@
@@ -2478,7 +2740,7 @@ diff --git a/components/password_manager/core/browser/password_store/password_st
    }
 +#endif
  }
- 
+
  void PasswordStoreBuiltInBackend::WritePasswordRemovalReasonPrefs(
 diff --git a/components/password_manager/core/browser/password_store/password_store_built_in_backend.h b/components/password_manager/core/browser/password_store/password_store_built_in_backend.h
 --- a/components/password_manager/core/browser/password_store/password_store_built_in_backend.h
@@ -2507,20 +2769,20 @@ diff --git a/components/password_manager/core/browser/password_store/password_st
    void RemoveLoginAsync(const base::Location& location,
 @@ -165,6 +173,9 @@
        GUARDED_BY_CONTEXT(sequence_checker_);
- 
+
    bool is_database_initialized_successfully_ = false;
 +#if BUILDFLAG(IS_ANDROID) && BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
 +  bool is_archium_encryption_available_ = false;
 +#endif
- 
+
    const IsAccountStore is_account_store_ = IsAccountStore(false);
- 
+
 diff --git a/components/password_manager/core/browser/password_store/password_store_interface.h b/components/password_manager/core/browser/password_store/password_store_interface.h
 --- a/components/password_manager/core/browser/password_store/password_store_interface.h
 +++ b/components/password_manager/core/browser/password_store/password_store_interface.h
 @@ -6,6 +6,12 @@
  #define COMPONENTS_PASSWORD_MANAGER_CORE_BROWSER_PASSWORD_STORE_PASSWORD_STORE_INTERFACE_H_
- 
+
  #include <vector>
 +#include <optional>
 +#include <utility>
@@ -2528,13 +2790,13 @@ diff --git a/components/password_manager/core/browser/password_store/password_st
 +#include "base/types/expected.h"
 +#include "components/password_manager/core/browser/password_store/archium_password_import_snapshot.h"
 +#include "components/password_manager/core/browser/password_store/password_store_backend_error.h"
- 
+
  #include "base/functional/callback_helpers.h"
  #include "base/memory/weak_ptr.h"
 @@ -96,6 +102,17 @@
    virtual void AddLogins(std::vector<StoredCredential> forms,
                           base::OnceClosure completion = base::DoNothing()) = 0;
- 
+
 +  using ImportCompletion = ArchiumImportCompletion;
 +
 +  // An accepted local import is all-or-nothing. Implementations without an
@@ -2553,7 +2815,7 @@ diff --git a/components/password_manager/core/browser/password_store_factory_uti
 --- a/components/password_manager/core/browser/password_store_factory_util.cc
 +++ b/components/password_manager/core/browser/password_store_factory_util.cc
 @@ -9,6 +9,7 @@
- 
+
  #include "build/blink_buildflags.h"
  #include "components/affiliations/core/browser/affiliation_utils.h"
 +#include "components/password_manager/core/browser/password_manager_buildflags.h"
@@ -2563,17 +2825,17 @@ diff --git a/components/password_manager/core/browser/password_store_factory_uti
 @@ -21,18 +22,21 @@
  #include "components/password_manager/core/common/password_manager_pref_names.h"
  #include "components/prefs/pref_service.h"
- 
+
 -#if !BUILDFLAG(IS_ANDROID)
 +#if !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
  #include "components/password_manager/core/browser/password_store/login_database.h"
 -#endif  // !BUILDFLAG(IS_ANDROID)
 +#endif  // !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
- 
+
  namespace password_manager {
- 
+
  namespace {
- 
+
 -#if !BUILDFLAG(IS_ANDROID)
 +#if !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
  LoginDatabase::DeletingUndecryptablePasswordsEnabled GetPolicyFromPrefs(
@@ -2592,9 +2854,9 @@ diff --git a/components/password_manager/core/browser/password_store_factory_uti
  }
 -#endif  // !BUILDFLAG(IS_ANDROID)
 +#endif  // !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
- 
+
  }  // namespace
- 
+
 -#if !BUILDFLAG(IS_ANDROID)
 +#if !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
  std::unique_ptr<LoginDatabase> CreateLoginDatabase(
@@ -2606,7 +2868,7 @@ diff --git a/components/password_manager/core/browser/password_store_factory_uti
  }
 -#endif  // !BUILDFLAG(IS_ANDROID)
 +#endif  // !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
- 
+
  // TODO(http://crbug.com/890318): Add unitests to check cleaners are correctly
  // created.
 diff --git a/components/password_manager/core/browser/password_store_factory_util.h b/components/password_manager/core/browser/password_store_factory_util.h
@@ -2618,19 +2880,19 @@ diff --git a/components/password_manager/core/browser/password_store_factory_uti
  #include "build/build_config.h"
 +#include "components/password_manager/core/browser/password_manager_buildflags.h"
  #include "components/password_manager/core/browser/password_store/password_store_interface.h"
- 
+
 -#if !BUILDFLAG(IS_ANDROID)
 +#if !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
  #include "components/password_manager/core/browser/password_store/login_database.h"
 -#endif  // !BUILDFLAG(IS_ANDROID)
 +#endif  // !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
- 
+
  namespace network::mojom {
  class NetworkContext;
 @@ -27,7 +28,7 @@
- 
+
  class CredentialsCleanerRunner;
- 
+
 -#if !BUILDFLAG(IS_ANDROID)
 +#if !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
  // Creates a LoginDatabase. Looks in |db_directory| for the database file.
@@ -2642,7 +2904,7 @@ diff --git a/components/password_manager/core/browser/password_store_factory_uti
      PrefService* prefs);
 -#endif  // !BUILDFLAG(IS_ANDROID)
 +#endif  // !BUILDFLAG(IS_ANDROID) || BUILDFLAG(ENABLE_ARCHIUM_LOCAL_PASSWORDS)
- 
+
  // This function handles the following clean-ups of credentials:
  // (1) Removing blocklisted duplicates: if two blocklisted credentials have the
 diff --git a/components/password_manager/core/browser/ui/saved_passwords_presenter.cc b/components/password_manager/core/browser/ui/saved_passwords_presenter.cc
@@ -2651,7 +2913,7 @@ diff --git a/components/password_manager/core/browser/ui/saved_passwords_present
 @@ -97,6 +97,47 @@
    return stored_credential;
  }
- 
+
 +// One implementation serves both the live presenter cache and import snapshots.
 +// Exact matches keep their upstream precedence even if another matching form
 +// has a different password.
@@ -2698,11 +2960,11 @@ diff --git a/components/password_manager/core/browser/ui/saved_passwords_present
  }
 @@ -121,6 +162,7 @@
  SavedPasswordsPresenter::~SavedPasswordsPresenter() = default;
- 
+
  void SavedPasswordsPresenter::Init(base::OnceClosure completion_callback) {
 +  has_password_store_read_error_ = false;
    init_completion_callback_ = std::move(completion_callback);
- 
+
    // Clear old cache.
 @@ -236,60 +278,27 @@
  SavedPasswordsPresenter::AddResult
@@ -2784,11 +3046,11 @@ diff --git a/components/password_manager/core/browser/ui/saved_passwords_present
 +  return GenerateStoredCredentialFromCredential(std::move(credential),
 +                                                 PasswordForm::Type::kImported);
  }
- 
+
  bool SavedPasswordsPresenter::AddCredential(const CredentialUIEntry& credential,
 @@ -682,6 +691,7 @@
    DCHECK_GE(pending_store_updates_, 0);
- 
+
    if (!results_or_error) {
 +    has_password_store_read_error_ = true;
      NotifySavedPasswordsChanged(PasswordStoreChangeList());
@@ -2800,7 +3062,7 @@ diff --git a/components/password_manager/core/browser/ui/saved_passwords_present
 @@ -111,6 +111,15 @@
      kMaxValue = kConflictInProfileAndAccountStore,
    };
- 
+
 +  // Evaluates the same native validity/duplicate rules against a DB snapshot.
 +  // This is read-only and does not rely on asynchronously refreshed UI caches.
 +  static AddResult GetExpectedAddResultForStoredCredentials(
@@ -2814,24 +3076,24 @@ diff --git a/components/password_manager/core/browser/ui/saved_passwords_present
    using DuplicatePasswordsMap =
        std::multimap<CredentialSortKey, StoredCredential>;
 @@ -130,6 +139,10 @@
- 
+
    // Returns whether there are ongoing fetch requests to credential stores.
    bool IsWaitingForPasswordStore() const;
 +
 +  // Distinguishes a failed read from an honestly empty credential store.
 +  bool HasPasswordStoreReadError() const { return has_password_store_read_error_; }
 +
- 
+
    // Removes the credential and all its duplicates from the store.
    bool RemoveCredential(const CredentialUIEntry& credential);
 @@ -283,6 +296,7 @@
- 
+
    // The number of stores from which no updates have been received yet.
    int pending_store_updates_ = 0;
 +  bool has_password_store_read_error_ = false;
- 
+
    std::unique_ptr<PasswordUndoHelper> undo_helper_;
- 
+
 diff --git a/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java b/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java
 --- a/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java
 +++ b/components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java
@@ -2845,7 +3107,7 @@ diff --git a/components/signin/public/android/java/src/org/chromium/components/s
 +        // The facade's nullable callback contract allows callers to display their fallback UI.
 +        callback.onResult(null);
      }
- 
+
      @Override
 diff --git a/chrome/android/java/res/values/arc_strings.xml b/chrome/android/java/res/values/arc_strings.xml
 new file mode 100644
@@ -4311,39 +4573,50 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcNativeTa
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcNativeTabSession.java
-@@ -0,0 +1,252 @@
+@@ -0,0 +1,342 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
 +package org.chromium.chrome.browser.arc;
 +
 +import org.chromium.base.ThreadUtils;
++import org.chromium.chrome.browser.app.tabwindow.TabWindowManagerSingleton;
 +import org.chromium.chrome.browser.profiles.Profile;
 +import org.chromium.chrome.browser.tab.Tab;
 +import org.chromium.chrome.browser.tab.TabLaunchType;
 +import org.chromium.chrome.browser.tab.TabSelectionType;
 +import org.chromium.chrome.browser.tabmodel.TabClosureParams;
 +import org.chromium.chrome.browser.tabmodel.TabCreator;
++import org.chromium.chrome.browser.tabmodel.TabList;
 +import org.chromium.chrome.browser.tabmodel.TabModel;
 +import org.chromium.chrome.browser.tabmodel.TabModelObserver;
++import org.chromium.chrome.browser.tabmodel.TabModelSelector;
++import org.chromium.chrome.browser.tabwindow.TabWindowManager;
 +import org.chromium.content_public.browser.LoadUrlParams;
 +
++import java.util.ArrayList;
++import java.util.HashMap;
 +import java.util.HashSet;
 +import java.util.List;
++import java.util.Map;
 +import java.util.Set;
 +import java.util.function.BooleanSupplier;
++import java.util.function.IntPredicate;
 +
 +/** Adapter to one real Chromium model/creator; never acts on an inactive profile's UI. */
 +public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
 +    private enum RestoreState { RESTORE_PENDING, RESTORE_COMPLETE }
 +
 +    private final TabModel mModel;
++    private final Profile mProfile;
 +    private final TabCreator mCreator;
 +    private final BooleanSupplier mIsCurrentModel;
 +    private final Runnable mOnStateChanged;
 +    private final ArcTabActions mActions;
 +    private final ArcSidebarStore mStore;
 +    private final TabModelObserver mObserver;
++    private final TabWindowManager mWindowManager;
++    private final TabWindowManager.Observer mWindowObserver;
 +    private RestoreState mRestoreState;
 +    private boolean mDestroyed;
 +
@@ -4355,6 +4628,7 @@ new file mode 100644
 +            throw new IllegalStateException("Arc tab profile is not initialized");
 +        }
 +        mModel = model;
++        mProfile = profile;
 +        mCreator = creator;
 +        mIsCurrentModel = isCurrentModel;
 +        mOnStateChanged = onStateChanged;
@@ -4385,6 +4659,12 @@ new file mode 100644
 +                if (active()) mOnStateChanged.run();
 +            }
 +
++            @Override public void tabClosureUndone(Tab tab) {
++                if (mDestroyed) return;
++                if (restoreComplete()) adoptTab(tab.getId());
++                if (active()) mOnStateChanged.run();
++            }
++
 +            @Override public void tabClosureCommitted(Tab tab) { confirmedClose(tab.getId()); }
 +            @Override public void onTabCloseCommitted(List<Tab> tabs, boolean isAllTabs,
 +                    boolean canRestore, int closingSource) {
@@ -4392,6 +4672,19 @@ new file mode 100644
 +            }
 +        };
 +        model.addObserver(mObserver);
++        mWindowManager = TabWindowManagerSingleton.getInstance();
++        mWindowObserver = new TabWindowManager.Observer() {
++            @Override public void onAllTabModelStateInitialized() {
++                if (mDestroyed) return;
++                // This event establishes absence authority, not a local Space selection. Never
++                // create or choose a tab just because another window finished restoring.
++                reconcileTabsAfterRestore();
++                if (active()) mOnStateChanged.run();
++            }
++        };
++        // addObserver() does not replay the all-model event. The reconciliation below explicitly
++        // checks the latch, so attaching after that event is equally safe.
++        mWindowManager.addObserver(mWindowObserver);
 +        // If this session attaches after Chromium already completed restore, the model itself is
 +        // authoritative and the restoreCompleted callback is not required to arrive again.
 +        if (restoreComplete()) {
@@ -4406,11 +4699,12 @@ new file mode 100644
 +    private boolean active() {
 +        Profile profile = mModel.getProfile();
 +        return !mDestroyed && mIsCurrentModel.getAsBoolean()
-+                && profile != null && !profile.shutdownStarted();
++                && profile == mProfile && !profile.shutdownStarted();
 +    }
 +
 +    private void adoptTab(int tabId) {
-+        if (mDestroyed || tabId < 0) return;
++        if (mDestroyed || tabId < 0 || mProfile.shutdownStarted()
++                || mModel.getProfile() != mProfile) return;
 +        try {
 +            ArcSidebarState state = mStore.load();
 +            if (state.isFavoriteTab(tabId) || state.hasTabSpace(tabId)) return;
@@ -4425,22 +4719,79 @@ new file mode 100644
 +        return mRestoreState == RestoreState.RESTORE_COMPLETE;
 +    }
 +
-+    private Set<Integer> liveTabIds() {
++    private static Set<Integer> comprehensiveTabIds(TabModel model) {
 +        Set<Integer> live = new HashSet<>();
-+        for (int i = 0; i < mModel.getCount(); i++) {
-+            Tab tab = mModel.getTabAt(i);
-+            if (tab != null) live.add(tab.getId());
++        TabList comprehensive = model.getComprehensiveModel();
++        for (int i = 0; i < comprehensive.getCount(); i++) {
++            Tab tab = comprehensive.getTabAt(i);
++            if (tab == null || tab.getId() < 0) {
++                throw new IllegalStateException("Arc tab authority is incomplete");
++            }
++            live.add(tab.getId());
 +        }
 +        return live;
 +    }
 +
++    private IntPredicate tabDeletionAuthority(Set<Integer> localIds) {
++        try {
++            // Headless regular restoration deliberately ignores persisted incognito state. Its
++            // all-window latch cannot prove absence in an exact OTR profile's in-memory store.
++            if (mProfile.isOffTheRecord() || mProfile.shutdownStarted()
++                    || !mModel.isTabModelRestored()
++                    || !mWindowManager.isAllTabStateInitialized()) return id -> false;
++            TabModelSelector archive = mWindowManager.getArchivedTabModelSelector();
++            if (archive == null || !archive.isTabStateInitialized()) return id -> false;
++            // Manager collections are live; take UI-thread snapshots before inspecting models.
++            List<TabModelSelector> selectors =
++                    new ArrayList<>(mWindowManager.getAllTabModelSelectors());
++            selectors.addAll(new ArrayList<>(mWindowManager.getCustomTabsTabModelSelectors()));
++            selectors.add(archive);
++            Set<Integer> protectedIds = new HashSet<>(localIds);
++            for (TabModelSelector selector : selectors) {
++                if (!selector.isTabStateInitialized()) return id -> false;
++                List<TabModel> models = new ArrayList<>(selector.getModels());
++                if (models.isEmpty()) return id -> false;
++                for (TabModel model : models) {
++                    Profile candidate = model.getProfile();
++                    if (candidate == null) {
++                        // Incognito's unused empty stub has no native Profile. It cannot own a
++                        // regular ID; any unknown regular/nonempty state remains conservative.
++                        if (model.isOffTheRecord() && model.getCount() == 0
++                                && model.getComprehensiveModel().getCount() == 0) continue;
++                        return id -> false;
++                    }
++                    if (candidate != mProfile) continue;
++                    if (candidate.shutdownStarted() || !model.isTabModelRestored()) {
++                        return id -> false;
++                    }
++                    protectedIds.addAll(comprehensiveTabIds(model));
++                }
++            }
++            // Cache each decision for this reconciliation: bindings and owners for the same ID
++            // must see the same answer, even if a manager lookup fails partway through.
++            Map<Integer, Boolean> decisions = new HashMap<>();
++            return id -> decisions.computeIfAbsent(id, candidate -> {
++                if (protectedIds.contains(candidate)) return false;
++                try {
++                    return mWindowManager.canTabStateBeDeleted(candidate);
++                } catch (RuntimeException ignored) {
++                    return false;
++                }
++            });
++        } catch (RuntimeException ignored) {
++            // Unknown window/profile/archive state never authorizes negative reconciliation.
++            return id -> false;
++        }
++    }
++
 +    private void reconcileTabsAfterRestore() {
-+        if (mDestroyed || !restoreComplete()) return;
++        if (mDestroyed || !restoreComplete() || mProfile.shutdownStarted()
++                || mModel.getProfile() != mProfile) return;
 +        try {
 +            ArcSidebarState state = mStore.load();
-+            Set<Integer> live = liveTabIds();
++            Set<Integer> live = comprehensiveTabIds(mModel);
 +            String before = state.serialize();
-+            state.reconcileTabsAfterRestore(live);
++            state.reconcileTabsAfterRestore(tabDeletionAuthority(live));
 +            for (int tabId : live) {
 +                if (!state.isFavoriteTab(tabId) && !state.hasTabSpace(tabId)) {
 +                    state.associateTab(tabId, state.selectedSpace());
@@ -4561,6 +4912,7 @@ new file mode 100644
 +        if (mDestroyed) return;
 +        mDestroyed = true;
 +        mModel.removeObserver(mObserver);
++        mWindowManager.removeObserver(mWindowObserver);
 +        mActions.destroy();
 +    }
 +}
@@ -4606,7 +4958,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarS
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarState.java
-@@ -0,0 +1,361 @@
+@@ -0,0 +1,362 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -4625,6 +4977,7 @@ new file mode 100644
 +import java.util.Map;
 +import java.util.Set;
 +import java.util.UUID;
++import java.util.function.IntPredicate;
 +
 +/** Profile-owned Arc metadata. Native TabModel remains the owner of every real tab. */
 +public final class ArcSidebarState {
@@ -4754,18 +5107,18 @@ new file mode 100644
 +        mTabSpaces.remove(tabId);
 +    }
 +    /**
-+     * Reconciles persisted native IDs against the authoritative live set. Callers must invoke this
-+     * only after Chromium reports restoreCompleted() (or when TabModel.isTabModelRestored() was
-+     * already true at session construction). Closed pinned entries keep their canonical URL/title.
++     * Clears IDs only when profile-wide native authority confirms they may be forgotten. A local
++     * Activity's restored tab list cannot prove another window's persisted IDs absent. Closed
++     * pinned entries keep their canonical URL/title, and pending closures retain their bindings.
 +     */
-+    public void reconcileTabsAfterRestore(Set<Integer> realTabIds) {
++    public void reconcileTabsAfterRestore(IntPredicate mayForgetTabId) {
 +        for (int i = 0; i < mEntries.size(); i++) {
 +            Entry entry = mEntries.get(i);
-+            if (entry.tabId != null && !realTabIds.contains(entry.tabId)) {
++            if (entry.tabId != null && mayForgetTabId.test(entry.tabId)) {
 +                mEntries.set(i, entry.withTab(null));
 +            }
 +        }
-+        mTabSpaces.keySet().retainAll(realTabIds);
++        mTabSpaces.keySet().removeIf(mayForgetTabId::test);
 +        // Favorites are global collection entries, not Space-owned open-tab rows. Repair any
 +        // residual ownership left by a synchronous didAddTab() or older persisted state.
 +        for (Entry entry : mEntries) {
@@ -5813,7 +6166,7 @@ diff --git a/chrome/browser/password_manager/android/archium_local_password_mana
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/password_manager/android/archium_local_password_manager_unittest.cc
-@@ -0,0 +1,402 @@
+@@ -0,0 +1,491 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -5823,6 +6176,7 @@ new file mode 100644
 +#include <memory>
 +#include <utility>
 +
++#include "base/files/scoped_temp_dir.h"
 +#include "base/functional/bind.h"
 +#include "base/functional/callback_helpers.h"
 +#include "base/test/bind.h"
@@ -5830,10 +6184,16 @@ new file mode 100644
 +#include "base/test/test_future.h"
 +#include "components/affiliations/core/browser/fake_affiliation_service.h"
 +#include "components/device_reauth/mock_device_authenticator.h"
++#include "components/os_crypt/async/browser/test_utils.h"
++#include "components/password_manager/core/browser/affiliation/affiliated_match_helper.h"
 +#include "components/password_manager/core/browser/password_store/actionable_error.h"
-+#include "components/password_manager/core/browser/password_store/test_password_store.h"
++#include "components/password_manager/core/browser/password_store/login_database.h"
 +#include "components/password_manager/core/browser/password_store/mock_password_store_interface.h"
++#include "components/password_manager/core/browser/password_store/password_store.h"
++#include "components/password_manager/core/browser/password_store/password_store_built_in_backend.h"
 +#include "components/password_manager/core/browser/ui/saved_passwords_presenter.h"
++#include "components/password_manager/core/common/password_manager_pref_names.h"
++#include "components/prefs/testing_pref_service.h"
 +#include "testing/gmock/include/gmock/gmock.h"
 +#include "testing/gtest/include/gtest/gtest.h"
 +
@@ -5857,9 +6217,33 @@ new file mode 100644
 +class ArchiumLocalPasswordManagerTest : public testing::Test {
 + protected:
 +  void SetUp() override {
++    ASSERT_TRUE(directory_.CreateUniqueTempDir());
++    prefs_.registry()->RegisterBooleanPref(prefs::kClearingUndecryptablePasswords,
++                                          false);
++    prefs_.registry()->RegisterIntegerPref(prefs::kPasswordRemovalReasonForAccount,
++                                          0);
++    prefs_.registry()->RegisterIntegerPref(prefs::kPasswordRemovalReasonForProfile,
++                                          0);
++    crypt_ = os_crypt_async::GetTestOSCryptAsyncForTesting();
++    // Exercise the same asynchronous SQLite snapshot/import implementation as
++    // production. TestPasswordStore's FakePasswordStoreBackend does not implement
++    // these APIs and cannot be used to test a successful authenticated operation.
++    store_ = base::MakeRefCounted<PasswordStore>(
++        std::make_unique<PasswordStoreBuiltInBackend>(
++            std::make_unique<LoginDatabase>(
++                directory_.GetPath().AppendASCII("Login Data"),
++                IsAccountStore(false)),
++            syncer::WipeModelUponSyncDisabledBehavior::kNever, &prefs_,
++            crypt_.get(), nullptr));
 +    store_->Init();
-+    CSVPassword csv(GURL("https://example.test/"), "user", "secret", "", CSVPassword::Status::kOK);
-+    store_->AddLogin(SavedPasswordsPresenter::CreateImportedCredential(CredentialUIEntry(csv)));
++    CSVPassword csv(GURL("https://example.test/"), "user", "secret", "",
++                    CSVPassword::Status::kOK);
++    base::test::TestFuture<void> seeded;
++    store_->AddLogin(
++        SavedPasswordsPresenter::CreateImportedCredential(CredentialUIEntry(csv)),
++        seeded.GetCallback());
++    tasks_.RunUntilIdle();
++    ASSERT_TRUE(seeded.IsReady());
 +    auto auth = std::make_unique<testing::NiceMock<device_reauth::MockDeviceAuthenticator>>();
 +    auth_ = auth.get();
 +    ON_CALL(*auth_, CanAuthenticateWithBiometricOrScreenLock()).WillByDefault(Return(true));
@@ -5873,8 +6257,11 @@ new file mode 100644
 +  }
 +  void TearDown() override {
 +    manager_.reset();
-+    store_->ShutdownOnUIThread();
++    if (store_) {
++      store_->ShutdownOnUIThread();
++    }
 +    tasks_.RunUntilIdle();
++    store_.reset();
 +  }
 +  int64_t FirstId() {
 +    auto metadata = manager_->GetMetadata();
@@ -5882,13 +6269,68 @@ new file mode 100644
 +    if (!metadata || metadata->empty()) return -1;
 +    return metadata->front().id;
 +  }
-+  base::test::SingleThreadTaskEnvironment tasks_;
-+  scoped_refptr<TestPasswordStore> store_ = base::MakeRefCounted<TestPasswordStore>();
++  // Both the built-in DB backend and PreviewImport's parsing worker use ThreadPool.
++  base::test::TaskEnvironment tasks_;
++  base::ScopedTempDir directory_;
++  TestingPrefServiceSimple prefs_;
++  std::unique_ptr<os_crypt_async::OSCryptAsync> crypt_;
++  scoped_refptr<PasswordStore> store_;
 +  affiliations::FakeAffiliationService affiliations_;
 +  device_reauth::MockDeviceAuthenticator* auth_ = nullptr;
 +  device_reauth::DeviceAuthenticator::AuthenticateCallback pending_auth_;
 +  std::unique_ptr<ArchiumLocalPasswordManager> manager_;
 +};
++
++TEST_F(ArchiumLocalPasswordManagerTest,
++       FixtureSupportsRealSnapshotsAndAtomicImport) {
++  base::test::TestFuture<ArchiumImportSnapshotResult> before;
++  store_->GetImportSnapshot(before.GetCallback());
++  tasks_.RunUntilIdle();
++  ASSERT_TRUE(before.IsReady());
++  ASSERT_TRUE(before.Get().has_value());
++  ASSERT_EQ(before.Get()->credentials.size(), 1u);
++  EXPECT_FALSE(before.Get()->revision.session.is_empty());
++  EXPECT_EQ(before.Get()->credentials.front().password_value, u"secret");
++
++  CSVPassword csv(GURL("https://fixture-import.test/"), "import-user",
++                  "import-secret", "", CSVPassword::Status::kOK);
++  std::vector<StoredCredential> imported;
++  imported.push_back(
++      SavedPasswordsPresenter::CreateImportedCredential(CredentialUIEntry(csv)));
++  base::test::TestFuture<base::expected<void, ArchiumImportFailure>> committed;
++  store_->ImportLoginsAtomically(std::move(imported), committed.GetCallback(),
++                                before.Get()->revision);
++  tasks_.RunUntilIdle();
++  ASSERT_TRUE(committed.IsReady());
++  ASSERT_TRUE(committed.Get().has_value());
++
++  base::test::TestFuture<ArchiumImportSnapshotResult> after;
++  store_->GetImportSnapshot(after.GetCallback());
++  tasks_.RunUntilIdle();
++  ASSERT_TRUE(after.IsReady());
++  ASSERT_TRUE(after.Get().has_value());
++  EXPECT_EQ(after.Get()->credentials.size(), 2u);
++  EXPECT_NE(after.Get()->revision, before.Get()->revision);
++  EXPECT_TRUE(std::ranges::any_of(after.Get()->credentials, [](const auto& cred) {
++    return cred.url == GURL("https://fixture-import.test/") &&
++           cred.username_value == u"import-user" &&
++           cred.password_value == u"import-secret";
++  }));
++}
++
++TEST_F(ArchiumLocalPasswordManagerTest,
++       AuthenticatedExportReadsPersistedSnapshot) {
++  base::test::TestFuture<Status, std::vector<StoredCredential>> result;
++  manager_->Export(result.GetCallback());
++  EXPECT_FALSE(result.IsReady());
++  ASSERT_TRUE(pending_auth_);
++  std::move(pending_auth_).Run(true);
++  tasks_.RunUntilIdle();
++  ASSERT_TRUE(result.IsReady());
++  ASSERT_EQ(result.Get<0>(), Status::kSuccess);
++  ASSERT_EQ(result.Get<1>().size(), 1u);
++  EXPECT_EQ(result.Get<1>().front().password_value, u"secret");
++}
 +
 +TEST_F(ArchiumLocalPasswordManagerTest, MetadataDoesNotRequestAuthenticationOrRevealSecrets) {
 +  EXPECT_CALL(*auth_, AuthenticateWithMessage(_, _)).Times(0);
@@ -8153,7 +8595,7 @@ diff --git a/chrome/browser/password_manager/android/java/src/org/chromium/chrom
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordSettingsFragment.java
-@@ -0,0 +1,917 @@
+@@ -0,0 +1,931 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -8237,7 +8679,17 @@ new file mode 100644
 +    private final Handler mMain = new Handler(Looper.getMainLooper());
 +    private final Map<Integer, ArchiumPasswordManagerBridge.Entry> mRevealRequests =
 +            new HashMap<>();
-+    private final Map<Integer, Integer> mPreviewParseErrors = new HashMap<>();
++    private static final class ImportSourceCounts {
++        final int invalidRows;
++        final int duplicateRows;
++
++        ImportSourceCounts(int invalidRows, int duplicateRows) {
++            this.invalidRows = invalidRows;
++            this.duplicateRows = duplicateRows;
++        }
++    }
++
++    private final Map<Integer, ImportSourceCounts> mPreviewSourceCounts = new HashMap<>();
 +    private final Set<AlertDialog> mDialogs = new HashSet<>();
 +    private final Set<ExportWriteTask> mPendingExportTasks = ConcurrentHashMap.newKeySet();
 +
@@ -8253,23 +8705,25 @@ new file mode 100644
 +
 +    @Override
 +    public void onCreate(@Nullable Bundle savedInstanceState) {
-+        super.onCreate(savedInstanceState);
 +        mPageTitle.set("Local passwords");
-+        Profile profile = getProfile();
-+        mOffTheRecord = profile == null || profile.isOffTheRecord();
-+        if (mOffTheRecord || !ArchiumPasswordManagerBridge.isLocalEnabled()) return;
-+        mBridge =
-+                new ArchiumPasswordManagerBridge(
-+                        requireActivity(), profile, this);
++        super.onCreate(savedInstanceState);
 +    }
 +
 +    @Override
 +    public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
++        // PreferenceFragmentCompat calls this synchronously from super.onCreate(). The
++        // Settings profile is already injected; initialize before choosing the screen.
++        Profile profile = getProfile();
++        mOffTheRecord = profile == null || profile.isOffTheRecord();
++        if (mBridge == null && !mOffTheRecord && ArchiumPasswordManagerBridge.isLocalEnabled()) {
++            mBridge = new ArchiumPasswordManagerBridge(requireActivity(), profile, this);
++        }
 +        PreferenceScreen screen = getPreferenceManager().createPreferenceScreen(requireContext());
 +        setPreferenceScreen(screen);
 +
 +        // Do not even present interactive list/search/CRUD/SAF controls in OTR.
-+        if (mOffTheRecord || mBridge == null) {
++        ArchiumPasswordManagerBridge bridge = mBridge;
++        if (mOffTheRecord || bridge == null) {
 +            Preference unavailable = new Preference(requireContext());
 +            unavailable.setTitle(mOffTheRecord
 +                    ? "Local passwords are unavailable in Incognito"
@@ -8323,11 +8777,7 @@ new file mode 100644
 +        mEntriesCategory.setTitle("Saved passwords");
 +        screen.addPreference(mEntriesCategory);
 +
-+        if (mBridge == null) {
-+            setUnavailable("Local password storage is unavailable in this build.");
-+        } else {
-+            mBridge.start();
-+        }
++        bridge.start();
 +    }
 +
 +    @Override
@@ -8676,12 +9126,18 @@ new file mode 100644
 +        }
 +
 +        int request = nextRequest();
-+        mPreviewParseErrors.put(request, parsed.errors.size());
++        mPreviewSourceCounts.put(
++                request, new ImportSourceCounts(parsed.errors.size(), parsed.duplicateCount));
 +        ArchiumPasswordManagerBridge bridge = mBridge;
 +        if (bridge != null) {
-+            bridge.previewImport(request, urls, users, passwords);
++            try {
++                bridge.previewImport(request, urls, users, passwords);
++            } catch (RuntimeException | Error failure) {
++                mPreviewSourceCounts.remove(request);
++                throw failure;
++            }
 +        } else {
-+            mPreviewParseErrors.remove(request);
++            mPreviewSourceCounts.remove(request);
 +            for (char[] password : passwords) Arrays.fill(password, '\0');
 +        }
 +      } finally {
@@ -8693,7 +9149,7 @@ new file mode 100644
 +
 +    private void reviewImport(
 +            int request,
-+            int sourceInvalidRows,
++            ImportSourceCounts sourceCounts,
 +            List<ArchiumPasswordManagerBridge.ImportRow> rows) {
 +        int maxIndex = -1;
 +        for (ArchiumPasswordManagerBridge.ImportRow row : rows) {
@@ -8702,12 +9158,12 @@ new file mode 100644
 +        int[] decisions = new int[maxIndex + 1];
 +        Set<String> acceptedFileConflicts = new HashSet<>();
 +        reviewNextConflict(
-+                request, sourceInvalidRows, rows, decisions, acceptedFileConflicts, 0);
++                request, sourceCounts, rows, decisions, acceptedFileConflicts, 0);
 +    }
 +
 +    private void reviewNextConflict(
 +            int request,
-+            int sourceInvalidRows,
++            ImportSourceCounts sourceCounts,
 +            List<ArchiumPasswordManagerBridge.ImportRow> rows,
 +            int[] decisions,
 +            Set<String> acceptedFileConflicts,
@@ -8761,7 +9217,7 @@ new file mode 100644
 +                                            }
 +                                            reviewNextConflict(
 +                                                    request,
-+                                                    sourceInvalidRows,
++                                                    sourceCounts,
 +                                                    rows,
 +                                                    decisions,
 +                                                    acceptedFileConflicts,
@@ -8773,7 +9229,7 @@ new file mode 100644
 +                                            decisions[row.index] = DECISION_SKIP;
 +                                            reviewNextConflict(
 +                                                    request,
-+                                                    sourceInvalidRows,
++                                                    sourceCounts,
 +                                                    rows,
 +                                                    decisions,
 +                                                    acceptedFileConflicts,
@@ -8789,19 +9245,19 @@ new file mode 100644
 +                return;
 +            }
 +        }
-+        showImportSummary(request, sourceInvalidRows, rows, decisions);
++        showImportSummary(request, sourceCounts, rows, decisions);
 +    }
 +
 +    private void showImportSummary(
 +            int request,
-+            int sourceInvalidRows,
++            ImportSourceCounts sourceCounts,
 +            List<ArchiumPasswordManagerBridge.ImportRow> rows,
 +            int[] decisions) {
 +        if (mDestroyed) return;
 +        int added = 0;
 +        int replaced = 0;
-+        int duplicates = 0;
-+        int invalid = sourceInvalidRows;
++        int duplicates = sourceCounts.duplicateRows;
++        int invalid = sourceCounts.invalidRows;
 +        int skipped = 0;
 +        for (ArchiumPasswordManagerBridge.ImportRow row : rows) {
 +            if (row.kind == PREVIEW_EXACT || row.kind == PREVIEW_FILE_DUPLICATE) {
@@ -9028,14 +9484,14 @@ new file mode 100644
 +    @Override
 +    public void onPreview(
 +            int request, int status, List<ArchiumPasswordManagerBridge.ImportRow> rows) {
-+        Integer parseErrors = mPreviewParseErrors.remove(request);
-+        int sourceInvalidRows = parseErrors == null ? 0 : parseErrors;
++        ImportSourceCounts sourceCounts = mPreviewSourceCounts.remove(request);
 +        if (mDestroyed) return;
 +        if (status != ArchiumPasswordManagerBridge.SUCCESS) {
 +            showError("Couldn't review import", statusMessage(status));
 +            return;
 +        }
-+        reviewImport(request, sourceInvalidRows, rows);
++        reviewImport(
++                request, sourceCounts == null ? new ImportSourceCounts(0, 0) : sourceCounts, rows);
 +    }
 +
 +    @Override
@@ -9056,7 +9512,7 @@ new file mode 100644
 +        for (AlertDialog dialog : List.copyOf(mDialogs)) dialog.dismiss();
 +        mDialogs.clear();
 +        mRevealRequests.clear();
-+        mPreviewParseErrors.clear();
++        mPreviewSourceCounts.clear();
 +        ArchiumPasswordManagerBridge bridge = mBridge;
 +        mBridge = null;
 +        if (bridge != null) {

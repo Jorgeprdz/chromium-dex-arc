@@ -46,7 +46,7 @@ public final class ArcSidebarStateTest {
         ArcSidebarState restored = ArcSidebarState.deserialize(serialized);
         check(restored.serialize().equals(serialized), "Versioned roundtrip preserves identity and ordering");
         check(restored.entry(pinned).tabId == 12, "Saved association survives serialization");
-        restored.reconcileTabsAfterRestore(java.util.Set.of(10, 11, 13));
+        restored.reconcileTabsAfterRestore(id -> !java.util.Set.of(10, 11, 13).contains(id));
         check(restored.entry(pinned).tabId == null, "Missing native tab recovers as unopened pin");
         check(restored.entry(pinned).url.equals(state.entry(pinned).url), "Reconciliation retains URL");
         rejected(() -> restored.move(other, work, child, 0), "Cross-Space folder must be rejected");
@@ -81,7 +81,7 @@ public final class ArcSidebarStateTest {
                 "Pre-restore presentation checks never clean persisted metadata");
 
         ArcSidebarState lateRestored = ArcSidebarState.deserialize(preRestore);
-        lateRestored.reconcileTabsAfterRestore(java.util.Set.of(123, 124));
+        lateRestored.reconcileTabsAfterRestore(id -> !java.util.Set.of(123, 124).contains(id));
         check(lateRestored.entry(latePin).tabId == 123
                         && lateRestored.visibleTabForPresentation(123, true),
                 "Persisted tab that appears by restore completion keeps its original Space ownership");
@@ -93,11 +93,11 @@ public final class ArcSidebarStateTest {
         reordered.associateTab(2, reorderB);
         reordered.associateTab(3, reorderA);
         String ownershipBefore = reordered.serialize();
-        reordered.reconcileTabsAfterRestore(java.util.Set.of(3, 1, 2));
+        reordered.reconcileTabsAfterRestore(id -> !java.util.Set.of(3, 1, 2).contains(id));
         check(ownershipBefore.equals(reordered.serialize()),
                 "Restore arrival order cannot reassign Space ownership");
 
-        lifecycle.reconcileTabsAfterRestore(java.util.Set.of(124, 999));
+        lifecycle.reconcileTabsAfterRestore(id -> !java.util.Set.of(124, 999).contains(id));
         check(lifecycle.entry(latePin).tabId == null,
                 "Missing tab ID is cleaned only by post-restore reconciliation");
         check(lifecycle.entry(latePin).url.equals("https://late.test/"),

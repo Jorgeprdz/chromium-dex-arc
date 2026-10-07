@@ -4095,7 +4095,46 @@ public class VerticalTabListCoordinatorUnitTest {
                 mCoordinator.getView().findViewById(R.id.tab_list_recycler_view);
         SimpleRecyclerViewAdapter adapter = (SimpleRecyclerViewAdapter) recycler.getAdapter();
         assertEquals(2, adapter.getModelList().size());
-        assertEquals(TabModel.INVALID_TAB_INDEX, adapter.getModelList().indexFromTabId(TAB_ID_3));
+        for (int i = 0; i < adapter.getModelList().size(); i++) {
+            assertFalse(TAB_ID_3 == adapter.getModelList().get(i).model.get(TabProperties.TAB_ID));
+        }
+        assertEquals(3, mTabModel.getCount());
+    }
+
+    @Test
+    public void testTabVisibilityPredicate_GroupExpansionPreservesFollowingVisibleTab() {
+        Token groupId = new Token(1L, 2L);
+        Tab visible = prepareMockTab(mMockTab1, TAB_ID_1);
+        Tab hidden = prepareMockTab(mMockTab2, TAB_ID_2);
+        Tab following = prepareMockTab(mMockTab3, TAB_ID_3);
+        setupMockTabGroup(groupId, List.of(visible, hidden));
+        when(mTabModel.getRepresentativeTabList()).thenReturn(List.of(visible, following));
+        when(mTabModel.getCount()).thenReturn(3);
+        when(mTabModel.iterator()).thenAnswer(inv -> List.of(visible, hidden, following).iterator());
+        final boolean[] collapsed = {false};
+        when(mTabModel.getTabGroupCollapsed(groupId)).thenAnswer(inv -> collapsed[0]);
+        doAnswer(inv -> {
+            collapsed[0] = inv.getArgument(1);
+            for (TabGroupObserver observer : List.copyOf(mTabGroupObservers)) {
+                observer.didChangeTabGroupCollapsed(groupId, collapsed[0], false);
+            }
+            return null;
+        }).when(mTabModel).setTabGroupCollapsed(eq(groupId), anyBoolean(), anyBoolean());
+        createCoordinator();
+        mCoordinator.setTabVisibilityPredicate(id -> id != TAB_ID_2);
+        TabListRecyclerView recycler = mCoordinator.getView().findViewById(R.id.tab_list_recycler_view);
+        SimpleRecyclerViewAdapter adapter = (SimpleRecyclerViewAdapter) recycler.getAdapter();
+        assertEquals(3, adapter.getModelList().size());
+        assertEquals(TAB_ID_3, adapter.getModelList().get(2).model.get(TabProperties.TAB_ID));
+
+        mCoordinator.toggleTabGroupExpansion(TAB_ID_1);
+        assertEquals(2, adapter.getModelList().size());
+        assertEquals(TAB_ID_3, adapter.getModelList().get(1).model.get(TabProperties.TAB_ID));
+
+        mCoordinator.toggleTabGroupExpansion(TAB_ID_1);
+        assertEquals(3, adapter.getModelList().size());
+        assertEquals(TAB_ID_1, adapter.getModelList().get(1).model.get(TabProperties.TAB_ID));
+        assertEquals(TAB_ID_3, adapter.getModelList().get(2).model.get(TabProperties.TAB_ID));
         assertEquals(3, mTabModel.getCount());
     }
 

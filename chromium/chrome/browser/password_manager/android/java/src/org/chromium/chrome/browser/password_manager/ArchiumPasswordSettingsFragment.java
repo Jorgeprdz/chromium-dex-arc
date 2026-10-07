@@ -81,7 +81,17 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
     private final Handler mMain = new Handler(Looper.getMainLooper());
     private final Map<Integer, ArchiumPasswordManagerBridge.Entry> mRevealRequests =
             new HashMap<>();
-    private final Map<Integer, Integer> mPreviewParseErrors = new HashMap<>();
+    private static final class ImportSourceCounts {
+        final int invalidRows;
+        final int duplicateRows;
+
+        ImportSourceCounts(int invalidRows, int duplicateRows) {
+            this.invalidRows = invalidRows;
+            this.duplicateRows = duplicateRows;
+        }
+    }
+
+    private final Map<Integer, ImportSourceCounts> mPreviewSourceCounts = new HashMap<>();
     private final Set<AlertDialog> mDialogs = new HashSet<>();
     private final Set<ExportWriteTask> mPendingExportTasks = ConcurrentHashMap.newKeySet();
 
@@ -97,23 +107,25 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
         mPageTitle.set("Local passwords");
-        Profile profile = getProfile();
-        mOffTheRecord = profile == null || profile.isOffTheRecord();
-        if (mOffTheRecord || !ArchiumPasswordManagerBridge.isLocalEnabled()) return;
-        mBridge =
-                new ArchiumPasswordManagerBridge(
-                        requireActivity(), profile, this);
+        super.onCreate(savedInstanceState);
     }
 
     @Override
     public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
+        // PreferenceFragmentCompat calls this synchronously from super.onCreate(). The
+        // Settings profile is already injected; initialize before choosing the screen.
+        Profile profile = getProfile();
+        mOffTheRecord = profile == null || profile.isOffTheRecord();
+        if (mBridge == null && !mOffTheRecord && ArchiumPasswordManagerBridge.isLocalEnabled()) {
+            mBridge = new ArchiumPasswordManagerBridge(requireActivity(), profile, this);
+        }
         PreferenceScreen screen = getPreferenceManager().createPreferenceScreen(requireContext());
         setPreferenceScreen(screen);
 
         // Do not even present interactive list/search/CRUD/SAF controls in OTR.
-        if (mOffTheRecord || mBridge == null) {
+        ArchiumPasswordManagerBridge bridge = mBridge;
+        if (mOffTheRecord || bridge == null) {
             Preference unavailable = new Preference(requireContext());
             unavailable.setTitle(mOffTheRecord
                     ? "Local passwords are unavailable in Incognito"
@@ -167,11 +179,7 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
         mEntriesCategory.setTitle("Saved passwords");
         screen.addPreference(mEntriesCategory);
 
-        if (mBridge == null) {
-            setUnavailable("Local password storage is unavailable in this build.");
-        } else {
-            mBridge.start();
-        }
+        bridge.start();
     }
 
     @Override
@@ -520,12 +528,18 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
         }
 
         int request = nextRequest();
-        mPreviewParseErrors.put(request, parsed.errors.size());
+        mPreviewSourceCounts.put(
+                request, new ImportSourceCounts(parsed.errors.size(), parsed.duplicateCount));
         ArchiumPasswordManagerBridge bridge = mBridge;
         if (bridge != null) {
-            bridge.previewImport(request, urls, users, passwords);
+            try {
+                bridge.previewImport(request, urls, users, passwords);
+            } catch (RuntimeException | Error failure) {
+                mPreviewSourceCounts.remove(request);
+                throw failure;
+            }
         } else {
-            mPreviewParseErrors.remove(request);
+            mPreviewSourceCounts.remove(request);
             for (char[] password : passwords) Arrays.fill(password, '\0');
         }
       } finally {
@@ -537,7 +551,7 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
 
     private void reviewImport(
             int request,
-            int sourceInvalidRows,
+            ImportSourceCounts sourceCounts,
             List<ArchiumPasswordManagerBridge.ImportRow> rows) {
         int maxIndex = -1;
         for (ArchiumPasswordManagerBridge.ImportRow row : rows) {
@@ -546,12 +560,12 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
         int[] decisions = new int[maxIndex + 1];
         Set<String> acceptedFileConflicts = new HashSet<>();
         reviewNextConflict(
-                request, sourceInvalidRows, rows, decisions, acceptedFileConflicts, 0);
+                request, sourceCounts, rows, decisions, acceptedFileConflicts, 0);
     }
 
     private void reviewNextConflict(
             int request,
-            int sourceInvalidRows,
+            ImportSourceCounts sourceCounts,
             List<ArchiumPasswordManagerBridge.ImportRow> rows,
             int[] decisions,
             Set<String> acceptedFileConflicts,
@@ -605,7 +619,7 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
                                             }
                                             reviewNextConflict(
                                                     request,
-                                                    sourceInvalidRows,
+                                                    sourceCounts,
                                                     rows,
                                                     decisions,
                                                     acceptedFileConflicts,
@@ -617,7 +631,7 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
                                             decisions[row.index] = DECISION_SKIP;
                                             reviewNextConflict(
                                                     request,
-                                                    sourceInvalidRows,
+                                                    sourceCounts,
                                                     rows,
                                                     decisions,
                                                     acceptedFileConflicts,
@@ -633,19 +647,19 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
                 return;
             }
         }
-        showImportSummary(request, sourceInvalidRows, rows, decisions);
+        showImportSummary(request, sourceCounts, rows, decisions);
     }
 
     private void showImportSummary(
             int request,
-            int sourceInvalidRows,
+            ImportSourceCounts sourceCounts,
             List<ArchiumPasswordManagerBridge.ImportRow> rows,
             int[] decisions) {
         if (mDestroyed) return;
         int added = 0;
         int replaced = 0;
-        int duplicates = 0;
-        int invalid = sourceInvalidRows;
+        int duplicates = sourceCounts.duplicateRows;
+        int invalid = sourceCounts.invalidRows;
         int skipped = 0;
         for (ArchiumPasswordManagerBridge.ImportRow row : rows) {
             if (row.kind == PREVIEW_EXACT || row.kind == PREVIEW_FILE_DUPLICATE) {
@@ -872,14 +886,14 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
     @Override
     public void onPreview(
             int request, int status, List<ArchiumPasswordManagerBridge.ImportRow> rows) {
-        Integer parseErrors = mPreviewParseErrors.remove(request);
-        int sourceInvalidRows = parseErrors == null ? 0 : parseErrors;
+        ImportSourceCounts sourceCounts = mPreviewSourceCounts.remove(request);
         if (mDestroyed) return;
         if (status != ArchiumPasswordManagerBridge.SUCCESS) {
             showError("Couldn't review import", statusMessage(status));
             return;
         }
-        reviewImport(request, sourceInvalidRows, rows);
+        reviewImport(
+                request, sourceCounts == null ? new ImportSourceCounts(0, 0) : sourceCounts, rows);
     }
 
     @Override
@@ -900,7 +914,7 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
         for (AlertDialog dialog : List.copyOf(mDialogs)) dialog.dismiss();
         mDialogs.clear();
         mRevealRequests.clear();
-        mPreviewParseErrors.clear();
+        mPreviewSourceCounts.clear();
         ArchiumPasswordManagerBridge bridge = mBridge;
         mBridge = null;
         if (bridge != null) {

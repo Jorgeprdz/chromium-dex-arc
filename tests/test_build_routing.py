@@ -48,6 +48,9 @@ elif name=='python3' and args[0].endswith('archium-checkpoint.py') and args[1]==
  android_jar=s/'third_party/android_sdk/public/platforms/android-37.0/android.jar'
  android_jar.parent.mkdir(parents=True,exist_ok=True);android_jar.write_bytes(b'synthetic android jar fixture')
  (w/'depot_tools').mkdir(exist_ok=True);(w/'depot_tools/ensure_bootstrap').write_text('exit 0\\n')
+elif name=='python3' and args and args[0].endswith('archium-java-preflight.py'):
+ if os.environ.get('MOCK_JAVA_PREFLIGHT_RESULT','0')!='0':sys.exit(int(os.environ['MOCK_JAVA_PREFLIGHT_RESULT']))
+ pathlib.Path(args[args.index('--targets-file')+1]).write_text('obj/archium-fixture.javac.jar\\n')
 elif name=='python3' and args and args[0].endswith('archium-test-gates.py') and len(args)>1 and args[1]=='host':
  sys.exit(int(os.environ.get('MOCK_HOST_GATE_RESULT','0')))
 elif name=='python3' and args and args[0].endswith('archium-test-gates.py') and len(args)>1 and args[1]=='verify-device-runners':
@@ -56,7 +59,9 @@ elif name=='timeout':
  i=0
  while args[i].startswith('--'):i+=1
  os.execvp(args[i+1],args[i+1:])
-elif name=='autoninja':sys.exit(int(os.environ.get('MOCK_NINJA_RESULT','0')))
+elif name=='autoninja':
+ is_java='obj/archium-fixture.javac.jar' in args
+ sys.exit(int(os.environ.get('MOCK_JAVA_NINJA_RESULT' if is_java else 'MOCK_NINJA_RESULT','0')))
 ''')
         driver.chmod(0o755)
         for name in ['sudo', 'df', 'git', 'python3', 'gn', 'timeout', 'autoninja']:
@@ -78,6 +83,38 @@ elif name=='autoninja':sys.exit(int(os.environ.get('MOCK_NINJA_RESULT','0')))
 
     def calls(self):
         return [json.loads(line) for line in self.trace.read_text().splitlines()] if self.trace.exists() else []
+
+    def test_real_java_preflight_precedes_native_and_apk_compilation(self):
+        result=self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
+                              ARCHIUM_COMPILE_GATE_TARGETS='archium_password_manager_tests')
+        self.assertEqual(result.returncode,0,result.stderr)
+        calls=self.calls()
+        resolution=next(i for i,c in enumerate(calls)
+                        if c[0]=='python3' and c[1].endswith('archium-java-preflight.py'))
+        ninjas=[(i,c) for i,c in enumerate(calls) if c[0]=='autoninja']
+        self.assertIn('obj/archium-fixture.javac.jar',ninjas[0][1])
+        self.assertLess(resolution,ninjas[0][0])
+        self.assertIn('archium_password_manager_tests',ninjas[1][1])
+        self.assertIn('chrome/browser/password_manager:unit_tests',ninjas[1][1])
+        self.assertIn('chrome_public_apk',ninjas[2][1])
+
+    def test_java_compiler_failure_prevents_native_and_apk(self):
+        result=self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
+                              ARCHIUM_COMPILE_GATE_TARGETS='archium_password_manager_tests',
+                              MOCK_JAVA_NINJA_RESULT='1')
+        self.assertEqual(result.returncode,1,result.stderr)
+        ninjas=[c for c in self.calls() if c[0]=='autoninja']
+        self.assertEqual(len(ninjas),1)
+        self.assertIn('obj/archium-fixture.javac.jar',ninjas[0])
+        self.assertFalse(any('archium_password_manager_tests' in c or 'chrome_public_apk' in c for c in ninjas))
+        self.assertEqual(self.output.read_text(),'')
+
+    def test_missing_java_owner_stops_before_any_compilation(self):
+        result=self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
+                              MOCK_JAVA_PREFLIGHT_RESULT='5')
+        self.assertEqual(result.returncode,5,result.stderr)
+        self.assertFalse(any(c[0]=='autoninja' for c in self.calls()))
+        self.assertEqual(self.output.read_text(),'')
 
     def test_first_stage_restores_declared_old_commit_transitions_and_regenerates_gn(self):
         result = self.run_build(ARCHIUM_SOURCE_TAG=SOURCE_TAG, ARCHIUM_SOURCE_COMMIT=SOURCE_COMMIT)
@@ -102,7 +139,7 @@ elif name=='autoninja':sys.exit(int(os.environ.get('MOCK_NINJA_RESULT','0')))
         self.assertFalse(any('transition-archium-patches.py' in c[1] for c in calls if c[0]=='python3'))
         restore=next(c for c in calls if c[0]=='python3')
         self.assertNotIn('--source-commit',restore)
-        self.assertFalse(any(c[0]=='gn' for c in calls))
+        self.assertFalse(any(c[:2]==['gn','gen'] for c in calls))
 
     def test_changed_args_force_gn_even_for_current_checkpoint(self):
         result=self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG)
@@ -127,7 +164,7 @@ elif name=='autoninja':sys.exit(int(os.environ.get('MOCK_NINJA_RESULT','0')))
                               ARCHIUM_VALIDATE_TARGETS='archium_key_provider_tests archium_key_java',
                               MOCK_NINJA_RESULT='1')
         self.assertEqual(result.returncode,1,result.stderr)
-        ninja=[c for c in self.calls() if c[0]=='autoninja']
+        ninja=[c for c in self.calls() if c[0]=='autoninja' and 'obj/archium-fixture.javac.jar' not in c]
         self.assertEqual(len(ninja),1)
         self.assertIn('archium_key_provider_tests',ninja[0]);self.assertIn('archium_key_java',ninja[0])
         self.assertNotIn('chrome_public_apk',ninja[0])
@@ -140,7 +177,7 @@ elif name=='autoninja':sys.exit(int(os.environ.get('MOCK_NINJA_RESULT','0')))
                               ARCHIUM_RUN_HOST_GATES='true')
         self.assertEqual(result.returncode,0,result.stderr)
         calls=self.calls()
-        ninja_indices=[i for i,c in enumerate(calls) if c[0]=='autoninja']
+        ninja_indices=[i for i,c in enumerate(calls) if c[0]=='autoninja' and 'obj/archium-fixture.javac.jar' not in c]
         self.assertEqual(len(ninja_indices),2,calls)
         host_index=next(i for i,c in enumerate(calls)
                         if c[0]=='python3' and c[1].endswith('archium-test-gates.py') and c[2]=='host')
@@ -156,7 +193,7 @@ elif name=='autoninja':sys.exit(int(os.environ.get('MOCK_NINJA_RESULT','0')))
                               MOCK_HOST_GATE_RESULT='7')
         self.assertEqual(result.returncode,7,result.stderr)
         calls=self.calls()
-        ninja=[c for c in calls if c[0]=='autoninja']
+        ninja=[c for c in calls if c[0]=='autoninja' and 'obj/archium-fixture.javac.jar' not in c]
         self.assertEqual(len(ninja),1,calls)
         self.assertIn('archium_key_provider_tests',ninja[0])
         self.assertNotIn('chrome_public_apk',ninja[0])
@@ -167,7 +204,7 @@ elif name=='autoninja':sys.exit(int(os.environ.get('MOCK_NINJA_RESULT','0')))
                               ARCHIUM_COMPILE_GATE_TARGETS='archium_key_provider_tests',
                               ARCHIUM_RUN_HOST_GATES='false')
         self.assertEqual(result.returncode,2,result.stderr)
-        ninja=[c for c in self.calls() if c[0]=='autoninja']
+        ninja=[c for c in self.calls() if c[0]=='autoninja' and 'obj/archium-fixture.javac.jar' not in c]
         self.assertEqual(len(ninja),1,self.calls())
         self.assertIn('archium_key_provider_tests',ninja[0])
         self.assertNotIn('chrome_public_apk',ninja[0])

@@ -68,8 +68,10 @@ def main():
         for name, sha in manifest['modified'].items():
             assert hashlib.sha256((checkout / name).read_bytes()).hexdigest() == sha, name
             overlay = ROOT / 'chromium' / name
-            if overlay.exists():
-                assert overlay.read_bytes() == (checkout / name).read_bytes(), 'Stale patch: ' + name
+            if not overlay.exists():
+                overlay = ROOT / '.source-modified' / name
+            assert overlay.is_file(), 'Missing delivery source: ' + name
+            assert overlay.read_bytes() == (checkout / name).read_bytes(), 'Stale patch: ' + name
             if name.endswith('.xml'):
                 ET.parse(checkout / name)
         print(f'Pinned patch: all {len(manifest["originals"])} files applied and hashes matched', flush=True)
@@ -183,6 +185,20 @@ def main():
             'org.chromium.components.user_prefs.UserPrefs': 'public class UserPrefs { public static org.chromium.components.prefs.PrefService get(org.chromium.chrome.browser.profiles.Profile p){return new org.chromium.components.prefs.PrefService();} }',
             'org.chromium.chrome.browser.profiles.ProfileKeyedMap': 'public class ProfileKeyedMap<T> { public @interface ProfileSelection { int OWN_INSTANCE=0; } public ProfileKeyedMap(int selection,org.chromium.base.Callback<T> cleanup){} public static <T> org.chromium.base.Callback<T> noRequiredCleanupAction(){return null;} public T getForProfile(Profile p,java.util.function.Function<Profile,T> factory){return factory.apply(p);} }',
         })
+        # Share the minimal, pinned authority contracts with the executed adapter regression.
+        # These bodies remain synthetic and are not API/runtime compilation evidence.
+        arc_spec = importlib.util.spec_from_file_location(
+            'arc_session_regression', ROOT / 'scripts/test-arc-native-session.py')
+        arc_module = importlib.util.module_from_spec(arc_spec)
+        arc_spec.loader.exec_module(arc_module)
+        for name in (
+                'org.chromium.chrome.browser.tabmodel.TabList',
+                'org.chromium.chrome.browser.tabmodel.TabModel',
+                'org.chromium.chrome.browser.tabmodel.TabModelObserver',
+                'org.chromium.chrome.browser.tabmodel.TabModelSelector',
+                'org.chromium.chrome.browser.tabwindow.TabWindowManager',
+                'org.chromium.chrome.browser.app.tabwindow.TabWindowManagerSingleton'):
+            definitions[name] = arc_module.DEFINITIONS[name]
         for annotation in ['Nullable', 'NullMarked', 'NullUnmarked']:
             definitions['org.chromium.build.annotations.' + annotation] = '@java.lang.annotation.Target({java.lang.annotation.ElementType.TYPE_USE,java.lang.annotation.ElementType.TYPE,java.lang.annotation.ElementType.METHOD,java.lang.annotation.ElementType.PACKAGE}) public @interface ' + annotation + ' {}'
         for name, body in definitions.items():
@@ -196,6 +212,12 @@ def main():
             *map(str, stubs.rglob('*.java')), *map(str, new_java), str(account), str(ROOT / 'tests/java/NullAccountDelegateTest.java'), str(ROOT / 'tests/android/window/ArchiumPasswordManagerBridgeJni.java'))
         print('New Android adapters: isolated SDK API compilation passed (dependency contracts stubbed)', flush=True)
         run('java', '-cp', str(classes) + ':' + str(args.android_jar), 'NullAccountDelegateTest')
+        run('python3', str(ROOT / 'scripts/test-password-settings-lifecycle.py'),
+            '--android-jar', str(args.android_jar), '--source-root', str(checkout))
+        run('python3', str(ROOT / 'scripts/test-arc-native-session.py'),
+            '--source-root', str(checkout))
+        run('python3', '-m', 'unittest', 'discover', '-s', str(ROOT / 'tests'),
+            '-p', 'test_group_projection.py')
         print('Full Chromium build/native tests and browser password/Arc/adaptive/input acceptance remain pending', flush=True)
 
 

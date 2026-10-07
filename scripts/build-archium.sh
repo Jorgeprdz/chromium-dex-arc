@@ -118,6 +118,21 @@ compile_slice() {
         exit "$result"
     fi
 }
+# Resolve real compiler actions for every Java delivery after GN generation. This
+# includes modified upstream tests, unlike the isolated preparation contracts.
+printf 'PHASE A1: compiling real Java/JNI owners before native work.\n'
+java_targets_file="$PWD/out/Archium/archium-java-targets.txt"
+python3 "$GITHUB_WORKSPACE/scripts/archium-java-preflight.py" \
+    --out "$PWD/out/Archium" --targets-file "$java_targets_file"
+mapfile -t java_targets < "$java_targets_file"
+if (( ${#java_targets[@]} == 0 )); then
+    printf 'Java preflight did not resolve any compilation targets.\n' >&2
+    exit 2
+fi
+compile_slice "${java_targets[@]}"
+# Check accessible native owners, including the bridge's generated JNI includes.
+gn check out/Archium //chrome/browser/password_manager/android:archium_password_manager_tests
+
 compile_gate_targets="${ARCHIUM_COMPILE_GATE_TARGETS:-${ARCHIUM_VALIDATE_TARGETS:-}}"
 if [[ -n "${ARCHIUM_VALIDATE_TARGETS:-}" && -z "${ARCHIUM_COMPILE_GATE_TARGETS:-}" ]]; then
     printf 'ARCHIUM_VALIDATE_TARGETS is deprecated; treating it as compile-only gate targets.\n' >&2
@@ -130,7 +145,9 @@ if [[ -n "$compile_gate_targets" ]]; then
             exit 2
         fi
     done
-    printf 'PHASE A: compiling Archium test/validation targets.\n'
+    # This source_set owns the edited upstream password client tests.
+    validation_targets+=(chrome/browser/password_manager:unit_tests)
+    printf 'PHASE A2: compiling Archium native/full test targets.\n'
     compile_slice "${validation_targets[@]}"
 fi
 

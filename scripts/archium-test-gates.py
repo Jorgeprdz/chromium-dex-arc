@@ -94,11 +94,19 @@ def host_gate(android_jar: Path, out_dir: Path) -> None:
         out_dir / 'bin' / 'run_chrome_junit_tests'
     )
     require_file(robolectric_runner, 'Chromium Robolectric runner')
-    run([
-        str(robolectric_runner), '-f',
-        'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.'
-        'VerticalTabListCoordinatorUnitTest.*',
-    ], cwd=out_dir.parent.parent)
+    # Class names and registrations verified in the exact pinned junit/BUILD.gn
+    # and toolbar:junit. Each suite executes separately, keeping missing classes visible.
+    for test_filter in (
+            'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.'
+            'VerticalTabListCoordinatorUnitTest.*',
+            'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.'
+            'TabVerticalViewBinderUnitTest.*',
+            'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.'
+            'VerticalTabRailLayoutUnitTest.*',
+            'org.chromium.chrome.browser.tasks.tab_management.NestedLayoutDelegateUnitTest.*',
+            'org.chromium.chrome.browser.tasks.tab_management.TabListMediatorUnitTest.*',
+            'org.chromium.chrome.browser.toolbar.top.ToolbarTabletUnitTest.*'):
+        run([str(robolectric_runner), '-f', test_filter], cwd=out_dir.parent.parent)
     print('ARCHIUM_HOST_EXECUTION_GATE=PASS', flush=True)
 
 

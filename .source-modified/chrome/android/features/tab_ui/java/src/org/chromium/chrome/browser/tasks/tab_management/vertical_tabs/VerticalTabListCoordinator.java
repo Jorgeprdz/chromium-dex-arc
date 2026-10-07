@@ -77,6 +77,7 @@ import org.chromium.chrome.browser.tabmodel.TabCreatorUtil;
 import org.chromium.chrome.browser.tabmodel.TabGroupMergeNotificationType;
 import org.chromium.chrome.browser.tabmodel.TabGroupMetadata;
 import org.chromium.chrome.browser.tabmodel.TabGroupUtils.TabGroupCreationCallback;
+import org.chromium.chrome.browser.tabmodel.TabGroupObserver;
 import org.chromium.chrome.browser.tabmodel.TabList;
 import org.chromium.chrome.browser.tabmodel.TabModel;
 import org.chromium.chrome.browser.tabmodel.TabModelSelector;
@@ -206,6 +207,34 @@ public class VerticalTabListCoordinator {
     private boolean mIsActive;
     // Optional presentation-only filter. The underlying TabModel always remains global.
     private @Nullable IntPredicate mTabVisibilityPredicate;
+    private @Nullable TabModel mPresentationGroupModel;
+    private final TabGroupObserver mPresentationGroupObserver = new TabGroupObserver() {
+        @Override
+        public void didChangeTabGroupCollapsed(Token id, boolean collapsed, boolean animate) {
+            refreshTabPresentationIfFiltered();
+        }
+
+        @Override
+        public void didMergeTabToGroup(Tab tab, boolean isDestinationTab) {
+            refreshTabPresentationIfFiltered();
+        }
+
+        @Override
+        public void didMoveTabOutOfGroup(Tab tab, Token oldGroupId) {
+            refreshTabPresentationIfFiltered();
+        }
+
+        @Override
+        public void didMoveTabGroup(Token id, int oldIndex, int newIndex) {
+            refreshTabPresentationIfFiltered();
+        }
+
+        @Override
+        public void didMoveWithinGroup(Tab tab, int oldIndex, int newIndex) {
+            refreshTabPresentationIfFiltered();
+        }
+    };
+
 
     private class VerticalTabListClickHandler implements TabListItemOnClickListenerProvider {
         private final TabActionListener mTabGroupClickedListener =
@@ -900,6 +929,10 @@ public class VerticalTabListCoordinator {
         mModelList.clear();
         mTabModelSelector.removeObserver(mTabModelSelectorObserver);
         mTabModelSelector.getCurrentTabModelSupplier().removeObserver(mCurrentTabModelObserver);
+        if (mPresentationGroupModel != null) {
+            mPresentationGroupModel.removeTabGroupObserver(mPresentationGroupObserver);
+            mPresentationGroupModel = null;
+        }
         mTabListFaviconProvider.destroy();
 
         if (mTabStripContextMenuCoordinator != null) {
@@ -1149,6 +1182,12 @@ public class VerticalTabListCoordinator {
         if (tabModel == null || mTabModelSelectorTabModelObserver == null) return;
         tabModel.removeObserver(mTabModelSelectorTabModelObserver);
         tabModel.addObserver(mTabModelSelectorTabModelObserver);
+        if (mPresentationGroupModel != null) {
+            mPresentationGroupModel.removeTabGroupObserver(mPresentationGroupObserver);
+        }
+        mPresentationGroupModel = tabModel;
+        // Group membership/expansion events also require a final synchronous projection.
+        tabModel.addTabGroupObserver(mPresentationGroupObserver);
     }
 
     /**
@@ -1159,6 +1198,7 @@ public class VerticalTabListCoordinator {
      */
     public void setTabVisibilityPredicate(@Nullable IntPredicate predicate) {
         mTabVisibilityPredicate = predicate;
+        mMediator.setTabVisibilityPredicate(predicate);
         refreshTabPresentation();
     }
 
