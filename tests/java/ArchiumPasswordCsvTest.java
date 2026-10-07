@@ -53,6 +53,101 @@ public final class ArchiumPasswordCsvTest {
         cases++;
     }
 
+    private static void eofAndBufferBoundaries() throws Exception {
+        String header = "url,username,password\n";
+        String prefix = header + "https://boundary.example,u,";
+        for (int length : new int[] {8192, 8193, 16384}) {
+            String password = "x".repeat(length - prefix.length());
+            try (AutoCloseable result = (AutoCloseable) parse(prefix + password)) {
+                check(rows(result).size() == 1, "Buffer boundary invented or lost a record");
+                check(field(rows(result).get(0), "password").equals(password),
+                        "Buffer boundary changed the final field");
+            }
+            cases++;
+        }
+        for (String[] fixture : new String[][] {
+                {"\"quoted\"", "quoted"},
+                {"\"escaped-\"\"\"", "escaped-\""},
+                {"", ""}}) {
+            try (AutoCloseable result = (AutoCloseable) parse(prefix + fixture[0])) {
+                check(rows(result).size() == 1, "EOF after final field lost a record");
+                check(field(rows(result).get(0), "password").equals(fixture[1]),
+                        "EOF changed the quoted or empty final field");
+            }
+            cases++;
+        }
+        try (AutoCloseable empty = (AutoCloseable) parse("")) {
+            check(rows(empty).isEmpty(), "Empty input invented a record");
+            check(((List<?>) empty.getClass().getField("errors").get(empty)).size() == 1,
+                    "Empty input must retain its missing-header error");
+        }
+        cases++;
+
+        // CR ends the first chunk; LF and the next record start the second.
+        String firstPassword = "x".repeat(8191 - prefix.length());
+        try (AutoCloseable result = (AutoCloseable) parse(prefix + firstPassword
+                + "\r\nhttps://second.example,u,p")) {
+            check(rows(result).size() == 2, "Split CRLF invented or lost a record");
+            check(field(rows(result).get(0), "password").equals(firstPassword),
+                    "Split CRLF changed the first password");
+            check(field(rows(result).get(1), "password").equals("p"),
+                    "Split CRLF changed the final password");
+        }
+        cases++;
+
+        // The two quotes encoding a literal quote straddle the chunk boundary.
+        String quotedPrefix = prefix + "\"";
+        String quotedPassword = "x".repeat(8191 - quotedPrefix.length());
+        try (AutoCloseable result = (AutoCloseable) parse(quotedPrefix + quotedPassword + "\"\"\"")) {
+            check(rows(result).size() == 1, "Split escaped quote lost a record");
+            check(field(rows(result).get(0), "password").equals(quotedPassword + "\""),
+                    "Split escaped quote changed the password");
+        }
+        cases++;
+
+        for (String separator : new String[] {"\n", "\r", "\r\n"}) {
+            try (AutoCloseable result = (AutoCloseable) parse("url,username,password"
+                    + separator + "https://one.example,,p" + separator)) {
+                check(rows(result).size() == 1, "Line ending invented or lost a record");
+                check(field(rows(result).get(0), "username").isEmpty(), "Empty username changed");
+            }
+            cases++;
+        }
+
+        Class<?> readerClass = Class.forName(csv.getName() + "$CsvReader");
+        var constructor = readerClass.getDeclaredConstructor(Reader.class);
+        constructor.setAccessible(true);
+        var readRaw = readerClass.getDeclaredMethod("readRaw");
+        readRaw.setAccessible(true);
+        int[] reads = {0};
+        Object emptyReader = constructor.newInstance(new StringReader("") {
+            @Override public int read(char[] data, int off, int len) throws IOException {
+                reads[0]++;
+                return super.read(data, off, len);
+            }
+        });
+        for (int i = 0; i < 3; i++) {
+            check((int) readRaw.invoke(emptyReader) == -1, "Repeated EOF returned buffered data");
+        }
+        check(reads[0] == 1, "Terminal EOF read the input again");
+        cases++;
+
+        reads[0] = 0;
+        Object zeroBulkReader = constructor.newInstance(new StringReader("z") {
+            @Override public int read(char[] data, int off, int len) { return 0; }
+            @Override public int read() throws IOException {
+                reads[0]++;
+                return super.read();
+            }
+        });
+        check((int) readRaw.invoke(zeroBulkReader) == 'z', "Zero bulk read lost fallback data");
+        for (int i = 0; i < 3; i++) {
+            check((int) readRaw.invoke(zeroBulkReader) == -1, "Fallback EOF returned data");
+        }
+        check(reads[0] == 2, "Fallback EOF was not terminal");
+        cases++;
+    }
+
     public static void main(String[] ignored) throws Exception {
         try {
             csv = Class.forName("org.chromium.chrome.browser.password_manager.ArchiumPasswordCsv");
@@ -60,6 +155,7 @@ public final class ArchiumPasswordCsvTest {
         } catch (ClassNotFoundException missing) {
             throw new AssertionError("CSV parser is not implemented");
         }
+        eofAndBufferBoundaries();
         Object normal = parse("\ufeffname,url,username,password,note\r\nDemo,https://one.example/login,,synthetic-secret,note\r\n");
         check(rows(normal).size() == 1, "BOM/additional column import");
         check(field(rows(normal).get(0), "username").isEmpty(), "Empty username changed");

@@ -6532,7 +6532,7 @@ new file mode 100644
 +    JNIEnv* env, const password_manager::PasswordString& password) {
 +  auto secret = password.secure_value();
 +  if (secret.size() > static_cast<size_t>(std::numeric_limits<jsize>::max())) return {};
-+  auto result = base::android::ScopedJavaLocalRef<jcharArray>(
++  auto result = base::android::ScopedJavaLocalRef<jcharArray>::Adopt(
 +      env, env->NewCharArray(static_cast<jsize>(secret.size())));
 +  if (!result.is_null() && !secret.empty()) {
 +    env->SetCharArrayRegion(result.obj(), 0, static_cast<jsize>(secret.size()),
@@ -6842,11 +6842,11 @@ new file mode 100644
 +  const jsize count = env->GetArrayLength(urls.obj());
 +  size_t total_chars = 0;
 +  for (jsize i = 0; i < count; ++i) {
-+    auto url = base::android::ScopedJavaLocalRef<jstring>(env,
++    auto url = base::android::ScopedJavaLocalRef<jstring>::Adopt(env,
 +        static_cast<jstring>(env->GetObjectArrayElement(urls.obj(), i)));
-+    auto user = base::android::ScopedJavaLocalRef<jstring>(env,
++    auto user = base::android::ScopedJavaLocalRef<jstring>::Adopt(env,
 +        static_cast<jstring>(env->GetObjectArrayElement(users.obj(), i)));
-+    auto password = base::android::ScopedJavaLocalRef<jcharArray>(env,
++    auto password = base::android::ScopedJavaLocalRef<jcharArray>::Adopt(env,
 +        static_cast<jcharArray>(env->GetObjectArrayElement(passwords.obj(), i)));
 +    // Do not call back into Java with a pending JNI exception (for example,
 +    // OutOfMemoryError while resolving an array element). The owning Java
@@ -7181,7 +7181,7 @@ diff --git a/chrome/browser/password_manager/android/java/src/org/chromium/chrom
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordCsv.java
-@@ -0,0 +1,498 @@
+@@ -0,0 +1,501 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -7431,8 +7431,10 @@ new file mode 100644
 +        }
 +
 +        private int readRaw() throws IOException {
++            // EOF is terminal. Otherwise 0 <= nextRead <= buffered <= buffer length.
++            if (buffered < 0) return -1;
 +            int c;
-+            if (nextRead == buffered) {
++            if (nextRead >= buffered) {
 +                if (Thread.currentThread().isInterrupted()) {
 +                    throw new IOException("CSV read cancelled");
 +                }
@@ -7445,6 +7447,7 @@ new file mode 100644
 +            } else {
 +                c = readBuffer[nextRead++];
 +            }
++            if (c == -1) buffered = -1; // Also latch EOF from the zero-length-read fallback.
 +            if (c != -1 && ++characters > MAX_INPUT_CHARS) {
 +                throw new IOException("CSV input is too large");
 +            }

@@ -166,10 +166,10 @@
     "chrome/browser/password_manager/android/archium_password_key_provider.cc": "ed44bc262af5c31a50db91518d5d5fbb4483d73c4c425f33eb13dc339f98c5d9",
     "chrome/browser/password_manager/android/archium_password_key_provider.h": "229d6149cd96e942ab8ad1874a6f3d8d5935bfdd26b7c83e0d21eb03bdc84af5",
     "chrome/browser/password_manager/android/archium_password_key_provider_unittest.cc": "e21d5d88498679e1117593e9e9b443577b5923d05addec179ce349b8d8323aa4",
-    "chrome/browser/password_manager/android/archium_password_manager_bridge.cc": "77b95d3ce7b192df4028339d6579039b11f1adb31f6e8ba685554e4ca8e7d6cc",
+    "chrome/browser/password_manager/android/archium_password_manager_bridge.cc": "1786d2a21dab2e35634f14c11159873f9529c1b9900dec4d2c5b72cde862643d",
     "chrome/browser/password_manager/android/archium_password_manager_bridge.h": "0ea7fdfa4fce58180c0d04b5a4931d66540986504e24774aae834c7be2ac61e8",
     "chrome/browser/password_manager/android/archium_password_manager_bridge_unittest.cc": "7b183572761e87cfb9de0accb7abd601e4f346a82f64920344cb4037b23d397f",
-    "chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordCsv.java": "db8418589583ae8850b2036a9c680ad8ea23b4d3ad9679b8ef996739b0b30fe6",
+    "chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordCsv.java": "df2ad3ca653c6370ce8617a9341fc9b7481ba0a236327b3aab103c7ebbd6a193",
     "chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordKey.java": "61bb5c8fe3a8b544377de3fa0dd339c18c718eb58af8f013455a0d1ccb54a2b5",
     "chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordKeyBridge.java": "8022f9c4b78bfd2a3a39b469d947ab7ebe99513813b4605bd18d410230bc0142",
     "chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordManagerBridge.java": "dd3e257ba2793f6f242141396818d89b1906f3fcfb6cb0ca30d010548a6b46f4",
@@ -184,5 +184,5 @@
     "components/password_manager/core/browser/password_store/password_store_backend.cc": "45764d4ad0e05acc5a216944a5a6763212f6c17e71bf689e9c973f12fb5c87d8",
     "components/password_manager/core/browser/password_store/password_store_interface.cc": "7e9dd5813ce8ece459ec66abdd3306028b7b3d6bbae048664872a34d8d097268"
   },
-  "patch_sha256": "183bcfac7d9779265b1906dcef7c5bd8415e8a9771ccb2f786fe971ac965a68e"
+  "patch_sha256": "8d6097d9bd38aa1418435d597fcca20bc6a426fddfb0396a912e496ac0943da8"
 }

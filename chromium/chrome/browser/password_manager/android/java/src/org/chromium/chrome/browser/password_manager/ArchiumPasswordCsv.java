@@ -247,8 +247,10 @@ public final class ArchiumPasswordCsv {
         }
 
         private int readRaw() throws IOException {
+            // EOF is terminal. Otherwise 0 <= nextRead <= buffered <= buffer length.
+            if (buffered < 0) return -1;
             int c;
-            if (nextRead == buffered) {
+            if (nextRead >= buffered) {
                 if (Thread.currentThread().isInterrupted()) {
                     throw new IOException("CSV read cancelled");
                 }
@@ -261,6 +263,7 @@ public final class ArchiumPasswordCsv {
             } else {
                 c = readBuffer[nextRead++];
             }
+            if (c == -1) buffered = -1; // Also latch EOF from the zero-length-read fallback.
             if (c != -1 && ++characters > MAX_INPUT_CHARS) {
                 throw new IOException("CSV input is too large");
             }

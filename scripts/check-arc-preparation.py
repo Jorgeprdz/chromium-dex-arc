@@ -131,10 +131,44 @@ def main():
             'org.chromium.components.signin.AccountManagerDelegate': 'public interface AccountManagerDelegate { public interface AccountsChangeObserver{} public @interface CapabilityResponse{int EXCEPTION=0;} void attachAccountsChangeObserver(AccountsChangeObserver o); android.accounts.Account[] getAccountsSynchronous(); AccessTokenData getAccessToken(android.accounts.Account a,String s); void invalidateAccessToken(String s) throws AuthException; int hasCapability(android.accounts.Account a,String s); void createAddAccountIntent(String email,org.chromium.base.Callback<android.content.Intent> c); void updateCredentials(android.accounts.Account a,android.app.Activity activity,org.chromium.base.Callback<Boolean> c); org.chromium.google_apis.gaia.GaiaId getAccountGaiaId(String e); void confirmCredentials(android.accounts.Account a,android.app.Activity activity,org.chromium.base.Callback<android.os.Bundle> c); }',
         }
         resources = ET.parse(ROOT / 'chromium/chrome/android/java/res/values/arc_strings.xml')
-        string_ids = ', '.join(f'{node.attrib["name"]}={i}' for i, node in enumerate(resources.getroot(), 1))
+        # Chromium cfd94726: toolbar/java/res/layout/toolbar_tablet.xml references
+        # these navigation strings/drawables and the real LocationBar IDs.
+        string_names = [node.attrib['name'] for node in resources.getroot()] + [
+            'accessibility_toolbar_btn_back', 'accessibility_toolbar_btn_forward',
+            'accessibility_btn_refresh',
+        ]
+        string_ids = ', '.join(f'{name}={i}' for i, name in enumerate(string_names, 1))
+        id_names = ('toolbar', 'desktop_window_spacer', 'location_bar',
+                    'location_bar_holder', 'collapse_button', 'menu_button_wrapper',
+                    'extensions_toolbar_container', 'coordinator')
+        view_ids = ', '.join(f'{name}={i}' for i, name in enumerate(id_names, 1))
         definitions['org.chromium.chrome.R'] = ('public final class R { public static final class string { public static final int '
-                + string_ids + '; } public static final class id { public static final int toolbar=1, desktop_window_spacer=2; } }')
+                + string_ids + '; } public static final class id { public static final int '
+                + view_ids + '; } public static final class drawable { public static final int '
+                'btn_back=1, btn_forward=2, btn_reload_stop=3; } }')
         definitions.update({
+            # Minimal type contracts from cfd94726's CompositorViewHolder,
+            # TouchEventObserver and NullableObservableSupplier. Stub bodies are
+            # never used as evidence of compositor/touch/browser runtime behavior.
+            'org.chromium.chrome.browser.compositor.CompositorViewHolder': '''public class CompositorViewHolder extends android.widget.FrameLayout {
+                public CompositorViewHolder(android.content.Context c, android.util.AttributeSet attrs){super(c, attrs);}
+                public android.view.View getActiveSurfaceView(){return null;}
+                public void addTouchEventObserver(org.chromium.components.browser_ui.widget.TouchEventObserver o){}
+                public void removeTouchEventObserver(org.chromium.components.browser_ui.widget.TouchEventObserver o){}
+            }''',
+            'org.chromium.components.browser_ui.widget.TouchEventObserver': '''public interface TouchEventObserver {
+                boolean onInterceptTouchEvent(android.view.MotionEvent e);
+                default boolean mayInterceptTouchSequenceInWebContents(){return false;}
+                default boolean onTouchEvent(android.view.MotionEvent e){return false;}
+                default boolean dispatchTouchEvent(android.view.MotionEvent e){return false;}
+            }''',
+            'org.chromium.base.supplier.NullableObservableSupplier': 'public interface NullableObservableSupplier<T> extends java.util.function.Supplier<T> {}',
+            # These two presentation APIs are Archium additions in the delivered
+            # .source-modified VerticalTabListCoordinator, not upstream inventions.
+            'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabListCoordinator': '''public class VerticalTabListCoordinator {
+                public void setTabVisibilityPredicate(java.util.function.IntPredicate predicate){}
+                public void refreshTabPresentation(){}
+            }''',
             'org.chromium.chrome.browser.tab.Tab': 'public class Tab { public int getId(){return 1;} public org.chromium.url.GURL getUrl(){return new org.chromium.url.GURL();} public String getTitle(){return "Title";} public boolean canGoBack(){return false;} public void goBack(){} public boolean canGoForward(){return false;} public void goForward(){} public void reload(){} }',
             'org.chromium.chrome.browser.tab.TabLaunchType': 'public class TabLaunchType { public static final int FROM_CHROME_UI=1; }',
             'org.chromium.chrome.browser.tab.TabSelectionType': 'public class TabSelectionType { public static final int FROM_USER=1; }',
@@ -142,8 +176,8 @@ def main():
             'org.chromium.chrome.browser.tabmodel.TabCreator': 'public interface TabCreator { org.chromium.chrome.browser.tab.Tab createNewTab(org.chromium.content_public.browser.LoadUrlParams p,int type,org.chromium.chrome.browser.tab.Tab parent); }',
             'org.chromium.chrome.browser.tabmodel.TabClosureParams': 'public class TabClosureParams { public static Builder closeTab(org.chromium.chrome.browser.tab.Tab t){return new Builder();} public static class Builder { public Builder allowUndo(boolean b){return this;} public TabClosureParams build(){return new TabClosureParams();} } }',
             'org.chromium.chrome.browser.tabmodel.TabRemover': 'public interface TabRemover { void closeTabs(TabClosureParams p,boolean allowDialog); }',
-            'org.chromium.chrome.browser.tabmodel.TabModelObserver': 'public interface TabModelObserver { default void tabClosureCommitted(org.chromium.chrome.browser.tab.Tab t){} default void onTabCloseCommitted(java.util.List<org.chromium.chrome.browser.tab.Tab> t,boolean all,boolean restore,int source){} }',
-            'org.chromium.chrome.browser.tabmodel.TabModel': 'public interface TabModel { org.chromium.chrome.browser.profiles.Profile getProfile(); org.chromium.chrome.browser.tab.Tab getTabById(int id); boolean isClosurePending(int id); void cancelTabClosure(int id); int getCount(); org.chromium.chrome.browser.tab.Tab getTabAt(int i); void setIndex(int i,int type); void pinTab(int id,boolean dialog); void unpinTab(int id); TabRemover getTabRemover(); void addObserver(TabModelObserver o); void removeObserver(TabModelObserver o); }',
+            'org.chromium.chrome.browser.tabmodel.TabModelObserver': 'public interface TabModelObserver { default void didAddTab(org.chromium.chrome.browser.tab.Tab t,int type,int creationState,boolean markedForSelection){} default void didSelectTab(org.chromium.chrome.browser.tab.Tab t,int type,int lastId){} default void restoreCompleted(){} default void tabClosureCommitted(org.chromium.chrome.browser.tab.Tab t){} default void onTabCloseCommitted(java.util.List<org.chromium.chrome.browser.tab.Tab> t,boolean all,boolean restore,int source){} }',
+            'org.chromium.chrome.browser.tabmodel.TabModel': 'public interface TabModel { org.chromium.chrome.browser.profiles.Profile getProfile(); org.chromium.chrome.browser.tab.Tab getTabById(int id); boolean isClosurePending(int id); void cancelTabClosure(int id); int getCount(); org.chromium.chrome.browser.tab.Tab getTabAt(int i); void setIndex(int i,int type); void pinTab(int id,boolean dialog); void unpinTab(int id); TabRemover getTabRemover(); void addObserver(TabModelObserver o); void removeObserver(TabModelObserver o); boolean isTabModelRestored(); org.chromium.base.supplier.NullableObservableSupplier<org.chromium.chrome.browser.tab.Tab> getCurrentTabSupplier(); }',
             'org.chromium.base.ThreadUtils': 'public class ThreadUtils { public static void assertOnUiThread(){} }',
             'org.chromium.components.prefs.PrefService': 'public class PrefService { public String getString(String key){return "";} public void setString(String key,String value){} }',
             'org.chromium.components.user_prefs.UserPrefs': 'public class UserPrefs { public static org.chromium.components.prefs.PrefService get(org.chromium.chrome.browser.profiles.Profile p){return new org.chromium.components.prefs.PrefService();} }',

@@ -66,7 +66,7 @@ base::android::ScopedJavaLocalRef<jcharArray> SecretArray(
     JNIEnv* env, const password_manager::PasswordString& password) {
   auto secret = password.secure_value();
   if (secret.size() > static_cast<size_t>(std::numeric_limits<jsize>::max())) return {};
-  auto result = base::android::ScopedJavaLocalRef<jcharArray>(
+  auto result = base::android::ScopedJavaLocalRef<jcharArray>::Adopt(
       env, env->NewCharArray(static_cast<jsize>(secret.size())));
   if (!result.is_null() && !secret.empty()) {
     env->SetCharArrayRegion(result.obj(), 0, static_cast<jsize>(secret.size()),
@@ -376,11 +376,11 @@ void ArchiumPasswordManagerBridge::PreviewImport(
   const jsize count = env->GetArrayLength(urls.obj());
   size_t total_chars = 0;
   for (jsize i = 0; i < count; ++i) {
-    auto url = base::android::ScopedJavaLocalRef<jstring>(env,
+    auto url = base::android::ScopedJavaLocalRef<jstring>::Adopt(env,
         static_cast<jstring>(env->GetObjectArrayElement(urls.obj(), i)));
-    auto user = base::android::ScopedJavaLocalRef<jstring>(env,
+    auto user = base::android::ScopedJavaLocalRef<jstring>::Adopt(env,
         static_cast<jstring>(env->GetObjectArrayElement(users.obj(), i)));
-    auto password = base::android::ScopedJavaLocalRef<jcharArray>(env,
+    auto password = base::android::ScopedJavaLocalRef<jcharArray>::Adopt(env,
         static_cast<jcharArray>(env->GetObjectArrayElement(passwords.obj(), i)));
     // Do not call back into Java with a pending JNI exception (for example,
     // OutOfMemoryError while resolving an array element). The owning Java
