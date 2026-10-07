@@ -43,6 +43,50 @@ public final class ArcDesktopPolicyTest {
         check(ArcDesktopPolicy.foreground(0xffffffff) == 0xff000000, "white needs black text");
         check(ArcDesktopPolicy.surface(0xff0044ee, true) != ArcDesktopPolicy.surface(0xffee4400, true),
                 "chosen hue affects surface");
-        System.out.println("ArcDesktopPolicy: AUTO/ARC/MOBILE, independent navigation and 4,238 palette cases passed");
+        check(ArcDesktopPolicy.surface(0xff53657b, true)
+                        != ArcDesktopPolicy.surface(0xff53657b, false),
+                "incognito/dark treatment remains visually distinct from regular light Arc");
+
+        // REAL_CONTRACT_TEST: production rounded-viewport hit testing. The sidebar lives left of
+        // x=240; web content is the rounded rect [240, 0, 1000, 700].
+        check(!ArcDesktopPolicy.containsRoundedRectPoint(239, 350, 240, 0, 1000, 700, 16),
+                "sidebar/gap coordinates are outside web content");
+        check(ArcDesktopPolicy.containsRoundedRectPoint(500, 350, 240, 0, 1000, 700, 16),
+                "content center is interactive");
+        check(!ArcDesktopPolicy.containsRoundedRectPoint(240, 0, 240, 0, 1000, 700, 16),
+                "rounded top-left corner rejects invisible content");
+        check(ArcDesktopPolicy.containsRoundedRectPoint(256, 16, 240, 0, 1000, 700, 16),
+                "rounded top-left arc accepts its inner boundary");
+        check(!ArcDesktopPolicy.containsRoundedRectPoint(999, 0, 240, 0, 1000, 700, 16),
+                "rounded top-right corner rejects invisible content");
+        check(!ArcDesktopPolicy.containsRoundedRectPoint(1000, 350, 240, 0, 1000, 700, 16),
+                "right bound is exclusive");
+        check(ArcDesktopPolicy.containsRoundedRectPoint(240, 0, 240, 0, 1000, 700, 0),
+                "zero-radius rectangle retains normal rectangular hit testing");
+        check(!ArcDesktopPolicy.containsRoundedRectPoint(0, 0, 0, 0, 2, 2, 99),
+                "oversized radius is clamped instead of exposing a square corner");
+        check(ArcDesktopPolicy.showFullControls(240, 700, 1f),
+                "expanded 240dp rail exposes full Arc controls");
+        check(!ArcDesktopPolicy.showFullControls(52, 700, 1f),
+                "collapsed 52dp rail keeps compact controls");
+        check(!ArcDesktopPolicy.showFullControls(240, 350, 1f),
+                "short rail keeps compact controls");
+        check(ArcDesktopPolicy.showFullControls(480, 720, 2f),
+                "expanded contract scales with density rather than physical pixels");
+        check(!ArcDesktopPolicy.showFullControls(240, 700, 0f),
+                "invalid density fails compact instead of exposing oversized controls");
+
+        check(ArcDesktopPolicy.ARC_OUTER_PADDING_DP > 0
+                        && ArcDesktopPolicy.ARC_FRAME_GAP_DP > 0
+                        && ArcDesktopPolicy.ARC_CONTENT_RADIUS_DP > 0
+                        && ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP > 0
+                        && ArcDesktopPolicy.ARC_NAV_BUTTON_WIDTH_DP > 0
+                        && ArcDesktopPolicy.ARC_LOCATION_BAR_SIDE_MARGIN_DP >= 0
+                        && ArcDesktopPolicy.ARC_FULL_CONTROLS_MIN_WIDTH_DP
+                                >= ArcDesktopPolicy.ARC_NAV_BUTTON_WIDTH_DP * 4
+                        && ArcDesktopPolicy.ARC_FULL_CONTROLS_MIN_HEIGHT_DP > 0,
+                "Arc frame dimensions remain semantic and fit collapse plus native navigation");
+
+        System.out.println("ArcDesktopPolicy: policy, palette and rounded-content contract cases defined");
     }
 }

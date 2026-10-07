@@ -11,6 +11,17 @@ public final class ArcDesktopPolicy {
     public static final int MODE_ARC = 1;
     public static final int MODE_MOBILE = 2;
 
+    // Semantic Arc frame dimensions. Keep these centralized so layout, clipping and hit testing
+    // use one geometry contract instead of repeating magic numbers across views.
+    public static final int ARC_OUTER_PADDING_DP = 8;
+    public static final int ARC_FRAME_GAP_DP = 8;
+    public static final int ARC_CONTENT_RADIUS_DP = 16;
+    public static final int ARC_NAV_ROW_HEIGHT_DP = 42;
+    public static final int ARC_NAV_BUTTON_WIDTH_DP = 44;
+    public static final int ARC_LOCATION_BAR_SIDE_MARGIN_DP = 4;
+    public static final int ARC_FULL_CONTROLS_MIN_WIDTH_DP = ARC_NAV_BUTTON_WIDTH_DP * 4;
+    public static final int ARC_FULL_CONTROLS_MIN_HEIGHT_DP = 360;
+
     private ArcDesktopPolicy() {}
 
     /** UI preference only. Native desktop navigation always uses the actual window class. */
@@ -35,6 +46,37 @@ public final class ArcDesktopPolicy {
     public static int foreground(int background) {
         return contrast(background, 0xff000000) >= contrast(background, 0xffffffff)
                 ? 0xff000000 : 0xffffffff;
+    }
+
+
+    /** Whether the Arc sidebar has enough real layout space for its expanded controls. */
+    public static boolean showFullControls(int railWidthPx, int railHeightPx, float density) {
+        if (!(density > 0f)) return false;
+        return railWidthPx >= Math.round(ARC_FULL_CONTROLS_MIN_WIDTH_DP * density)
+                && railHeightPx >= Math.round(ARC_FULL_CONTROLS_MIN_HEIGHT_DP * density);
+    }
+
+    /** Returns whether a point lies inside a rounded content rect. Pure math for UI + tests. */
+    public static boolean containsRoundedRectPoint(
+            float x, float y, int left, int top, int right, int bottom, float radius) {
+        if (right <= left || bottom <= top || x < left || x >= right || y < top || y >= bottom) {
+            return false;
+        }
+        float clampedRadius = Math.max(0f, Math.min(radius,
+                Math.min((right - left) / 2f, (bottom - top) / 2f)));
+        if (clampedRadius == 0f) return true;
+
+        float innerLeft = left + clampedRadius;
+        float innerRight = right - clampedRadius;
+        float innerTop = top + clampedRadius;
+        float innerBottom = bottom - clampedRadius;
+        if ((x >= innerLeft && x < innerRight) || (y >= innerTop && y < innerBottom)) return true;
+
+        float centerX = x < innerLeft ? innerLeft : innerRight;
+        float centerY = y < innerTop ? innerTop : innerBottom;
+        float dx = x - centerX;
+        float dy = y - centerY;
+        return dx * dx + dy * dy <= clampedRadius * clampedRadius;
     }
 
     public static double contrast(int first, int second) {

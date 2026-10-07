@@ -102,8 +102,7 @@ class PasswordStoreInterface : public RefcountedKeyedService {
   virtual void AddLogins(std::vector<StoredCredential> forms,
                          base::OnceClosure completion = base::DoNothing()) = 0;
 
-  using ImportCompletion = base::OnceCallback<void(
-      base::expected<void, PasswordStoreBackendError>)>;
+  using ImportCompletion = ArchiumImportCompletion;
 
   // An accepted local import is all-or-nothing. Implementations without an
   // atomic backend must reject it, never fall back to AddLogins().

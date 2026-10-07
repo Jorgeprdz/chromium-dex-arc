@@ -494,7 +494,9 @@ source_set("unit_tests") {
 
   if (is_android) {
     if (enable_archium_local_passwords) {
-      sources += [ "android/archium_local_password_manager_unittest.cc" ]
+      sources += [
+        "android/archium_local_password_manager_unittest.cc",
+      ]
       deps += [
         "//chrome/browser/password_manager/android:archium_local_password_manager",
         "//components/password_manager/core/browser/import:archium_import_preview",

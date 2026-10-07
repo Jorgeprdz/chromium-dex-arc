@@ -118,33 +118,54 @@ compile_slice() {
         exit "$result"
     fi
 }
-if [[ -n "${ARCHIUM_VALIDATE_TARGETS:-}" ]]; then
-    read -r -a validation_targets <<< "$ARCHIUM_VALIDATE_TARGETS"
+compile_gate_targets="${ARCHIUM_COMPILE_GATE_TARGETS:-${ARCHIUM_VALIDATE_TARGETS:-}}"
+if [[ -n "${ARCHIUM_VALIDATE_TARGETS:-}" && -z "${ARCHIUM_COMPILE_GATE_TARGETS:-}" ]]; then
+    printf 'ARCHIUM_VALIDATE_TARGETS is deprecated; treating it as compile-only gate targets.\n' >&2
+fi
+if [[ -n "$compile_gate_targets" ]]; then
+    read -r -a validation_targets <<< "$compile_gate_targets"
     for target in "${validation_targets[@]}"; do
         if [[ ! "$target" =~ ^[A-Za-z_][A-Za-z_0-9:/.-]*$ ]]; then
-            printf 'Invalid validation target.\n' >&2
+            printf 'Invalid compile-gate target.\n' >&2
             exit 2
         fi
     done
+    printf 'PHASE A: compiling Archium test/validation targets.\n'
     compile_slice "${validation_targets[@]}"
 fi
+
+# Verify every mandatory Android-native test produced Chromium's generated device
+# launcher before the APK is permitted to compile. Missing launchers fail closed.
+python3 "$GITHUB_WORKSPACE/scripts/archium-test-gates.py" verify-device-runners \
+    --out "$PWD/out/Archium"
+
+if [[ -n "${ARCHIUM_RUN_HOST_GATES:-}" && "${ARCHIUM_RUN_HOST_GATES}" != true ]]; then
+    printf 'ARCHIUM_RUN_HOST_GATES may not disable the mandatory host execution gate.\n' >&2
+    exit 2
+fi
+printf 'PHASE B: executing mandatory Archium host gates.\n'
+# Use the SDK pinned by this Chromium checkout. The GitHub-hosted ANDROID_HOME is
+# deliberately removed earlier to reclaim disk, so relying on it here would be
+# a stale-path gate. Parse the pinned public SDK version from Chromium itself.
+android_sdk_version="$(sed -n 's/^[[:space:]]*public_android_sdk_platform_version = "\([0-9][0-9.]*\)"/\1/p' build/config/android/config.gni | head -n1)"
+if [[ ! "$android_sdk_version" =~ ^[0-9]+([.][0-9]+)*$ ]]; then
+    printf 'Unable to resolve Chromium public Android SDK platform version.\n' >&2
+    exit 2
+fi
+android_jar="$PWD/third_party/android_sdk/public/platforms/android-${android_sdk_version}/android.jar"
+if [[ ! -s "$android_jar" ]]; then
+    printf 'Pinned Chromium Android platform jar is missing: %s\n' "$android_jar" >&2
+    exit 2
+fi
+python3 "$GITHUB_WORKSPACE/scripts/archium-test-gates.py" host \
+    --android-jar "$android_jar" --out "$PWD/out/Archium"
+
+printf 'PHASE C: host gates passed; APK target is now allowed.\n'
 compile_slice chrome_public_apk
 test -s out/Archium/apks/ChromePublic.apk
 mkdir -p "$GITHUB_WORKSPACE/archium-output"
 cp out/Archium/apks/ChromePublic.apk "$GITHUB_WORKSPACE/archium-output/Archium-for-Android-arm64.apk"
 cp LICENSE "$GITHUB_WORKSPACE/archium-output/LICENSE.chromium"
-native_tests=(
-    out/Archium/obj/chrome/browser/password_manager/android/archium_key_provider_tests/archium_key_provider_tests
-    out/Archium/obj/components/password_manager/core/browser/password_store/archium_login_database_tests/archium_login_database_tests
-    out/Archium/obj/components/password_manager/core/browser/import/archium_password_import_tests/archium_password_import_tests
-    out/Archium/obj/chrome/browser/password_manager/android/archium_password_manager_tests/archium_password_manager_tests
-)
-for native_test in "${native_tests[@]}"; do
-    if [[ -s "$native_test" ]]; then
-        mkdir -p "$GITHUB_WORKSPACE/archium-output/native-tests"
-        cp "$native_test" "$GITHUB_WORKSPACE/archium-output/native-tests/"
-    fi
-done
 sha256sum "$GITHUB_WORKSPACE/archium-output/Archium-for-Android-arm64.apk" > "$GITHUB_WORKSPACE/archium-output/SHA256SUMS"
 
 printf 'complete=true\n' >> "$GITHUB_OUTPUT"

@@ -103,7 +103,7 @@ class LoginDatabase : public EncryptDecryptInterface {
 
   // Inserts/replaces an accepted import as one transaction. Failure preserves
   // all previous rows; returned changes may be notified only after success.
-  base::expected<PasswordStoreChangeList, PasswordStoreBackendError>
+  base::expected<PasswordStoreChangeList, ArchiumImportFailure>
   ApplyImportedLogins(
       const std::vector<StoredCredential>& credentials,
       std::optional<ArchiumPasswordImportRevision> expected_revision = std::nullopt);

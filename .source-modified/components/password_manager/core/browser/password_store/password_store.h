@@ -148,8 +148,7 @@ class PasswordStore : public PasswordStoreInterface {
                         ArchiumImportSnapshotResult result);
   void OnImportedLogins(
       ImportCompletion completion,
-      base::expected<std::optional<PasswordStoreChangeList>,
-                     PasswordStoreBackendError> result);
+      ArchiumImportChangesResult result);
 
   // Notifies observers with all logins remaining after a modifying operation.
   void NotifyLoginsRetainedOnMainSequence(

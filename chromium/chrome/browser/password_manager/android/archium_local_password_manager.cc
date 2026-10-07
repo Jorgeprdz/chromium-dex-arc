@@ -42,9 +42,29 @@ ArchiumLocalPasswordManager::GetMetadata() {
   for (auto& entry : presenter_.GetSavedPasswords()) {
     const int64_t id = next_id_++;
     metadata.push_back({id, entry.GetURL(), entry.username});
-    entries_.emplace(id, std::move(entry));
+    entries_.emplace(id, EntryKey{entry.GetURL(),
+                                 entry.GetFirstSignonRealm(), entry.username});
   }
   return metadata;
+}
+
+std::optional<CredentialUIEntry> ArchiumLocalPasswordManager::ResolveCredential(
+    int64_t id) const {
+  auto key = entries_.find(id);
+  if (key == entries_.end() || !Ready()) return std::nullopt;
+  std::optional<CredentialUIEntry> selected;
+  // Presenter entries are fetched only for the duration of this operation.
+  // Ambiguous identities fail closed rather than selecting an arbitrary row.
+  for (auto& entry : presenter_.GetSavedPasswords()) {
+    if (entry.GetURL() != key->second.url ||
+        entry.GetFirstSignonRealm() != key->second.signon_realm ||
+        entry.username != key->second.username) {
+      continue;
+    }
+    if (selected) return std::nullopt;
+    selected.emplace(std::move(entry));
+  }
+  return selected;
 }
 
 void ArchiumLocalPasswordManager::Add(
@@ -73,7 +93,7 @@ void ArchiumLocalPasswordManager::Add(
         self->writing_ = true;
         const bool accepted = self->presenter_.AddCredential(
             credential, PasswordForm::Type::kManuallyAdded, base::DoNothing());
-        std::fill(credential.password.begin(), credential.password.end(), u'\0');
+        credential.password.clear();
         if (!accepted) {
           self->writing_ = false;
           std::move(reply).Run(Status::kInvalid);
@@ -99,17 +119,17 @@ void ArchiumLocalPasswordManager::Update(
           std::move(reply).Run(status);
           return;
         }
-        auto found = self->entries_.find(id);
-        if (found == self->entries_.end()) {
+        auto selected = self->ResolveCredential(id);
+        if (!selected) {
           std::move(reply).Run(Status::kStale);
           return;
         }
 
-        CredentialUIEntry original = found->second;
+        CredentialUIEntry original = std::move(*selected);
         CredentialUIEntry updated = original;
         updated.username = username;
         const auto secret = password.secure_value();
-        updated.password.assign(secret.data(), secret.size());
+        updated.password = PasswordString(std::u16string(secret.data(), secret.size()));
         const GURL url = original.GetURL();
         const std::string signon_realm = original.GetFirstSignonRealm();
         const std::u16string old_username = original.username;
@@ -117,7 +137,7 @@ void ArchiumLocalPasswordManager::Update(
         self->writing_ = true;
         const auto result =
             self->presenter_.EditSavedCredentials(original, updated);
-        std::fill(updated.password.begin(), updated.password.end(), u'\0');
+        updated.password.clear();
         if (result == SavedPasswordsPresenter::EditResult::kNothingChanged) {
           self->writing_ = false;
           std::move(reply).Run(Status::kSuccess);
@@ -149,12 +169,12 @@ void ArchiumLocalPasswordManager::Delete(int64_t id, OperationReply reply) {
           std::move(reply).Run(status);
           return;
         }
-        auto found = self->entries_.find(id);
-        if (found == self->entries_.end()) {
+        auto selected = self->ResolveCredential(id);
+        if (!selected) {
           std::move(reply).Run(Status::kStale);
           return;
         }
-        CredentialUIEntry original = found->second;
+        CredentialUIEntry original = std::move(*selected);
         const std::string signon_realm = original.GetFirstSignonRealm();
         const std::u16string username = original.username;
 
@@ -287,12 +307,13 @@ void ArchiumLocalPasswordManager::Reveal(int64_t id, SecretReply reply) {
       [](base::WeakPtr<ArchiumLocalPasswordManager> self, int64_t id, SecretReply reply, Status status) {
         if (!self) return;
         if (status != Status::kSuccess) { std::move(reply).Run(status, PasswordString()); return; }
-        auto found = self->entries_.find(id);
-        if (found == self->entries_.end()) {
+        auto selected = self->ResolveCredential(id);
+        if (!selected) {
           std::move(reply).Run(Status::kStale, PasswordString());
           return;
         }
-        std::move(reply).Run(Status::kSuccess, found->second.password);
+        // Transfer only the current credential's secret to this one callback.
+        std::move(reply).Run(Status::kSuccess, std::move(selected->password));
       }, weak_ptr_factory_.GetWeakPtr(), id, std::move(reply)));
 }
 
@@ -306,6 +327,21 @@ void ArchiumLocalPasswordManager::Export(ExportReply reply) {
                ArchiumImportSnapshotResult snapshot) {
               if (!self) return;
               if (!snapshot || !self->Ready()) { std::move(reply).Run(Status::kUnavailable, {}); return; }
+              // Bounded in-memory export: never assemble arbitrarily large
+              // batches of plaintext credentials on native and Java heaps.
+              if (snapshot->credentials.size() > 10000) {
+                std::move(reply).Run(Status::kUnavailable, {});
+                return;
+              }
+              size_t secret_chars = 0;
+              for (const auto& entry : snapshot->credentials) {
+                const size_t length = entry.password_value.secure_value().size();
+                if (length > 1048576 || secret_chars > 16777216 - length) {
+                  std::move(reply).Run(Status::kUnavailable, {});
+                  return;
+                }
+                secret_chars += length;
+              }
               std::erase_if(snapshot->credentials, [](const StoredCredential& entry) {
                 return entry.blocked_by_user || entry.federation_origin.IsValid() || entry.password_value.empty();
               });
@@ -375,14 +411,30 @@ void ArchiumLocalPasswordManager::ConfirmImport(
         if (!batch) { std::move(reply).Run(Status::kInvalid); return; }
         const auto revision = self->preview_->revision();
         self->preview_.reset();
-        if (batch->empty()) { std::move(reply).Run(Status::kSuccess); return; }
+        // Even when every preview row was skipped, do not report success
+        // against an obsolete revision: the database must validate the
+        // revision inside its transaction before the result is acknowledged.
         self->writing_ = true;
         self->store_->ImportLoginsAtomically(std::move(*batch), base::BindOnce(
             [](base::WeakPtr<ArchiumLocalPasswordManager> self, OperationReply reply,
-               base::expected<void, PasswordStoreBackendError> result) {
+               base::expected<void, ArchiumImportFailure> result) {
               if (!self) return;
               self->writing_ = false;
-              std::move(reply).Run(result ? Status::kSuccess : Status::kWriteFailed);
+              if (result) {
+                std::move(reply).Run(Status::kSuccess);
+                return;
+              }
+              switch (result.error()) {
+                case ArchiumImportFailure::kStale:
+                  std::move(reply).Run(Status::kStale);
+                  return;
+                case ArchiumImportFailure::kUnavailable:
+                  std::move(reply).Run(Status::kUnavailable);
+                  return;
+                case ArchiumImportFailure::kWriteFailed:
+                  std::move(reply).Run(Status::kWriteFailed);
+                  return;
+              }
             }, self, std::move(reply)), revision);
       }, weak_ptr_factory_.GetWeakPtr(), generation, std::move(decisions), std::move(reply)));
 }

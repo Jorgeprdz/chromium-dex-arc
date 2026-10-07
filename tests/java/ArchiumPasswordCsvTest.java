@@ -30,6 +30,11 @@ public final class ArchiumPasswordCsvTest {
     }
 
     private static String field(Object row, String name) throws Exception {
+        if (name.equals("password")) {
+            char[] buffer = (char[]) rowClass.getMethod("copyPassword").invoke(row);
+            try { return new String(buffer); }
+            finally { java.util.Arrays.fill(buffer, '\0'); }
+        }
         return (String) rowClass.getField(name).get(row);
     }
 
@@ -114,6 +119,25 @@ public final class ArchiumPasswordCsvTest {
         }
         cases++;
 
+        // REAL_CONTRACT_TEST (synthetic CSV): parser and row secrets are
+        // explicitly erasable. This doesn't claim Java String/Reader erasure.
+        Object scrubbedResult = parse("url,username,password\nhttps://erase.example,u,synthetic-secret\n");
+        Object scrubbedRow = rows(scrubbedResult).get(0);
+        char[] borrowed = (char[]) rowClass.getMethod("copyPassword").invoke(scrubbedRow);
+        ((AutoCloseable) scrubbedResult).close();
+        java.lang.reflect.Field passwordField = rowClass.getDeclaredField("mPassword");
+        passwordField.setAccessible(true);
+        for (char c : (char[]) passwordField.get(scrubbedRow)) check(c == 0, "parser row not scrubbed");
+        java.util.Arrays.fill(borrowed, '\0');
+        try {
+            rowClass.getMethod("copyPassword").invoke(scrubbedRow);
+            throw new AssertionError("Closed import buffer reused");
+        } catch (InvocationTargetException closed) {
+            check(closed.getCause() instanceof IllegalStateException,
+                    "closed parser row failed with wrong error");
+        }
+        cases++;
+
         Writer failed = new Writer() {
             @Override public void write(char[] chars, int off, int len) throws IOException {
                 throw new IOException("Synthetic output failure");
@@ -172,6 +196,55 @@ public final class ArchiumPasswordCsvTest {
         } catch (InvocationTargetException expected) {
             check(expected.getCause() instanceof IOException, "closed secret has wrong failure type");
             check(closedOutput.toString().isEmpty(), "closed export wrote a partial header");
+        }
+        cases++;
+        // REAL_CONTRACT_TEST on synthetic data; NOT_EXECUTED in Prompt 2.
+        // The private buffer used by production CsvReader must be erasable.
+        Class<?> readerClass = Class.forName(csv.getName() + "$CsvReader");
+        var readerConstructor = readerClass.getDeclaredConstructor(Reader.class);
+        readerConstructor.setAccessible(true);
+        Object bufferedParser = readerConstructor.newInstance(new StringReader("synthetic-secret"));
+        var readRaw = readerClass.getDeclaredMethod("readRaw");
+        readRaw.setAccessible(true);
+        check((int) readRaw.invoke(bufferedParser) == 's', "reader did not consume test data");
+        java.lang.reflect.Field bufferField = readerClass.getDeclaredField("readBuffer");
+        bufferField.setAccessible(true);
+        char[] internalBuffer = (char[]) bufferField.get(bufferedParser);
+        check(internalBuffer[0] == 's', "reader did not buffer data");
+        var eraseReader = readerClass.getDeclaredMethod("erase");
+        eraseReader.setAccessible(true);
+        eraseReader.invoke(bufferedParser);
+        for (char c : internalBuffer) check(c == 0, "CSV buffer survived erase");
+        cases++;
+
+        // REAL_CONTRACT_TEST: cancellation before export cannot emit a header.
+        Object cancelSecret = secretRow.getConstructor(String.class, String.class, char[].class)
+                .newInstance("https://cancel.example/", "user", "synthetic-secret".toCharArray());
+        StringWriter cancelled = new StringWriter();
+        Thread.currentThread().interrupt();
+        try {
+            csv.getMethod("writeSecrets", Writer.class, List.class)
+                    .invoke(null, cancelled, List.of(cancelSecret));
+            throw new AssertionError("Cancelled CSV export accepted");
+        } catch (InvocationTargetException expected) {
+            check(expected.getCause() instanceof IOException, "Export cancel wrong error type");
+            check(cancelled.toString().isEmpty(), "Cancelled export emitted a header");
+        } finally {
+            Thread.interrupted(); // Clear the test's interrupted status.
+            secretRow.getMethod("close").invoke(cancelSecret);
+        }
+        cases++;
+
+        // REAL_CONTRACT_TEST: interruption aborts CSV parsing (also triggers
+        // the parser's finally-owned-buffer scrub path). NOT_EXECUTED.
+        Thread.currentThread().interrupt();
+        try {
+            parse("url,username,password\nhttps://cancel.example,u,synthetic-secret\n");
+            throw new AssertionError("Cancelled CSV read accepted");
+        } catch (IOException expected) {
+            check(!expected.getMessage().contains("synthetic-secret"), "Cancel leaked password");
+        } finally {
+            Thread.interrupted();
         }
         cases++;
         System.out.println("ArchiumPasswordCsv: " + cases + " synthetic cases passed");

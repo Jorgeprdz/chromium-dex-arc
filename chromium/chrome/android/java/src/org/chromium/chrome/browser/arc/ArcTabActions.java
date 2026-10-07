@@ -17,6 +17,8 @@ public final class ArcTabActions {
         void pin(int tabId);
         void unpin(int tabId);
         default void onSpaceChanged(ArcSidebarState state) {}
+        /** Metadata changed without switching Spaces; refresh presentation without selecting tabs. */
+        default void onArcStateChanged(ArcSidebarState state) {}
     }
     public enum Result { OPENED, SELECTED, NOT_OPENED, PERSISTENCE_ERROR }
 
@@ -55,6 +57,7 @@ public final class ArcTabActions {
                 current.bindTab(entryId, tabId);
                 mStore.save(current);
                 mUncommittedTabs.remove(entryId);
+                mTabs.onArcStateChanged(current);
             } catch (RuntimeException failure) {
                 return Result.PERSISTENCE_ERROR;
             }

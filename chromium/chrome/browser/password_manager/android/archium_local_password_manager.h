@@ -7,6 +7,8 @@
 #include <cstdint>
 #include <map>
 #include <memory>
+#include <optional>
+#include <string>
 #include <vector>
 
 #include "base/functional/callback.h"
@@ -70,6 +72,15 @@ class ArchiumLocalPasswordManager : public SavedPasswordsPresenter::Observer {
   void Shutdown();
 
  private:
+  // No CredentialUIEntry/PasswordString survives in this UI metadata map.
+  // IDs are ephemeral, opaque, and never list positions. Every sensitive
+  // operation resolves the current presenter entry *after* authentication.
+  struct EntryKey {
+    GURL url;
+    std::string signon_realm;
+    std::u16string username;
+  };
+  std::optional<CredentialUIEntry> ResolveCredential(int64_t id) const;
   bool Ready() const;
   void Authenticate(OperationReply reply);
   void OnAuthenticated(OperationReply reply, bool success);
@@ -92,7 +103,7 @@ class ArchiumLocalPasswordManager : public SavedPasswordsPresenter::Observer {
   std::unique_ptr<device_reauth::DeviceAuthenticator> authenticator_;
   SavedPasswordsPresenter presenter_;
   base::RepeatingClosure on_changed_;
-  std::map<int64_t, CredentialUIEntry> entries_;
+  std::map<int64_t, EntryKey> entries_;
   int64_t next_id_ = 1;
   uint64_t import_generation_ = 0;
   bool live_ = true;

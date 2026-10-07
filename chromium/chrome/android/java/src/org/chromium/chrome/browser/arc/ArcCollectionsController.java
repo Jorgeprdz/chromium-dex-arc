@@ -68,6 +68,7 @@ public final class ArcCollectionsController {
         // Publish metadata before changing the native tab; a failed write leaves it untouched.
         mStore.save(draft);
         mTabs.pin(tabId);
+        mTabs.onArcStateChanged(draft);
         return existingId;
     }
 
@@ -82,12 +83,14 @@ public final class ArcCollectionsController {
         draft.unpin(id);
         mStore.save(draft);
         if (tabId != null && mTabs.exists(tabId)) mTabs.unpin(tabId);
+        mTabs.onArcStateChanged(draft);
     }
 
     public void move(String id, String space, String folder, int index) {
         ArcSidebarState draft = state();
         draft.move(id, space, folder, index);
         mStore.save(draft);
+        mTabs.onArcStateChanged(draft);
     }
 
     public void destroy() { mDestroyed = true; }

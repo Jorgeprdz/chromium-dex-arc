@@ -106,6 +106,24 @@ ArchiumPasswordImportPreview::ArchiumPasswordImportPreview(
       }
     }
   }
+  // The full snapshot is used to classify exact matches and conflicts, but
+  // confirming a replacement needs only the original form fields and an
+  // incoming secret. Never retain copies of unrelated vault passwords across
+  // the user's potentially long review dialog.
+  for (auto& credential : snapshot_.credentials) {
+    credential.password_value = PasswordString();
+  }
+  // Likewise, no secret is needed for duplicate/exact-match/invalid rows:
+  // BuildBatch() always discards them, even when the UI requests import.
+  for (size_t index = 0; index < rows_.size(); ++index) {
+    if (rows_[index].kind == Kind::kDuplicateInFile ||
+        store_results_[index] == AddResult::kExactMatch ||
+        store_results_[index] == AddResult::kInvalid ||
+        store_results_[index] == AddResult::kConflictInAccountStore ||
+        store_results_[index] == AddResult::kConflictInProfileAndAccountStore) {
+      entries_[index].password = PasswordString();
+    }
+  }
 }
 
 ArchiumPasswordImportPreview::~ArchiumPasswordImportPreview() = default;

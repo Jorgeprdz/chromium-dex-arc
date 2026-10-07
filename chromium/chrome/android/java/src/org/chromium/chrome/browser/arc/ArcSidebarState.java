@@ -131,7 +131,10 @@ public final class ArcSidebarState {
     public void bindTab(String id, int tabId) {
         Entry entry = entry(id); requireFreeTab(tabId, id);
         mEntries.set(mEntries.indexOf(entry), entry.withTab(tabId));
-        if (!entry.favorite) associateTab(tabId, entry.spaceId);
+        // A newly created native tab can be adopted synchronously by ArcNativeTabSession before
+        // this bind completes. Favorites are shared across Spaces, so scrub that temporary owner.
+        if (entry.favorite) mTabSpaces.remove(tabId);
+        else associateTab(tabId, entry.spaceId);
     }
     public void tabClosed(int tabId) {
         for (int i = 0; i < mEntries.size(); i++) {
@@ -141,7 +144,12 @@ public final class ArcSidebarState {
         }
         mTabSpaces.remove(tabId);
     }
-    public void reconcileTabs(Set<Integer> realTabIds) {
+    /**
+     * Reconciles persisted native IDs against the authoritative live set. Callers must invoke this
+     * only after Chromium reports restoreCompleted() (or when TabModel.isTabModelRestored() was
+     * already true at session construction). Closed pinned entries keep their canonical URL/title.
+     */
+    public void reconcileTabsAfterRestore(Set<Integer> realTabIds) {
         for (int i = 0; i < mEntries.size(); i++) {
             Entry entry = mEntries.get(i);
             if (entry.tabId != null && !realTabIds.contains(entry.tabId)) {
@@ -149,6 +157,11 @@ public final class ArcSidebarState {
             }
         }
         mTabSpaces.keySet().retainAll(realTabIds);
+        // Favorites are global collection entries, not Space-owned open-tab rows. Repair any
+        // residual ownership left by a synchronous didAddTab() or older persisted state.
+        for (Entry entry : mEntries) {
+            if (entry.favorite && entry.tabId != null) mTabSpaces.remove(entry.tabId);
+        }
     }
     public void associateTab(int tabId, String spaceId) {
         if (tabId < 0) throw invalid();
@@ -163,11 +176,25 @@ public final class ArcSidebarState {
         }
         return false;
     }
+    /** Returns whether a native tab is valid in the selected Arc context for selection. */
     public boolean visibleTab(int tabId) {
-        for (Entry entry : mEntries) {
-            if (entry.favorite && Integer.valueOf(tabId).equals(entry.tabId)) return true;
-        }
-        return mSelected.equals(mTabSpaces.get(tabId));
+        if (isFavoriteTab(tabId)) return true;
+        String owner = mTabSpaces.get(tabId);
+        return owner != null && mSelected.equals(owner);
+    }
+
+    /**
+     * Returns whether a real native tab belongs in the active Space open-tab presentation. Favorites
+     * are rendered by the shared Favorites collection and are intentionally not duplicated here.
+     * While restore is pending, an unknown tab remains visible rather than being misclassified or
+     * adopted. Once restore is authoritative, unknown tabs are expected to be adopted by
+     * ArcNativeTabSession.
+     */
+    public boolean visibleTabForPresentation(int tabId, boolean restoreComplete) {
+        if (isFavoriteTab(tabId)) return false;
+        String owner = mTabSpaces.get(tabId);
+        if (owner != null) return mSelected.equals(owner);
+        return !restoreComplete;
     }
     public void move(String id, String spaceId, String folderId, int index) {
         Entry entry = entry(id);
@@ -188,7 +215,12 @@ public final class ArcSidebarState {
         mEntries.add(at, moved);
         if (entry.tabId != null) associateTab(entry.tabId, spaceId);
     }
-    public void unpin(String id) { mEntries.remove(entry(id)); }
+    public void unpin(String id) {
+        Entry removed = entry(id);
+        mEntries.remove(removed);
+        // Removing a global Favorite must not orphan its still-open native tab from every Space.
+        if (removed.favorite && removed.tabId != null) associateTab(removed.tabId, mSelected);
+    }
 
     /** Changes placement without replacing the canonical entry or native tab identity. */
     public void setFavorite(String id, boolean favorite) {

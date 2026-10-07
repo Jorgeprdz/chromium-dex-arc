@@ -18,8 +18,7 @@ void PasswordStoreInterface::ImportLoginsAtomically(
     std::vector<StoredCredential> credentials,
     ImportCompletion completion,
     std::optional<ArchiumPasswordImportRevision> expected_revision) {
-  std::move(completion).Run(base::unexpected(PasswordStoreBackendError(
-      PasswordStoreBackendErrorType::kUncategorized)));
+  std::move(completion).Run(base::unexpected(ArchiumImportFailure::kUnavailable));
 }
 
 }  // namespace password_manager

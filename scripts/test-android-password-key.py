@@ -16,7 +16,9 @@ def run(*args):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--device', required=True, help='Explicit ADB serial; do not infer an emulator from its name')
-    parser.add_argument('--sdk', type=Path, default=Path('/opt/android-sdk'))
+    parser.add_argument('--sdk', type=Path, required=True)
+    parser.add_argument('--platform-version', required=True)
+    parser.add_argument('--build-tools-version', required=True)
     args = parser.parse_args()
     work = ROOT / '.test-build/password-key'
     work.mkdir(parents=True, exist_ok=True)
@@ -28,8 +30,13 @@ def main():
     if dex.exists():
         shutil.rmtree(dex)
     dex.mkdir()
-    tools = args.sdk / 'build-tools/36.0.0'
-    android = args.sdk / 'platforms/android-36/android.jar'
+    tools = args.sdk / 'build-tools' / args.build_tools_version
+    android = args.sdk / 'platforms' / f'android-{args.platform_version}' / 'android.jar'
+    if not android.is_file():
+        raise SystemExit(f'Pinned Android platform jar missing: {android}')
+    for tool in ('aapt2', 'd8', 'apksigner'):
+        if not (tools / tool).is_file():
+            raise SystemExit(f'Pinned Android build tool missing: {tools / tool}')
     sources = [ROOT / 'tests/android/ArchiumPasswordKeyTest.java']
     production = ROOT / ('chromium/chrome/browser/password_manager/android/java/src/'
                          'org/chromium/chrome/browser/password_manager/ArchiumPasswordKey.java')
@@ -40,8 +47,7 @@ def main():
     run('jar', 'cf', jar, '-C', classes, '.')
     run(tools / 'd8', '--min-api', '29', '--lib', android, '--output', dex, jar)
     apk = work / 'unsigned.apk'
-    modern_aapt2 = args.sdk / 'build-tools/37.0.0/aapt2'
-    aapt2 = str(modern_aapt2) if modern_aapt2.is_file() else (shutil.which('aapt2') or str(tools / 'aapt2'))
+    aapt2 = str(tools / 'aapt2')
     run(aapt2, 'link', '-I', android, '--manifest', ROOT / 'tests/android/AndroidManifest.xml',
         '-o', apk)
     with zipfile.ZipFile(apk, 'a') as archive:

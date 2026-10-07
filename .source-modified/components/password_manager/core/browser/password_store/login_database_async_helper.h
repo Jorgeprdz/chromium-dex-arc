@@ -82,9 +82,7 @@ class LoginDatabaseAsyncHelper : public PasswordStoreSync {
   base::expected<std::optional<PasswordStoreChangeList>,
                  PasswordStoreBackendError>
   AddLogin(StoredCredential cred);
-  base::expected<std::optional<PasswordStoreChangeList>,
-                 PasswordStoreBackendError>
-  ImportLoginsAtomically(
+  ArchiumImportChangesResult ImportLoginsAtomically(
       std::vector<StoredCredential> credentials,
       std::optional<ArchiumPasswordImportRevision> expected_revision = std::nullopt);
   ArchiumImportSnapshotResult GetImportSnapshot();

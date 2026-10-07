@@ -388,7 +388,7 @@ void PasswordStoreBuiltInBackend::GetImportSnapshotAsync(
 
 void PasswordStoreBuiltInBackend::ImportLoginsAtomicallyAsync(
     std::vector<StoredCredential> credentials,
-    PasswordChangesOrErrorReply callback,
+    ArchiumImportChangesReply callback,
     std::optional<ArchiumPasswordImportRevision> expected_revision) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
   DCHECK(helper_);

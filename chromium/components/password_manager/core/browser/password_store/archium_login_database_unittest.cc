@@ -109,11 +109,35 @@ TEST_F(ArchiumLoginDatabaseTest, StaleImportPreviewCannotOverwriteLaterWebSave) 
   std::vector<StoredCredential> imported;
   imported.push_back(Credential("later.example", u"csv-secret"));
   auto result = db_->ApplyImportedLogins(imported, snapshot->revision);
-  EXPECT_FALSE(result.has_value());
+  ASSERT_FALSE(result.has_value());
+  EXPECT_EQ(ArchiumImportFailure::kStale, result.error());
   std::vector<StoredCredential> actual;
   ASSERT_EQ(FormRetrievalResult::kSuccess, db_->GetAllLogins(&actual));
   ASSERT_EQ(1u, actual.size());
   EXPECT_EQ(u"web-secret", actual[0].password_value.value());
+}
+
+// REAL_CONTRACT_TEST: even a preview with all rows skipped must not report
+// SUCCESS after an external web save changed the revision. NOT_EXECUTED.
+TEST_F(ArchiumLoginDatabaseTest, EmptyImportStillValidatesRevision) {
+  auto snapshot = db_->GetImportSnapshot();
+  ASSERT_TRUE(snapshot.has_value());
+  ASSERT_FALSE(db_->AddLogin(Credential("outside.example", u"web-secret")).empty());
+  auto stale = db_->ApplyImportedLogins({}, snapshot->revision);
+  ASSERT_FALSE(stale.has_value());
+  EXPECT_EQ(ArchiumImportFailure::kStale, stale.error());
+  EXPECT_EQ(1, RowCount());
+}
+
+// REAL_CONTRACT_TEST: a valid no-op import succeeds without altering the vault.
+// NOT_EXECUTED.
+TEST_F(ArchiumLoginDatabaseTest, EmptyImportWithCurrentRevisionIsNoOp) {
+  auto snapshot = db_->GetImportSnapshot();
+  ASSERT_TRUE(snapshot.has_value());
+  auto unchanged = db_->ApplyImportedLogins({}, snapshot->revision);
+  ASSERT_TRUE(unchanged.has_value());
+  EXPECT_TRUE(unchanged->empty());
+  EXPECT_EQ(0, RowCount());
 }
 
 TEST_F(ArchiumLoginDatabaseTest, SnapshotReadDoesNotInvalidatePreviewAndCommitDoes) {
@@ -127,7 +151,9 @@ TEST_F(ArchiumLoginDatabaseTest, SnapshotReadDoesNotInvalidatePreviewAndCommitDo
   ASSERT_TRUE(db_->ApplyImportedLogins(rows, first->revision).has_value());
   std::vector<StoredCredential> later;
   later.push_back(Credential("two.example", u"second-secret"));
-  EXPECT_FALSE(db_->ApplyImportedLogins(later, second->revision).has_value());
+  auto stale = db_->ApplyImportedLogins(later, second->revision);
+  ASSERT_FALSE(stale.has_value());
+  EXPECT_EQ(ArchiumImportFailure::kStale, stale.error());
   EXPECT_EQ(1, RowCount());
 }
 
@@ -137,7 +163,9 @@ TEST_F(ArchiumLoginDatabaseTest, ImportPreviewCannotBeReplayedOnReopenedDatabase
   Reopen(encryptor_);
   std::vector<StoredCredential> rows;
   rows.push_back(Credential("one.example", u"synthetic-secret"));
-  EXPECT_FALSE(db_->ApplyImportedLogins(rows, snapshot->revision).has_value());
+  auto stale = db_->ApplyImportedLogins(rows, snapshot->revision);
+  ASSERT_FALSE(stale.has_value());
+  EXPECT_EQ(ArchiumImportFailure::kStale, stale.error());
   EXPECT_EQ(0, RowCount());
 }
 
@@ -152,7 +180,9 @@ TEST_F(ArchiumLoginDatabaseTest, OtherConnectionWriteInvalidatesImportPreview) {
   }
   std::vector<StoredCredential> rows;
   rows.push_back(Credential("two.example", u"import-secret"));
-  EXPECT_FALSE(db_->ApplyImportedLogins(rows, snapshot->revision).has_value());
+  auto stale = db_->ApplyImportedLogins(rows, snapshot->revision);
+  ASSERT_FALSE(stale.has_value());
+  EXPECT_EQ(ArchiumImportFailure::kStale, stale.error());
   EXPECT_EQ(1, RowCount());
 }
 
@@ -306,10 +336,12 @@ TEST_F(ArchiumLoginDatabaseTest, AsyncSnapshotQueuesAndRejectsSubsequentWebSave)
   store_->AddLogin(Credential("one.example", u"web-secret"));
   std::vector<StoredCredential> imported;
   imported.push_back(Credential("one.example", u"csv-secret"));
-  base::test::TestFuture<base::expected<void, PasswordStoreBackendError>> result;
+  base::test::TestFuture<base::expected<void, ArchiumImportFailure>> result;
   store_->ImportLoginsAtomically(std::move(imported), result.GetCallback(),
                                  snapshot->revision);
-  EXPECT_FALSE(result.Take().has_value());
+  auto stale = result.Take();
+  ASSERT_FALSE(stale.has_value());
+  EXPECT_EQ(ArchiumImportFailure::kStale, stale.error());
   base::test::TestFuture<ArchiumImportSnapshotResult> current;
   store_->GetImportSnapshot(current.GetCallback());
   auto actual = current.Take();
@@ -338,10 +370,12 @@ TEST_F(ArchiumLoginDatabaseTest, AsyncStoreNotifiesOnlyAfterCompleteCommit) {
   invalid.push_back(Credential("one.example", u"synthetic-secret"));
   invalid.push_back(Credential("invalid.example", u"other-secret"));
   invalid.back().signon_realm.clear();
-  base::test::TestFuture<base::expected<void, PasswordStoreBackendError>> failed;
+  base::test::TestFuture<base::expected<void, ArchiumImportFailure>> failed;
   // Request before initialization finishes: it must queue and return an error.
   store_->ImportLoginsAtomically(std::move(invalid), failed.GetCallback());
-  EXPECT_FALSE(failed.Take().has_value());
+  auto write_failure = failed.Take();
+  ASSERT_FALSE(write_failure.has_value());
+  EXPECT_EQ(ArchiumImportFailure::kWriteFailed, write_failure.error());
   EXPECT_TRUE(observer.committed_counts.empty());
   EXPECT_EQ(0, RowCount());
   EXPECT_FALSE(store_->CreateSyncControllerDelegate());
@@ -349,7 +383,7 @@ TEST_F(ArchiumLoginDatabaseTest, AsyncStoreNotifiesOnlyAfterCompleteCommit) {
   std::vector<StoredCredential> valid;
   valid.push_back(Credential("one.example", u"synthetic-secret"));
   valid.push_back(Credential("two.example", u"other-secret"));
-  base::test::TestFuture<base::expected<void, PasswordStoreBackendError>> committed;
+  base::test::TestFuture<base::expected<void, ArchiumImportFailure>> committed;
   store_->ImportLoginsAtomically(std::move(valid), committed.GetCallback());
   EXPECT_TRUE(committed.Take().has_value());
   ASSERT_EQ(1u, observer.committed_counts.size());

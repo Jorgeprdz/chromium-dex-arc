@@ -172,6 +172,13 @@ public class VerticalTabUtils {
         if (!isVerticalTabsEligible(context)) {
             return false;
         }
+        // Arc's sidebar is the primary browser chrome, not an optional tab-layout preference.
+        // Keeping it enabled also prevents the Arc toolbar-suppression path from ever producing a
+        // window with neither the sidebar nor the horizontal toolbar. MOBILE is ineligible above
+        // and therefore retains Chromium's normal mobile/tablet composition.
+        if (context != null && ArcDesktopAppearance.isDesktopWindow(context)) {
+            return true;
+        }
         boolean defaultValue = true;
         return ChromeSharedPreferences.getInstance()
                 .readBoolean(ChromePreferenceKeys.VERTICAL_TABS_ENABLED, defaultValue);

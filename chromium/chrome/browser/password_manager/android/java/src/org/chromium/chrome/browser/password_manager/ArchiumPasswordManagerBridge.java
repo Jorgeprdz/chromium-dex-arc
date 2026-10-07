@@ -71,7 +71,7 @@ public final class ArchiumPasswordManagerBridge {
         void onOperation(int request, int status);
     }
 
-    private long mNativePtr;
+    private long mNativeHandle;
     private boolean mStarted;
     private @Nullable Listener mListener;
     private final List<Entry> mEntries = new ArrayList<>();
@@ -80,7 +80,10 @@ public final class ArchiumPasswordManagerBridge {
 
     public ArchiumPasswordManagerBridge(Activity activity, Profile profile, Listener listener) {
         mListener = listener;
-        mNativePtr = ArchiumPasswordManagerBridgeJni.get().init(this, profile, activity);
+        // Defense in depth: do not create a JNI peer from any off-the-record
+        // context; native Init independently repeats the real profile check.
+        if (profile == null || profile.isOffTheRecord()) return;
+        mNativeHandle = ArchiumPasswordManagerBridgeJni.get().init(this, profile, activity);
     }
 
     public static boolean isLocalEnabled() {
@@ -89,17 +92,17 @@ public final class ArchiumPasswordManagerBridge {
     public void start() {
         if (mStarted || mListener == null) return;
         mStarted = true;
-        if (mNativePtr == 0) mListener.onMetadata(List.of(), UNAVAILABLE);
+        if (mNativeHandle == 0) mListener.onMetadata(List.of(), UNAVAILABLE);
         else refresh();
     }
-    private boolean active() { return mStarted && mNativePtr != 0 && mListener != null; }
-    public void refresh() { if (active()) ArchiumPasswordManagerBridgeJni.get().refresh(mNativePtr); }
+    private boolean active() { return mStarted && mNativeHandle != 0 && mListener != null; }
+    public void refresh() { if (active()) ArchiumPasswordManagerBridgeJni.get().refresh(mNativeHandle); }
     /** Password input is consumed and erased after the native call returns. */
     public void add(int request, String url, String username, char[] password) {
         try {
             if (active()) {
                 ArchiumPasswordManagerBridgeJni.get().add(
-                        mNativePtr, request, url, username, password);
+                        mNativeHandle, request, url, username, password);
             }
         } finally {
             Arrays.fill(password, '\0');
@@ -110,34 +113,34 @@ public final class ArchiumPasswordManagerBridge {
         try {
             if (active()) {
                 ArchiumPasswordManagerBridgeJni.get().update(
-                        mNativePtr, request, id, username, password);
+                        mNativeHandle, request, id, username, password);
             }
         } finally {
             Arrays.fill(password, '\0');
         }
     }
     public void delete(int request, long id) {
-        if (active()) ArchiumPasswordManagerBridgeJni.get().delete(mNativePtr, request, id);
+        if (active()) ArchiumPasswordManagerBridgeJni.get().delete(mNativeHandle, request, id);
     }
     public void reveal(int request, long id) {
-        if (active()) ArchiumPasswordManagerBridgeJni.get().reveal(mNativePtr, request, id);
+        if (active()) ArchiumPasswordManagerBridgeJni.get().reveal(mNativeHandle, request, id);
     }
     public void export(int request) {
-        if (active()) ArchiumPasswordManagerBridgeJni.get().export(mNativePtr, request);
+        if (active()) ArchiumPasswordManagerBridgeJni.get().export(mNativeHandle, request);
     }
     /** Input password buffers are consumed/erased, including cancellation or a JNI exception. */
     public void previewImport(int request, String[] urls, String[] users, char[][] passwords) {
         try {
-            if (active()) ArchiumPasswordManagerBridgeJni.get().previewImport(mNativePtr, request, urls, users, passwords);
+            if (active()) ArchiumPasswordManagerBridgeJni.get().previewImport(mNativeHandle, request, urls, users, passwords);
         } finally {
             for (char[] password : passwords) if (password != null) Arrays.fill(password, '\0');
         }
     }
     public void confirmImport(int request, int[] decisions) {
-        if (active()) ArchiumPasswordManagerBridgeJni.get().confirmImport(mNativePtr, request, decisions);
+        if (active()) ArchiumPasswordManagerBridgeJni.get().confirmImport(mNativeHandle, request, decisions);
     }
     public void cancelImport() {
-        if (active()) ArchiumPasswordManagerBridgeJni.get().cancelImport(mNativePtr);
+        if (active()) ArchiumPasswordManagerBridgeJni.get().cancelImport(mNativeHandle);
         mPreviews.clear();
     }
 
@@ -212,25 +215,25 @@ public final class ArchiumPasswordManagerBridge {
         mPreviews.clear();
         for (List<ArchiumPasswordCsv.SecretRow> rows : mExports.values()) closeRows(rows);
         mExports.clear();
-        long pointer = mNativePtr;
-        mNativePtr = 0;
-        if (pointer != 0) ArchiumPasswordManagerBridgeJni.get().destroy(pointer);
+        long handle = mNativeHandle;
+        mNativeHandle = 0;
+        if (handle != 0) ArchiumPasswordManagerBridgeJni.get().destroy(handle);
     }
 
     @NativeMethods public interface Natives {
         boolean isLocalEnabled();
         long init(ArchiumPasswordManagerBridge bridge, @JniType("Profile*") Profile profile, Activity activity);
-        void refresh(long nativeArchiumPasswordManagerBridge);
-        void add(long nativeArchiumPasswordManagerBridge, int request, String url,
+        void refresh(long handle);
+        void add(long handle, int request, String url,
                 String username, char[] password);
-        void update(long nativeArchiumPasswordManagerBridge, int request, long id,
+        void update(long handle, int request, long id,
                 String username, char[] password);
-        void delete(long nativeArchiumPasswordManagerBridge, int request, long id);
-        void reveal(long nativeArchiumPasswordManagerBridge, int request, long id);
-        void export(long nativeArchiumPasswordManagerBridge, int request);
-        void previewImport(long nativeArchiumPasswordManagerBridge, int request, String[] urls, String[] users, char[][] passwords);
-        void confirmImport(long nativeArchiumPasswordManagerBridge, int request, int[] decisions);
-        void cancelImport(long nativeArchiumPasswordManagerBridge);
-        void destroy(long nativeArchiumPasswordManagerBridge);
+        void delete(long handle, int request, long id);
+        void reveal(long handle, int request, long id);
+        void export(long handle, int request);
+        void previewImport(long handle, int request, String[] urls, String[] users, char[][] passwords);
+        void confirmImport(long handle, int request, int[] decisions);
+        void cancelImport(long handle);
+        void destroy(long handle);
     }
 }

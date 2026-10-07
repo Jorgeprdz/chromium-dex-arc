@@ -6,17 +6,19 @@ import org.chromium.chrome.browser.arc.ArcTabActions;
 import org.chromium.chrome.browser.arc.ArcCollectionsController;
 
 /** Production collection/state logic; only the Chromium command boundary is simulated. */
+// SIMULATED_BOUNDARY: production Arc controller/state with a fake native-tab command boundary.
 public final class ArcCollectionsControllerTest {
     private static final class Native implements ArcTabActions.NativeTabs {
         final Set<Integer> ids = new HashSet<>();
-        int pinned = -1, unpinned = -1, selected = -1, opens, spaceChanges;
+        int pinned = -1, unpinned = -1, selected = -1, opens, spaceChanges, stateChanges, closeCalls;
         public boolean exists(int id) { return ids.contains(id); }
         public int open(String url) { opens++; ids.add(100 + opens); return 100 + opens; }
         public void select(int id) { selected = id; }
         public void pin(int id) { pinned = id; }
         public void unpin(int id) { unpinned = id; }
-        public void close(int id) {}
+        public void close(int id) { closeCalls++; }
         public void onSpaceChanged(ArcSidebarState state) { spaceChanges++; }
+        public void onArcStateChanged(ArcSidebarState state) { stateChanges++; }
     }
     private static final class Storage implements ArcSidebarStore.Persistence {
         String value = "";
@@ -54,14 +56,19 @@ public final class ArcCollectionsControllerTest {
                 "moving back from favorites keeps identity");
         check(controller.state().entries(work).get(0).id.equals(pinned), "pin moved into current Space");
         String folder = controller.createFolder(null, "Reading");
+        int beforeMoveRefresh = nativeTabs.stateChanges;
         controller.move(pinned, work, folder, 0);
         check(controller.state().entry(pinned).folderId.equals(folder), "folder move persists");
+        check(nativeTabs.stateChanges == beforeMoveRefresh + 1,
+                "moving ownership refreshes Arc presentation without switching Spaces");
         controller.selectSpace(personal);
         check(controller.state().entries(controller.state().selectedSpace()).isEmpty(),
                 "Space selection changes actual visible pinned collection");
         check(nativeTabs.spaceChanges == 2, "existing Space switch reaches native session");
         controller.selectSpace(work);
         check(nativeTabs.spaceChanges == 3, "switching back reaches native session");
+        check(nativeTabs.closeCalls == 0 && nativeTabs.ids.contains(7),
+                "Space switches never close real tabs in the global native model");
         ArcSidebarState reopened = new ArcSidebarStore(persistence).load();
         check(reopened.selectedSpace().equals(work) && reopened.entry(pinned).folderId.equals(folder),
                 "Space/folder selection survives reopened store");
@@ -74,6 +81,16 @@ public final class ArcCollectionsControllerTest {
         controller.remove(pinned);
         check(nativeTabs.unpinned == 7 && controller.state().entries(work).isEmpty(),
                 "removal reuses native unpin and keeps real tab open");
+
+        nativeTabs.ids.add(8);
+        String favorite = controller.rememberTab(8, "https://shared.test/", "Shared", true);
+        check(!controller.state().hasTabSpace(8), "Favorite has no Space ownership while shared");
+        controller.remove(favorite);
+        check(controller.state().hasTabSpace(8) && controller.state().visibleTabForPresentation(8, true),
+                "removing an open Favorite adopts it into active Space without closing it");
+        check(nativeTabs.ids.contains(8) && nativeTabs.closeCalls == 0,
+                "removing a Favorite never closes the global native tab");
+
         nativeTabs.ids.remove(7);
         try { controller.rememberTab(7, "https://example.test/", "Example", false);
             throw new AssertionError("inactive tab accepted"); }

@@ -1373,16 +1373,16 @@ ArchiumImportSnapshotResult LoginDatabase::GetImportSnapshot() {
   return std::move(snapshot);
 }
 
-base::expected<PasswordStoreChangeList, PasswordStoreBackendError>
+base::expected<PasswordStoreChangeList, ArchiumImportFailure>
 LoginDatabase::ApplyImportedLogins(
     const std::vector<StoredCredential>& credentials,
     std::optional<ArchiumPasswordImportRevision> expected_revision) {
-  auto failure = [] {
-    return base::unexpected(PasswordStoreBackendError(
-        PasswordStoreBackendErrorType::kUncategorized));
-  };
-  if (!encryptor_ || !encryptor_->IsEncryptionAvailable()) {
-    return failure();
+  auto failure = [] { return base::unexpected(ArchiumImportFailure::kWriteFailed); };
+  // This operation is exclusively for the local profile vault; account-store
+  // callers must never import into a synchronized backend through this API.
+  if (is_account_store_.value() || !encryptor_ ||
+      !encryptor_->IsEncryptionAvailable()) {
+    return base::unexpected(ArchiumImportFailure::kUnavailable);
   }
   sql::Transaction transaction(&db_);
   if (!transaction.Begin()) {
@@ -1397,8 +1397,11 @@ LoginDatabase::ApplyImportedLogins(
         db_.GetUniqueStatement("SELECT COUNT(*) FROM logins"));
     if (!snapshot_lock.Step()) return failure();
     auto current_revision = ReadImportRevision();
-    if (!current_revision || *current_revision != *expected_revision) {
-      return failure();
+    if (!current_revision) return failure();
+    if (*current_revision != *expected_revision) {
+      // The read lock and transaction remain held through this decision.
+      // Abort without executing AddLogin or emitting observer notifications.
+      return base::unexpected(ArchiumImportFailure::kStale);
     }
   }
   PasswordStoreChangeList committed_changes;

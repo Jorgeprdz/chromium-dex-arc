@@ -12,6 +12,7 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
+import android.provider.DocumentsContract;
 import android.text.Editable;
 import android.text.InputType;
 import android.view.ViewGroup;
@@ -29,10 +30,9 @@ import org.chromium.base.supplier.SettableMonotonicObservableSupplier;
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.browser.settings.ChromeBaseSettingsFragment;
+import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.components.browser_ui.settings.SettingsFragment;
 
-import java.io.BufferedReader;
-import java.io.BufferedWriter;
 import java.io.InputStream;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
@@ -92,22 +92,36 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
     private int mNextRequest = 1;
     private String mQuery = "";
     private List<ArchiumPasswordManagerBridge.Entry> mEntries = List.of();
-    private boolean mDestroyed;
+    private volatile boolean mDestroyed;
+    private boolean mOffTheRecord;
 
     @Override
     public void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         mPageTitle.set("Local passwords");
-        if (!ArchiumPasswordManagerBridge.isLocalEnabled()) return;
+        Profile profile = getProfile();
+        mOffTheRecord = profile == null || profile.isOffTheRecord();
+        if (mOffTheRecord || !ArchiumPasswordManagerBridge.isLocalEnabled()) return;
         mBridge =
                 new ArchiumPasswordManagerBridge(
-                        requireActivity(), getProfile().getOriginalProfile(), this);
+                        requireActivity(), profile, this);
     }
 
     @Override
     public void onCreatePreferences(@Nullable Bundle savedInstanceState, @Nullable String rootKey) {
         PreferenceScreen screen = getPreferenceManager().createPreferenceScreen(requireContext());
         setPreferenceScreen(screen);
+
+        // Do not even present interactive list/search/CRUD/SAF controls in OTR.
+        if (mOffTheRecord || mBridge == null) {
+            Preference unavailable = new Preference(requireContext());
+            unavailable.setTitle(mOffTheRecord
+                    ? "Local passwords are unavailable in Incognito"
+                    : "Local password storage is unavailable");
+            unavailable.setEnabled(false);
+            screen.addPreference(unavailable);
+            return;
+        }
 
         Preference search = new Preference(requireContext());
         search.setTitle("Search");
@@ -462,18 +476,22 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
                                         .onMalformedInput(CodingErrorAction.REPORT)
                                         .onUnmappableCharacter(CodingErrorAction.REPORT);
                         ArchiumPasswordCsv.ParseResult result;
-                        try (BufferedReader reader =
-                                new BufferedReader(new InputStreamReader(stream, decoder))) {
+                        // ArchiumPasswordCsv owns and scrubs its own char buffer.
+                        // Avoid adding an opaque BufferedReader containing secrets.
+                        try (InputStreamReader reader = new InputStreamReader(stream, decoder)) {
                             result = ArchiumPasswordCsv.parse(reader);
                         }
-                        mMain.post(() -> startImportPreview(result));
+                        if (!mMain.post(() -> startImportPreview(result))) result.close();
                     } catch (Exception error) {
-                        mMain.post(() -> showError("Import failed", error.getMessage()));
+                        // Reader/provider exceptions are untrusted; never display their
+                        // messages because some implementations embed field contents.
+                        mMain.post(() -> showError("Import failed", "Could not read the selected CSV."));
                     }
                 });
     }
 
     private void startImportPreview(ArchiumPasswordCsv.ParseResult parsed) {
+      try {
         if (mDestroyed) return;
         if (parsed.rows.isEmpty()) {
             if (!parsed.errors.isEmpty()) {
@@ -498,7 +516,7 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
             ArchiumPasswordCsv.Row row = parsed.rows.get(i);
             urls[i] = row.url;
             users[i] = row.username;
-            passwords[i] = row.password.toCharArray();
+            passwords[i] = row.copyPassword();
         }
 
         int request = nextRequest();
@@ -510,6 +528,11 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
             mPreviewParseErrors.remove(request);
             for (char[] password : passwords) Arrays.fill(password, '\0');
         }
+      } finally {
+          // Erase every parser-owned password on success, early return,
+          // cancellation, and even if JNI throws.
+          parsed.close();
+      }
     }
 
     private void reviewImport(
@@ -698,21 +721,30 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
             mPendingExportTasks.remove(this);
             String error = null;
             try (OutputStream stream = mResolver.openOutputStream(mUri, "wt");
-                    BufferedWriter writer =
-                            stream == null
-                                    ? null
-                                    : new BufferedWriter(
-                                            new OutputStreamWriter(
-                                                    stream, StandardCharsets.UTF_8))) {
-                if (writer == null) {
-                    throw new java.io.IOException("Unable to open destination");
+                    OutputStreamWriter writer =
+                            stream == null ? null : new OutputStreamWriter(stream, StandardCharsets.UTF_8)) {
+                if (writer == null || mDestroyed || Thread.currentThread().isInterrupted()) {
+                    throw new java.io.IOException("Export unavailable or cancelled");
                 }
+                // StreamEncoder already buffers output; avoid a second opaque
+                // BufferedWriter holding a copy of exported secrets.
                 ArchiumPasswordCsv.writeSecrets(writer, mRows);
                 writer.flush();
             } catch (Exception failure) {
-                error = failure.getMessage();
+                error = "Could not write the selected CSV.";
             } finally {
                 for (ArchiumPasswordCsv.SecretRow row : mRows) row.close();
+            }
+            if (error != null) {
+                // This URI came exclusively from ACTION_CREATE_DOCUMENT.
+                // A provider failure can leave a partial plaintext CSV; ask
+                // SAF to remove that newly created document. Providers may
+                // refuse deletion, so this is best-effort, not secure erasure.
+                try {
+                    DocumentsContract.deleteDocument(mResolver, mUri);
+                } catch (Exception ignored) {
+                    // Never surface provider exception text or credential data.
+                }
             }
 
             String finalError = error;
@@ -746,7 +778,7 @@ public final class ArchiumPasswordSettingsFragment extends ChromeBaseSettingsFra
             mIo.execute(task);
         } catch (RuntimeException rejected) {
             task.cancelWithoutRunning();
-            if (!mDestroyed) showError("Export failed", rejected.getMessage());
+            if (!mDestroyed) showError("Export failed", "Export task was not accepted.");
         }
     }
 

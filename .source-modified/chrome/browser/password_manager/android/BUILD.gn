@@ -789,11 +789,14 @@ if (enable_archium_local_passwords) {
     use_raw_android_executable = true
     sources = [
       "archium_local_password_manager_unittest.cc",
+      "archium_password_manager_bridge_unittest.cc",
       "//base/test/run_all_unittests.cc",
     ]
     deps = [
       ":archium_local_password_manager",
       "//base/test:test_support",
+      "//chrome/browser/password_manager",
+      "//chrome/test/base:testing_profile_impl",
       "//components/affiliations/core/browser:test_support",
       "//components/device_reauth:test_support",
       "//components/password_manager/core/browser:test_support",

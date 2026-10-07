@@ -21,6 +21,8 @@ import java.util.function.BooleanSupplier;
 
 /** Adapter to one real Chromium model/creator; never acts on an inactive profile's UI. */
 public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
+    private enum RestoreState { RESTORE_PENDING, RESTORE_COMPLETE }
+
     private final TabModel mModel;
     private final TabCreator mCreator;
     private final BooleanSupplier mIsCurrentModel;
@@ -28,6 +30,7 @@ public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
     private final ArcTabActions mActions;
     private final ArcSidebarStore mStore;
     private final TabModelObserver mObserver;
+    private RestoreState mRestoreState;
     private boolean mDestroyed;
 
     public ArcNativeTabSession(TabModel model, TabCreator creator,
@@ -43,16 +46,28 @@ public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
         mOnStateChanged = onStateChanged;
         mStore = ArcSidebarProfiles.getForProfile(profile);
         mActions = new ArcTabActions(mStore, this);
+        mRestoreState = model.isTabModelRestored()
+                ? RestoreState.RESTORE_COMPLETE : RestoreState.RESTORE_PENDING;
         mObserver = new TabModelObserver() {
             @Override
             public void didAddTab(
                     Tab tab, int type, int creationState, boolean markedForSelection) {
-                adoptTab(tab.getId());
+                // A didAddTab before restoreCompleted() can still be a restored tab. Preserve any
+                // persisted owner and defer adoption of unknown IDs until restore is authoritative.
+                if (restoreComplete()) adoptTab(tab.getId());
+                if (active()) mOnStateChanged.run();
+            }
+
+            @Override public void didSelectTab(Tab tab, int type, int lastId) {
+                // Selection during restore is presentation-only; it must never reassign ownership.
                 if (active()) mOnStateChanged.run();
             }
 
             @Override public void restoreCompleted() {
-                reconcileTabs();
+                if (mDestroyed || restoreComplete()) return;
+                mRestoreState = RestoreState.RESTORE_COMPLETE;
+                reconcileTabsAfterRestore();
+                selectForActiveSpaceAfterRestore();
                 if (active()) mOnStateChanged.run();
             }
 
@@ -63,7 +78,12 @@ public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
             }
         };
         model.addObserver(mObserver);
-        reconcileTabs();
+        // If this session attaches after Chromium already completed restore, the model itself is
+        // authoritative and the restoreCompleted callback is not required to arrive again.
+        if (restoreComplete()) {
+            reconcileTabsAfterRestore();
+            selectForActiveSpaceAfterRestore();
+        }
     }
 
     public ArcTabActions actions() { return mActions; }
@@ -87,17 +107,26 @@ public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
         }
     }
 
-    private void reconcileTabs() {
-        if (mDestroyed) return;
+    private boolean restoreComplete() {
+        return mRestoreState == RestoreState.RESTORE_COMPLETE;
+    }
+
+    private Set<Integer> liveTabIds() {
+        Set<Integer> live = new HashSet<>();
+        for (int i = 0; i < mModel.getCount(); i++) {
+            Tab tab = mModel.getTabAt(i);
+            if (tab != null) live.add(tab.getId());
+        }
+        return live;
+    }
+
+    private void reconcileTabsAfterRestore() {
+        if (mDestroyed || !restoreComplete()) return;
         try {
             ArcSidebarState state = mStore.load();
-            Set<Integer> live = new HashSet<>();
-            for (int i = 0; i < mModel.getCount(); i++) {
-                Tab tab = mModel.getTabAt(i);
-                if (tab != null) live.add(tab.getId());
-            }
+            Set<Integer> live = liveTabIds();
             String before = state.serialize();
-            state.reconcileTabs(live);
+            state.reconcileTabsAfterRestore(live);
             for (int tabId : live) {
                 if (!state.isFavoriteTab(tabId) && !state.hasTabSpace(tabId)) {
                     state.associateTab(tabId, state.selectedSpace());
@@ -106,6 +135,44 @@ public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
             if (!before.equals(state.serialize())) mStore.save(state);
         } catch (RuntimeException ignored) {
             // Keep Chromium's TabModel authoritative if Arc metadata is unavailable.
+        }
+    }
+
+    /** Presentation predicate consumed by the native vertical-tab model. Fail open on metadata IO. */
+    public boolean isTabVisibleForActiveSpace(int tabId) {
+        // A predicate can briefly outlive the selected TabModel while profile/incognito selection
+        // is rebinding. Never project one profile's Space metadata onto another model.
+        if (!active() || tabId < 0) return true;
+        try {
+            return mStore.load().visibleTabForPresentation(tabId, restoreComplete());
+        } catch (RuntimeException ignored) {
+            return true;
+        }
+    }
+
+    private void selectForActiveSpaceAfterRestore() {
+        if (!active() || !restoreComplete()) return;
+        try {
+            selectForActiveSpace(mStore.load());
+        } catch (RuntimeException ignored) {
+            // Metadata failure must not close, move, or otherwise mutate native tabs.
+        }
+    }
+
+    private void selectForActiveSpace(ArcSidebarState state) {
+        Tab current = mModel.getCurrentTabSupplier().get();
+        if (current != null && state.visibleTab(current.getId())) return;
+        for (int i = 0; i < mModel.getCount(); i++) {
+            Tab tab = mModel.getTabAt(i);
+            if (tab != null && state.visibleTab(tab.getId())) {
+                select(tab.getId());
+                return;
+            }
+        }
+        int created = open("chrome://newtab/");
+        if (created >= 0) {
+            adoptTab(created);
+            select(created);
         }
     }
 
@@ -155,26 +222,16 @@ public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
     }
 
     @Override
+    public void onArcStateChanged(ArcSidebarState state) {
+        if (active()) mOnStateChanged.run();
+    }
+
+    @Override
     public void onSpaceChanged(ArcSidebarState state) {
         if (!active()) return;
-        Tab current = mModel.getCurrentTabSupplier().get();
-        if (current != null && state.visibleTab(current.getId())) {
-            mOnStateChanged.run();
-            return;
-        }
-        for (int i = 0; i < mModel.getCount(); i++) {
-            Tab tab = mModel.getTabAt(i);
-            if (tab != null && state.visibleTab(tab.getId())) {
-                select(tab.getId());
-                mOnStateChanged.run();
-                return;
-            }
-        }
-        int created = open("chrome://newtab/");
-        if (created >= 0) {
-            adoptTab(created);
-            select(created);
-        }
+        // Do not create/select based on an incomplete restore. The persisted Space selection is
+        // already committed; once restoreCompleted() arrives we choose a valid real tab.
+        if (restoreComplete()) selectForActiveSpace(state);
         mOnStateChanged.run();
     }
 

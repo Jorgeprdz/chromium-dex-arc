@@ -312,8 +312,6 @@ import org.chromium.components.tab_group_sync.SavedTabGroup;
 import org.chromium.components.tab_group_sync.TabGroupSyncController;
 import org.chromium.components.tab_group_sync.TabGroupSyncService;
 import org.chromium.components.tab_group_sync.TabGroupUiActionHandler;
-import org.chromium.components.omnibox.AutocompleteInput;
-import org.chromium.components.omnibox.OmniboxFocusReason;
 import org.chromium.components.user_prefs.UserPrefs;
 import org.chromium.components.webapps.bottomsheet.PwaBottomSheetController;
 import org.chromium.components.webapps.bottomsheet.PwaBottomSheetControllerFactory;
@@ -403,6 +401,9 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
     protected @Nullable InstantMessageDelegateImpl mInstantMessageDelegateImpl;
     private @Nullable ArcDesktopCoordinator mArcDesktopCoordinator;
     private @Nullable ArcDesktopWindowObserver mArcWindowObserver;
+    private boolean mArcToolbarSuppressed;
+    private int mArcToolbarOriginalVisibility = View.VISIBLE;
+    private int mArcToolbarHairlineOriginalVisibility = View.VISIBLE;
     private @Nullable BookmarkBarCoordinator mBookmarkBarCoordinator;
     private @Nullable BookmarkBarIphController mBookmarkBarIphController;
     private @Nullable BookmarkBarVisibilityProvider mBookmarkBarVisibilityProvider;
@@ -519,13 +520,13 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
 
     private static class BottomSheetContainerMarginAdjusterForSideUi
             extends ViewMarginAdjusterForSideUi implements LayoutStateProvider.LayoutStateObserver {
-        private final Supplier<@Nullable SideUiCoordinator> mSideUiCoordinatorSupplier;
+        private final Supplier<@Nullable SideUiStateProvider> mSideUiStateProviderSupplier;
         private boolean mIsInHub;
 
         BottomSheetContainerMarginAdjusterForSideUi(
-                View view, Supplier<@Nullable SideUiCoordinator> sideUiCoordinatorSupplier) {
+                View view, Supplier<@Nullable SideUiStateProvider> sideUiStateProviderSupplier) {
             super(view);
-            mSideUiCoordinatorSupplier = sideUiCoordinatorSupplier;
+            mSideUiStateProviderSupplier = sideUiStateProviderSupplier;
         }
 
         @Override
@@ -551,9 +552,9 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
         public void onStartedHiding(@LayoutType int layoutType) {
             if (layoutType == LayoutType.HUB) {
                 mIsInHub = false;
-                var sideUiCoordinator = mSideUiCoordinatorSupplier.get();
-                if (sideUiCoordinator != null) {
-                    updateMarginsForSideUi(sideUiCoordinator.getCurrentSideUiSpecs());
+                var sideUiStateProvider = mSideUiStateProviderSupplier.get();
+                if (sideUiStateProvider != null) {
+                    updateMarginsForSideUi(sideUiStateProvider.getCurrentSideUiSpecs());
                 }
             }
         }
@@ -1998,6 +1999,38 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
         return mGlicPromoCoordinator != null;
     }
 
+    private void setArcToolbarSuppressed(boolean suppressed) {
+        if (mToolbarManager == null || mArcToolbarSuppressed == suppressed) return;
+        View toolbarView = mActivity.findViewById(R.id.toolbar);
+        if (toolbarView == null) return;
+        View toolbarHairline = mActivity.findViewById(R.id.toolbar_hairline);
+
+        var toolbarCoordinator = mToolbarManager.getTopToolbarCoordinator();
+        if (suppressed) {
+            mArcToolbarOriginalVisibility = toolbarView.getVisibility();
+            if (toolbarHairline != null) {
+                mArcToolbarHairlineOriginalVisibility = toolbarHairline.getVisibility();
+                toolbarHairline.setVisibility(View.GONE);
+            }
+            toolbarView.clearFocus();
+            toolbarView.setVisibility(View.GONE);
+            // Removing the layer is what removes its BrowserControls height; GONE alone would
+            // leave the stacker's layout contract stale. The hairline is a separate View and is
+            // hidden explicitly so no residual horizontal Chrome divider survives in ARC.
+            mTopControlsStacker.removeControl(toolbarCoordinator);
+        } else {
+            // Restore the stack layer before exposing the View so browser-control geometry is
+            // authoritative as soon as the toolbar can receive focus/input again.
+            mTopControlsStacker.addControl(toolbarCoordinator);
+            toolbarView.setVisibility(mArcToolbarOriginalVisibility);
+            if (toolbarHairline != null) {
+                toolbarHairline.setVisibility(mArcToolbarHairlineOriginalVisibility);
+            }
+        }
+        mArcToolbarSuppressed = suppressed;
+        mTopControlsStacker.requestLayerUpdateSync(/* requireAnimate= */ false);
+    }
+
     private void updateTopControlsHeight() {
         updateTopControlsHeight(/* allowAnimations= */ true);
     }
@@ -2494,33 +2527,37 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
         }
 
         if (VerticalTabUtils.isVerticalTabsEligible(mActivity)) {
+            if (mToolbarManager == null) {
+                throw new IllegalStateException(
+                        "Arc requires ToolbarManager before composing desktop browser chrome");
+            }
+            VerticalTabListCoordinator verticalTabListCoordinator =
+                    new VerticalTabListCoordinator(
+                            mActivity,
+                            assumeNonNull(mTabModelSelectorSupplier.get()),
+                            assumeNonNull(mProfileSupplier.get()),
+                            mVerticalTabsActionDelegate,
+                            mWindowAndroid,
+                            mActivityResultTracker,
+                            assumeNonNull(mMultiInstanceManager),
+                            assumeNonNull(mSnackbarManagerSupplier.get()),
+                            getDesktopWindowStateManager(),
+                            mShareDelegateSupplier,
+                            mDataSharingTabManager,
+                            mIsVerticalTabsActiveSupplier,
+                            mVerticalTabsWidthSupplier,
+                            canActivateTabLayoutToggleMenu(),
+                            mActivity.findViewById(R.id.vertical_tab_hover_card_holder_stub),
+                            mActivity.findViewById(R.id.vertical_tab_group_hover_card_holder_stub),
+                            mTabContentManagerSupplier,
+                            mUndoGroupSnackbarController,
+                            mBrowserControlsManager,
+                            mBackPressManager);
             mVerticalTabsSideUiCoordinator =
                     new VerticalTabsSideUiCoordinator(
                             mActivity,
                             mSideUiCoordinator,
-                            new VerticalTabListCoordinator(
-                                    mActivity,
-                                    assumeNonNull(mTabModelSelectorSupplier.get()),
-                                    assumeNonNull(mProfileSupplier.get()),
-                                    mVerticalTabsActionDelegate,
-                                    mWindowAndroid,
-                                    mActivityResultTracker,
-                                    assumeNonNull(mMultiInstanceManager),
-                                    assumeNonNull(mSnackbarManagerSupplier.get()),
-                                    getDesktopWindowStateManager(),
-                                    mShareDelegateSupplier,
-                                    mDataSharingTabManager,
-                                    mIsVerticalTabsActiveSupplier,
-                                    mVerticalTabsWidthSupplier,
-                                    canActivateTabLayoutToggleMenu(),
-                                    mActivity.findViewById(
-                                            R.id.vertical_tab_hover_card_holder_stub),
-                                    mActivity.findViewById(
-                                            R.id.vertical_tab_group_hover_card_holder_stub),
-                                    mTabContentManagerSupplier,
-                                    mUndoGroupSnackbarController,
-                                    mBrowserControlsManager,
-                                    mBackPressManager),
+                            verticalTabListCoordinator,
                             mIsVerticalTabsActiveSupplier);
             mArcDesktopCoordinator = new ArcDesktopCoordinator(
                     mActivity, (ViewGroup) mVerticalTabsSideUiCoordinator.getView(),
@@ -2530,12 +2567,6 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
                                 mTabModelSelectorSupplier.asNonNull().get().isIncognitoSelected());
                         if (creator != null) creator.createNewTab(new LoadUrlParams(url),
                                 TabLaunchType.FROM_CHROME_UI, mActivityTabProvider.get());
-                    },
-                    () -> {
-                        if (mToolbarManager != null) {
-                            mToolbarManager.beginFuseboxInput(
-                                    new AutocompleteInput(OmniboxFocusReason.OMNIBOX_TAP));
-                        }
                     },
                     () -> mBookmarkManagerOpenerSupplier.asNonNull().get().showBookmarkManager(
                             mActivity, mActivityTabProvider.get(), currentlySelectedProfile),
@@ -2550,6 +2581,17 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
                     },
                     ArchiumPasswordManagerBridge.isLocalEnabled(),
                     mIncognitoStateProvider,
+                    verticalTabListCoordinator,
+                    mCompositorViewHolderSupplier.asNonNull().get(),
+                    () -> {
+                        var sideUiStateProvider = mSideUiStateProviderSupplier.get();
+                        if (sideUiStateProvider == null) return 0;
+                        var specs = sideUiStateProvider.getCurrentSideUiSpecs();
+                        return specs == null
+                                ? 0
+                                : specs.getReservedWidth(SideUiCoordinator.AnchorSide.LEFT);
+                    },
+                    this::setArcToolbarSuppressed,
                     () -> mTabModelSelectorSupplier.asNonNull().get().getCurrentModel(),
                     () -> mTabCreatorManagerSupplier.asNonNull().get().getTabCreator(
                             mTabModelSelectorSupplier.asNonNull().get().isIncognitoSelected()),
@@ -3482,8 +3524,12 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
      * activated.
      */
     public BooleanSupplier canActivateTabLayoutToggleMenu() {
+        // In Archium, eligibility means the Arc shell is active. The vertical rail is structural
+        // browser chrome in that shell, so exposing the horizontal/vertical toggle could leave the
+        // toolbar-suppressed Arc window without its navigation surface.
         return () ->
-                mVerticalTabsSideUiCoordinator != null
+                !VerticalTabUtils.isVerticalTabsEligible(mActivity)
+                        && mVerticalTabsSideUiCoordinator != null
                         && mVerticalTabsSideUiCoordinator.canActivateTabLayoutToggleMenu()
                         && !VerticalTabUtils.isTabLayoutSwitchingInProgress();
     }

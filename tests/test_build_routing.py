@@ -1,5 +1,6 @@
 """Run the build orchestrator against disposable command fakes, inspecting actual routing."""
 import json
+import importlib.util
 import os
 from pathlib import Path
 import shutil
@@ -33,16 +34,24 @@ args=sys.argv[1:]
 with open(os.environ['MOCK_TRACE'],'a') as f:f.write(json.dumps([name]+args)+'\\n')
 if name=='df':print('Available\\n150000000000')
 elif name=='python3' and args[0].endswith('archium-checkpoint.py') and args[1]=='restore':
- w=pathlib.Path(args[2]);s=w/'checkout/src';s.mkdir(parents=True)
- (s/'out/Archium/apks').mkdir(parents=True)
+ w=pathlib.Path(args[2]);s=w/'checkout/src';s.mkdir(parents=True,exist_ok=True)
+ (s/'out/Archium/apks').mkdir(parents=True,exist_ok=True)
  (s/'out/Archium/args.gn').write_text(os.environ.get('MOCK_RESTORED_ARGS','restored old args\\n'))
  (s/'out/Archium/apks/ChromePublic.apk').write_bytes(b'synthetic APK fixture')
  for relative in os.environ.get('MOCK_NATIVE_TEST_PATHS','').split(':'):
   if relative:
    binary=s/relative;binary.parent.mkdir(parents=True,exist_ok=True);binary.write_bytes(b'synthetic native test artifact')
  (s/'LICENSE').write_text('fixture license')
- (s/'build').mkdir();(s/'build/install-build-deps.sh').write_text('exit 0\\n')
- (w/'depot_tools').mkdir();(w/'depot_tools/ensure_bootstrap').write_text('exit 0\\n')
+ (s/'build').mkdir(exist_ok=True);(s/'build/install-build-deps.sh').write_text('exit 0\\n')
+ (s/'build/config/android').mkdir(parents=True,exist_ok=True)
+ (s/'build/config/android/config.gni').write_text('  public_android_sdk_platform_version = \"37.0\"\\n  public_android_sdk_build_tools_version = \"37.0.0\"\\n')
+ android_jar=s/'third_party/android_sdk/public/platforms/android-37.0/android.jar'
+ android_jar.parent.mkdir(parents=True,exist_ok=True);android_jar.write_bytes(b'synthetic android jar fixture')
+ (w/'depot_tools').mkdir(exist_ok=True);(w/'depot_tools/ensure_bootstrap').write_text('exit 0\\n')
+elif name=='python3' and args and args[0].endswith('archium-test-gates.py') and len(args)>1 and args[1]=='host':
+ sys.exit(int(os.environ.get('MOCK_HOST_GATE_RESULT','0')))
+elif name=='python3' and args and args[0].endswith('archium-test-gates.py') and len(args)>1 and args[1]=='verify-device-runners':
+ sys.exit(int(os.environ.get('MOCK_DEVICE_RUNNER_VERIFY_RESULT','0')))
 elif name=='timeout':
  i=0
  while args[i].startswith('--'):i+=1
@@ -59,7 +68,8 @@ elif name=='autoninja':sys.exit(int(os.environ.get('MOCK_NINJA_RESULT','0')))
                     'GITHUB_WORKSPACE': str(self.repo), 'GITHUB_OUTPUT': str(self.output),
                     'ARCHIUM_CHECKPOINT_TAG': 'archium-checkpoint-456-2'}
         for name in ['ARCHIUM_SOURCE_TAG', 'ARCHIUM_SOURCE_COMMIT', 'ARCHIUM_PREVIOUS_TAG',
-                     'ARCHIUM_VALIDATE_TARGETS']:
+                     'ARCHIUM_VALIDATE_TARGETS', 'ARCHIUM_COMPILE_GATE_TARGETS',
+                     'ARCHIUM_RUN_HOST_GATES']:
             self.env.pop(name, None)
 
     def run_build(self, **env):
@@ -124,6 +134,59 @@ elif name=='autoninja':sys.exit(int(os.environ.get('MOCK_NINJA_RESULT','0')))
         self.assertEqual(self.output.read_text(),'')
         self.assertFalse(any('pack' in c for c in self.calls()))
 
+    def test_host_execution_gate_runs_after_compile_gate_and_before_apk(self):
+        result=self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
+                              ARCHIUM_COMPILE_GATE_TARGETS='archium_key_provider_tests archium_key_java',
+                              ARCHIUM_RUN_HOST_GATES='true')
+        self.assertEqual(result.returncode,0,result.stderr)
+        calls=self.calls()
+        ninja_indices=[i for i,c in enumerate(calls) if c[0]=='autoninja']
+        self.assertEqual(len(ninja_indices),2,calls)
+        host_index=next(i for i,c in enumerate(calls)
+                        if c[0]=='python3' and c[1].endswith('archium-test-gates.py') and c[2]=='host')
+        self.assertLess(ninja_indices[0],host_index)
+        self.assertLess(host_index,ninja_indices[1])
+        self.assertIn('archium_key_provider_tests',calls[ninja_indices[0]])
+        self.assertIn('chrome_public_apk',calls[ninja_indices[1]])
+
+    def test_host_execution_gate_failure_blocks_apk(self):
+        result=self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
+                              ARCHIUM_COMPILE_GATE_TARGETS='archium_key_provider_tests',
+                              ARCHIUM_RUN_HOST_GATES='true',
+                              MOCK_HOST_GATE_RESULT='7')
+        self.assertEqual(result.returncode,7,result.stderr)
+        calls=self.calls()
+        ninja=[c for c in calls if c[0]=='autoninja']
+        self.assertEqual(len(ninja),1,calls)
+        self.assertIn('archium_key_provider_tests',ninja[0])
+        self.assertNotIn('chrome_public_apk',ninja[0])
+        self.assertEqual(self.output.read_text(),'')
+
+    def test_host_execution_gate_is_mandatory_and_cannot_be_disabled(self):
+        result=self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
+                              ARCHIUM_COMPILE_GATE_TARGETS='archium_key_provider_tests',
+                              ARCHIUM_RUN_HOST_GATES='false')
+        self.assertEqual(result.returncode,2,result.stderr)
+        ninja=[c for c in self.calls() if c[0]=='autoninja']
+        self.assertEqual(len(ninja),1,self.calls())
+        self.assertIn('archium_key_provider_tests',ninja[0])
+        self.assertNotIn('chrome_public_apk',ninja[0])
+        self.assertEqual(self.output.read_text(),'')
+
+        if self.trace.exists(): self.trace.unlink()
+        self.output.write_text('')
+        result=self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
+                              ARCHIUM_COMPILE_GATE_TARGETS='archium_key_provider_tests')
+        self.assertEqual(result.returncode,0,result.stderr)
+        calls=self.calls()
+        host=next(c for c in calls if c[0]=='python3' and c[1].endswith('archium-test-gates.py') and c[2]=='host')
+        self.assertEqual(host[2],'host')
+        self.assertIn('--out',host)
+        script=(ROOT / 'scripts/build-archium.sh').read_text()
+        self.assertIn('public_android_sdk_platform_version',script)
+        self.assertIn('third_party/android_sdk/public/platforms/android-${android_sdk_version}/android.jar',script)
+        self.assertNotIn('${ANDROID_HOME:-/opt/android-sdk}/platforms/android-36/android.jar',script)
+
     def test_slice_timeout_publishes_current_checkpoint_without_completion_claim(self):
         result=self.run_build(ARCHIUM_SOURCE_TAG=SOURCE_TAG, ARCHIUM_SOURCE_COMMIT=SOURCE_COMMIT,
                               MOCK_NINJA_RESULT='124')
@@ -132,20 +195,106 @@ elif name=='autoninja':sys.exit(int(os.environ.get('MOCK_NINJA_RESULT','0')))
         self.assertNotIn('--source-commit',pack)
         self.assertEqual(self.output.read_text(),'complete=false\n')
 
-    def test_all_native_test_executables_are_kept_in_artifact(self):
-        binaries = [
-            'out/Archium/obj/chrome/browser/password_manager/android/archium_key_provider_tests/archium_key_provider_tests',
-            'out/Archium/obj/components/password_manager/core/browser/password_store/archium_login_database_tests/archium_login_database_tests',
-            'out/Archium/obj/components/password_manager/core/browser/import/archium_password_import_tests/archium_password_import_tests',
-            'out/Archium/obj/chrome/browser/password_manager/android/archium_password_manager_tests/archium_password_manager_tests',
-        ]
-        result = self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
-                                MOCK_NATIVE_TEST_PATHS=':'.join(binaries))
-        self.assertEqual(result.returncode, 0, result.stderr)
-        for path in binaries:
-            kept = self.repo / 'archium-output/native-tests' / Path(path).name
-            self.assertTrue(kept.is_file(), str(kept))
-            self.assertEqual(kept.read_bytes(), b'synthetic native test artifact')
+    def test_missing_device_runner_blocks_apk(self):
+        result=self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
+                              ARCHIUM_COMPILE_GATE_TARGETS='archium_key_provider_tests',
+                              MOCK_DEVICE_RUNNER_VERIFY_RESULT='9')
+        self.assertEqual(result.returncode,9,result.stderr)
+        calls=self.calls()
+        self.assertTrue(any(c[0]=='autoninja' and 'archium_key_provider_tests' in c for c in calls))
+        self.assertFalse(any(c[0]=='autoninja' and 'chrome_public_apk' in c for c in calls))
+        self.assertEqual(self.output.read_text(),'')
+
+    def test_native_gate_outputs_are_resolved_before_apk_compile(self):
+        result=self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
+                              ARCHIUM_COMPILE_GATE_TARGETS='archium_key_provider_tests')
+        self.assertEqual(result.returncode,0,result.stderr)
+        calls=self.calls()
+        collect_index=next(i for i,c in enumerate(calls)
+                           if c[0]=='python3' and c[1].endswith('archium-test-gates.py') and c[2]=='verify-device-runners')
+        apk_index=next(i for i,c in enumerate(calls)
+                       if c[0]=='autoninja' and 'chrome_public_apk' in c)
+        self.assertLess(collect_index,apk_index)
+
+    def test_build_script_does_not_assume_native_test_object_paths(self):
+        script=(ROOT / 'scripts/build-archium.sh').read_text()
+        self.assertNotIn('obj/chrome/browser/password_manager/android/archium_key_provider_tests', script)
+        self.assertNotIn('obj/components/password_manager/core/browser/password_store/archium_login_database_tests', script)
+
+
+    def test_host_gate_requires_explicit_pinned_android_jar(self):
+        gate = (ROOT / 'scripts/archium-test-gates.py').read_text()
+        build = (ROOT / 'scripts/build-archium.sh').read_text()
+        self.assertIn("host.add_argument('--android-jar', type=Path, required=True)", gate)
+        self.assertNotIn('DEFAULT_ANDROID_JAR', gate)
+        self.assertIn("--android-jar", build)
+        self.assertIn('public_android_sdk_platform_version', build)
+
+    def test_android_device_gate_uses_pinned_chromium_sdk_not_hardcoded_runner_sdk(self):
+        gate = (ROOT / 'scripts/archium-test-gates.py').read_text()
+        key = (ROOT / 'scripts/test-android-password-key.py').read_text()
+        window = (ROOT / 'scripts/test-android-window-policy.py').read_text()
+        self.assertIn('public_android_sdk_platform_version', gate)
+        self.assertIn('public_android_sdk_build_tools_version', gate)
+        self.assertIn("third_party' / 'android_sdk' / 'public", gate)
+        self.assertIn("platform_dir_name = platform_version", gate)
+        self.assertNotIn("platform_version.split('.', 1)[0]", gate)
+        for source in (gate, key, window):
+            self.assertNotIn('/opt/android-sdk', source)
+            self.assertNotIn('android-36/android.jar', source)
+            self.assertNotIn('build-tools/36.0.0', source)
+        self.assertIn("--platform-version", gate)
+        self.assertIn("--build-tools-version", gate)
+
+    def test_pinned_sdk_resolver_preserves_full_chromium_platform_version(self):
+        spec = importlib.util.spec_from_file_location(
+            'archium_test_gates', ROOT / 'scripts/archium-test-gates.py')
+        gates = importlib.util.module_from_spec(spec)
+        assert spec.loader is not None
+        spec.loader.exec_module(gates)
+        checkout = self.root / 'sdk-checkout'
+        out_dir = checkout / 'out' / 'Archium'
+        out_dir.mkdir(parents=True)
+        config = checkout / 'build/config/android/config.gni'
+        config.parent.mkdir(parents=True)
+        config.write_text(
+            'public_android_sdk_platform_version = "37.0"\n'
+            'public_android_sdk_build_tools_version = "37.0.0"\n')
+        sdk = checkout / 'third_party/android_sdk/public'
+        android_jar = sdk / 'platforms/android-37.0/android.jar'
+        android_jar.parent.mkdir(parents=True)
+        android_jar.write_bytes(b'fixture')
+        tools = sdk / 'build-tools/37.0.0'
+        tools.mkdir(parents=True)
+        for tool in ('aapt2', 'd8', 'apksigner'):
+            (tools / tool).write_bytes(b'fixture')
+        sdk_root, platform, build_tools, resolved_jar = gates.resolve_pinned_android_sdk(out_dir)
+        self.assertEqual(sdk_root, sdk)
+        self.assertEqual(platform, '37.0')
+        self.assertEqual(build_tools, '37.0.0')
+        self.assertEqual(resolved_jar, android_jar)
+
+    def test_gate_orchestrator_separates_host_device_and_post_build_execution(self):
+        gates=(ROOT / 'scripts/archium-test-gates.py').read_text()
+        for label in (
+                '//chrome/browser/password_manager/android:archium_key_provider_tests',
+                '//components/password_manager/core/browser/password_store:archium_login_database_tests',
+                '//components/password_manager/core/browser/import:archium_password_import_tests',
+                '//chrome/browser/password_manager/android:archium_password_manager_tests'):
+            self.assertIn(label,gates)
+        self.assertIn("f'run_{target_name}'",gates)
+        self.assertIn('verify_device_runners',gates)
+        self.assertIn("'adb', '-s', serial",gates)
+        self.assertIn("'--device', serial",gates)
+        self.assertIn("'-f', 'Archium*'",gates)
+        self.assertIn("sub.add_parser('post-build')",gates)
+        self.assertIn("'android.intent.action.MAIN'",gates)
+        self.assertIn("'android.intent.category.LAUNCHER'",gates)
+        self.assertIn("'-p', package",gates)
+        self.assertIn('run_chrome_junit_tests',gates)
+        self.assertIn('VerticalTabListCoordinatorUnitTest.*',gates)
+        self.assertNotIn('run_chrome_junit_tests_org.chromium.chrome.browser.tasks',gates)
+        self.assertNotIn('out/Archium/obj/chrome/browser/password_manager/android',gates)
 
     def test_workflow_exposes_source_identity_only_to_first_stage(self):
         workflow=(ROOT / '.github/workflows/baseline-build.yml').read_text()
@@ -156,7 +305,13 @@ elif name=='autoninja':sys.exit(int(os.environ.get('MOCK_NINJA_RESULT','0')))
         self.assertNotIn('inputs.source_commit',continuation)
         stage=(ROOT / '.github/workflows/archium-stage.yml').read_text()
         self.assertIn('ARCHIUM_SOURCE_COMMIT:',stage)
-        self.assertIn('ARCHIUM_VALIDATE_TARGETS:',stage)
+        self.assertIn('ARCHIUM_COMPILE_GATE_TARGETS:',stage)
+        self.assertIn('ARCHIUM_RUN_HOST_GATES:',stage)
+        self.assertIn('chrome_junit_tests',stage)
+        self.assertNotIn('chrome_junit_tests_org.chromium.chrome.browser.tasks',stage)
+        self.assertNotIn('validate_native:',stage)
+        baseline=(ROOT / '.github/workflows/baseline-build.yml').read_text()
+        self.assertNotIn('validate_native:',baseline)
 
 
 if __name__=='__main__':unittest.main()

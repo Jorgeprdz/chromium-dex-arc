@@ -204,9 +204,7 @@ ArchiumImportSnapshotResult LoginDatabaseAsyncHelper::GetImportSnapshot() {
   return login_db_->GetImportSnapshot();
 }
 
-base::expected<std::optional<PasswordStoreChangeList>,
-               PasswordStoreBackendError>
-LoginDatabaseAsyncHelper::ImportLoginsAtomically(
+ArchiumImportChangesResult LoginDatabaseAsyncHelper::ImportLoginsAtomically(
     std::vector<StoredCredential> credentials,
     std::optional<ArchiumPasswordImportRevision> expected_revision) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
@@ -214,8 +212,7 @@ LoginDatabaseAsyncHelper::ImportLoginsAtomically(
   // commit credentials separately from account Sync metadata.
   if (!login_db_ || login_db_->is_account_store() || password_sync_bridge_ ||
       !is_encryption_available_) {
-    return base::unexpected(PasswordStoreBackendError(
-        PasswordStoreBackendErrorType::kUncategorized));
+    return base::unexpected(ArchiumImportFailure::kUnavailable);
   }
   auto result = login_db_->ApplyImportedLogins(credentials, expected_revision);
   if (!result.has_value()) {

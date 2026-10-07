@@ -139,7 +139,7 @@ class PasswordStoreBackend {
   // The default rejects without changing any row or notifying observers.
   virtual void ImportLoginsAtomicallyAsync(
       std::vector<StoredCredential> credentials,
-      PasswordChangesOrErrorReply callback,
+      ArchiumImportChangesReply callback,
       std::optional<ArchiumPasswordImportRevision> expected_revision =
           std::nullopt);
   virtual void UpdateLoginAsync(StoredCredential cred,

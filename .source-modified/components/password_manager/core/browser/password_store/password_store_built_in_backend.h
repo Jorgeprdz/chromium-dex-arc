@@ -97,7 +97,7 @@ class PasswordStoreBuiltInBackend : public PasswordStoreBackend,
   void GetImportSnapshotAsync(ArchiumImportSnapshotReply callback) override;
   void ImportLoginsAtomicallyAsync(
       std::vector<StoredCredential> credentials,
-      PasswordChangesOrErrorReply callback,
+      ArchiumImportChangesReply callback,
       std::optional<ArchiumPasswordImportRevision> expected_revision =
           std::nullopt) override;
   void UpdateLoginAsync(StoredCredential cred,

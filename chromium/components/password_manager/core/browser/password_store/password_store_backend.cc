@@ -16,10 +16,9 @@ void PasswordStoreBackend::GetImportSnapshotAsync(
 
 void PasswordStoreBackend::ImportLoginsAtomicallyAsync(
     std::vector<StoredCredential> credentials,
-    PasswordChangesOrErrorReply callback,
+    ArchiumImportChangesReply callback,
     std::optional<ArchiumPasswordImportRevision> expected_revision) {
-  std::move(callback).Run(base::unexpected(PasswordStoreBackendError(
-      PasswordStoreBackendErrorType::kUncategorized)));
+  std::move(callback).Run(base::unexpected(ArchiumImportFailure::kUnavailable));
 }
 
 }  // namespace password_manager

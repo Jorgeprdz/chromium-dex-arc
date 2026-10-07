@@ -4,7 +4,6 @@
 
 package org.chromium.chrome.browser.password_manager;
 
-import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.Writer;
@@ -43,16 +42,34 @@ public final class ArchiumPasswordCsv {
         }
     }
 
-    /** Contains secrets for a user-authorized preview/commit/export; never pass rows to logging. */
-    public static final class Row {
+    /** An owned, explicitly closable import secret. Do not retain rows in UI state. */
+    public static final class Row implements AutoCloseable {
         public final String url;
         public final String username;
-        public final String password;
+        private final char[] mPassword;
+        private boolean mClosed;
 
+        // Compatibility for synthetic test fixtures only. The caller-supplied
+        // String cannot be wiped by Java; the CSV parser never uses this path.
         public Row(String url, String username, String password) {
+            this(url, username, Objects.requireNonNull(password).toCharArray());
+        }
+
+        public Row(String url, String username, char[] password) {
             this.url = Objects.requireNonNull(url);
             this.username = Objects.requireNonNull(username);
-            this.password = Objects.requireNonNull(password);
+            this.mPassword = Objects.requireNonNull(password).clone();
+        }
+
+        /** Caller owns and must erase the returned temporary copy. */
+        public synchronized char[] copyPassword() {
+            if (mClosed) throw new IllegalStateException("Import secret no longer available");
+            return mPassword.clone();
+        }
+
+        @Override public synchronized void close() {
+            Arrays.fill(mPassword, '\0');
+            mClosed = true;
         }
 
         @Override
@@ -61,12 +78,12 @@ public final class ArchiumPasswordCsv {
             Row row = (Row) other;
             return url.equals(row.url)
                     && username.equals(row.username)
-                    && password.equals(row.password);
+                    && Arrays.equals(mPassword, row.mPassword);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(url, username, password);
+            return 31 * Objects.hash(url, username) + Arrays.hashCode(mPassword);
         }
 
         @Override
@@ -93,7 +110,7 @@ public final class ArchiumPasswordCsv {
         }
     }
 
-    public static final class ParseResult {
+    public static final class ParseResult implements AutoCloseable {
         public final List<Row> rows;
         public final List<LineError> errors;
         public final int duplicateCount;
@@ -103,15 +120,99 @@ public final class ArchiumPasswordCsv {
             this.errors = Collections.unmodifiableList(new ArrayList<>(errors));
             this.duplicateCount = duplicateCount;
         }
+
+        @Override public void close() {
+            for (Row row : rows) row.close();
+        }
     }
 
-    private static final class Record {
+    private static final class Record implements AutoCloseable {
         final List<String> fields;
         final int line;
+        final char[] secret;
 
-        Record(List<String> fields, int line) {
+        Record(List<String> fields, int line, char[] secret) {
             this.fields = fields;
             this.line = line;
+            this.secret = secret;
+        }
+
+        @Override public void close() { Arrays.fill(secret, '\0'); }
+    }
+
+    /** Resizable buffer with explicit scrubbing of old backing arrays on growth. */
+    private static final class SecretBuffer {
+        private char[] data = new char[64];
+        private int length;
+
+        void append(int c) {
+            if (length == data.length) {
+                char[] old = data;
+                data = Arrays.copyOf(data, Math.min(MAX_FIELD_CHARS, data.length * 2));
+                Arrays.fill(old, '\0');
+            }
+            data[length++] = (char) c;
+        }
+
+        char[] take() {
+            char[] value = Arrays.copyOf(data, length);
+            erase();
+            return value;
+        }
+
+        void erase() {
+            Arrays.fill(data, '\0');
+            length = 0;
+        }
+    }
+
+    private static final class RecordBuilder {
+        final List<String> fields = new ArrayList<>();
+        final StringBuilder text = new StringBuilder();
+        final SecretBuffer secretBuffer = new SecretBuffer();
+        final int secretColumn;
+        char[] password = new char[0];
+
+        RecordBuilder(int secretColumn) { this.secretColumn = secretColumn; }
+
+        void append(int c, int line) throws IOException {
+            if ((fields.size() == secretColumn ? secretLength : text.length()) == MAX_FIELD_CHARS) {
+                throw new IOException("CSV field is too large at line " + line);
+            }
+            if (fields.size() == secretColumn) {
+                secretBuffer.append(c);
+                secretLength++;
+            } else {
+                text.append((char) c);
+            }
+        }
+
+        private int secretLength;
+
+        void addField(int line) throws IOException {
+            if (fields.size() == MAX_COLUMNS) {
+                throw new IOException("Too many CSV columns at line " + line);
+            }
+            if (fields.size() == secretColumn) {
+                password = secretBuffer.take();
+                fields.add(""); // Do not construct an immutable password String.
+                secretLength = 0;
+            } else {
+                fields.add(text.toString());
+            }
+            text.setLength(0);
+        }
+
+        Record finish(int line) throws IOException {
+            addField(line);
+            char[] owned = password;
+            password = new char[0];
+            return new Record(fields, line, owned);
+        }
+
+        void erase() {
+            secretBuffer.erase();
+            Arrays.fill(password, '\0');
         }
     }
 
@@ -122,6 +223,13 @@ public final class ArchiumPasswordCsv {
         private static final int AFTER_QUOTE = 3;
 
         private final Reader input;
+        // Own and scrub the buffering layer instead of retaining an opaque
+        // BufferedReader with an inaccessible plaintext backing array.
+        // The caller's Reader/decoder and pre-existing String input are outside
+        // this class's erasure guarantees.
+        private final char[] readBuffer = new char[8192];
+        private int buffered;
+        private int nextRead;
         private int line = 1;
         private boolean firstCharacter = true;
         private boolean previousWasCr;
@@ -129,11 +237,30 @@ public final class ArchiumPasswordCsv {
         private int characters;
 
         CsvReader(Reader input) {
-            this.input = new BufferedReader(input);
+            this.input = input;
+        }
+
+        void erase() {
+            Arrays.fill(readBuffer, '\0');
+            buffered = 0;
+            nextRead = 0;
         }
 
         private int readRaw() throws IOException {
-            int c = input.read();
+            int c;
+            if (nextRead == buffered) {
+                if (Thread.currentThread().isInterrupted()) {
+                    throw new IOException("CSV read cancelled");
+                }
+                // Clear the previous chunk before reuse; the final chunk is
+                // always cleared by parse()'s finally block, including errors.
+                erase();
+                buffered = input.read(readBuffer, 0, readBuffer.length);
+                if (buffered < 0) return -1;
+                c = buffered == 0 ? input.read() : readBuffer[nextRead++];
+            } else {
+                c = readBuffer[nextRead++];
+            }
             if (c != -1 && ++characters > MAX_INPUT_CHARS) {
                 throw new IOException("CSV input is too large");
             }
@@ -151,28 +278,13 @@ public final class ArchiumPasswordCsv {
             return c;
         }
 
-        private void append(StringBuilder field, int c, int recordLine) throws IOException {
-            if (field.length() == MAX_FIELD_CHARS) {
-                throw new IOException("CSV field is too large at line " + recordLine);
-            }
-            field.append((char) c);
-        }
-
-        private void addField(List<String> fields, StringBuilder field, int recordLine)
-                throws IOException {
-            if (fields.size() == MAX_COLUMNS) {
-                throw new IOException("Too many CSV columns at line " + recordLine);
-            }
-            fields.add(field.toString());
-        }
-
-        Record next() throws IOException {
+        Record next(int secretColumn) throws IOException {
             int startLine = line;
-            List<String> fields = new ArrayList<>();
-            StringBuilder field = new StringBuilder();
+            RecordBuilder builder = new RecordBuilder(secretColumn);
             int state = START;
             boolean anyCharacter = false;
-            while (true) {
+            try {
+              while (true) {
                 int c = read();
                 if (skipLf) {
                     skipLf = false;
@@ -186,27 +298,27 @@ public final class ArchiumPasswordCsv {
                         throw new IOException("Unclosed CSV quote at line " + startLine);
                     }
                     if (!anyCharacter) return null;
-                    addField(fields, field, startLine);
-                    return new Record(fields, startLine);
+                    return builder.finish(startLine);
                 }
                 anyCharacter = true;
                 if (state == QUOTED) {
                     if (c == '"') state = AFTER_QUOTE;
-                    else append(field, c, startLine);
+                    else builder.append(c, startLine);
                     continue;
                 }
                 if (state == AFTER_QUOTE && c == '"') {
-                    append(field, c, startLine);
+                    builder.append(c, startLine);
                     state = QUOTED;
                     continue;
                 }
                 if (c == ',' || c == '\r' || c == '\n') {
-                    addField(fields, field, startLine);
+                    builder.addField(startLine);
                     if (c != ',') {
                         skipLf = c == '\r';
-                        return new Record(fields, startLine);
+                        char[] owned = builder.password;
+                        builder.password = new char[0];
+                        return new Record(builder.fields, startLine, owned);
                     }
-                    field.setLength(0);
                     state = START;
                     continue;
                 }
@@ -216,9 +328,13 @@ public final class ArchiumPasswordCsv {
                 if (state == START && c == '"') {
                     state = QUOTED;
                 } else {
-                    append(field, c, startLine);
+                    builder.append(c, startLine);
                     state = UNQUOTED;
                 }
+              }
+            } catch (IOException | RuntimeException exception) {
+                builder.erase();
+                throw exception;
             }
         }
     }
@@ -227,9 +343,10 @@ public final class ArchiumPasswordCsv {
     public static ParseResult parse(Reader input) throws IOException {
         Objects.requireNonNull(input);
         CsvReader reader = new CsvReader(input);
+        try {
         List<Row> rows = new ArrayList<>();
         List<LineError> errors = new ArrayList<>();
-        Record header = reader.next();
+        Record header = reader.next(-1);
         if (header == null) {
             errors.add(new LineError(1, ErrorCode.MISSING_REQUIRED_HEADERS));
             return new ParseResult(rows, errors, 0);
@@ -261,7 +378,9 @@ public final class ArchiumPasswordCsv {
         Set<Row> identicalRows = new HashSet<>();
         int duplicates = 0;
         int recordCount = 0;
-        for (Record record; (record = reader.next()) != null; ) {
+        try {
+          for (Record record; (record = reader.next(password)) != null; ) {
+            try {
             if (++recordCount > MAX_RECORDS) {
                 throw new IOException("Too many CSV records");
             }
@@ -275,11 +394,19 @@ public final class ArchiumPasswordCsv {
                 continue;
             }
             Row row = new Row(record.fields.get(url), record.fields.get(username),
-                    record.fields.get(password));
+                    record.secret);
             if (identicalRows.add(row)) rows.add(row);
-            else duplicates++;
+            else { duplicates++; row.close(); }
+            } finally { record.close(); }
+          }
+        } catch (IOException | RuntimeException failure) {
+            for (Row row : rows) row.close();
+            throw failure;
         }
         return new ParseResult(rows, errors, duplicates);
+        } finally {
+            reader.erase();
+        }
     }
 
     private static void writeField(Writer output, String value) throws IOException {
@@ -294,18 +421,35 @@ public final class ArchiumPasswordCsv {
         output.write('"');
     }
 
+    private static void writeField(Writer output, char[] value) throws IOException {
+        output.write('"');
+        for (char c : value) {
+            if (c == '"') output.write('"');
+            output.write(c);
+        }
+        output.write('"');
+    }
+
     /** Streams to the selected output. Ownership/flush/close remain with the SAF caller. */
     public static void write(Writer output, List<Row> rows) throws IOException {
         Objects.requireNonNull(output);
         Objects.requireNonNull(rows);
+        for (Row row : rows) {
+            synchronized (row) {
+                if (row.mClosed) throw new IOException("Import secret no longer available");
+            }
+        }
         output.write("url,username,password\r\n");
         for (Row row : rows) {
+          synchronized (row) {
+            if (row.mClosed) throw new IOException("Import secret no longer available");
             writeField(output, row.url);
             output.write(',');
             writeField(output, row.username);
             output.write(',');
-            writeField(output, row.password);
+            writeField(output, row.mPassword);
             output.write("\r\n");
+          }
         }
     }
 
@@ -318,8 +462,14 @@ public final class ArchiumPasswordCsv {
                 if (row.mClosed) throw new IOException("Export credentials no longer available");
             }
         }
+        if (Thread.currentThread().isInterrupted()) {
+            throw new IOException("CSV export cancelled");
+        }
         output.write("url,username,password\r\n");
         for (SecretRow row : rows) {
+            if (Thread.currentThread().isInterrupted()) {
+                throw new IOException("CSV export cancelled");
+            }
             // Closing cannot zero a password halfway through writing its field.
             synchronized (row) {
                 if (row.mClosed) throw new IOException("Export credentials no longer available");
@@ -328,7 +478,13 @@ public final class ArchiumPasswordCsv {
                 writeField(output, row.username);
                 output.write(',');
                 output.write('"');
-                for (char value : row.mPassword) {
+                for (int i = 0; i < row.mPassword.length; i++) {
+                    // A destroyed screen interrupts its export executor. Even
+                    // a long single password must respond to cancellation.
+                    if ((i & 2047) == 0 && Thread.currentThread().isInterrupted()) {
+                        throw new IOException("CSV export cancelled");
+                    }
+                    char value = row.mPassword[i];
                     if (value == '"') output.write('"');
                     output.write(value);
                 }

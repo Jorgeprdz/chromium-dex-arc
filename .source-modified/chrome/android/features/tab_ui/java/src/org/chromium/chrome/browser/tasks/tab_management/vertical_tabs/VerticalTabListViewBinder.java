@@ -131,11 +131,9 @@ public class VerticalTabListViewBinder {
         ViewCompat.setBackgroundTintList(incognitoButton, buttonBgTint);
     }
 
-    /** Reapply the saved Arc palette after an appearance change without mutating tab state. */
+    /** Reapply Arc or upstream palette after an appearance-mode change without mutating tab state. */
     public static void refreshArcAppearance(VerticalTabRailLayout view, boolean isIncognito) {
-        if (ArcDesktopAppearance.isDesktopWindow(view.getContext())) {
-            updateIncognitoColors(view, isIncognito);
-        }
+        updateIncognitoColors(view, isIncognito);
     }
 
     private static void updateIncognitoButton(@Nullable ImageButton button, boolean isIncognito) {

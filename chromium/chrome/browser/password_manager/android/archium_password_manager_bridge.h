@@ -7,6 +7,9 @@
 #include <jni.h>
 #include <cstdint>
 #include <memory>
+#include <limits>
+#include <map>
+#include <utility>
 
 #include "base/android/scoped_java_ref.h"
 #include "base/memory/raw_ptr.h"
@@ -18,8 +21,37 @@
 class Profile;
 namespace password_manager { class ArchiumLocalPasswordManager; }
 
+// Tested handle mapping used directly by JNI. Opaque IDs never contain a
+// native address and are never reused during the registry's lifetime.
+// Kept independent of Java so invalid/destroyed handle behavior is testable.
+template <typename T>
+class ArchiumNonReusingHandleMap {
+ public:
+  int64_t Insert(std::shared_ptr<T> object) {
+    if (!object || next_handle_ == std::numeric_limits<int64_t>::max())
+      return 0;
+    const int64_t handle = next_handle_++;
+    entries_.emplace(handle, std::move(object));
+    return handle;
+  }
+
+  std::shared_ptr<T> Acquire(int64_t handle) const {
+    if (handle <= 0) return {};
+    auto it = entries_.find(handle);
+    return it == entries_.end() ? std::shared_ptr<T>() : it->second;
+  }
+
+  void Remove(int64_t handle) { entries_.erase(handle); }
+
+ private:
+  int64_t next_handle_ = 1;
+  std::map<int64_t, std::shared_ptr<T>> entries_;
+};
+
 class ArchiumPasswordManagerBridge : public ProfileObserver {
  public:
+  // Shared by JNI entry and native tests. Never unwrap an OTR profile.
+  static bool CanManageProfile(Profile* profile);
   ArchiumPasswordManagerBridge(const base::android::JavaRef<jobject>& peer,
                                Profile* profile,
                                const base::android::JavaRef<jobject>& activity);
@@ -45,9 +77,12 @@ class ArchiumPasswordManagerBridge : public ProfileObserver {
   void ConfirmImport(JNIEnv* env, int32_t request,
                      const base::android::JavaRef<jintArray>& decisions);
   void CancelImport(JNIEnv* env);
-  void Destroy(JNIEnv* env);
+  // Called when the opaque Java handle is destroyed. Safe to call repeatedly.
+  void Close();
 
  private:
+  bool Operational() const;
+  bool closed_ = false;
   void OnProfileWillBeDestroyed(Profile* profile) override;
   base::android::ScopedJavaGlobalRef<jobject> peer_;
   raw_ptr<Profile> profile_;

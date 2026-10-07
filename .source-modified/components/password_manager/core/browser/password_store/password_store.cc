@@ -160,8 +160,7 @@ void PasswordStore::ImportLoginsAtomically(
     std::optional<ArchiumPasswordImportRevision> expected_revision) {
   DCHECK(main_task_runner_->RunsTasksInCurrentSequence());
   if (!backend_) {
-    std::move(completion).Run(base::unexpected(PasswordStoreBackendError(
-        PasswordStoreBackendErrorType::kUncategorized)));
+    std::move(completion).Run(base::unexpected(ArchiumImportFailure::kUnavailable));
     return;
   }
   if (post_init_callback_) {
@@ -181,8 +180,7 @@ void PasswordStore::ImportLoginsAtomically(
 
 void PasswordStore::OnImportedLogins(
     ImportCompletion completion,
-    base::expected<std::optional<PasswordStoreChangeList>,
-                   PasswordStoreBackendError> result) {
+    ArchiumImportChangesResult result) {
   DCHECK(main_task_runner_->RunsTasksInCurrentSequence());
   if (!result.has_value()) {
     std::move(completion).Run(base::unexpected(std::move(result).error()));
@@ -190,12 +188,18 @@ void PasswordStore::OnImportedLogins(
   }
   // A missing changelist cannot confirm a transaction committed.
   if (!result->has_value()) {
-    std::move(completion).Run(base::unexpected(PasswordStoreBackendError(
-        PasswordStoreBackendErrorType::kUncategorized)));
+    std::move(completion).Run(base::unexpected(ArchiumImportFailure::kWriteFailed));
     return;
   }
-  NotifyLoginsChangedOnMainSequence(LoginsChangedTrigger::Addition,
-                                    std::move(result));
+  // Do not emit a spurious password change notification for an authenticated
+  // no-op import. The backend has still validated the expected revision and
+  // successfully committed its zero-write transaction.
+  if (!result->value().empty()) {
+    NotifyLoginsChangedOnMainSequence(
+        LoginsChangedTrigger::Addition,
+        base::expected<std::optional<PasswordStoreChangeList>, PasswordStoreBackendError>(
+            std::move(result).value()));
+  }
   std::move(completion).Run(base::ok());
 }
 
