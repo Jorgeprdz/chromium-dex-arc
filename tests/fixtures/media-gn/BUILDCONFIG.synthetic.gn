@@ -1,0 +1,39 @@
+declare_args() {
+ is_chrome_branded = false
+ is_chrome_for_testing_branded = false
+ is_desktop_android = false
+ is_debug = false
+ is_official_build = false
+ is_component_build = false
+ symbol_level = 0
+ blink_symbol_level = 0
+ v8_symbol_level = 0
+ chrome_pgo_phase = 0
+ use_remoteexec = false
+ chrome_public_manifest_package = "app.archium.android"
+ enable_archium_local_passwords = false
+}
+current_os = target_os
+current_cpu = target_cpu
+is_android = true
+is_ios = false
+is_apple = false
+is_mac = false
+is_win = false
+is_linux = false
+is_chromeos = false
+is_chromeos_device = false
+is_fuchsia = false
+is_posix = true
+is_castos = false
+is_cast_android = false
+use_fuzzing_engine = false
+use_linux_video_acceleration = false
+enable_cast_receiver = false
+enable_cast_renderer = false
+is_asan = false
+is_tsan = false
+is_msan = false
+is_clang = true
+toolkit_views = false
+set_default_toolchain("//:default")

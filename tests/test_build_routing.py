@@ -48,6 +48,8 @@ elif name=='python3' and args[0].endswith('archium-checkpoint.py') and args[1]==
  android_jar=s/'third_party/android_sdk/public/platforms/android-37.0/android.jar'
  android_jar.parent.mkdir(parents=True,exist_ok=True);android_jar.write_bytes(b'synthetic android jar fixture')
  (w/'depot_tools').mkdir(exist_ok=True);(w/'depot_tools/ensure_bootstrap').write_text('exit 0\\n')
+elif name=='python3' and args and args[0].endswith('archium-media-preflight.py'):
+ sys.exit(int(os.environ.get('MOCK_MEDIA_GATE_RESULT','0')))
 elif name=='python3' and args and args[0].endswith('archium-java-preflight.py'):
  if os.environ.get('MOCK_JAVA_PREFLIGHT_RESULT','0')!='0':sys.exit(int(os.environ['MOCK_JAVA_PREFLIGHT_RESULT']))
  pathlib.Path(args[args.index('--targets-file')+1]).write_text('obj/archium-fixture.javac.jar\\n')
@@ -97,6 +99,13 @@ elif name=='autoninja':
         self.assertIn('archium_password_manager_tests',ninjas[1][1])
         self.assertIn('chrome/browser/password_manager:unit_tests',ninjas[1][1])
         self.assertIn('chrome_public_apk',ninjas[2][1])
+
+    def test_media_configuration_failure_prevents_all_compilation(self):
+        result = self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
+                                MOCK_MEDIA_GATE_RESULT='2')
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertFalse(any(c[0] == 'autoninja' for c in self.calls()))
+        self.assertEqual(self.output.read_text(), '')
 
     def test_java_compiler_failure_prevents_native_and_apk(self):
         result=self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,

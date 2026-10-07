@@ -1,0 +1,1 @@
+Unmodified GN files from the exact Chromium pin and its FFmpeg dependency. The test executes these files with real GN; non-media platform context is synthetic. This is configuration semantics, not full Chromium GN generation/compilation or decoder/runtime proof. Original license notices are preserved.

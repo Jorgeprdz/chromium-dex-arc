@@ -1,0 +1,261 @@
+{
+  "content": "Owned synthetic test pattern and 440Hz tone",
+  "ffmpeg": "ffmpeg version 5.1.9-0+deb12u1 Copyright (c) 2000-2026 the FFmpeg developers",
+  "files": [
+    {
+      "file": "aac.m4a",
+      "bytes": 17555,
+      "sha256": "bd5f666c0c17196554d2a57eac864c07f0719f8582fa2ad9e3cc7af95fa4bc82",
+      "probe": {
+        "programs": [],
+        "streams": [
+          {
+            "codec_name": "aac",
+            "profile": "LC",
+            "codec_type": "audio"
+          }
+        ],
+        "format": {
+          "duration": "2.000000"
+        }
+      }
+    },
+    {
+      "file": "av1-opus.webm",
+      "bytes": 73060,
+      "sha256": "7682700cb7e46565863abb9e55ce5687619e468ef15a1d3e1629bae0a4deaf64",
+      "probe": {
+        "programs": [],
+        "streams": [
+          {
+            "codec_name": "av1",
+            "profile": "Main",
+            "codec_type": "video",
+            "level": 0
+          },
+          {
+            "codec_name": "opus",
+            "codec_type": "audio"
+          }
+        ],
+        "format": {
+          "duration": "2.008000"
+        }
+      }
+    },
+    {
+      "file": "avc-aac-fragmented.mp4",
+      "bytes": 88588,
+      "sha256": "61f0c43db9e75ac936d46d0c5c4899f1f89beeff8c26824696d5704fd867e41d",
+      "probe": {
+        "programs": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "profile": "Constrained Baseline",
+            "codec_type": "video",
+            "level": 30
+          },
+          {
+            "codec_name": "aac",
+            "profile": "LC",
+            "codec_type": "audio"
+          }
+        ],
+        "format": {
+          "duration": "2.021403"
+        }
+      }
+    },
+    {
+      "file": "avc-aac.mp4",
+      "bytes": 88074,
+      "sha256": "979601177e18b8bd942bca0059495fbc29b07b81b93be15aa7d7f0762a4fcc17",
+      "probe": {
+        "programs": [],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "profile": "Constrained Baseline",
+            "codec_type": "video",
+            "level": 30
+          },
+          {
+            "codec_name": "aac",
+            "profile": "LC",
+            "codec_type": "audio"
+          }
+        ],
+        "format": {
+          "duration": "2.000000"
+        }
+      }
+    },
+    {
+      "file": "hls-00.ts",
+      "bytes": 48316,
+      "sha256": "01e0b2d6fad070403202d278fee054613a1c04eeef377c4a24355a131726c1b9",
+      "probe": {
+        "programs": [
+          {
+            "streams": [
+              {
+                "codec_name": "h264",
+                "profile": "Constrained Baseline",
+                "codec_type": "video",
+                "level": 30
+              },
+              {
+                "codec_name": "aac",
+                "profile": "LC",
+                "codec_type": "audio"
+              }
+            ]
+          }
+        ],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "profile": "Constrained Baseline",
+            "codec_type": "video",
+            "level": 30
+          },
+          {
+            "codec_name": "aac",
+            "profile": "LC",
+            "codec_type": "audio"
+          }
+        ],
+        "format": {
+          "duration": "1.024000"
+        }
+      }
+    },
+    {
+      "file": "hls-01.ts",
+      "bytes": 47376,
+      "sha256": "e9e969933dcc852662da2eaedec5a930b3cbe029d6b32cdc23a43a58eb4950af",
+      "probe": {
+        "programs": [
+          {
+            "streams": [
+              {
+                "codec_name": "h264",
+                "profile": "Constrained Baseline",
+                "codec_type": "video",
+                "level": 30
+              },
+              {
+                "codec_name": "aac",
+                "profile": "LC",
+                "codec_type": "audio"
+              }
+            ]
+          }
+        ],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "profile": "Constrained Baseline",
+            "codec_type": "video",
+            "level": 30
+          },
+          {
+            "codec_name": "aac",
+            "profile": "LC",
+            "codec_type": "audio"
+          }
+        ],
+        "format": {
+          "duration": "1.000000"
+        }
+      }
+    },
+    {
+      "file": "playlist.m3u8",
+      "bytes": 144,
+      "sha256": "1c206baf4c095d1d081b25eab7d5b955e5dbcfa64bc1d2c58ca94441721a3536",
+      "probe": {
+        "programs": [
+          {
+            "streams": [
+              {
+                "codec_name": "h264",
+                "profile": "Constrained Baseline",
+                "codec_type": "video",
+                "level": 30
+              },
+              {
+                "codec_name": "aac",
+                "profile": "LC",
+                "codec_type": "audio"
+              }
+            ]
+          }
+        ],
+        "streams": [
+          {
+            "codec_name": "h264",
+            "profile": "Constrained Baseline",
+            "codec_type": "video",
+            "level": 30
+          },
+          {
+            "codec_name": "aac",
+            "profile": "LC",
+            "codec_type": "audio"
+          }
+        ],
+        "format": {
+          "duration": "2.000000"
+        }
+      }
+    },
+    {
+      "file": "vp8-opus.webm",
+      "bytes": 70692,
+      "sha256": "a962fa3607fa43dc9fb613b0c036b7372bdf17a6f42e13ab339286c4dc2e80fe",
+      "probe": {
+        "programs": [],
+        "streams": [
+          {
+            "codec_name": "vp8",
+            "profile": "0",
+            "codec_type": "video",
+            "level": -99
+          },
+          {
+            "codec_name": "opus",
+            "codec_type": "audio"
+          }
+        ],
+        "format": {
+          "duration": "2.008000"
+        }
+      }
+    },
+    {
+      "file": "vp9-opus.webm",
+      "bytes": 68280,
+      "sha256": "a08e5f4133bb3765d28090994cc256777962851aa2d4a331bfe5f9a2f067658e",
+      "probe": {
+        "programs": [],
+        "streams": [
+          {
+            "codec_name": "vp9",
+            "profile": "Profile 0",
+            "codec_type": "video",
+            "level": -99
+          },
+          {
+            "codec_name": "opus",
+            "codec_type": "audio"
+          }
+        ],
+        "format": {
+          "duration": "2.008000"
+        }
+      }
+    }
+  ]
+}

@@ -12,3 +12,7 @@ chrome_pgo_phase = 0
 use_remoteexec = false
 chrome_public_manifest_package = "app.archium.android"
 enable_archium_local_passwords = true
+# Enable Chromium's native H.264/AAC formats and matching FFmpeg decoders.
+# FFmpeg flavor is independent of Google Chrome product branding.
+proprietary_codecs = true
+ffmpeg_branding = "Chrome"
