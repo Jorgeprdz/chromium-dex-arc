@@ -166,7 +166,7 @@
     "chrome/browser/desktop_policy/android/java/src/org/chromium/chrome/browser/desktop_policy/ArchiumWindowMetrics.java": "b6c3ee973f686a1acab8d77734e32437dcc3390d56e2f7da314656edb2623c3a",
     "chrome/browser/password_manager/android/archium_local_password_manager.cc": "e6b07a4818bdae166afdf8b1ffbc8e5720dd054415d8a1272afbe24724177f5a",
     "chrome/browser/password_manager/android/archium_local_password_manager.h": "44bd77321d5b13bd6b9c01b60c1cae4a79b0921ff46d2f1e443fd053b6bc8f8f",
-    "chrome/browser/password_manager/android/archium_local_password_manager_unittest.cc": "3a5b81bf6f0666b6d8534768534de34c633f3a496cfbc214be9e104816cc919e",
+    "chrome/browser/password_manager/android/archium_local_password_manager_unittest.cc": "aaddbe743052cd09af22595bd4857c85162ce39680d68d1516bf3e12fee6886c",
     "chrome/browser/password_manager/android/archium_password_key_provider.cc": "ba9643aac21594195d20957a690cecae4c012016ef6eda38bd3539fb675aedd6",
     "chrome/browser/password_manager/android/archium_password_key_provider.h": "186f138f64471200471f63d43eafe937380056e98c8456d0eb432da1c645cd59",
     "chrome/browser/password_manager/android/archium_password_key_provider_unittest.cc": "e21d5d88498679e1117593e9e9b443577b5923d05addec179ce349b8d8323aa4",
@@ -183,10 +183,10 @@
     "components/password_manager/core/browser/import/archium_password_import_preview.cc": "5ec8255bf6346ac15d04c143d5f70e21708406c024d1f12382fd49a8b25e14bb",
     "components/password_manager/core/browser/import/archium_password_import_preview.h": "415317397105cd6cab059ac00acb1e1e6e2317e4170b711aa8e1293ed8afd9ec",
     "components/password_manager/core/browser/import/archium_password_import_preview_unittest.cc": "7f6c4cb7dfcd816e1f3a8268b01b4c5ae242fc56bc3f8b4cb1a956af1edcc41a",
-    "components/password_manager/core/browser/password_store/archium_login_database_unittest.cc": "11d8ac5f6d81ef597256366c96e37690b4efc60411691463e9b78a0a8ee5dc84",
+    "components/password_manager/core/browser/password_store/archium_login_database_unittest.cc": "996de6cfa88a78cc3fbee551707445a5bea3575270cab8dca301a456a4d44b36",
     "components/password_manager/core/browser/password_store/archium_password_import_snapshot.h": "f745a978585212564a232e21c7ad4de00ea6a7c434166eb9296efd83b687222c",
     "components/password_manager/core/browser/password_store/password_store_backend.cc": "45764d4ad0e05acc5a216944a5a6763212f6c17e71bf689e9c973f12fb5c87d8",
     "components/password_manager/core/browser/password_store/password_store_interface.cc": "7e9dd5813ce8ece459ec66abdd3306028b7b3d6bbae048664872a34d8d097268"
   },
-  "patch_sha256": "ef39da4faa358025825edbace737871c09b460b8aa06792bb55c685ae3c280dc"
+  "patch_sha256": "390ddf27237031907f691da23bfda73b38e6d06ed2925489f7bb8a623306ac1b"
 }

@@ -13,6 +13,7 @@
 #include "base/test/bind.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_future.h"
+#include "build/build_config.h"
 #include "components/affiliations/core/browser/fake_affiliation_service.h"
 #include "components/device_reauth/mock_device_authenticator.h"
 #include "components/os_crypt/async/browser/test_utils.h"
@@ -24,6 +25,7 @@
 #include "components/password_manager/core/browser/password_store/password_store_built_in_backend.h"
 #include "components/password_manager/core/browser/ui/saved_passwords_presenter.h"
 #include "components/password_manager/core/common/password_manager_pref_names.h"
+#include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/testing_pref_service.h"
 #include "testing/gmock/include/gmock/gmock.h"
 #include "testing/gtest/include/gtest/gtest.h"
@@ -49,8 +51,10 @@ class ArchiumLocalPasswordManagerTest : public testing::Test {
  protected:
   void SetUp() override {
     ASSERT_TRUE(directory_.CreateUniqueTempDir());
+#if !BUILDFLAG(IS_ANDROID)
     prefs_.registry()->RegisterBooleanPref(prefs::kClearingUndecryptablePasswords,
                                           false);
+#endif
     prefs_.registry()->RegisterIntegerPref(prefs::kPasswordRemovalReasonForAccount,
                                           0);
     prefs_.registry()->RegisterIntegerPref(prefs::kPasswordRemovalReasonForProfile,

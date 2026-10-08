@@ -11,9 +11,11 @@
 #include "base/functional/bind.h"
 #include "base/test/task_environment.h"
 #include "base/test/test_future.h"
+#include "build/build_config.h"
 #include "components/password_manager/core/browser/password_store/password_store.h"
 #include "components/password_manager/core/browser/password_store/password_store_built_in_backend.h"
 #include "components/password_manager/core/common/password_manager_pref_names.h"
+#include "components/prefs/pref_registry_simple.h"
 #include "components/prefs/testing_pref_service.h"
 #include "base/task/sequenced_task_runner.h"
 #include "components/password_manager/core/browser/password_store/login_database_async_helper.h"
@@ -59,8 +61,10 @@ class ArchiumLoginDatabaseTest : public testing::Test {
 
   void OpenStore(bool key_available = true) {
     db_.reset();
+#if !BUILDFLAG(IS_ANDROID)
     prefs_.registry()->RegisterBooleanPref(prefs::kClearingUndecryptablePasswords,
                                           false);
+#endif
     if (key_available) {
       crypt_ = os_crypt_async::GetTestOSCryptAsyncForTesting();
     } else {
