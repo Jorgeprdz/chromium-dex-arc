@@ -114,8 +114,29 @@ def transition(checkout, old_manifest, new_manifest, old_patch, new_patch, origi
     validate_bundle(old_manifest, old_patch)
     validate_bundle(new_manifest, new_patch)
     receipt_path = checkout / RECEIPT
-    if receipt_path.exists() or receipt_path.is_symlink():
-        raise ValueError('Checkout has a previous transition receipt')
+    previous_receipt = None
+    previous_receipt_info = None
+    if receipt_path.is_symlink() or (receipt_path.exists() and not receipt_path.is_file()):
+        raise ValueError('Transition receipt must be a regular file')
+    if receipt_path.exists():
+        previous_receipt_info = receipt_path.stat()
+        previous_receipt = receipt_path.read_bytes()
+        try:
+            previous = json.loads(previous_receipt)
+        except (ValueError, UnicodeDecodeError) as error:
+            raise ValueError('Invalid previous transition receipt') from error
+        # Checkpoints retain the receipt written by their producing implementation.
+        # Authorize another transition only from that exact commit and patch;
+        # every source byte is still checked below before any mutation.
+        if not isinstance(previous, dict) or previous.get('schema') != 1 \
+                or previous.get('revision') != REVISION \
+                or not re.fullmatch('[0-9a-f]{40}', str(source_commit)) \
+                or not re.fullmatch('[0-9a-f]{40}', str(implementation_commit)) \
+                or not re.fullmatch('[0-9a-f]{40}', str(previous.get('source_commit'))) \
+                or not re.fullmatch('[0-9a-f]{64}', str(previous.get('old_patch_sha256'))) \
+                or previous.get('implementation_commit') != source_commit \
+                or previous.get('new_patch_sha256') != old_manifest['patch_sha256']:
+            raise ValueError('Previous transition receipt does not match source checkpoint identity')
     names = sorted(old_manifest['originals'].keys() | new_manifest['originals'].keys())
     originals = {}
     snapshots = {}
@@ -168,7 +189,13 @@ def transition(checkout, old_manifest, new_manifest, old_patch, new_patch, origi
             _write_file(target, after, stat.S_IMODE(info.st_mode) if info else 0o644)
         _write_file(receipt_path, (json.dumps(receipt, indent=2) + '\n').encode(), 0o644)
     except BaseException:
-        if receipt_path.exists(): receipt_path.unlink()
+        if previous_receipt is None:
+            if receipt_path.exists(): receipt_path.unlink()
+        else:
+            _atomic_write(receipt_path, previous_receipt,
+                          stat.S_IMODE(previous_receipt_info.st_mode))
+            os.utime(receipt_path, ns=(previous_receipt_info.st_atime_ns,
+                                     previous_receipt_info.st_mtime_ns))
         for name in reversed(changed):
             target = checkout / name
             before, info = snapshots[name]

@@ -78,6 +78,81 @@ class TransitionTests(unittest.TestCase):
         return {p.relative_to(self.checkout).as_posix(): (p.read_bytes(), p.stat().st_mtime_ns, p.stat().st_mode & 0o777)
                 for p in self.checkout.rglob('*') if p.is_file() and '.git' not in p.parts}
 
+    def prepare_chained_transition(self):
+        transition.transition(self.checkout, self.old, self.new,
+                              self.old_patch, self.new_patch, self.originals,
+                              source_commit='1' * 40, implementation_commit='2' * 40)
+        third_state = dict(self.new_state, **{'shared.txt': b'third\n'})
+        third, third_patch = self.bundle('third', third_state)
+        return third, third_patch
+
+    def apply_chained(self, third, third_patch):
+        return transition.transition(self.checkout, self.new, third,
+                                     self.new_patch, third_patch, self.originals,
+                                     source_commit='2' * 40, implementation_commit='3' * 40)
+
+    def test_checkpoint_can_transition_again_with_verified_previous_identity(self):
+        third, third_patch = self.prepare_chained_transition()
+        before = self.snapshot()
+        receipt = self.apply_chained(third, third_patch)
+        self.assertEqual((self.checkout / 'shared.txt').read_bytes(), b'third\n')
+        self.assertEqual(self.snapshot()['unchanged.txt'], before['unchanged.txt'])
+        self.assertEqual(receipt['source_commit'], '2' * 40)
+        self.assertEqual(receipt['implementation_commit'], '3' * 40)
+        self.assertEqual(receipt['old_patch_sha256'], self.new['patch_sha256'])
+        self.assertEqual(receipt['new_patch_sha256'], third['patch_sha256'])
+        self.assertEqual(json.loads((self.checkout / transition.RECEIPT).read_text()), receipt)
+
+    def test_chained_interruption_restores_previous_receipt_and_source_timestamps(self):
+        third, third_patch = self.prepare_chained_transition()
+        before = self.snapshot()
+        original_write = transition._write_file
+        def interrupt(path, *args):
+            if path.name == transition.RECEIPT:
+                original_write(path, *args)
+                raise KeyboardInterrupt('interrupted receipt replacement')
+            return original_write(path, *args)
+        with patch.object(transition, '_write_file', interrupt):
+            with self.assertRaises(KeyboardInterrupt): self.apply_chained(third, third_patch)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_chained_receipt_identity_or_hash_mismatch_rejects_every_write(self):
+        third, third_patch = self.prepare_chained_transition()
+        path = self.checkout / transition.RECEIPT
+        valid = json.loads(path.read_text())
+        for field, value in [('schema', 2), ('revision', '0' * 40),
+                             ('implementation_commit', '4' * 40),
+                             ('source_commit', None), ('old_patch_sha256', 'invalid'),
+                             ('new_patch_sha256', '0' * 64)]:
+            with self.subTest(field=field):
+                path.write_text(json.dumps(dict(valid, **{field: value})))
+                before = self.snapshot()
+                with self.assertRaises(ValueError): self.apply_chained(third, third_patch)
+                self.assertEqual(self.snapshot(), before)
+
+    def test_chained_receipt_does_not_authorize_divergent_source(self):
+        third, third_patch = self.prepare_chained_transition()
+        (self.checkout / 'shared.txt').write_bytes(b'unsaved external edit\n')
+        before = self.snapshot()
+        with self.assertRaisesRegex(ValueError, 'Checkout input diverged'):
+            self.apply_chained(third, third_patch)
+        self.assertEqual(self.snapshot(), before)
+
+    def test_chained_receipt_malformed_or_symlink_rejects_every_write(self):
+        third, third_patch = self.prepare_chained_transition()
+        path = self.checkout / transition.RECEIPT
+        for value in [b'{broken', b'[]']:
+            path.write_bytes(value)
+            before = self.snapshot()
+            with self.assertRaises(ValueError): self.apply_chained(third, third_patch)
+            self.assertEqual(self.snapshot(), before)
+        external = self.root / 'external-receipt'
+        external.write_bytes(path.read_bytes())
+        path.unlink()
+        path.symlink_to(external)
+        with self.assertRaises(ValueError): self.apply_chained(third, third_patch)
+        self.assertEqual(external.read_bytes(), b'[]')
+
     def test_reuses_unchanged_inputs_restores_removed_behavior_and_creates_new_source(self):
         before = self.snapshot()
         self.apply()
