@@ -1,0 +1,7 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android" package="app.archium.toolbarprobe">
+  <uses-sdk android:minSdkVersion="29" android:targetSdkVersion="37" />
+  <application android:allowBackup="false" android:label="Archium toolbar geometry probe">
+    <activity android:name="app.archium.toolbarprobe.ArcToolbarGeometryTest$ProbeActivity" android:exported="false" android:theme="@android:style/Theme.Material.Light.NoActionBar" />
+  </application>
+  <instrumentation android:name="app.archium.toolbarprobe.ArcToolbarGeometryTest" android:targetPackage="app.archium.toolbarprobe" />
+</manifest>

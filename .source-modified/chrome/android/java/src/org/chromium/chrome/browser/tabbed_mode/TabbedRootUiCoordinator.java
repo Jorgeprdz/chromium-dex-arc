@@ -2695,7 +2695,14 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
                             var transitionCoord =
                                     assumeNonNull(mToolbarManager)
                                             .getTabStripTransitionCoordinator();
-                            assumeNonNull(transitionCoord).suppressTabStrip(true);
+                            if (transitionCoord != null) {
+                                transitionCoord.suppressTabStrip(true);
+                            } else {
+                                // Forced Arc can use ToolbarPhone, which has no horizontal
+                                // strip to animate. Show the shelf without waiting for one.
+                                showVerticalTabs(true);
+                                setTabLayoutSwitchingInProgress(false);
+                            }
                         } else {
                             assumeNonNull(mVerticalTabsSideUiCoordinator)
                                     .setVisible(/* show= */ false, /* suppressAnimations= */ false);
@@ -2774,9 +2781,11 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
     private void onVerticalTabsActiveChanged(boolean active) {
         var transitionCoordinator =
                 assumeNonNull(mToolbarManager).getTabStripTransitionCoordinator();
-        assumeNonNull(transitionCoordinator);
         maybeClearPendingTabStripUnsuppression();
         setTabLayoutSwitchingInProgress(false);
+        // ToolbarPhone has no horizontal TabStripTransitionCoordinator. Vertical-tab
+        // state and pending observers still need cleanup when Arc forces this layout.
+        if (transitionCoordinator == null) return;
         if (active) {
             transitionCoordinator.suppressTabStrip(true);
         } else {

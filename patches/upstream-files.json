@@ -30,6 +30,7 @@
     "chrome/browser/prefs/browser_prefs.cc": "d69052094bd0d29d332906ca88d715dab9cfd3a3be299573240e1d69446dd6fb",
     "chrome/browser/sync/BUILD.gn": "d5e0cd499203dc7eeb30f6bcf9cedec75fe3d59b600ae0ef7e28a764f6193792",
     "chrome/browser/sync/sync_service_factory.cc": "2aa8e3c60c9efa1bf66aa61f77462b24c5dca994b9bcc7296158bee5a0531ce8",
+    "chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarLayout.java": "6a711c7fdf457f6dc1218f696f7410b767bf2426ee564063bbfbcaf9d2b114a5",
     "chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java": "b337f4d66b713deb79629d1048f84a795c0fc56b9977f04d20aa5ad6edee5b3f",
     "chrome/browser/ui/vertical_tabs/BUILD.gn": "86df0c943df87a0c91d7a134c4adb77fe2a60ada21d96b9c56ff48de813a3d63",
     "chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/VerticalTabUtils.java": "10d4abef6f5940c4b59fa8114d0ad6b9253c04a391a152d1bdafe37d99288c54",
@@ -107,7 +108,7 @@
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabRailLayout.java": "977b4100eb5ea83993b87237bb3353e8a35ba48fc78486e80e3a98d6d01d8561",
     "chrome/android/java/res_chromium_base/values/channel_constants.xml": "e4909d3f5731496c09e1fb02be7f16c348a522d00c620346f95967df2ca68a83",
     "chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java": "a34ae234ba90c0a31a7e9076d2c02a76c919536d8589b4aa51bf33a8cea16045",
-    "chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java": "897294a965029f5d392d20cd8abb5b7858faca3271f349bfbabf7286fff8ad40",
+    "chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java": "150952b4bad2908c50288f7c992c2a5d61c66099e9329bfaddcf79606e9da4f2",
     "chrome/browser/BUILD.gn": "48b9c964ed8ac56546d3d32248cde6638c00a182def11d9a7d5531e428599c2c",
     "chrome/browser/autofill/android/BUILD.gn": "00e2d69719b56d99054d6f62e59fd139ac396af4248cd4aa8d9a4ee813749125",
     "chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/AutofillClientProviderUtils.java": "b14949cce15c8cf64a2cf31a202455309419c22b12539a594952ac3eed34e56a",
@@ -124,6 +125,7 @@
     "chrome/browser/prefs/browser_prefs.cc": "9201712fe0919f0941e8f5a642bdc411785d0d865462134768c36b0a05567243",
     "chrome/browser/sync/BUILD.gn": "fbdcca57731beaa9b8312b29204cb4db6fdc7f86460469d52d45003ea2d61f92",
     "chrome/browser/sync/sync_service_factory.cc": "0484538f79a8ca52a7649350fe5d2953d6e21b4cc5c94dddd62f5110b8c82d4f",
+    "chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarLayout.java": "be715af66bda4ece6b20bd3fc239141453d88912becce9aa7aacd4a5541f9931",
     "chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java": "f3b7aef4e7328b9c1712a7b570abc7e3a89d88d92dd53ba509bd551203927087",
     "chrome/browser/ui/vertical_tabs/BUILD.gn": "58d53b2edaa42bbcd2eff10be6d914263d7eb53b916f0f744b3fff5040882966",
     "chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/VerticalTabUtils.java": "27d45236478c427bb81b0f6e8fb91146d60ca5a19469e8fca5cd8e1b44af4dd9",
@@ -188,5 +190,5 @@
     "components/password_manager/core/browser/password_store/password_store_backend.cc": "45764d4ad0e05acc5a216944a5a6763212f6c17e71bf689e9c973f12fb5c87d8",
     "components/password_manager/core/browser/password_store/password_store_interface.cc": "7e9dd5813ce8ece459ec66abdd3306028b7b3d6bbae048664872a34d8d097268"
   },
-  "patch_sha256": "1340db7f799b77af7d60c7db0e09f8b30fd425fd563445a58d8f292778579ece"
+  "patch_sha256": "74fc7481c659c1eb859ffd7da0569ac4114ba42fb9a16f2fd06143ff0af94e07"
 }

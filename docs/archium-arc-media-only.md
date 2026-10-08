@@ -100,6 +100,27 @@ slices normales pueden continuar dentro de ese mismo run. Ante failure final,
 se conserva la evidencia y no se corrige, reintenta ni despacha otro run
 automáticamente. El monitor existente sigue el último run de esta variante.
 
+Corrección de los cierres reales del APK `37835925363` en modo Arc:
+
+- `ToolbarLayout.getLocationBarContentRect` conserva el cálculo original cuando
+  la barra es descendiente del toolbar. Tras moverla al sidebar usa coordenadas
+  de la ventana común; durante desconexión o en otra ventana devuelve un rectángulo
+  vacío. Evita recorrer hasta `ViewRootImpl` como si fuera una vista.
+- El callback de pestañas verticales limpia las transiciones pendientes y admite
+  que `ToolbarPhone` no tenga coordinador de tab strip horizontal. Un cambio de
+  preferencia muestra el panel directamente en ese caso; tablet conserva su transición.
+
+Las regresiones host ejecutan los cuerpos de los métodos entregados con límites
+Java controlados. El probe Android ejecuta el método de geometría extraído sobre
+vistas adjuntas y una raíz real; cubre reparentado, descendiente, desconexión y
+otra ventana. No equivale a validar toda la actividad Arc del APK reconstruido.
+Puede repetirse explícitamente con:
+
+```bash
+python3 scripts/test-android-arc-toolbar.py --device SERIAL --sdk /path/to/sdk \
+  --platform-version 37.0 --build-tools-version 36.0.0
+```
+
 Validación local:
 
 ```bash

@@ -1157,7 +1157,36 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
              if (mToolbarManager != null) {
                  mToolbarManager.setVerticalTabsAutoHiddenSupplier(
                          mVerticalTabsSideUiCoordinator.getIsAutoHiddenSupplier());
-@@ -3429,8 +3524,12 @@
+@@ -2600,7 +2695,14 @@
+                             var transitionCoord =
+                                     assumeNonNull(mToolbarManager)
+                                             .getTabStripTransitionCoordinator();
+-                            assumeNonNull(transitionCoord).suppressTabStrip(true);
++                            if (transitionCoord != null) {
++                                transitionCoord.suppressTabStrip(true);
++                            } else {
++                                // Forced Arc can use ToolbarPhone, which has no horizontal
++                                // strip to animate. Show the shelf without waiting for one.
++                                showVerticalTabs(true);
++                                setTabLayoutSwitchingInProgress(false);
++                            }
+                         } else {
+                             assumeNonNull(mVerticalTabsSideUiCoordinator)
+                                     .setVisible(/* show= */ false, /* suppressAnimations= */ false);
+@@ -2679,9 +2781,11 @@
+     private void onVerticalTabsActiveChanged(boolean active) {
+         var transitionCoordinator =
+                 assumeNonNull(mToolbarManager).getTabStripTransitionCoordinator();
+-        assumeNonNull(transitionCoordinator);
+         maybeClearPendingTabStripUnsuppression();
+         setTabLayoutSwitchingInProgress(false);
++        // ToolbarPhone has no horizontal TabStripTransitionCoordinator. Vertical-tab
++        // state and pending observers still need cleanup when Arc forces this layout.
++        if (transitionCoordinator == null) return;
+         if (active) {
+             transitionCoordinator.suppressTabStrip(true);
+         } else {
+@@ -3429,8 +3533,12 @@
       * activated.
       */
      public BooleanSupplier canActivateTabLayoutToggleMenu() {
@@ -1773,6 +1802,39 @@ diff --git a/chrome/browser/sync/sync_service_factory.cc b/chrome/browser/sync/s
    builder.SetPrefService(profile->GetPrefs());
    builder.SetPrefServiceSyncable(PrefServiceSyncableFromProfile(profile));
    builder.SetTabGroupSyncService(GetTabGroupSyncService(profile));
+diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarLayout.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarLayout.java
+--- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarLayout.java
++++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarLayout.java
+@@ -718,7 +718,28 @@
+                 container.getPaddingTop(),
+                 container.getWidth() - container.getPaddingRight(),
+                 container.getHeight() - container.getPaddingBottom());
+-        ViewUtils.getRelativeDrawPosition(this, getLocationBar().getContainerView(), mTempPosition);
++        var ancestor = container.getParent();
++        while (ancestor instanceof View && ancestor != this) {
++            ancestor = ancestor.getParent();
++        }
++        if (ancestor == this) {
++            ViewUtils.getRelativeDrawPosition(this, container, mTempPosition);
++        } else {
++            // Arc reparents the real omnibox into its sidebar. The toolbar is no longer
++            // an ancestor, so the ancestor-only ViewUtils walk would reach ViewRootImpl.
++            // Keep the rectangle in toolbar coordinates using the shared window origin.
++            if (container.getWindowToken() == null
++                    || container.getWindowToken() != getWindowToken()) {
++                outRect.setEmpty();
++                return;
++            }
++            getLocationInWindow(mTempPosition);
++            int toolbarX = mTempPosition[0];
++            int toolbarY = mTempPosition[1];
++            container.getLocationInWindow(mTempPosition);
++            mTempPosition[0] -= toolbarX;
++            mTempPosition[1] -= toolbarY;
++        }
+         outRect.offset(mTempPosition[0], mTempPosition[1]);
+     }
+
 diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java
 --- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java
 +++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java
