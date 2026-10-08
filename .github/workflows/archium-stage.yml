@@ -26,25 +26,33 @@ jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ARCHIUM_SOURCE_TAG: ${{ inputs.source_tag }}
+      ARCHIUM_SOURCE_COMMIT: ${{ inputs.source_commit }}
+      ARCHIUM_COMPILE_GATE_TARGETS: 'archium_key_provider_tests archium_key_java archium_login_database_tests archium_password_import_tests archium_password_manager_tests archium_password_csv_java chrome_junit_tests'
+      ARCHIUM_RUN_HOST_GATES: 'true'
+      ARCHIUM_PREVIOUS_TAG: ${{ inputs.previous_tag }}
+      ARCHIUM_CHECKPOINT_TAG: archium-checkpoint-${{ github.run_id }}-${{ inputs.stage }}
+      ARCHIUM_SLICE_MINUTES: '120'
+      ARCHIUM_PREPARE_SECONDS: '3600'
+      ARCHIUM_WORK_SECONDS: '14400'
+      ARCHIUM_HOST_SECONDS: '1800'
+      ARCHIUM_CHECKPOINT_SECONDS: '5400'
     outputs:
       complete: ${{ steps.compile.outputs.complete }}
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
-      - name: Compile for two hours and checkpoint
+      - name: Restore checkpoint and prepare Chromium
+        timeout-minutes: 62
+        run: bash scripts/build-archium.sh --prepare
+      - name: Compile, run gates and checkpoint
         id: compile
-        env:
-          GH_TOKEN: ${{ github.token }}
-          ARCHIUM_SOURCE_TAG: ${{ inputs.source_tag }}
-          ARCHIUM_SOURCE_COMMIT: ${{ inputs.source_commit }}
-          ARCHIUM_COMPILE_GATE_TARGETS: 'archium_key_provider_tests archium_key_java archium_login_database_tests archium_password_import_tests archium_password_manager_tests archium_password_csv_java chrome_junit_tests'
-          ARCHIUM_RUN_HOST_GATES: 'true'
-          ARCHIUM_PREVIOUS_TAG: ${{ inputs.previous_tag }}
-          ARCHIUM_CHECKPOINT_TAG: archium-checkpoint-${{ github.run_id }}-${{ inputs.stage }}
-          ARCHIUM_SLICE_MINUTES: '120'
-        run: bash scripts/build-archium.sh
+        run: bash scripts/build-archium.sh --work
       - name: Save completed APK
+        timeout-minutes: 30
         if: steps.compile.outputs.complete == 'true'
         uses: actions/upload-artifact@v4
         with:

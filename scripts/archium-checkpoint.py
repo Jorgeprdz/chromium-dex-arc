@@ -11,8 +11,24 @@ import tempfile
 CHUNK_BYTES = 1024 ** 3  # Each release asset must be below 2 GiB.
 
 
-def run(*args):
-    subprocess.run(args, check=True)
+def run(*args, capture=False):
+    return subprocess.run(args, check=True, text=True, capture_output=capture)
+
+
+def verify_assets(parts, tag, repo):
+    # Newly created draft releases are not resolved by GitHub's by-tag endpoint.
+    response = run('gh', 'api', f'repos/{repo}/releases?per_page=100', '--paginate', '--jq',
+                   f'.[] | select(.tag_name == {json.dumps(tag)})', capture=True)
+    release = json.loads(response.stdout)
+    if release.get('tag_name') != tag:
+        raise ValueError('Checkpoint release identity mismatch')
+    assets = {asset['name']: asset for asset in release.get('assets', [])}
+    for part in parts:
+        asset = assets.get(part['name'], {})
+        if (asset.get('state') != 'uploaded' or asset.get('size') != part['bytes']
+                or asset.get('digest') != 'sha256:' + part['sha256']):
+            raise ValueError('Uploaded checkpoint part verification failed: ' + part['name'])
+    print(f'Checkpoint remote parts verified: {len(parts)}', flush=True)
 
 
 def identity(workspace, *, source_commit=None):
@@ -61,10 +77,18 @@ def pack(workspace, tag, repo):
             if process.poll() is None:
                 process.kill()
                 process.wait()
+        # Verify remote receipts before making this checkpoint consumable.
+        verify_assets(manifest['parts'], tag, repo)
         path = Path(temporary) / 'checkpoint.json'
         path.write_text(json.dumps(manifest, indent=2) + '\n')
         # Manifest is the commit marker: consumers never restore incomplete checkpoints.
         run('gh', 'release', 'upload', tag, str(path), '--repo', repo)
+        # Read back only the small commit marker, never the multi-GB parts.
+        with tempfile.TemporaryDirectory(dir=temporary) as readback:
+            run('gh', 'release', 'download', tag, '--repo', repo, '--pattern',
+                'checkpoint.json', '--dir', readback)
+            if json.loads((Path(readback) / 'checkpoint.json').read_text()) != manifest:
+                raise ValueError('Checkpoint manifest readback mismatch')
     print(f'Checkpoint complete: {len(manifest["parts"])} parts', flush=True)
 
 

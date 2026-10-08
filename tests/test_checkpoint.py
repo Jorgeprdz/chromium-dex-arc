@@ -1,6 +1,8 @@
 import hashlib
 import importlib.util
 import os
+import json
+import subprocess
 from pathlib import Path
 import tempfile
 import unittest
@@ -25,7 +27,13 @@ class CheckpointTests(unittest.TestCase):
             executable.chmod(0o755)
             (workspace / 'compiler-link').symlink_to('compiler')
             assets = {}
-            def fake_gh(*args):
+            def fake_gh(*args, capture=False):
+                if args[1] == 'api':
+                    return subprocess.CompletedProcess(args, 0, stdout=json.dumps({
+                        'tag_name': 'tag', 'assets': [
+                            {'name': name, 'size': len(data), 'state': 'uploaded',
+                             'digest': 'sha256:' + hashlib.sha256(data).hexdigest()}
+                            for name, data in assets.items()]}))
                 if args[2] == 'upload':
                     p = Path(args[4])
                     assets[p.name] = p.read_bytes()
@@ -50,6 +58,46 @@ class CheckpointTests(unittest.TestCase):
             self.assertEqual(executable.stat().st_mode & 0o777, 0o755)
             self.assertTrue((workspace / 'compiler-link').is_symlink())
             self.assertGreater(len(assets), 2)
+
+    def test_remote_inventory_rejects_missing_corrupt_or_unfinished_assets(self):
+        digest = hashlib.sha256(b'x').hexdigest()
+        parts = [{'name': 'checkpoint-0000.tar.gz.part', 'bytes': 1, 'sha256': digest}]
+        valid = {'name': parts[0]['name'], 'size': 1, 'state': 'uploaded',
+                 'digest': 'sha256:' + digest}
+        for assets in ([], [dict(valid, size=2)], [dict(valid, digest='sha256:'+'0'*64)],
+                       [dict(valid, state='starter')], [dict(valid, digest=None)]):
+            with self.subTest(assets=assets), patch.object(checkpoint, 'run', return_value=
+                    subprocess.CompletedProcess([], 0, stdout=json.dumps(
+                        {'tag_name': 'tag', 'assets': assets}))):
+                with self.assertRaises(ValueError):
+                    checkpoint.verify_assets(parts, 'tag', 'repo')
+
+    def test_remote_mismatch_never_publishes_commit_marker(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            workspace = Path(temporary); (workspace / 'data').write_bytes(b'payload')
+            uploads = []
+            def fake_gh(*args, capture=False):
+                if args[1] == 'api':
+                    return subprocess.CompletedProcess(args, 0, stdout=json.dumps(
+                        {'tag_name': 'tag', 'assets': []}))
+                if args[2] == 'upload': uploads.append(Path(args[4]).name)
+            with patch.dict(os.environ, {'GITHUB_SHA': 'test-commit'}), \
+                    patch.object(checkpoint, 'run', fake_gh):
+                with self.assertRaises(ValueError): checkpoint.pack(workspace, 'tag', 'repo')
+            self.assertIn('checkpoint-0000.tar.gz.part', uploads)
+            self.assertNotIn('checkpoint.json', uploads)
+
+    def test_release_beyond_first_api_page_can_be_verified(self):
+        digest = hashlib.sha256(b'x').hexdigest()
+        parts = [{'name': 'checkpoint-0000.tar.gz.part', 'bytes': 1, 'sha256': digest}]
+        def api(*args, capture=False):
+            # GitHub CLI yields only jq matches. This tag is on the second page.
+            body = json.dumps({'tag_name': 'tag', 'assets': [
+                {'name': parts[0]['name'], 'size': 1, 'state': 'uploaded',
+                 'digest': 'sha256:' + digest}]}) if '--paginate' in args else ''
+            return subprocess.CompletedProcess(args, 0, stdout=body)
+        with patch.object(checkpoint, 'run', api):
+            checkpoint.verify_assets(parts, 'tag', 'repo')
 
     def test_old_checkpoint_requires_explicit_source_commit(self):
         with patch.dict(os.environ, {'GITHUB_SHA': 'new-implementation'}):

@@ -11,12 +11,81 @@ readonly chromium_revision=cfd94726b7b5fb48aedcc32662f2f3fbdbadec35
 readonly depot_revision=8a5434051036b32412a2ecb10c213a72e3f3ccb9
 readonly build_workspace="$RUNNER_TEMP/chromium-archium"
 
+build_phase="${1:---all}"
+if (( $# > 1 )) || [[ ! "$build_phase" =~ ^--(all|prepare|work)$ ]]; then
+    printf 'Usage: build-archium.sh [--prepare|--work]\n' >&2
+    exit 2
+fi
+budget_value() {
+    local value="$1" maximum="$2"
+    if [[ ! "$value" =~ ^[1-9][0-9]*$ ]] \
+        || (( ${#value} > ${#maximum} || value > maximum )); then
+        printf 'Invalid stage budget: %s (maximum %s seconds).\n' "$value" "$maximum" >&2
+        return 2
+    fi
+    printf '%s' "$value"
+}
+prepare_seconds=$(budget_value "${ARCHIUM_PREPARE_SECONDS:-3600}" 3600)
+work_seconds=$(budget_value "${ARCHIUM_WORK_SECONDS:-14400}" 14400)
+host_seconds=$(budget_value "${ARCHIUM_HOST_SECONDS:-1800}" 1800)
+checkpoint_seconds=$(budget_value "${ARCHIUM_CHECKPOINT_SECONDS:-5400}" 5400)
+slice_minutes=$(budget_value "${ARCHIUM_SLICE_MINUTES:-120}" 120)
+script_started=$SECONDS
+job_started=$(date +%s)
+initial_elapsed=0
+prepared_marker="$RUNNER_TEMP/archium-prepared-${GITHUB_RUN_ID:-local}"
+
+job_elapsed() { printf '%s' "$((initial_elapsed + SECONDS - script_started))"; }
+
+run_prepare() {
+    local remaining=$((prepare_seconds - $(job_elapsed))) result=0
+    if (( remaining <= 0 )); then
+        printf 'Preparation budget exhausted; retaining the previous checkpoint.\n' >&2
+        return 124
+    fi
+    timeout --signal=TERM --kill-after=30s "${remaining}s" "$@" || result=$?
+    if (( result != 0 )); then
+        printf 'Preparation stopped (exit %s); no new checkpoint identity published.\n' "$result" >&2
+    fi
+    return "$result"
+}
+
+save_checkpoint() {
+    local final_status="${1:-0}" result=0
+    printf 'CHECKPOINT: saving quiescent workspace; execution gates remain pending.\n'
+    timeout --signal=TERM --kill-after=30s "${checkpoint_seconds}s" \
+        python3 "$GITHUB_WORKSPACE/scripts/archium-checkpoint.py" pack \
+        "$build_workspace" "$ARCHIUM_CHECKPOINT_TAG" || result=$?
+    if (( result != 0 )); then
+        printf 'Checkpoint failed verification/upload (exit %s); continuation blocked.\n' "$result" >&2
+        exit "$result"
+    fi
+    printf 'complete=false\n' >> "$GITHUB_OUTPUT"
+    exit "$final_status"
+}
+
+run_work() {
+    local signal="$1" limit="$2" timeout_status="$3"
+    shift 3
+    local remaining=$((work_seconds - $(job_elapsed))) result=0
+    if (( remaining <= 0 )); then save_checkpoint "$timeout_status"; fi
+    if (( limit > remaining )); then limit=$remaining; fi
+    timeout --signal="$signal" --kill-after=90s "${limit}s" "$@" || result=$?
+    if (( result == 124 )); then
+        save_checkpoint "$timeout_status"
+    elif (( result != 0 )); then
+        # Escalation to SIGKILL is a failure, never a resumable-success claim.
+        printf 'Work failed (exit %s); mandatory gates did not pass.\n' "$result" >&2
+        exit "$result"
+    fi
+}
+
 install_build_deps() {
     printf 'PREPARE: configuring bounded package downloads.\n'
-    sudo --preserve-env=GITHUB_ACTIONS,GITHUB_REPOSITORY \
+    run_prepare sudo --preserve-env=GITHUB_ACTIONS,GITHUB_REPOSITORY \
         python3 "$GITHUB_WORKSPACE/scripts/configure-archium-apt.py"
     printf 'PREPARE: installing pinned Chromium dependencies (30 minute limit).\n'
-    sudo timeout --signal=TERM --kill-after=30s 30m \
+    run_prepare sudo timeout --signal=TERM --kill-after=30s 30m \
         ./build/install-build-deps.sh --no-prompt --android
     printf 'PREPARE: dependencies installed.\n'
 }
@@ -32,7 +101,9 @@ if [[ -n "$source_tag" || -n "$source_commit" ]]; then
     fi
 fi
 
-sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/hostedtoolcache
+if [[ "$build_phase" != --work ]]; then
+printf 'PREPARE: restoring/setting up this job (60 minute total limit).\n'
+run_prepare sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/hostedtoolcache
 available_bytes=$(df -B1 --output=avail "$RUNNER_TEMP" | tail -n 1 | tr -d ' ')
 if (( available_bytes < 100000000000 )); then
     printf 'Insufficient disk space after cleanup: %s bytes\n' "$available_bytes" >&2
@@ -41,39 +112,39 @@ fi
 df -h "$RUNNER_TEMP"
 if [[ -n "$source_tag" || -n "${ARCHIUM_PREVIOUS_TAG:-}" ]]; then
     if [[ -n "$source_tag" ]]; then
-        python3 "$GITHUB_WORKSPACE/scripts/archium-checkpoint.py" restore \
+        run_prepare python3 "$GITHUB_WORKSPACE/scripts/archium-checkpoint.py" restore \
             "$build_workspace" "$source_tag" --source-commit "$source_commit"
     else
-        python3 "$GITHUB_WORKSPACE/scripts/archium-checkpoint.py" restore \
+        run_prepare python3 "$GITHUB_WORKSPACE/scripts/archium-checkpoint.py" restore \
             "$build_workspace" "$ARCHIUM_PREVIOUS_TAG"
     fi
     export PATH="$build_workspace/depot_tools:$PATH"
     export DEPOT_TOOLS_UPDATE=0
-    bash "$build_workspace/depot_tools/ensure_bootstrap"
+    run_prepare bash "$build_workspace/depot_tools/ensure_bootstrap"
     cd "$build_workspace/checkout/src"
     install_build_deps
     if [[ -n "$source_tag" ]]; then
-        git -C "$GITHUB_WORKSPACE" fetch --depth 1 origin "$source_commit"
-        python3 "$GITHUB_WORKSPACE/scripts/transition-archium-patches.py" "$PWD" \
+        run_prepare git -C "$GITHUB_WORKSPACE" fetch --depth 1 origin "$source_commit"
+        run_prepare python3 "$GITHUB_WORKSPACE/scripts/transition-archium-patches.py" "$PWD" \
             --source-commit "$source_commit" --implementation-commit "$GITHUB_SHA"
         cp "$GITHUB_WORKSPACE/config/archium-args.gn" out/Archium/args.gn
-        gn gen out/Archium
+        run_prepare gn gen out/Archium
     elif ! cmp -s "$GITHUB_WORKSPACE/config/archium-args.gn" out/Archium/args.gn; then
         cp "$GITHUB_WORKSPACE/config/archium-args.gn" out/Archium/args.gn
-        gn gen out/Archium
+        run_prepare gn gen out/Archium
     fi
 else
 mkdir -p "$build_workspace"
 cd "$build_workspace"
-git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git
-git -C depot_tools fetch --depth 1 origin "$depot_revision"
-git -C depot_tools checkout --detach "$depot_revision"
+run_prepare git clone --depth 1 https://chromium.googlesource.com/chromium/tools/depot_tools.git
+run_prepare git -C depot_tools fetch --depth 1 origin "$depot_revision"
+run_prepare git -C depot_tools checkout --detach "$depot_revision"
 export PATH="$build_workspace/depot_tools:$PATH"
 export DEPOT_TOOLS_UPDATE=0
 # Pinning disables gclient's automatic update/bootstrap. Initialize the pinned
 # tools explicitly so GN's python-bin wrapper has its interpreter metadata.
-bash "$build_workspace/depot_tools/ensure_bootstrap"
-"$build_workspace/depot_tools/python-bin/python3" --version
+run_prepare bash "$build_workspace/depot_tools/ensure_bootstrap"
+run_prepare "$build_workspace/depot_tools/python-bin/python3" --version
 
 mkdir checkout
 cd checkout
@@ -87,52 +158,56 @@ solutions = [{
 }]
 target_os = ["android"]
 GCLIENT
-gclient sync --no-history --nohooks --revision "src@$chromium_revision"
+run_prepare gclient sync --no-history --nohooks --revision "src@$chromium_revision"
 cd src
 test "$(git rev-parse HEAD)" = "$chromium_revision"
 install_build_deps
-gclient runhooks
+run_prepare gclient runhooks
 
 mkdir -p out/Archium
-python3 "$GITHUB_WORKSPACE/scripts/apply-arc-patches.py" "$PWD"
+run_prepare python3 "$GITHUB_WORKSPACE/scripts/apply-arc-patches.py" "$PWD"
 cp "$GITHUB_WORKSPACE/config/archium-args.gn" out/Archium/args.gn
-gn gen out/Archium
+run_prepare gn gen out/Archium
+fi
+printf '%s\n%s\n' "$GITHUB_SHA" "$job_started" > "$prepared_marker"
+if [[ "$build_phase" == --prepare ]]; then exit 0; fi
+else
+    if [[ ! -f "$prepared_marker" ]]; then
+        printf 'This job has no completed preparation.\n' >&2
+        exit 2
+    fi
+    mapfile -t prepared < "$prepared_marker"
+    if (( ${#prepared[@]} != 2 )) || [[ "${prepared[0]}" != "$GITHUB_SHA" \
+        || ! "${prepared[1]}" =~ ^[1-9][0-9]{0,10}$ ]] || (( prepared[1] > job_started )); then
+        printf 'Preparation identity/clock mismatch.\n' >&2
+        exit 2
+    fi
+    initial_elapsed=$((job_started - prepared[1]))
+    export PATH="$build_workspace/depot_tools:$PATH"
+    export DEPOT_TOOLS_UPDATE=0
+    cd "$build_workspace/checkout/src"
 fi
 
 df -h .
 # SIGINT lets Ninja stop its children and flush .ninja_log/.ninja_deps before packing.
-slice_minutes="${ARCHIUM_SLICE_MINUTES:-120}"
-if [[ ! "$slice_minutes" =~ ^[1-9][0-9]*$ ]]; then
-    printf 'Invalid compilation slice duration.\n' >&2
-    exit 2
-fi
 slice_started=$SECONDS
 slice_seconds=$((slice_minutes * 60))
 compile_slice() {
     local remaining=$((slice_seconds - (SECONDS - slice_started)))
-    local result=0
     if (( remaining <= 0 )); then
-        result=124
-    else
-        timeout --signal=INT --kill-after=90s "${remaining}s" \
-            autoninja -C out/Archium "$@" -j 4 || result=$?
+        save_checkpoint
     fi
-    if (( result == 124 )); then
-        printf 'Compilation slice ended; saving complete workspace.\n'
-        python3 "$GITHUB_WORKSPACE/scripts/archium-checkpoint.py" pack \
-            "$build_workspace" "$ARCHIUM_CHECKPOINT_TAG"
-        printf 'complete=false\n' >> "$GITHUB_OUTPUT"
-        exit 0
-    elif (( result != 0 )); then
-        printf 'Compilation failed with exit %s; stopping the chain.\n' "$result" >&2
-        exit "$result"
-    fi
+    # Use the interpreter from the pinned autoninja shell entrypoint. The thin
+    # loader defers Python SIGINT so subprocess.call cannot SIGKILL its backend.
+    run_work INT "$remaining" 0 "$build_workspace/depot_tools/python-bin/python3" \
+        "$GITHUB_WORKSPACE/scripts/archium-autoninja.py" \
+        "$build_workspace/depot_tools/autoninja.py" -C out/Archium "$@" -j 4
 }
 # Resolve real compiler actions for every Java delivery after GN generation. This
 # includes modified upstream tests, unlike the isolated preparation contracts.
 printf 'PHASE A1: compiling real Java/JNI owners before native work.\n'
 java_targets_file="$PWD/out/Archium/archium-java-targets.txt"
-python3 "$GITHUB_WORKSPACE/scripts/archium-java-preflight.py" \
+run_work TERM "$work_seconds" 0 python3 "$GITHUB_WORKSPACE/scripts/archium-java-preflight.py" \
     --out "$PWD/out/Archium" --targets-file "$java_targets_file"
 mapfile -t java_targets < "$java_targets_file"
 if (( ${#java_targets[@]} == 0 )); then
@@ -141,7 +216,7 @@ if (( ${#java_targets[@]} == 0 )); then
 fi
 compile_slice "${java_targets[@]}"
 # Check accessible native owners, including the bridge's generated JNI includes.
-gn check out/Archium //chrome/browser/password_manager/android:archium_password_manager_tests
+run_work TERM "$work_seconds" 0 gn check out/Archium //chrome/browser/password_manager/android:archium_password_manager_tests
 
 compile_gate_targets="${ARCHIUM_COMPILE_GATE_TARGETS:-${ARCHIUM_VALIDATE_TARGETS:-}}"
 if [[ -n "${ARCHIUM_VALIDATE_TARGETS:-}" && -z "${ARCHIUM_COMPILE_GATE_TARGETS:-}" ]]; then
@@ -163,7 +238,7 @@ fi
 
 # Verify every mandatory Android-native test produced Chromium's generated device
 # launcher before the APK is permitted to compile. Missing launchers fail closed.
-python3 "$GITHUB_WORKSPACE/scripts/archium-test-gates.py" verify-device-runners \
+run_work TERM "$work_seconds" 0 python3 "$GITHUB_WORKSPACE/scripts/archium-test-gates.py" verify-device-runners \
     --out "$PWD/out/Archium"
 
 if [[ -n "${ARCHIUM_RUN_HOST_GATES:-}" && "${ARCHIUM_RUN_HOST_GATES}" != true ]]; then
@@ -184,7 +259,7 @@ if [[ ! -s "$android_jar" ]]; then
     printf 'Pinned Chromium Android platform jar is missing: %s\n' "$android_jar" >&2
     exit 2
 fi
-python3 "$GITHUB_WORKSPACE/scripts/archium-test-gates.py" host \
+run_work TERM "$host_seconds" 124 python3 "$GITHUB_WORKSPACE/scripts/archium-test-gates.py" host \
     --android-jar "$android_jar" --out "$PWD/out/Archium"
 
 printf 'PHASE C: host gates passed; APK target is now allowed.\n'

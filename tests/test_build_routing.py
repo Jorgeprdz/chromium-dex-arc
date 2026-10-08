@@ -28,12 +28,13 @@ class BuildRoutingTests(unittest.TestCase):
         self.output.touch()
         driver = self.bin / 'driver'
         driver.write_text('''#!/usr/bin/python3
-import json,os,pathlib,sys
+import json,os,pathlib,sys,time,signal
 name=pathlib.Path(sys.argv[0]).name
 args=sys.argv[1:]
 with open(os.environ['MOCK_TRACE'],'a') as f:f.write(json.dumps([name]+args)+'\\n')
 if name=='df':print('Available\\n150000000000')
 elif name=='python3' and args[0].endswith('archium-checkpoint.py') and args[1]=='restore':
+ time.sleep(float(os.environ.get('MOCK_RESTORE_SLEEP','0')))
  w=pathlib.Path(args[2]);s=w/'checkout/src';s.mkdir(parents=True,exist_ok=True)
  (s/'out/Archium/apks').mkdir(parents=True,exist_ok=True)
  (s/'out/Archium/args.gn').write_text(os.environ.get('MOCK_RESTORED_ARGS','restored old args\\n'))
@@ -48,20 +49,40 @@ elif name=='python3' and args[0].endswith('archium-checkpoint.py') and args[1]==
  android_jar=s/'third_party/android_sdk/public/platforms/android-37.0/android.jar'
  android_jar.parent.mkdir(parents=True,exist_ok=True);android_jar.write_bytes(b'synthetic android jar fixture')
  (w/'depot_tools').mkdir(exist_ok=True);(w/'depot_tools/ensure_bootstrap').write_text('exit 0\\n')
+ (w/'depot_tools/python-bin').mkdir(exist_ok=True)
+ python_link=w/'depot_tools/python-bin/python3'
+ if not python_link.exists():python_link.symlink_to(pathlib.Path(sys.argv[0]).resolve())
+elif name=='python3' and args and args[0].endswith('archium-autoninja.py'):
+ os.execvp('autoninja',['autoninja']+args[2:])
 elif name=='python3' and args and args[0].endswith('archium-java-preflight.py'):
+ time.sleep(float(os.environ.get('MOCK_PREFLIGHT_SLEEP','0')))
  if os.environ.get('MOCK_JAVA_PREFLIGHT_RESULT','0')!='0':sys.exit(int(os.environ['MOCK_JAVA_PREFLIGHT_RESULT']))
  pathlib.Path(args[args.index('--targets-file')+1]).write_text('obj/archium-fixture.javac.jar\\n')
 elif name=='python3' and args and args[0].endswith('archium-test-gates.py') and len(args)>1 and args[1]=='host':
+ time.sleep(float(os.environ.get('MOCK_HOST_SLEEP','0')))
  sys.exit(int(os.environ.get('MOCK_HOST_GATE_RESULT','0')))
+elif name=='python3' and args and args[0].endswith('archium-checkpoint.py') and args[1]=='pack':
+ if os.environ.get('MOCK_REQUIRE_FLUSH')=='true':
+  log=pathlib.Path(args[2])/'checkout/src/out/Archium/.ninja_log'
+  if not log.exists() or log.read_text()!='flushed after SIGINT':sys.exit(9)
+ sys.exit(int(os.environ.get('MOCK_PACK_RESULT','0')))
 elif name=='python3' and args and args[0].endswith('archium-test-gates.py') and len(args)>1 and args[1]=='verify-device-runners':
  sys.exit(int(os.environ.get('MOCK_DEVICE_RUNNER_VERIFY_RESULT','0')))
 elif name=='timeout':
  if './build/install-build-deps.sh' in args:
   sys.exit(int(os.environ.get('MOCK_DEPS_RESULT','0')))
+ if os.environ.get('MOCK_REAL_TIMEOUT')=='true':
+  os.execv('/usr/bin/timeout',['timeout']+args)
  i=0
  while args[i].startswith('--'):i+=1
  os.execvp(args[i+1],args[i+1:])
 elif name=='autoninja':
+ if os.environ.get('MOCK_NINJA_WAIT')=='true':
+  def stopped(signum,frame):
+   (pathlib.Path.cwd()/'out/Archium/.ninja_log').write_text('flushed after SIGINT')
+   sys.exit(130)
+  signal.signal(signal.SIGINT,stopped)
+  time.sleep(10)
  is_java='obj/archium-fixture.javac.jar' in args
  sys.exit(int(os.environ.get('MOCK_JAVA_NINJA_RESULT' if is_java else 'MOCK_NINJA_RESULT','0')))
 elif name=='sudo' and args and args[0]=='timeout':
@@ -81,8 +102,9 @@ elif name=='sudo' and args and args[0]=='timeout':
                      'ARCHIUM_RUN_HOST_GATES']:
             self.env.pop(name, None)
 
-    def run_build(self, **env):
-        return subprocess.run(['bash', str(ROOT / 'scripts/build-archium.sh')],
+    def run_build(self, phase=None, **env):
+        return subprocess.run(['bash', str(ROOT / 'scripts/build-archium.sh')]
+                              + ([phase] if phase else []),
                               env={**self.env, **env}, capture_output=True, text=True)
 
     def calls(self):
@@ -109,6 +131,90 @@ elif name=='sudo' and args and args[0]=='timeout':
         self.assertEqual(result.returncode, 124, result.stderr)
         self.assertFalse(any(c[0] in ('gn', 'autoninja') for c in self.calls()))
         self.assertEqual(self.output.read_text(), '')
+
+    def test_global_work_deadline_saves_before_any_later_compilation(self):
+        result = self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
+                                ARCHIUM_WORK_SECONDS='3', MOCK_REAL_TIMEOUT='true',
+                                MOCK_PREFLIGHT_SLEEP='10')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.output.read_text(), 'complete=false\n')
+        self.assertTrue(any('pack' in c for c in self.calls()))
+        self.assertFalse(any(c[0]=='autoninja' for c in self.calls()))
+
+    def test_preparation_deadline_never_packs_incomplete_workspace(self):
+        result = self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
+                                ARCHIUM_PREPARE_SECONDS='1', MOCK_REAL_TIMEOUT='true',
+                                MOCK_RESTORE_SLEEP='10')
+        self.assertEqual(result.returncode, 124, result.stderr)
+        self.assertFalse(any('pack' in c for c in self.calls()))
+        self.assertEqual(self.output.read_text(), '')
+
+    def test_host_timeout_preserves_checkpoint_but_does_not_pass_gate(self):
+        result = self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
+                                ARCHIUM_HOST_SECONDS='1', MOCK_REAL_TIMEOUT='true',
+                                MOCK_HOST_SLEEP='10')
+        self.assertEqual(result.returncode, 124, result.stderr)
+        self.assertTrue(any('pack' in c for c in self.calls()))
+        self.assertFalse(any(c[0]=='autoninja' and 'chrome_public_apk' in c
+                             for c in self.calls()))
+        self.assertEqual(self.output.read_text(), 'complete=false\n')
+
+    def test_failed_checkpoint_upload_cannot_claim_resumable_completion(self):
+        result = self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
+                                MOCK_NINJA_RESULT='124', MOCK_PACK_RESULT='8')
+        self.assertEqual(result.returncode, 8, result.stderr)
+        self.assertEqual(self.output.read_text(), '')
+
+    def test_work_requires_this_jobs_completed_preparation(self):
+        result = self.run_build('--work', ARCHIUM_PREVIOUS_TAG=CURRENT_TAG)
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertEqual(self.calls(), [])
+
+    def test_split_steps_restore_only_once_and_preserve_job_deadline(self):
+        result = self.run_build('--prepare', ARCHIUM_PREVIOUS_TAG=CURRENT_TAG)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(any(c[0]=='autoninja' for c in self.calls()))
+        result = self.run_build('--work', ARCHIUM_PREVIOUS_TAG=CURRENT_TAG)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(sum(c[0]=='python3' and 'restore' in c for c in self.calls()), 1)
+        self.assertEqual(self.output.read_text(), 'complete=true\n')
+
+    def test_global_cut_waits_for_ninja_sigint_flush_before_packing(self):
+        result = self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
+                                ARCHIUM_WORK_SECONDS='4', MOCK_REAL_TIMEOUT='true',
+                                MOCK_NINJA_WAIT='true', MOCK_REQUIRE_FLUSH='true')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.output.read_text(), 'complete=false\n')
+        self.assertEqual((self.root/'runner/chromium-archium/checkout/src/out/Archium/.ninja_log').read_text(),
+                         'flushed after SIGINT')
+
+    def test_forced_kill_never_claims_a_quiescent_checkpoint(self):
+        result = self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG, MOCK_NINJA_RESULT='137')
+        self.assertEqual(result.returncode, 137, result.stderr)
+        self.assertFalse(any(c[0]=='python3' and 'pack' in c for c in self.calls()))
+        self.assertEqual(self.output.read_text(), '')
+
+    def test_work_step_counts_time_spent_in_preparation(self):
+        result = self.run_build('--prepare', ARCHIUM_PREVIOUS_TAG=CURRENT_TAG)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        marker = self.root/'runner'/('archium-prepared-'+self.env.get('GITHUB_RUN_ID','local'))
+        prepared = marker.read_text().splitlines()
+        prepared[1] = str(int(prepared[1])-14401)
+        marker.write_text('\n'.join(prepared)+'\n')
+        result = self.run_build('--work', ARCHIUM_PREVIOUS_TAG=CURRENT_TAG)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(self.output.read_text(), 'complete=false\n')
+        self.assertFalse(any(c[0]=='autoninja' for c in self.calls()))
+
+    def test_stage_budgets_cannot_disable_reserve_or_overflow(self):
+        cases = [('ARCHIUM_WORK_SECONDS', value) for value in
+                 ('0', '-1', '14401', '99999999999999999999999999999999')]
+        cases.append(('ARCHIUM_SLICE_MINUTES', '121'))
+        for name, value in cases:
+            with self.subTest(name=name, value=value):
+                result=self.run_build(**{name:value})
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertEqual(self.calls(), [])
 
     def test_java_compiler_failure_prevents_native_and_apk(self):
         result=self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
