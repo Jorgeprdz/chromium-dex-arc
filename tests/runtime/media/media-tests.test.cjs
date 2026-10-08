@@ -1,0 +1,11 @@
+const assert = require('node:assert/strict');
+const {assessPlayback: verifyPlayback} = require('./media-tests.js');
+assert.equal(verifyPlayback({before:0, after:1, frames:12, error:null}, true), true);
+assert.equal(verifyPlayback({before:0, after:1, frames:0, error:null}, true), false);
+assert.equal(verifyPlayback({before:0, after:0, frames:12, error:null}, true), false);
+assert.equal(verifyPlayback({before:0, after:1, frames:12, error:3}, true), false);
+assert.equal(verifyPlayback({before:0, after:1, frames:0, error:null}, false), true);
+assert.equal(verifyPlayback({before:0, after:NaN, frames:12, error:null}, true), false);
+assert.equal(verifyPlayback({before:0, after:Infinity, frames:12, error:null}, true), false);
+assert.equal(verifyPlayback({before:1, after:0, frames:12, error:null}, true), false);
+console.log('8/8 playback-evidence assertions PASS; no browser/device certification');

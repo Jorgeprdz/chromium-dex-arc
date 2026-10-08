@@ -199,6 +199,10 @@ else
 fi
 
 df -h .
+# Inspect effective GN arguments after regeneration, including checkpoint resumes.
+# This verifies compiled-in formats, not successful playback or hardware support.
+python3 "$GITHUB_WORKSPACE/scripts/archium-media-preflight.py" \
+    --out "$PWD/out/Archium" --report "$PWD/out/Archium/archium-media-config.json"
 # SIGINT lets Ninja stop its children and flush .ninja_log/.ninja_deps before packing.
 slice_started=$SECONDS
 slice_seconds=$((slice_minutes * 60))

@@ -1,0 +1,22 @@
+{
+  "chromium": "cfd94726b7b5fb48aedcc32662f2f3fbdbadec35",
+  "ffmpeg": "9db86ce5b5b454dfc96c435f9f0723012980c37f",
+  "files": [
+    {
+      "path": "build/config/features.gni",
+      "sha256": "915f78aabf4afa8010b6579f6cb45131e1b24a9176a39185e6e2d17a871f2e2d"
+    },
+    {
+      "path": "media/media_options.gni",
+      "sha256": "1bcb71de32c1b658b6a95d0a50887c06c874e58e540defe626a0c039a586241b"
+    },
+    {
+      "path": "third_party/ffmpeg/ffmpeg_options.gni",
+      "sha256": "5e4192356f0efac34f8ebfa0e789bc5a862ddf631acf22e57e3455de9876a736"
+    },
+    {
+      "path": "third_party/widevine/cdm/widevine.gni",
+      "sha256": "4582c3205a869e55108e3b92329cc3c210b75bd6e75b3b04393e01950a2dffe8"
+    }
+  ]
+}

@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="es">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Archium · pruebas multimedia</title>
+<style>
+body{font:16px system-ui;background:#eef1f6;color:#1d2535;margin:24px auto;padding:0 20px;max-width:900px}
+video{width:100%;max-width:640px;background:#111;border-radius:12px;display:block;margin:20px 0}
+button{font:inherit;padding:10px 16px;margin-right:8px;border:0;border-radius:8px;background:#284f97;color:white;cursor:pointer}
+button:disabled{opacity:.5}pre{white-space:pre-wrap;background:white;padding:20px;border-radius:12px;font-size:13px}
+</style>
+<h1>Pruebas multimedia</h1>
+<p>Ejecutar en la APK de Archium con los cambios multimedia. Se reproducen patrones y tonos sintéticos; no se utiliza contenido personal.</p>
+<p>El resultado automático exige avance del tiempo y fotogramas de vídeo. Sonido audible, pantalla completa, PiP y aceleración requieren comprobación adicional en el dispositivo.</p>
+<button id="run">Ejecutar 8 pruebas</button><button id="save">Guardar resultados</button>
+<video id="player" controls playsinline preload="metadata"></video>
+<p>Después de las pruebas, usa los controles del vídeo para comprobar el tono, pantalla completa y las opciones disponibles.</p>
+<pre id="output">Pendiente de ejecución. Un navegador distinto no valida Archium.</pre>
+<script src="media-tests.js"></script>
+</html>

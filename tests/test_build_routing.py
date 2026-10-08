@@ -54,6 +54,8 @@ elif name=='python3' and args[0].endswith('archium-checkpoint.py') and args[1]==
  if not python_link.exists():python_link.symlink_to(pathlib.Path(sys.argv[0]).resolve())
 elif name=='python3' and args and args[0].endswith('archium-autoninja.py'):
  os.execvp('autoninja',['autoninja']+args[2:])
+elif name=='python3' and args and args[0].endswith('archium-media-preflight.py'):
+ sys.exit(int(os.environ.get('MOCK_MEDIA_GATE_RESULT','0')))
 elif name=='python3' and args and args[0].endswith('archium-java-preflight.py'):
  time.sleep(float(os.environ.get('MOCK_PREFLIGHT_SLEEP','0')))
  if os.environ.get('MOCK_JAVA_PREFLIGHT_RESULT','0')!='0':sys.exit(int(os.environ['MOCK_JAVA_PREFLIGHT_RESULT']))
@@ -215,6 +217,13 @@ elif name=='sudo' and args and args[0]=='timeout':
                 result=self.run_build(**{name:value})
                 self.assertEqual(result.returncode, 2, result.stderr)
                 self.assertEqual(self.calls(), [])
+
+    def test_media_configuration_failure_prevents_all_compilation(self):
+        result = self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
+                                MOCK_MEDIA_GATE_RESULT='2')
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertFalse(any(c[0] == 'autoninja' for c in self.calls()))
+        self.assertEqual(self.output.read_text(), '')
 
     def test_java_compiler_failure_prevents_native_and_apk(self):
         result=self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
