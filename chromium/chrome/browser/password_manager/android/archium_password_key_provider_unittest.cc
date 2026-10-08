@@ -20,10 +20,12 @@ class ArchiumPasswordKeyProviderTest : public testing::Test {
 
 TEST_F(ArchiumPasswordKeyProviderTest, WorkerLoadAndOriginSequenceReply) {
   const auto origin = base::PlatformThread::CurrentRef();
-  ArchiumPasswordKeyProvider provider(base::BindRepeating([origin] {
-    EXPECT_NE(origin, base::PlatformThread::CurrentRef());
-    return std::vector<uint8_t>(32, 42);
-  }));
+  ArchiumPasswordKeyProvider provider(base::BindRepeating(
+      [](base::PlatformThreadRef origin) {
+        EXPECT_NE(origin, base::PlatformThread::CurrentRef());
+        return std::vector<uint8_t>(32, 42);
+      },
+      origin));
   base::test::TestFuture<std::string,
                         base::expected<os_crypt_async::Encryptor::Key,
                                        os_crypt_async::KeyProvider::KeyError>> future;
@@ -68,9 +70,11 @@ TEST_F(ArchiumPasswordKeyProviderTest, LegacyDecryptsWithoutBecomingEncryptionFa
     std::vector<std::pair<size_t, std::unique_ptr<os_crypt_async::KeyProvider>>> providers;
     providers.emplace_back(5u, std::make_unique<ArchiumLegacyKeyProvider>());
     providers.emplace_back(20u, std::make_unique<ArchiumPasswordKeyProvider>(
-        base::BindRepeating([available] {
-          return std::vector<uint8_t>(available ? 32 : 0, 42);
-        })));
+        base::BindRepeating(
+            [](bool available) {
+              return std::vector<uint8_t>(available ? 32 : 0, 42);
+            },
+            available)));
     os_crypt_async::OSCryptAsync crypt(std::move(providers));
     base::test::TestFuture<scoped_refptr<os_crypt_async::Encryptor>> future;
     crypt.GetInstance(future.GetCallback());
@@ -91,7 +95,8 @@ TEST_F(ArchiumPasswordKeyProviderTest, InvalidKeyFailsClosedAndPreservesData) {
   for (size_t size : {0u, 31u, 33u}) {
     std::vector<std::pair<size_t, std::unique_ptr<os_crypt_async::KeyProvider>>> providers;
     providers.emplace_back(20u, std::make_unique<ArchiumPasswordKeyProvider>(
-        base::BindRepeating([size] { return std::vector<uint8_t>(size, 42); })));
+        base::BindRepeating(
+            [](size_t size) { return std::vector<uint8_t>(size, 42); }, size)));
     os_crypt_async::OSCryptAsync crypt(std::move(providers));
     base::test::TestFuture<scoped_refptr<os_crypt_async::Encryptor>> future;
     crypt.GetInstance(future.GetCallback());
