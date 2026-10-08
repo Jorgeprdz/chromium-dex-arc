@@ -11,6 +11,16 @@ readonly chromium_revision=cfd94726b7b5fb48aedcc32662f2f3fbdbadec35
 readonly depot_revision=8a5434051036b32412a2ecb10c213a72e3f3ccb9
 readonly build_workspace="$RUNNER_TEMP/chromium-archium"
 
+build_scope="${ARCHIUM_BUILD_SCOPE:-full}"
+if [[ "$build_scope" != full && "$build_scope" != arc-media ]]; then
+    printf 'Unknown Archium build scope: %s\n' "$build_scope" >&2
+    exit 2
+fi
+if [[ "$build_scope" == arc-media && "${ARCHIUM_COMPILE_GATE_TARGETS:-}" != chrome_junit_tests ]]; then
+    printf 'Arc/media scope requires exactly the chrome_junit_tests compile gate.\n' >&2
+    exit 2
+fi
+
 build_phase="${1:---all}"
 if (( $# > 1 )) || [[ ! "$build_phase" =~ ^--(all|prepare|work)$ ]]; then
     printf 'Usage: build-archium.sh [--prepare|--work]\n' >&2
@@ -223,7 +233,7 @@ compile_slice() {
 printf 'PHASE A1: compiling real Java/JNI owners before native work.\n'
 java_targets_file="$PWD/out/Archium/archium-java-targets.txt"
 run_work TERM "$work_seconds" 0 python3 "$GITHUB_WORKSPACE/scripts/archium-java-preflight.py" \
-    --out "$PWD/out/Archium" --targets-file "$java_targets_file"
+    --out "$PWD/out/Archium" --targets-file "$java_targets_file" --scope "$build_scope"
 mapfile -t java_targets < "$java_targets_file"
 if (( ${#java_targets[@]} == 0 )); then
     printf 'Java preflight did not resolve any compilation targets.\n' >&2
@@ -231,7 +241,11 @@ if (( ${#java_targets[@]} == 0 )); then
 fi
 compile_slice "${java_targets[@]}"
 # Check accessible native owners, including the bridge's generated JNI includes.
-run_work TERM "$work_seconds" 0 gn check out/Archium //chrome/browser/password_manager/android:archium_password_manager_tests
+if [[ "$build_scope" == full ]]; then
+    run_work TERM "$work_seconds" 0 gn check out/Archium //chrome/browser/password_manager/android:archium_password_manager_tests
+else
+    run_work TERM "$work_seconds" 0 gn check out/Archium //chrome/android:chrome_public_apk
+fi
 
 compile_gate_targets="${ARCHIUM_COMPILE_GATE_TARGETS:-${ARCHIUM_VALIDATE_TARGETS:-}}"
 if [[ -n "${ARCHIUM_VALIDATE_TARGETS:-}" && -z "${ARCHIUM_COMPILE_GATE_TARGETS:-}" ]]; then
@@ -246,7 +260,9 @@ if [[ -n "$compile_gate_targets" ]]; then
         fi
     done
     # This source_set owns the edited upstream password client tests.
-    validation_targets+=(chrome/browser/password_manager:unit_tests)
+    if [[ "$build_scope" == full ]]; then
+        validation_targets+=(chrome/browser/password_manager:unit_tests)
+    fi
     printf 'PHASE A2: compiling Archium native/full test targets.\n'
     compile_slice "${validation_targets[@]}"
 fi
@@ -254,7 +270,7 @@ fi
 # Verify every mandatory Android-native test produced Chromium's generated device
 # launcher before the APK is permitted to compile. Missing launchers fail closed.
 run_work TERM "$work_seconds" 0 python3 "$GITHUB_WORKSPACE/scripts/archium-test-gates.py" verify-device-runners \
-    --out "$PWD/out/Archium"
+    --out "$PWD/out/Archium" --scope "$build_scope"
 
 if [[ -n "${ARCHIUM_RUN_HOST_GATES:-}" && "${ARCHIUM_RUN_HOST_GATES}" != true ]]; then
     printf 'ARCHIUM_RUN_HOST_GATES may not disable the mandatory host execution gate.\n' >&2

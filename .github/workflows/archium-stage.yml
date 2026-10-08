@@ -30,7 +30,8 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       ARCHIUM_SOURCE_TAG: ${{ inputs.source_tag }}
       ARCHIUM_SOURCE_COMMIT: ${{ inputs.source_commit }}
-      ARCHIUM_COMPILE_GATE_TARGETS: 'archium_key_provider_tests archium_key_java archium_login_database_tests archium_password_import_tests archium_password_manager_tests archium_password_csv_java chrome_junit_tests'
+      ARCHIUM_BUILD_SCOPE: 'arc-media'
+      ARCHIUM_COMPILE_GATE_TARGETS: 'chrome_junit_tests'
       ARCHIUM_RUN_HOST_GATES: 'true'
       ARCHIUM_PREVIOUS_TAG: ${{ inputs.previous_tag }}
       ARCHIUM_CHECKPOINT_TAG: archium-checkpoint-${{ github.run_id }}-${{ inputs.stage }}

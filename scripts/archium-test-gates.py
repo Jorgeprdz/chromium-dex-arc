@@ -125,34 +125,49 @@ def android_test_runner(out_dir: Path, target: str) -> Path:
 
 
 
-def verify_device_runners(out_dir: Path) -> None:
+def native_test_targets(scope: str) -> tuple[str, ...]:
+    if scope == 'full':
+        return ANDROID_NATIVE_TEST_TARGETS
+    if scope == 'arc-media':
+        return ()
+    raise ValueError('Unknown Archium test scope: ' + scope)
+
+
+def verify_device_runners(out_dir: Path, scope: str = 'full') -> None:
     """Fail closed unless every compile-gated Android test has its Chromium launcher."""
-    for target in ANDROID_NATIVE_TEST_TARGETS:
+    targets = native_test_targets(scope)
+    if scope == 'arc-media':
+        require_file(out_dir.resolve() / 'bin/run_chrome_junit_tests',
+                     'Required Arc Robolectric runner')
+        print('ARCHIUM_ARC_HOST_RUNNER_READY=1', flush=True)
+        return
+    for target in targets:
         android_test_runner(out_dir, target)
-    print(f'ARCHIUM_DEVICE_RUNNERS_READY={len(ANDROID_NATIVE_TEST_TARGETS)}', flush=True)
+    print(f'ARCHIUM_DEVICE_RUNNERS_READY={len(targets)}', flush=True)
 
 
 def adb(serial: str, *args: str, capture: bool = False) -> subprocess.CompletedProcess[str]:
     return run(['adb', '-s', serial, *args], capture=capture)
 
 
-def device_gate(out_dir: Path, serial: str) -> None:
+def device_gate(out_dir: Path, serial: str, scope: str = 'full') -> None:
     """Execute Android-native + instrumentation tests on an explicitly named device."""
     if not serial.strip():
         raise SystemExit('DEVICE_GATE requires an explicit non-empty ADB serial')
     sdk, platform_version, build_tools_version, _ = resolve_pinned_android_sdk(out_dir)
     adb(serial, 'get-state')
-    for target in ANDROID_NATIVE_TEST_TARGETS:
+    for target in native_test_targets(scope):
         runner = android_test_runner(out_dir, target)
         # Chromium's generated runner owns deployment and runtime dependencies.
         # Explicit --device prevents accidental sharding across unrelated devices.
         run([str(runner), '--device', serial, '-f', 'Archium*'], cwd=out_dir.parent.parent)
 
-    run([
-        sys.executable, str(ROOT / 'scripts/test-android-password-key.py'),
-        '--device', serial, '--sdk', str(sdk),
-        '--platform-version', platform_version, '--build-tools-version', build_tools_version,
-    ], cwd=ROOT)
+    if scope == 'full':
+        run([
+            sys.executable, str(ROOT / 'scripts/test-android-password-key.py'),
+            '--device', serial, '--sdk', str(sdk),
+            '--platform-version', platform_version, '--build-tools-version', build_tools_version,
+        ], cwd=ROOT)
     run([
         sys.executable, str(ROOT / 'scripts/test-android-window-policy.py'),
         '--device', serial, '--sdk', str(sdk),
@@ -199,10 +214,12 @@ def main() -> None:
 
     verify = sub.add_parser('verify-device-runners')
     verify.add_argument('--out', type=Path, required=True)
+    verify.add_argument('--scope', choices=('full', 'arc-media'), default='full')
 
     device = sub.add_parser('device')
     device.add_argument('--out', type=Path, required=True)
     device.add_argument('--device', required=True)
+    device.add_argument('--scope', choices=('full', 'arc-media'), default='full')
 
     post = sub.add_parser('post-build')
     post.add_argument('--apk', type=Path, required=True)
@@ -213,9 +230,9 @@ def main() -> None:
     if args.gate == 'host':
         host_gate(args.android_jar, args.out)
     elif args.gate == 'verify-device-runners':
-        verify_device_runners(args.out)
+        verify_device_runners(args.out, args.scope)
     elif args.gate == 'device':
-        device_gate(args.out, args.device)
+        device_gate(args.out, args.device, args.scope)
     elif args.gate == 'post-build':
         post_build_gate(args.apk, args.device, args.package)
 

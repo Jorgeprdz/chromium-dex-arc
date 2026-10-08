@@ -100,6 +100,7 @@ elif name=='sudo' and args and args[0]=='timeout':
                     'GITHUB_WORKSPACE': str(self.repo), 'GITHUB_OUTPUT': str(self.output),
                     'ARCHIUM_CHECKPOINT_TAG': 'archium-checkpoint-456-2'}
         for name in ['ARCHIUM_SOURCE_TAG', 'ARCHIUM_SOURCE_COMMIT', 'ARCHIUM_PREVIOUS_TAG',
+                     'ARCHIUM_BUILD_SCOPE',
                      'ARCHIUM_VALIDATE_TARGETS', 'ARCHIUM_COMPILE_GATE_TARGETS',
                      'ARCHIUM_RUN_HOST_GATES']:
             self.env.pop(name, None)
@@ -125,6 +126,39 @@ elif name=='sudo' and args and args[0]=='timeout':
         self.assertIn('archium_password_manager_tests',ninjas[1][1])
         self.assertIn('chrome/browser/password_manager:unit_tests',ninjas[1][1])
         self.assertIn('chrome_public_apk',ninjas[2][1])
+
+    def test_arc_media_scope_keeps_java_host_and_media_gates_without_native_password_tests(self):
+        result=self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
+                              ARCHIUM_BUILD_SCOPE='arc-media',
+                              ARCHIUM_COMPILE_GATE_TARGETS='chrome_junit_tests')
+        self.assertEqual(result.returncode,0,result.stderr)
+        calls=self.calls()
+        gn_checks=[c for c in calls if c[:2]==['gn','check']]
+        self.assertTrue(gn_checks)
+        self.assertTrue(all('archium_password' not in ' '.join(c) for c in gn_checks))
+        ninjas=[c for c in calls if c[0]=='autoninja']
+        self.assertIn('chrome_junit_tests',ninjas[1])
+        self.assertFalse(any('chrome/browser/password_manager:unit_tests' in c for c in ninjas))
+        java=next(c for c in calls if c[0]=='python3' and c[1].endswith('archium-java-preflight.py'))
+        self.assertIn('arc-media',java)
+        verify=next(c for c in calls if c[0]=='python3' and c[1].endswith('archium-test-gates.py') and c[2]=='verify-device-runners')
+        self.assertIn('arc-media',verify)
+        media=next(i for i,c in enumerate(calls) if c[0]=='python3' and c[1].endswith('archium-media-preflight.py'))
+        host=next(i for i,c in enumerate(calls) if c[0]=='python3' and c[1].endswith('archium-test-gates.py') and c[2]=='host')
+        apk=next(i for i,c in enumerate(calls) if c[0]=='autoninja' and 'chrome_public_apk' in c)
+        self.assertLess(media,host);self.assertLess(host,apk)
+
+    def test_arc_media_scope_rejects_password_or_empty_test_compile_targets(self):
+        for targets in ('','archium_password_manager_tests','chrome_junit_tests archium_key_provider_tests'):
+            with self.subTest(targets=targets):
+                result=self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
+                                      ARCHIUM_BUILD_SCOPE='arc-media',
+                                      ARCHIUM_COMPILE_GATE_TARGETS=targets)
+                self.assertEqual(result.returncode,2)
+
+    def test_unknown_build_scope_is_rejected(self):
+        result=self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,ARCHIUM_BUILD_SCOPE='typo')
+        self.assertEqual(result.returncode,2)
 
     def test_dependency_timeout_stops_before_gn_or_compilation(self):
         result = self.run_build(ARCHIUM_SOURCE_TAG=SOURCE_TAG,

@@ -45,3 +45,27 @@ class JavaPreflightTests(unittest.TestCase):
         self.graph['//chrome:arc__compile_java']['outputs']=['//out/Other/arc.jar']
         with self.assertRaisesRegex(RuntimeError,'outside'):
             loader().resolve(self.graph,self.paths,self.checkout,self.out)
+
+    def test_disabled_keystore_sources_are_not_required_in_generated_graph(self):
+        prefix='chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/'
+        conditional=[prefix+'ArchiumPasswordKey.java',prefix+'ArchiumPasswordKeyBridge.java']
+        targets,coverage=loader().resolve(self.graph,self.paths+conditional,self.checkout,self.out,
+                                          local_passwords_enabled=False)
+        self.assertEqual(set(coverage),set(self.paths))
+        self.assertEqual(targets,['obj/chrome/arc.javac.jar','obj/chrome/tests.javac.jar'])
+
+    def test_disabled_passwords_do_not_exempt_other_delivered_sources(self):
+        prefix='chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/'
+        with self.assertRaisesRegex(RuntimeError,'ArchiumPasswordManagerBridge.java'):
+            loader().resolve(self.graph,self.paths+[prefix+'ArchiumPasswordManagerBridge.java'],
+                             self.checkout,self.out,local_passwords_enabled=False)
+
+    def test_effective_password_flag_requires_one_explicit_boolean(self):
+        module=loader()
+        self.assertFalse(module.parse_local_passwords_enabled('enable_archium_local_passwords = false\n'))
+        self.assertTrue(module.parse_local_passwords_enabled('enable_archium_local_passwords = true\n'))
+        for body in ('','enable_archium_local_passwords = 0\n',
+                     'enable_archium_local_passwords = false\nenable_archium_local_passwords = true\n'):
+            with self.subTest(body=body):
+                with self.assertRaises(RuntimeError):
+                    module.parse_local_passwords_enabled(body)

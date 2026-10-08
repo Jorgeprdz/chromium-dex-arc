@@ -7,9 +7,23 @@ The emitted Ninja outputs belong to real compile_java.py actions in this build d
 import argparse
 import json
 from pathlib import Path
+import re
 import subprocess
 
 ROOT = Path(__file__).resolve().parents[1]
+KEY_JAVA_PREFIX = 'chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/'
+# Exactly the sources in the enable_archium_local_passwords-guarded archium_key_java
+# target. Manager/CSV/settings sources still have owners when this flag is false.
+CONDITIONAL_KEY_SOURCES = frozenset(KEY_JAVA_PREFIX + name for name in (
+    'ArchiumPasswordKey.java', 'ArchiumPasswordKeyBridge.java'))
+
+
+def parse_local_passwords_enabled(text):
+    matches = re.findall(r'^\s*enable_archium_local_passwords\s*=\s*(true|false)\s*$',
+                         text, re.MULTILINE)
+    if len(matches) != 1:
+        raise RuntimeError('Missing or ambiguous effective GN local-passwords flag')
+    return matches[0] == 'true'
 
 
 def gn_path(value, checkout):
@@ -18,7 +32,9 @@ def gn_path(value, checkout):
     return Path(value).resolve() if Path(value).is_absolute() else (checkout / value).resolve()
 
 
-def resolve(graph, paths, checkout, out):
+def resolve(graph, paths, checkout, out, *, local_passwords_enabled=True):
+    if not local_passwords_enabled:
+        paths = [path for path in paths if path not in CONDITIONAL_KEY_SOURCES]
     checkout, out = checkout.resolve(), out.resolve()
     wanted = {gn_path('//' + name, checkout): name for name in paths}
     coverage = {}
@@ -53,20 +69,37 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--out', type=Path, required=True)
     parser.add_argument('--targets-file', type=Path, required=True)
+    parser.add_argument('--scope', choices=('full', 'arc-media'), default='full')
     args = parser.parse_args()
     out = args.out.resolve()
     checkout = out.parent.parent
     manifest = json.loads((ROOT / 'patches/upstream-files.json').read_text())
     paths = sorted(path for path in manifest['modified'] if path.endswith('.java'))
+    enabled = True
+    if args.scope == 'arc-media':
+        flag = subprocess.run(['gn', 'args', str(out),
+                               '--list=enable_archium_local_passwords', '--short'],
+                              text=True, capture_output=True, check=True, timeout=120)
+        enabled = parse_local_passwords_enabled(flag.stdout)
+        if enabled:
+            raise RuntimeError('Arc/media build requires effective local passwords disabled')
     # Default-toolchain actions match the configured APK/test build. Action inputs
     # contain invoker.source_files in pinned internal_rules.gni:3068.
     result = subprocess.run(['gn', 'desc', str(out), '*', '--format=json',
                              '--default-toolchain'], text=True, capture_output=True,
                             check=True, timeout=180)
-    targets, coverage = resolve(json.loads(result.stdout), paths, checkout, out)
+    targets, coverage = resolve(json.loads(result.stdout), paths, checkout, out,
+                                local_passwords_enabled=enabled)
     args.targets_file.write_text('\n'.join(targets) + '\n')
     (out / 'archium-java-coverage.json').write_text(json.dumps(coverage, indent=2) + '\n')
-    print(f'Java preflight coverage: {len(coverage)}/{len(paths)} sources, '
+    inactive = sorted(set(paths) & CONDITIONAL_KEY_SOURCES) if not enabled else []
+    (out / 'archium-build-scope.json').write_text(json.dumps({
+        'scope': args.scope, 'local_passwords_enabled': enabled,
+        'inactive_java_sources': inactive,
+        'reason': 'effective GN flag excludes archium_key_java' if inactive else None,
+    }, indent=2) + '\n')
+    print(f'Java preflight coverage: {len(coverage)}/{len(paths) - len(inactive)} active sources, '
+          f'{len(inactive)} sources excluded by verified GN flag, '
           f'{len(targets)} real javac actions', flush=True)
 
 

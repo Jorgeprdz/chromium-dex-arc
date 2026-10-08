@@ -1,4 +1,4 @@
-name: Archium for Android build in resumable stages
+name: Archium Arc + media for Android (without local passwords)
 on:
   workflow_dispatch:
     inputs:
@@ -18,7 +18,7 @@ on:
 permissions:
   contents: write
 concurrency:
-  group: archium-build-staged
+  group: archium-build-staged-${{ github.ref }}
   cancel-in-progress: false
 jobs:
   stage1:
