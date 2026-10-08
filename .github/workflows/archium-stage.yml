@@ -46,6 +46,11 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
+      - name: Check repository before checkpoint restore
+        timeout-minutes: 10
+        env:
+          ARCHIUM_REPOSITORY_PYTHON: /usr/bin/python3
+        run: bash scripts/check-archium-repository.sh
       - name: Restore checkpoint and prepare Chromium
         timeout-minutes: 62
         run: bash scripts/build-archium.sh --prepare

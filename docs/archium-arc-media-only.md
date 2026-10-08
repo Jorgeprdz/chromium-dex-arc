@@ -25,6 +25,8 @@ siguen necesitando acciones reales de compilación.
 
 Gates obligatorios:
 
+- Antes de descargar cualquier checkpoint: sintaxis Bash/Python y suite completa
+  del repositorio con Python 3.12, JDK 17 y GN standalone de la revisión fijada.
 - Verificación de argumentos multimedia efectivos.
 - Compilación Java/JNI de cada propietario activo.
 - `gn check //chrome/android:chrome_public_apk`.
@@ -77,6 +79,22 @@ opciones Java, incluso con un `-da` heredado. Esa regresión valida el contrato 
 lanzador; la ejecución completa de las suites Chromium sigue siendo obligatoria
 en Actions.
 
+El intento `37827632401` volvió a compilar `chrome_junit_tests`, pero la nueva
+regresión del lanzador se detuvo antes de las suites Robolectric: ejecutaba
+`unittest discover` sobre un directorio temporal vacío. Python 3.11 devolvía 0;
+Python 3.12 en Ubuntu 24.04 devuelve 5 (`NO TESTS RAN`). La fixture ahora contiene
+una prueba real y comprueba que se ejecutó antes de verificar las seis llamadas
+al JVM. No se ignora el código de salida ni se cambia la versión de Python en CI.
+
+Cada stage ejecuta `scripts/check-archium-repository.sh` justo después del
+checkout, con un límite de 10 minutos y antes de restaurar Chromium. Usa el
+Python 3.12 del sistema y JDK 17 del runner. El GN standalone corresponde a
+`gn_version` del DEPS de Chromium fijado; se comprueba el SHA-256 del binario
+tanto al descargarlo como al reutilizarlo. La suite incluye las tres pruebas
+GN de multimedia y la regresión JVM con aserciones, sin necesitar el checkpoint.
+Una prueba fallida detiene el job antes de la descarga y la compilación. Los
+gates posteriores con el checkout real de Chromium siguen siendo obligatorios.
+
 Política por autorización: un único `workflow_dispatch` para cada intento. Los
 slices normales pueden continuar dentro de ese mismo run. Ante failure final,
 se conserva la evidencia y no se corrige, reintenta ni despacha otro run
@@ -85,8 +103,8 @@ automáticamente. El monitor existente sigue el último run de esta variante.
 Validación local:
 
 ```bash
-ARCHIUM_BUILD_SCOPE=arc-media ARCHIUM_TEST_GN=/path/to/gn \
-  python3 -m unittest discover -s tests -p 'test_*.py'
+# python3 debe ser 3.12; java/javac deben ser JDK 17.
+ARCHIUM_BUILD_SCOPE=arc-media bash scripts/check-archium-repository.sh
 python3 scripts/check-arc-preparation.py \
   --android-jar /opt/android-sdk/platforms/android-37.0/android.jar
 bash -n scripts/build-archium.sh

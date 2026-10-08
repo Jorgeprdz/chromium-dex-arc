@@ -29,6 +29,15 @@ class HostGateCoverageTests(unittest.TestCase):
             # host subprocess calls and the JVM assertion behavior real in this fixture.
             (checkout/'scripts').mkdir();(checkout/'tests').mkdir()
             (checkout/'scripts/check-arc-preparation.py').write_text('pass\n')
+            # Python 3.12 returns exit 5 for an empty discovered suite. Exercise
+            # this subprocess boundary with a real test, as the production gate does.
+            repository_record=checkout/'repository-suite-ran.txt'
+            (checkout/'tests/test_repository_boundary.py').write_text(
+                'import unittest\nfrom pathlib import Path\n'
+                'class RepositoryBoundaryTest(unittest.TestCase):\n'
+                '    def test_checkout_contains_preparation_script(self):\n'
+                f'        self.assertTrue(Path({str(checkout / "scripts/check-arc-preparation.py")!r}).is_file())\n'
+                f'        Path({str(repository_record)!r}).write_text("executed")\n')
             source=checkout/'AssertionGateProbe.java'
             source.write_text('''public class AssertionGateProbe {
     public static void main(String[] args) {
@@ -60,6 +69,7 @@ class HostGateCoverageTests(unittest.TestCase):
                     os.environ,{'JAVA_TOOL_OPTIONS':'-Darchium.gate.marker=kept -da'}):
                 gates.host_gate(jar,out)
                 self.assertEqual(os.environ['JAVA_TOOL_OPTIONS'],'-Darchium.gate.marker=kept -da')
+            self.assertEqual(repository_record.read_text(),'executed')
             executed=record.read_text().splitlines()
             self.assertEqual(len(executed),6)
             self.assertTrue(all(line.startswith('ASSERTION_CAUGHT ') for line in executed))
