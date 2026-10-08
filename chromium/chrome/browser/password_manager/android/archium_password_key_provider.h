@@ -16,7 +16,7 @@ namespace password_manager {
 // Retain readability of the old profile without accepting the old fixed key for new writes.
 class ArchiumLegacyKeyProvider final : public os_crypt_async::PosixKeyProvider {
  public:
-  bool UseForEncryption() override { return false; }
+  bool UseForEncryption() override;
 };
 
 // Android Keystore-backed wrapping of the password database's stable data key.

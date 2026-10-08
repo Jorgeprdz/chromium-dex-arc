@@ -52,6 +52,10 @@ LoadEncryptionKey(ArchiumPasswordKeyProvider::KeyLoader loader) {
 
 }  // namespace
 
+bool ArchiumLegacyKeyProvider::UseForEncryption() {
+  return false;
+}
+
 ArchiumPasswordKeyProvider::ArchiumPasswordKeyProvider()
     : ArchiumPasswordKeyProvider(base::BindRepeating(&LoadAndroidKey)) {}
 

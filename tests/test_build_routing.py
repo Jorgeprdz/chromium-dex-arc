@@ -225,7 +225,8 @@ elif name=='sudo' and args and args[0]=='timeout':
         self.assertEqual(len(ninjas),1)
         self.assertIn('obj/archium-fixture.javac.jar',ninjas[0])
         self.assertFalse(any('archium_password_manager_tests' in c or 'chrome_public_apk' in c for c in ninjas))
-        self.assertEqual(self.output.read_text(),'')
+        self.assertEqual(self.output.read_text(),'complete=false\n')
+        self.assertTrue(any(c[0]=='python3' and 'pack' in c for c in self.calls()))
 
     def test_missing_java_owner_stops_before_any_compilation(self):
         result=self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
@@ -286,8 +287,23 @@ elif name=='sudo' and args and args[0]=='timeout':
         self.assertEqual(len(ninja),1)
         self.assertIn('archium_key_provider_tests',ninja[0]);self.assertIn('archium_key_java',ninja[0])
         self.assertNotIn('chrome_public_apk',ninja[0])
+        self.assertEqual(self.output.read_text(),'complete=false\n')
+        calls=self.calls()
+        pack_index=next(i for i,c in enumerate(calls) if c[0]=='python3' and 'pack' in c)
+        compiler_index=max(i for i,c in enumerate(calls) if c[0]=='autoninja')
+        self.assertGreater(pack_index,compiler_index)
+        self.assertIn('mandatory gates did not pass',result.stderr)
+
+    def test_compiler_failure_with_failed_upload_never_claims_saved_checkpoint(self):
+        result=self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
+                              ARCHIUM_COMPILE_GATE_TARGETS='archium_key_provider_tests',
+                              MOCK_NINJA_RESULT='1', MOCK_PACK_RESULT='8')
+        self.assertEqual(result.returncode,8,result.stderr)
         self.assertEqual(self.output.read_text(),'')
-        self.assertFalse(any('pack' in c for c in self.calls()))
+        self.assertIn('Work failed (exit 1)',result.stderr)
+        self.assertIn('Checkpoint failed verification/upload (exit 8)',result.stderr)
+        self.assertFalse(any(c[0]=='autoninja' and 'chrome_public_apk' in c
+                             for c in self.calls()))
 
     def test_host_execution_gate_runs_after_compile_gate_and_before_apk(self):
         result=self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,

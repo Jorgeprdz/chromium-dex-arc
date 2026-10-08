@@ -67,6 +67,11 @@ save_checkpoint() {
 run_work() {
     local signal="$1" limit="$2" timeout_status="$3"
     shift 3
+    local checkpoint_on_failure=false
+    if [[ "${1:-}" == --checkpoint-on-failure ]]; then
+        checkpoint_on_failure=true
+        shift
+    fi
     local remaining=$((work_seconds - $(job_elapsed))) result=0
     if (( remaining <= 0 )); then save_checkpoint "$timeout_status"; fi
     if (( limit > remaining )); then limit=$remaining; fi
@@ -74,8 +79,13 @@ run_work() {
     if (( result == 124 )); then
         save_checkpoint "$timeout_status"
     elif (( result != 0 )); then
-        # Escalation to SIGKILL is a failure, never a resumable-success claim.
         printf 'Work failed (exit %s); mandatory gates did not pass.\n' "$result" >&2
+        # A compiler that returned normally has drained its backend. Preserve
+        # its incremental outputs, while retaining FAILURE and blocking APK.
+        # Signal/forced-kill exits cannot prove quiescence and never pack.
+        if [[ "$checkpoint_on_failure" == true ]] && (( result < 128 )); then
+            save_checkpoint "$result"
+        fi
         exit "$result"
     fi
 }
@@ -199,7 +209,8 @@ compile_slice() {
     fi
     # Use the interpreter from the pinned autoninja shell entrypoint. The thin
     # loader defers Python SIGINT so subprocess.call cannot SIGKILL its backend.
-    run_work INT "$remaining" 0 "$build_workspace/depot_tools/python-bin/python3" \
+    run_work INT "$remaining" 0 --checkpoint-on-failure \
+        "$build_workspace/depot_tools/python-bin/python3" \
         "$GITHUB_WORKSPACE/scripts/archium-autoninja.py" \
         "$build_workspace/depot_tools/autoninja.py" -C out/Archium "$@" -j 4
 }

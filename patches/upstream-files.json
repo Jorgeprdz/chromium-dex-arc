@@ -167,8 +167,8 @@
     "chrome/browser/password_manager/android/archium_local_password_manager.cc": "e6b07a4818bdae166afdf8b1ffbc8e5720dd054415d8a1272afbe24724177f5a",
     "chrome/browser/password_manager/android/archium_local_password_manager.h": "44bd77321d5b13bd6b9c01b60c1cae4a79b0921ff46d2f1e443fd053b6bc8f8f",
     "chrome/browser/password_manager/android/archium_local_password_manager_unittest.cc": "3a5b81bf6f0666b6d8534768534de34c633f3a496cfbc214be9e104816cc919e",
-    "chrome/browser/password_manager/android/archium_password_key_provider.cc": "ed44bc262af5c31a50db91518d5d5fbb4483d73c4c425f33eb13dc339f98c5d9",
-    "chrome/browser/password_manager/android/archium_password_key_provider.h": "229d6149cd96e942ab8ad1874a6f3d8d5935bfdd26b7c83e0d21eb03bdc84af5",
+    "chrome/browser/password_manager/android/archium_password_key_provider.cc": "ba9643aac21594195d20957a690cecae4c012016ef6eda38bd3539fb675aedd6",
+    "chrome/browser/password_manager/android/archium_password_key_provider.h": "186f138f64471200471f63d43eafe937380056e98c8456d0eb432da1c645cd59",
     "chrome/browser/password_manager/android/archium_password_key_provider_unittest.cc": "e21d5d88498679e1117593e9e9b443577b5923d05addec179ce349b8d8323aa4",
     "chrome/browser/password_manager/android/archium_password_manager_bridge.cc": "1786d2a21dab2e35634f14c11159873f9529c1b9900dec4d2c5b72cde862643d",
     "chrome/browser/password_manager/android/archium_password_manager_bridge.h": "0ea7fdfa4fce58180c0d04b5a4931d66540986504e24774aae834c7be2ac61e8",
@@ -188,5 +188,5 @@
     "components/password_manager/core/browser/password_store/password_store_backend.cc": "45764d4ad0e05acc5a216944a5a6763212f6c17e71bf689e9c973f12fb5c87d8",
     "components/password_manager/core/browser/password_store/password_store_interface.cc": "7e9dd5813ce8ece459ec66abdd3306028b7b3d6bbae048664872a34d8d097268"
   },
-  "patch_sha256": "632f3c1959c8fa851c91b6aca56588b22a5807b45c67f80c6c73f6da18cf15d9"
+  "patch_sha256": "ef39da4faa358025825edbace737871c09b460b8aa06792bb55c685ae3c280dc"
 }

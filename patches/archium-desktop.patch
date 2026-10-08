@@ -6662,7 +6662,7 @@ diff --git a/chrome/browser/password_manager/android/archium_password_key_provid
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/password_manager/android/archium_password_key_provider.cc
-@@ -0,0 +1,81 @@
+@@ -0,0 +1,85 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -6717,6 +6717,10 @@ new file mode 100644
 +
 +}  // namespace
 +
++bool ArchiumLegacyKeyProvider::UseForEncryption() {
++  return false;
++}
++
 +ArchiumPasswordKeyProvider::ArchiumPasswordKeyProvider()
 +    : ArchiumPasswordKeyProvider(base::BindRepeating(&LoadAndroidKey)) {}
 +
@@ -6767,7 +6771,7 @@ new file mode 100644
 +// Retain readability of the old profile without accepting the old fixed key for new writes.
 +class ArchiumLegacyKeyProvider final : public os_crypt_async::PosixKeyProvider {
 + public:
-+  bool UseForEncryption() override { return false; }
++  bool UseForEncryption() override;
 +};
 +
 +// Android Keystore-backed wrapping of the password database's stable data key.
