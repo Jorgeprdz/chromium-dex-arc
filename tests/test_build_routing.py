@@ -56,12 +56,16 @@ elif name=='python3' and args and args[0].endswith('archium-test-gates.py') and 
 elif name=='python3' and args and args[0].endswith('archium-test-gates.py') and len(args)>1 and args[1]=='verify-device-runners':
  sys.exit(int(os.environ.get('MOCK_DEVICE_RUNNER_VERIFY_RESULT','0')))
 elif name=='timeout':
+ if './build/install-build-deps.sh' in args:
+  sys.exit(int(os.environ.get('MOCK_DEPS_RESULT','0')))
  i=0
  while args[i].startswith('--'):i+=1
  os.execvp(args[i+1],args[i+1:])
 elif name=='autoninja':
  is_java='obj/archium-fixture.javac.jar' in args
  sys.exit(int(os.environ.get('MOCK_JAVA_NINJA_RESULT' if is_java else 'MOCK_NINJA_RESULT','0')))
+elif name=='sudo' and args and args[0]=='timeout':
+ os.execvp('timeout',args[1:])
 ''')
         driver.chmod(0o755)
         for name in ['sudo', 'df', 'git', 'python3', 'gn', 'timeout', 'autoninja']:
@@ -97,6 +101,14 @@ elif name=='autoninja':
         self.assertIn('archium_password_manager_tests',ninjas[1][1])
         self.assertIn('chrome/browser/password_manager:unit_tests',ninjas[1][1])
         self.assertIn('chrome_public_apk',ninjas[2][1])
+
+    def test_dependency_timeout_stops_before_gn_or_compilation(self):
+        result = self.run_build(ARCHIUM_SOURCE_TAG=SOURCE_TAG,
+                                ARCHIUM_SOURCE_COMMIT=SOURCE_COMMIT,
+                                MOCK_DEPS_RESULT='124')
+        self.assertEqual(result.returncode, 124, result.stderr)
+        self.assertFalse(any(c[0] in ('gn', 'autoninja') for c in self.calls()))
+        self.assertEqual(self.output.read_text(), '')
 
     def test_java_compiler_failure_prevents_native_and_apk(self):
         result=self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,

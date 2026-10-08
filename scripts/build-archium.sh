@@ -11,6 +11,16 @@ readonly chromium_revision=cfd94726b7b5fb48aedcc32662f2f3fbdbadec35
 readonly depot_revision=8a5434051036b32412a2ecb10c213a72e3f3ccb9
 readonly build_workspace="$RUNNER_TEMP/chromium-archium"
 
+install_build_deps() {
+    printf 'PREPARE: configuring bounded package downloads.\n'
+    sudo --preserve-env=GITHUB_ACTIONS,GITHUB_REPOSITORY \
+        python3 "$GITHUB_WORKSPACE/scripts/configure-archium-apt.py"
+    printf 'PREPARE: installing pinned Chromium dependencies (30 minute limit).\n'
+    sudo timeout --signal=TERM --kill-after=30s 30m \
+        ./build/install-build-deps.sh --no-prompt --android
+    printf 'PREPARE: dependencies installed.\n'
+}
+
 source_tag="${ARCHIUM_SOURCE_TAG:-}"
 source_commit="${ARCHIUM_SOURCE_COMMIT:-}"
 if [[ -n "$source_tag" || -n "$source_commit" ]]; then
@@ -41,7 +51,7 @@ if [[ -n "$source_tag" || -n "${ARCHIUM_PREVIOUS_TAG:-}" ]]; then
     export DEPOT_TOOLS_UPDATE=0
     bash "$build_workspace/depot_tools/ensure_bootstrap"
     cd "$build_workspace/checkout/src"
-    sudo ./build/install-build-deps.sh --no-prompt --android
+    install_build_deps
     if [[ -n "$source_tag" ]]; then
         git -C "$GITHUB_WORKSPACE" fetch --depth 1 origin "$source_commit"
         python3 "$GITHUB_WORKSPACE/scripts/transition-archium-patches.py" "$PWD" \
@@ -80,7 +90,7 @@ GCLIENT
 gclient sync --no-history --nohooks --revision "src@$chromium_revision"
 cd src
 test "$(git rev-parse HEAD)" = "$chromium_revision"
-sudo ./build/install-build-deps.sh --no-prompt --android
+install_build_deps
 gclient runhooks
 
 mkdir -p out/Archium
