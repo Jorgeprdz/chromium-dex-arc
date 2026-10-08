@@ -1,6 +1,10 @@
 """Verify actual host orchestration includes all affected real Robolectric suites."""
 import importlib.util
+import os
 from pathlib import Path
+import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -9,6 +13,57 @@ ROOT=Path(__file__).resolve().parents[1]
 
 
 class HostGateCoverageTests(unittest.TestCase):
+    def test_host_suites_execute_java_assertions_and_preserve_existing_options(self):
+        """Catch launching assertion-dependent suites with official-build JVM defaults."""
+        spec=importlib.util.spec_from_file_location('host_assertions',ROOT/'scripts/archium-test-gates.py')
+        gates=importlib.util.module_from_spec(spec);spec.loader.exec_module(gates)
+        java=shutil.which('java');javac=shutil.which('javac')
+        self.assertIsNotNone(java, 'Real JVM required for the host assertion regression')
+        self.assertIsNotNone(javac, 'Real Java compiler required for the host assertion regression')
+        with tempfile.TemporaryDirectory() as tmp:
+            checkout=Path(tmp);out=checkout/'out/Archium';(out/'bin').mkdir(parents=True)
+            jar=checkout/'android.jar';jar.write_bytes(b'SDK presence boundary; not compiled')
+            binary=checkout/'buildtools/linux64/gn';binary.parent.mkdir(parents=True)
+            binary.write_bytes(b'\x7fELFnative tool presence boundary; not executed');binary.chmod(0o755)
+            # Repository preparation is a separate tested boundary. Keep all actual
+            # host subprocess calls and the JVM assertion behavior real in this fixture.
+            (checkout/'scripts').mkdir();(checkout/'tests').mkdir()
+            (checkout/'scripts/check-arc-preparation.py').write_text('pass\n')
+            source=checkout/'AssertionGateProbe.java'
+            source.write_text('''public class AssertionGateProbe {
+    public static void main(String[] args) {
+        if (!"kept".equals(System.getProperty("archium.gate.marker"))) {
+            throw new IllegalStateException("Existing JVM options lost");
+        }
+        try {
+            assert false : "Non-flat layout requires AssertionError";
+        } catch (AssertionError expected) {
+            System.out.println("ASSERTION_CAUGHT " + args[0]);
+            return;
+        }
+        throw new IllegalStateException("Expected exception: java.lang.AssertionError");
+    }
+}
+''')
+            subprocess.run([javac,str(source)],check=True,capture_output=True,text=True)
+            record=checkout/'executed-suites.txt'
+            runner=out/'bin/run_chrome_junit_tests'
+            runner.write_text(f'#!{sys.executable}\n'+
+                'import subprocess,sys\nfrom pathlib import Path\n'+
+                f'command={[java,"-cp",str(checkout),"AssertionGateProbe"]!r}\n'+
+                'result=subprocess.run(command+[sys.argv[2]],capture_output=True,text=True)\n'+
+                'print(result.stdout+result.stderr,end="")\n'+
+                'if result.returncode:sys.exit(result.returncode)\n'+
+                f'with Path({str(record)!r}).open("a") as log:log.write(result.stdout)\n')
+            runner.chmod(0o755)
+            with patch.object(gates,'ROOT',checkout),patch.dict(
+                    os.environ,{'JAVA_TOOL_OPTIONS':'-Darchium.gate.marker=kept -da'}):
+                gates.host_gate(jar,out)
+                self.assertEqual(os.environ['JAVA_TOOL_OPTIONS'],'-Darchium.gate.marker=kept -da')
+            executed=record.read_text().splitlines()
+            self.assertEqual(len(executed),6)
+            self.assertTrue(all(line.startswith('ASSERTION_CAUGHT ') for line in executed))
+
     def test_host_runs_affected_native_group_binder_rail_toolbar_suites(self):
         spec=importlib.util.spec_from_file_location('host_gate',ROOT/'scripts/archium-test-gates.py')
         gates=importlib.util.module_from_spec(spec);spec.loader.exec_module(gates)

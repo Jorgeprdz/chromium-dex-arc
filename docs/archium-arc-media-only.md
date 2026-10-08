@@ -62,10 +62,25 @@ el checkpoint verificado de 23 partes del run completo, con passwords apagadas
 al regenerar GN para esta variante. El fallo de passwords de ese run se conserva
 sin corregir y sus targets nativos continúan excluidos de esta variante.
 
-Política del intento: un único `workflow_dispatch` para esta variante. Los
+El intento `37819474930` compiló `chrome_junit_tests`, pasó las 116 pruebas del
+repositorio y las primeras cuatro suites Robolectric. Se detuvo en dos variantes
+de `testSetThumbnailSpinnerVisibility_NotFlatLayout_Asserts` (Android 29 y 37):
+el build oficial deja `enable_java_asserts=false`, por lo que su wrapper JVM no
+activa las aserciones que esa prueba requiere. El método conserva la aserción
+original de Chromium.
+
+El gate añade `-ea` a `JAVA_TOOL_OPTIONS` únicamente en los procesos de las seis
+suites Robolectric, conservando las opciones existentes. Los argumentos GN del
+APK oficial no cambian. Una regresión ejecuta un JVM real a través del gate para
+verificar que las seis suites reciben aserciones activas y conservan otras
+opciones Java, incluso con un `-da` heredado. Esa regresión valida el contrato del
+lanzador; la ejecución completa de las suites Chromium sigue siendo obligatoria
+en Actions.
+
+Política por autorización: un único `workflow_dispatch` para cada intento. Los
 slices normales pueden continuar dentro de ese mismo run. Ante failure final,
 se conserva la evidencia y no se corrige, reintenta ni despacha otro run
-automáticamente. El monitor existente continúa siguiendo el run original.
+automáticamente. El monitor existente sigue el último run de esta variante.
 
 Validación local:
 

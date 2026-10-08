@@ -113,6 +113,13 @@ def host_gate(android_jar: Path, out_dir: Path) -> None:
         out_dir / 'bin' / 'run_chrome_junit_tests'
     )
     require_file(robolectric_runner, 'Chromium Robolectric runner')
+    # Official-build wrappers omit -ea, but Robolectric suites include tests
+    # expecting AssertionError. Enable assertions only in their child JVMs;
+    # keep APK build arguments and any existing Java options intact.
+    robolectric_env = {
+        **os.environ,
+        'JAVA_TOOL_OPTIONS': (os.environ.get('JAVA_TOOL_OPTIONS', '') + ' -ea').strip(),
+    }
     # Class names and registrations verified in the exact pinned junit/BUILD.gn
     # and toolbar:junit. Each suite executes separately, keeping missing classes visible.
     for test_filter in (
@@ -125,7 +132,8 @@ def host_gate(android_jar: Path, out_dir: Path) -> None:
             'org.chromium.chrome.browser.tasks.tab_management.NestedLayoutDelegateUnitTest.*',
             'org.chromium.chrome.browser.tasks.tab_management.TabListMediatorUnitTest.*',
             'org.chromium.chrome.browser.toolbar.top.ToolbarTabletUnitTest.*'):
-        run([str(robolectric_runner), '-f', test_filter], cwd=out_dir.parent.parent)
+        run([str(robolectric_runner), '-f', test_filter], cwd=out_dir.parent.parent,
+            env=robolectric_env)
     print('ARCHIUM_HOST_EXECUTION_GATE=PASS', flush=True)
 
 
