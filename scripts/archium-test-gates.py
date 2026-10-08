@@ -31,11 +31,12 @@ ANDROID_NATIVE_TEST_TARGETS = (
 )
 
 
-def run(argv: list[str], *, cwd: Path | None = None, capture: bool = False) -> subprocess.CompletedProcess[str]:
+def run(argv: list[str], *, cwd: Path | None = None, capture: bool = False,
+        env: dict[str, str] | None = None) -> subprocess.CompletedProcess[str]:
     print('+ ' + ' '.join(shlex.quote(str(x)) for x in argv), flush=True)
     return subprocess.run(
         [str(x) for x in argv], cwd=cwd, check=True,
-        text=True, capture_output=capture,
+        text=True, capture_output=capture, env=env,
     )
 
 
@@ -76,9 +77,27 @@ def resolve_pinned_android_sdk(out_dir: Path) -> tuple[Path, str, str, Path]:
     return sdk_root, platform_dir_name, build_tools_version, android_jar
 
 
+def pinned_gn_binary(out_dir: Path) -> Path:
+    """Resolve the native GN tool before tests change to isolated fixture roots.
+
+    Match the pinned depot_tools gn.py locations. Its PATH launcher discovers GN
+    relative to cwd and cannot discover Chromium from a temporary fixture tree.
+    """
+    checkout = out_dir.resolve().parent.parent
+    for relative in ('third_party/gn/gn', 'buildtools/linux64/gn/gn',
+                     'buildtools/linux64/gn'):
+        candidate = checkout / relative
+        if candidate.is_file() and os.access(candidate, os.X_OK):
+            with candidate.open('rb') as binary:
+                if binary.read(4) == b'\x7fELF':
+                    return candidate.resolve()
+    raise SystemExit('Pinned native GN binary missing; do not use a cwd-dependent launcher')
+
+
 def host_gate(android_jar: Path, out_dir: Path) -> None:
     """Execute every Archium gate that is runnable on the Linux CI host."""
     require_file(android_jar, 'Android platform jar')
+    suite_env = {**os.environ, 'ARCHIUM_TEST_GN': str(pinned_gn_binary(out_dir))}
     run([
         sys.executable,
         str(ROOT / 'scripts/check-arc-preparation.py'),
@@ -87,7 +106,7 @@ def host_gate(android_jar: Path, out_dir: Path) -> None:
     run([
         sys.executable, '-m', 'unittest', 'discover',
         '-s', str(ROOT / 'tests'), '-p', 'test_*.py',
-    ], cwd=ROOT)
+    ], cwd=ROOT, env=suite_env)
 
     out_dir = out_dir.resolve()
     robolectric_runner = (

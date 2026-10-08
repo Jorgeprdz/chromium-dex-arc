@@ -43,10 +43,24 @@ de concurrencia por ref con `cancel-in-progress: false`, para permitir este buil
 alternativo sin cancelar el run completo `37807259506`. Los tags contienen el
 RUN_ID, por lo que los checkpoints de ambos builds no se mezclan.
 
-Checkpoint fuente validado: `archium-checkpoint-37788278858-1`, producido por
-`a16e3f76b0c461de7b0a0a3dbc6d3ed30c7bb6e2`. La transición verifica inputs y
+Checkpoint fuente validado: `archium-checkpoint-37807259506-1`, producido por
+`33db26aa6fad2e8a9ac9ccf26774605edb9db771`. La transición verifica inputs y
 regenera GN con el flag apagado; Ninja puede reutilizar outputs válidos y debe
 recompilar aquellos afectados por el cambio de configuración.
+
+El primer intento de esta variante, `37810745991`, compiló los 31 propietarios
+Java activos, pasó `gn check` y compiló `chrome_junit_tests`. Falló en las tres
+pruebas de configuración GN del gate host: el launcher de depot_tools busca el
+binario relativo al checkout del directorio actual, mientras esas pruebas se
+ejecutan en directorios temporales. El gate ahora resuelve el binario nativo
+del checkout antes de cambiar de directorio y transmite su ruta absoluta en
+`ARCHIUM_TEST_GN`. Conserva las tres pruebas, los criterios de configuración y
+las seis suites Robolectric. Los sources del diseño Arc no cambian por esta
+corrección. Ese intento no publicó un checkpoint real nuevo: los mensajes de
+checkpoint con ocho partes provenían de fixtures de la suite Python. Se utiliza
+el checkpoint verificado de 23 partes del run completo, con passwords apagadas
+al regenerar GN para esta variante. El fallo de passwords de ese run se conserva
+sin corregir y sus targets nativos continúan excluidos de esta variante.
 
 Política del intento: un único `workflow_dispatch` para esta variante. Los
 slices normales pueden continuar dentro de ese mismo run. Ante failure final,
