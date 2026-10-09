@@ -14,6 +14,11 @@ public final class ArcDesktopAppearance {
     public static final String COLOR_KEY = "frame_color";
     public static final String UI_MODE_KEY = "ui_mode";
     public static final int DEFAULT_COLOR = 0xff53657b;
+    // Opaque tint seeds, not transparent or simulated backdrop blur.
+    public static final int[] FRAME_COLOR_PRESETS = {
+        0xff53657b, 0xff998ac3, 0xff7e9a8d, 0xffb6a17b,
+        0xffbe879c, 0xff444750, 0xff438cb8, 0xffda886b
+    };
 
     private ArcDesktopAppearance() {}
 

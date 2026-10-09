@@ -24,4 +24,23 @@
     <string name="arc_spaces">Espacios</string>
     <string name="arc_favorites">Favoritos</string>
     <string name="arc_pinned_tabs">Pestañas fijadas</string>
+    <string name="arc_frame_color_presets">Colores predeterminados</string>
+    <string name="arc_frame_color_custom">Color personalizado (#RRGGBB)</string>
+    <string name="arc_frame_color_preview">Vista previa</string>
+    <string name="arc_frame_color_rgb">Ajustar color (rojo, verde y azul)</string>
+    <string-array name="arc_frame_palette_names">
+        <item>Azul pizarra</item>
+        <item>Lavanda</item>
+        <item>Verde salvia</item>
+        <item>Arena</item>
+        <item>Rosa empolvado</item>
+        <item>Grafito</item>
+        <item>Azul océano</item>
+        <item>Coral</item>
+    </string-array>
+    <string-array name="arc_frame_rgb_names">
+        <item>Rojo</item>
+        <item>Verde</item>
+        <item>Azul</item>
+    </string-array>
 </resources>

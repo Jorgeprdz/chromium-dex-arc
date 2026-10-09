@@ -5,8 +5,11 @@ package org.chromium.chrome.browser.arc;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.res.Configuration;
 import android.content.SharedPreferences;
 import android.graphics.Color;
+import android.text.Editable;
+import android.text.TextWatcher;
 import android.graphics.Outline;
 import android.graphics.Path;
 import android.graphics.drawable.Drawable;
@@ -20,9 +23,12 @@ import android.view.ViewOutlineProvider;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.GridLayout;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
+import android.widget.ScrollView;
+import android.widget.SeekBar;
 import android.widget.TextView;
 
 import org.chromium.chrome.R;
@@ -584,33 +590,170 @@ public final class ArcDesktopCoordinator {
         menu.show();
     }
 
+    /** Opaque window-color fallback until native desktop backdrop blur is verified on DeX. */
     private void showColorPicker() {
-        if (mDestroyed) return;
+        if (mDestroyed || (mColorDialog != null && mColorDialog.isShowing())) return;
+
+        int selected = mPreferences.getInt(
+                ArcDesktopAppearance.COLOR_KEY, ArcDesktopAppearance.DEFAULT_COLOR);
+        LinearLayout content = new LinearLayout(mActivity);
+        content.setOrientation(LinearLayout.VERTICAL);
+        content.setPadding(dp(20), dp(8), dp(20), dp(12));
+
+        TextView presetTitle = new TextView(mActivity);
+        presetTitle.setText(R.string.arc_frame_color_presets);
+        content.addView(presetTitle);
+
         EditText input = new EditText(mActivity);
         input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
         input.setSingleLine(true);
-        input.setText(String.format(Locale.ROOT, "#%06X",
-                mPreferences.getInt(ArcDesktopAppearance.COLOR_KEY,
-                        ArcDesktopAppearance.DEFAULT_COLOR) & 0xffffff));
+        input.setText(String.format(Locale.ROOT, "#%06X", selected & 0xffffff));
         input.setSelectAllOnFocus(true);
-        mColorDialog = new AlertDialog.Builder(mActivity)
-                .setTitle(R.string.arc_frame_color).setView(input)
+        input.setContentDescription(mActivity.getString(R.string.arc_frame_color_custom));
+
+        GridLayout palette = new GridLayout(mActivity);
+        palette.setColumnCount(4);
+        int[] presetColors = ArcDesktopAppearance.FRAME_COLOR_PRESETS;
+        String[] presetNames = mActivity.getResources().getStringArray(
+                R.array.arc_frame_palette_names);
+        for (int i = 0; i < presetColors.length; i++) {
+            final int color = presetColors[i];
+            View swatch = new View(mActivity);
+            swatch.setFocusable(true);
+            swatch.setClickable(true);
+            swatch.setContentDescription(presetNames[i]);
+            GradientDrawable circle = new GradientDrawable();
+            circle.setShape(GradientDrawable.OVAL);
+            circle.setColor(color);
+            circle.setStroke(dp(2), 0xff808080);
+            swatch.setBackground(circle);
+            swatch.setOnClickListener(v -> {
+                input.setText(String.format(Locale.ROOT, "#%06X", color & 0xffffff));
+                input.setSelection(input.length());
+            });
+            GridLayout.LayoutParams tile = new GridLayout.LayoutParams();
+            tile.width = dp(44);
+            tile.height = dp(44);
+            tile.setMargins(dp(4), dp(4), dp(4), dp(4));
+            palette.addView(swatch, tile);
+        }
+        content.addView(palette);
+
+        TextView customLabel = new TextView(mActivity);
+        customLabel.setText(R.string.arc_frame_color_custom);
+        LinearLayout.LayoutParams labelParams = new LinearLayout.LayoutParams(-1, -2);
+        labelParams.topMargin = dp(12);
+        content.addView(customLabel, labelParams);
+        content.addView(input, new LinearLayout.LayoutParams(-1, dp(48)));
+
+        TextView preview = new TextView(mActivity);
+        preview.setText(R.string.arc_frame_color_preview);
+        preview.setGravity(Gravity.CENTER);
+        LinearLayout.LayoutParams previewParams = new LinearLayout.LayoutParams(-1, dp(42));
+        previewParams.topMargin = dp(8);
+        content.addView(preview, previewParams);
+
+        TextView rgbLabel = new TextView(mActivity);
+        rgbLabel.setText(R.string.arc_frame_color_rgb);
+        LinearLayout.LayoutParams rgbLabelParams = new LinearLayout.LayoutParams(-1, -2);
+        rgbLabelParams.topMargin = dp(12);
+        content.addView(rgbLabel, rgbLabelParams);
+        SeekBar[] channels = new SeekBar[3];
+        String[] channelNames = mActivity.getResources().getStringArray(
+                R.array.arc_frame_rgb_names);
+        int[] shifts = {16, 8, 0};
+        for (int i = 0; i < channels.length; i++) {
+            LinearLayout row = new LinearLayout(mActivity);
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            TextView title = new TextView(mActivity);
+            title.setText(channelNames[i]);
+            row.addView(title, new LinearLayout.LayoutParams(dp(44), -2));
+            SeekBar slider = new SeekBar(mActivity);
+            slider.setMax(255);
+            slider.setProgress((selected >>> shifts[i]) & 255);
+            slider.setContentDescription(channelNames[i]);
+            channels[i] = slider;
+            row.addView(slider, new LinearLayout.LayoutParams(0, dp(42), 1f));
+            content.addView(row);
+        }
+
+        for (SeekBar slider : channels) {
+            slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
+                @Override
+                public void onProgressChanged(SeekBar seekBar, int progress, boolean fromUser) {
+                    if (!fromUser) return;
+                    int chosen = Color.rgb(channels[0].getProgress(),
+                            channels[1].getProgress(), channels[2].getProgress());
+                    input.setText(String.format(Locale.ROOT, "#%06X", chosen & 0xffffff));
+                    input.setSelection(input.length());
+                }
+                @Override public void onStartTrackingTouch(SeekBar seekBar) {}
+                @Override public void onStopTrackingTouch(SeekBar seekBar) {}
+            });
+        }
+        input.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void afterTextChanged(Editable value) {
+                String hex = value.toString().trim();
+                if (!hex.matches("#[0-9a-fA-F]{6}")) {
+                    preview.setText(R.string.arc_color_format);
+                    preview.setBackgroundColor(Color.TRANSPARENT);
+                    return;
+                }
+                int chosen = Color.parseColor(hex);
+                for (int i = 0; i < channels.length; i++) {
+                    channels[i].setProgress((chosen >>> shifts[i]) & 255);
+                }
+                updateFrameColorPreview(preview, chosen);
+            }
+            @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
+            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
+        });
+        updateFrameColorPreview(preview, selected);
+
+        ScrollView scroll = new ScrollView(mActivity);
+        scroll.setFillViewport(false);
+        scroll.addView(content);
+
+        AlertDialog dialog = new AlertDialog.Builder(mActivity)
+                .setTitle(R.string.arc_frame_color)
+                .setView(scroll)
                 .setPositiveButton(android.R.string.ok, null)
                 .setNegativeButton(android.R.string.cancel, null)
-                .setNeutralButton(R.string.arc_reset_color, (dialog, which) ->
-                        mPreferences.edit().remove(ArcDesktopAppearance.COLOR_KEY).apply()).create();
-        mColorDialog.setOnShowListener(dialog -> mColorDialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setNeutralButton(R.string.arc_reset_color, (d, which) ->
+                        mPreferences.edit().remove(ArcDesktopAppearance.COLOR_KEY).apply())
+                .create();
+        mColorDialog = dialog;
+        dialog.setOnDismissListener(d -> {
+            if (mColorDialog == dialog) mColorDialog = null;
+        });
+        dialog.setOnShowListener(d -> dialog.getButton(AlertDialog.BUTTON_POSITIVE)
                 .setOnClickListener(v -> {
-                    String value = input.getText().toString().trim();
-                    if (!value.matches("#[0-9a-fA-F]{6}")) {
+                    String hex = input.getText().toString().trim();
+                    if (!hex.matches("#[0-9a-fA-F]{6}")) {
                         input.setError(mActivity.getString(R.string.arc_color_format));
                         return;
                     }
+                    // Cancel does not mutate the persisted window color.
                     mPreferences.edit().putInt(ArcDesktopAppearance.COLOR_KEY,
-                            Color.parseColor(value)).apply();
-                    mColorDialog.dismiss();
+                            Color.parseColor(hex)).apply();
+                    dialog.dismiss();
                 }));
-        mColorDialog.show();
+        dialog.show();
+    }
+
+    /** Preview the actual opaque frame surface instead of the raw seed color. */
+    private void updateFrameColorPreview(TextView preview, int seed) {
+        boolean dark = mIncognitoStateProvider.isIncognitoSelected()
+                || (mActivity.getResources().getConfiguration().uiMode
+                        & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+        int surface = ArcDesktopPolicy.surface(seed, dark);
+        GradientDrawable background = new GradientDrawable();
+        background.setColor(surface);
+        background.setCornerRadius(dp(10));
+        preview.setBackground(background);
+        preview.setTextColor(ArcDesktopPolicy.foreground(surface));
+        preview.setText(R.string.arc_frame_color_preview);
     }
 
     private LinearLayout.LayoutParams arcLocationBarLayoutParams() {

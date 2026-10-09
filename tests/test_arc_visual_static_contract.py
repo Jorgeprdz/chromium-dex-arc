@@ -125,6 +125,20 @@ class ArcVisualStaticContractTest(unittest.TestCase):
         self.assertIn('mIncognitoStateProvider.isIncognitoSelected()', self.arc)
         self.assertIn('ArcDesktopAppearance.surface(mActivity, incognito)', self.arc)
 
+    def test_opaque_frame_palette_with_preset_and_custom_picker(self):
+        # Source-level contract only, not a native UI or device-blur test.
+        appearance = text(ROOT / 'chromium/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java')
+        resources = text(ROOT / 'chromium/chrome/android/java/res/values/arc_strings.xml')
+        for required in ('FRAME_COLOR_PRESETS', 'Color.rgb(channels[0].getProgress()',
+                         'R.array.arc_frame_palette_names', 'R.array.arc_frame_rgb_names',
+                         'updateFrameColorPreview(preview, chosen)', 'Color.parseColor(hex)',
+                         'mPreferences.edit().putInt(ArcDesktopAppearance.COLOR_KEY'):
+            self.assertIn(required, appearance + self.arc)
+        self.assertIn('<string-array name="arc_frame_palette_names">', resources)
+        self.assertIn('<string-array name="arc_frame_rgb_names">', resources)
+        self.assertNotIn('setBackgroundBlurRadius(', self.arc)
+        self.assertIn('mColumn.setBackgroundColor(surface)', self.arc)
+
 
 if __name__ == '__main__':
     unittest.main()
