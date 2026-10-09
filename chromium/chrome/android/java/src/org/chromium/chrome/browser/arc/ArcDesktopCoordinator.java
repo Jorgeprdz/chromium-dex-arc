@@ -6,6 +6,7 @@ package org.chromium.chrome.browser.arc;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.SharedPreferences;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Outline;
 import android.graphics.Rect;
@@ -13,6 +14,7 @@ import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.text.InputType;
 import android.text.TextUtils;
+import android.transition.Transition;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewOutlineProvider;
@@ -37,6 +39,7 @@ import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.ui.side_ui.SideUiStateProvider;
 import org.chromium.chrome.browser.ui.side_ui.SideUiObserver;
 import org.chromium.chrome.browser.ui.side_ui.SideUiCoordinator.SideUiSpecs;
+import org.chromium.chrome.browser.ui.side_ui.SideUiCoordinator.AnchorSide;
 import org.chromium.chrome.browser.ui.side_ui.SideUiCoordinator.UiUpdateRequest;
 import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance;
 import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy;
@@ -111,17 +114,24 @@ public final class ArcDesktopCoordinator {
     private final SideUiStateProvider mSideUiStateProvider;
     private final SideUiObserver mSideUiObserver = new SideUiObserver() {
         @Override
+        public Transition onPreSideUiSpecsChange(SideUiSpecs specs, UiUpdateRequest request) {
+            return createArcViewportTransition(specs);
+        }
+
+        @Override
         public void onTransitionBegun(SideUiSpecs specs, UiUpdateRequest request) {
-            // The provider still exposes the previous reserved width during the animation.
+            beginArcViewportAnimation(specs);
         }
 
         @Override
         public void onTransitionEnded(SideUiSpecs specs, UiUpdateRequest request) {
+            finishArcViewportAnimation();
             onSidebarGeometryChanged();
         }
 
         @Override
         public void onSideUiSpecsChanged(SideUiSpecs specs, UiUpdateRequest request) {
+            finishArcViewportAnimation();
             onSidebarGeometryChanged();
         }
     };
@@ -155,6 +165,10 @@ public final class ArcDesktopCoordinator {
     private boolean mDestroyed;
     private boolean mArcToolbarCompositionActive;
     private boolean mArcFrameActive;
+    private boolean mArcViewportAnimationPending;
+    private boolean mArcViewportAnimationActive;
+    private int mArcVisualReservedLeftWidth = -1;
+    private int mArcViewportAnimationGeneration;
     private boolean mRejectingRoundedCornerGesture;
     private View mClippedSurface;
     private ViewOutlineProvider mClippedSurfaceOriginalOutlineProvider;
@@ -634,8 +648,10 @@ public final class ArcDesktopCoordinator {
             if (model.getProfile().isOffTheRecord()) return;
             mIcons.getLargeIconForUrl(new org.chromium.url.GURL(entry.url), dp(24),
                     (icon, color, fallback, type) -> {
-                        if (!mDestroyed && mTabSession == session && mCurrentModel.get() == model
-                                && icon != null) button.setImageBitmap(icon);
+                        if (!mDestroyed && mTabSession == session && mCurrentModel.get() == model) {
+                            ArcCollectionsView.applyFavoriteIcon(
+                                    button, new org.chromium.url.GURL(entry.url), icon, color);
+                        }
                     });
         });
         // Native model loading can invoke the bridge callback synchronously. Attach first so
@@ -654,9 +670,8 @@ public final class ArcDesktopCoordinator {
         mCollectionsView.setNativeBookmarks(mNativeBookmarks, (item, button) -> {
             if (model.getProfile().isOffTheRecord() || item.isFolder()) return;
             mIcons.getLargeIconForUrl(item.getUrl(), dp(24), (icon, color, fallback, type) -> {
-                if (!mDestroyed && mTabSession == session && mCurrentModel.get() == model
-                        && icon != null) {
-                    button.setImageBitmap(icon);
+                if (!mDestroyed && mTabSession == session && mCurrentModel.get() == model) {
+                    ArcCollectionsView.applyFavoriteIcon(button, item.getUrl(), icon, color);
                 }
             });
         });
@@ -827,6 +842,12 @@ public final class ArcDesktopCoordinator {
         boolean desktop = ArcDesktopAppearance.isDesktopWindow(mActivity);
         boolean incognito = mIncognitoStateProvider.isIncognitoSelected();
         setArcToolbarCompositionActive(desktop);
+        View urlText = mLocationBarHost.findViewById(R.id.url_bar);
+        if (urlText instanceof TextView) {
+            // The shared 14sp text policy snapshots the original native size and restores it
+            // in MOBILE. It changes presentation without changing the UrlBar/editing model.
+            ArcDesktopAppearance.applyTabTextSize((TextView) urlText);
+        }
         mNavigationState.setActive(desktop);
         if (mNativeTabs instanceof VerticalTabRailLayout) {
             // This binder restores upstream colors/tints too when ARC is no longer active.
@@ -900,8 +921,62 @@ public final class ArcDesktopCoordinator {
     }
 
     private int reservedLeftWidth() {
+        if (mArcViewportAnimationActive) return Math.max(0, mArcVisualReservedLeftWidth);
         Integer width = mReservedLeftWidth.get();
         return Math.max(0, width == null ? 0 : width);
+    }
+
+    private Transition createArcViewportTransition(SideUiSpecs specs) {
+        if (mDestroyed || !mArcToolbarCompositionActive || !mArcFrameActive
+                || mCompositorViewHolder.getFullscreenManager().getPersistentFullscreenMode()) {
+            finishArcViewportAnimation();
+            return null;
+        }
+        int start = reservedLeftWidth();
+        int end = Math.max(0, specs.getReservedWidth(AnchorSide.LEFT));
+        if (start == end) {
+            // Hover expands the rail without reserving more page width; stale pending work
+            // from an interrupted request must not prepare a second renderer canvas.
+            finishArcViewportAnimation();
+            return null;
+        }
+        final int generation = ++mArcViewportAnimationGeneration;
+        mArcVisualReservedLeftWidth = start;
+        mArcViewportAnimationPending = true;
+        return new ArcViewportTransition(mCompositorViewHolder, start, end, width -> {
+            if (generation == mArcViewportAnimationGeneration) updateArcAnimatedViewportWidth(width);
+        });
+    }
+
+    private void beginArcViewportAnimation(SideUiSpecs specs) {
+        if (mDestroyed || !mArcToolbarCompositionActive || !mArcViewportAnimationPending) return;
+        if (!mArcFrameActive
+                || mCompositorViewHolder.getFullscreenManager().getPersistentFullscreenMode()) {
+            finishArcViewportAnimation();
+            return;
+        }
+        mArcViewportAnimationPending = false;
+        mArcViewportAnimationActive = true;
+        // Keep the larger canvas available throughout both directions. Collapse prepares the
+        // larger target now; expansion keeps its current canvas until native settlement.
+        mCompositorViewHolder.prepareArcSideUiAnimation(
+                mArcVisualReservedLeftWidth, specs.getReservedWidth(AnchorSide.LEFT));
+    }
+
+    private void finishArcViewportAnimation() {
+        mArcViewportAnimationPending = false;
+        mArcViewportAnimationActive = false;
+        mArcVisualReservedLeftWidth = -1;
+        ++mArcViewportAnimationGeneration;
+    }
+
+    private void updateArcAnimatedViewportWidth(int width) {
+        if (mDestroyed || !mArcToolbarCompositionActive || !mArcViewportAnimationActive) return;
+        mArcVisualReservedLeftWidth = Math.max(0, width);
+        mCompositorViewHolder.setArcSideUiContentOffsetX(mArcVisualReservedLeftWidth);
+        mFrameGeometry = currentFrameGeometry();
+        mCompositorViewHolder.invalidateOutline();
+        applyActiveSurfaceClip();
     }
 
     private int captionHeight() {
@@ -1128,6 +1203,7 @@ public final class ArcDesktopCoordinator {
     }
 
     private void clearFrameGeometry() {
+        finishArcViewportAnimation();
         if (!mArcFrameActive) return;
         mArcFrameActive = false;
         mCompositorViewHolder.removeCallbacks(mGeometryUpdate);
@@ -1218,23 +1294,27 @@ public final class ArcDesktopCoordinator {
     }
 
     private void tintHeader(View view, int foreground, int selection) {
-        // Native Chromium controls keep their own ripple, hover, accessibility and icon-tint
-        // state. Arc only styles views that it owns.
+        // Native Chromium controls retain their own input/state; only owned Arc views are styled.
         if (view == mLocationBarHost
-                || view == mNavigationControls
                 || view == mCollapseButton
                 || view == mMenuButtonWrapper
                 || view == mExtensionsToolbarHost) {
             return;
         }
+        if (view instanceof ArcCollectionsView) {
+            ((ArcCollectionsView) view).applyAppearance(mIncognitoStateProvider.isIncognitoSelected());
+            return;
+        }
         if (view instanceof TextView) ((TextView) view).setTextColor(foreground);
         if (view instanceof Button || view instanceof ImageButton) {
-            GradientDrawable background = new GradientDrawable();
-            background.setColor(selection);
-            background.setCornerRadius(dp(8));
-            view.setBackground(background);
+            view.setBackground(ArcDesktopAppearance.controlBackground(
+                    mActivity, mIncognitoStateProvider.isIncognitoSelected(), 8));
             if (view instanceof ImageButton) {
-                ((ImageButton) view).setColorFilter(foreground);
+                ImageButton button = (ImageButton) view;
+                button.clearColorFilter();
+                button.setImageTintList(new ColorStateList(
+                        new int[][] {new int[] {-android.R.attr.state_enabled}, new int[] {}},
+                        new int[] {(foreground & 0x00ffffff) | 0x61000000, foreground}));
             }
         }
         // Website favicons are intentionally never tinted.

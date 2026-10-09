@@ -769,8 +769,7 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
             // Null out the outline provider to avoid casting a shadow on views with translationZ
             // lower than ours.
             super.setOutlineProvider(null);
-            ViewUtils.setAncestorsShouldClipToPadding(this, false, View.NO_ID);
-            ViewUtils.setAncestorsShouldClipChildren(this, false, View.NO_ID);
+            setExpansionAncestorClipping(false);
             setBackground(mFocusedPopupDrawable);
         } else {
             parentParams.leftMargin = 0;
@@ -785,8 +784,7 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
             setPadding(0, 0, 0, getPaddingBottom());
             mHolder.setTranslationZ(NEUTRAL_Z_TRANSLATION);
             super.setOutlineProvider(mOutlineProvider);
-            ViewUtils.setAncestorsShouldClipToPadding(this, true, View.NO_ID);
-            ViewUtils.setAncestorsShouldClipChildren(this, true, View.NO_ID);
+            setExpansionAncestorClipping(true);
             // Reset our background to reflect non-zero suggestion count, which is the typical
             // state. Not setting this risks visual glitches when returning to the fusebox.
             setBackground(mLocationBarBackground);
@@ -866,6 +864,29 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
             chipParams.setMarginEnd(aiChipMarginEnd);
             mActivationChip.setLayoutParams(chipParams);
         }
+    }
+
+    /** Allow native focus expansion inside Arc's header without unclipping its scroll viewport. */
+    private void setExpansionAncestorClipping(boolean clip) {
+        View container = getExpansionContainerView();
+        if (!mIsReparentedToPopover
+                && container != mContainerView
+                && container instanceof ScrollView viewport) {
+            ViewGroup ancestor = this;
+            while (ancestor != viewport) {
+                ancestor.setClipToPadding(clip);
+                ancestor.setClipChildren(clip);
+                if (!(ancestor.getParent() instanceof ViewGroup parent)) return;
+                ancestor = parent;
+            }
+            // Suggestions live in the coordinator's sibling dropdown, outside this viewport.
+            // Only header content must stay within the header's visible scroll area.
+            viewport.setClipToPadding(true);
+            viewport.setClipChildren(true);
+            return;
+        }
+        ViewUtils.setAncestorsShouldClipToPadding(this, clip, View.NO_ID);
+        ViewUtils.setAncestorsShouldClipChildren(this, clip, View.NO_ID);
     }
 
     /** Keep the native container while it is an ancestor; otherwise use the holder's live host. */

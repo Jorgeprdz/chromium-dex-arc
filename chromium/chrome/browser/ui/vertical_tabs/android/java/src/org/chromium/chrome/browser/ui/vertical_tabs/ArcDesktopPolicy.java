@@ -33,6 +33,9 @@ public final class ArcDesktopPolicy {
     public static final int NATIVE_MAX_EXPANDED_WIDTH_DP = 500;
     public static final int COLLAPSED_WIDTH_DP = 52;
     public static final float ARC_TAB_TEXT_SIZE_SP = 14f;
+    public static final float ARC_PRINCIPAL_TEXT_SIZE_SP = 14f;
+    public static final float ARC_SECONDARY_TEXT_SIZE_SP = 12f;
+    public static final float ARC_OMNIBOX_TEXT_SIZE_SP = 14f;
     public static final int ARC_NEW_TAB_ICON_SIZE_DP = 18;
     public static final int ARC_NEW_TAB_ICON_ALPHA = 204;
 
@@ -154,11 +157,11 @@ public final class ArcDesktopPolicy {
     }
 
     public static int gradientStart(int seed, boolean dark) {
-        return blend(seed, dark ? 0xff17151a : 0xfffaf8f5, dark ? 0.22 : 0.16);
+        return blend(seed, dark ? 0xff17151a : 0xfffaf8f5, dark ? 0.22 : 0.32);
     }
 
     public static int gradientEnd(int seed, boolean dark) {
-        return blend(seed, dark ? 0xff261a27 : 0xfff2e4ec, dark ? 0.22 : 0.16);
+        return blend(seed, dark ? 0xff261a27 : 0xfff2e4ec, dark ? 0.22 : 0.32);
     }
 
     /** One text color remains legible across the whole vertical gradient. */
@@ -171,7 +174,17 @@ public final class ArcDesktopPolicy {
     }
 
     public static int selection(int surface) {
-        return blend(foreground(surface), surface, 0.24);
+        // Light palettes use an illuminated capsule. Almost-white custom palettes need a
+        // darker capsule to remain distinguishable; dark/incognito palettes lift their surface.
+        if (foreground(surface) == 0xffffffff) return blend(0xffffffff, surface, 0.34);
+        if (contrast(surface, 0xffffffff) >= 1.5) return 0xffffffff;
+        return blend(0xff000000, surface, 0.32);
+    }
+
+    /** Quiet controls/rows gain a theme-derived surface only while interacting. */
+    public static int interaction(int seed, boolean dark) {
+        int surface = gradientStart(seed, dark);
+        return blend(gradientForeground(seed, dark), surface, 0.10);
     }
 
     public static int foreground(int background) {

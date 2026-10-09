@@ -172,7 +172,7 @@ class Activity {}class Profile {boolean privateMode;boolean isOffTheRecord(){ret
 class TabModel {final Profile profile=new Profile();Profile getProfile(){return profile;}}
 class Current<T> implements Supplier<T> {T value;Current(T v){value=v;}public T get(){return value;}}
 class BookmarkItem {boolean folder;String getUrl(){return "https://native.test/";}boolean isFolder(){return folder;}}
-class ImageButton {Object bitmap;void setImageBitmap(Object icon){bitmap=icon;}}
+class ImageButton {Object bitmap;String iconUrl;int fallbackColor,iconResults;void setImageBitmap(Object icon){bitmap=icon;}}
 class Trace {static List<String> events=new ArrayList<>();}
 class ArcNativeTabSession {boolean destroyed;void destroy(){destroyed=true;Trace.events.add("session");}}
 class ArcCollectionsController {boolean destroyed;void destroy(){destroyed=true;Trace.events.add("collections");}}
@@ -187,6 +187,10 @@ class ArcNativeBookmarksBridge {
 class ArcCollectionsView {
     boolean destroyed,attached;int refreshes;Object layoutParams;ArcNativeBookmarksBridge bridge;BiConsumer<BookmarkItem,ImageButton> icons;
     Object getLayoutParams(){return layoutParams;}
+    // Bounded favicon presentation sink: real native Drawable generation is covered separately.
+    // String/Object stand in for GURL/Bitmap, matching this fixture's existing native API types.
+    static void applyFavoriteIcon(ImageButton button,String url,Object icon,int color){
+        button.iconResults++;button.iconUrl=url;button.fallbackColor=color;button.setImageBitmap(icon);}
     void refresh(){refreshes++;}void setNativeBookmarks(ArcNativeBookmarksBridge b,BiConsumer<BookmarkItem,ImageButton> loader){bridge=b;icons=loader;}
     void destroy(){destroyed=true;Trace.events.add("view");}
 }
@@ -220,15 +224,21 @@ class BookmarkWiringProbe {
         p.mCurrentModel.value=p.mSessionModel;old.emit();check(oldView.refreshes==2,"active native changes refresh the current projection");
         BookmarkItem item=new BookmarkItem();ImageButton inactiveTarget=new ImageButton();oldView.icons.accept(item,inactiveTarget);check(p.mIcons.requests==1,"regular native bookmark icon uses its own URL");
         p.mCurrentModel.value=new TabModel();p.mIcons.last.result(new Object(),0,false,0);
-        check(inactiveTarget.bitmap==null,"pending regular favicon cannot repaint after current native model switches");
-        p.mCurrentModel.value=p.mSessionModel;ImageButton target=new ImageButton();oldView.icons.accept(item,target);
+        check(inactiveTarget.bitmap==null&&inactiveTarget.iconResults==0,"pending regular favicon cannot repaint after current native model switches");
+        p.mCurrentModel.value=p.mSessionModel;ImageButton activeTarget=new ImageButton();oldView.icons.accept(item,activeTarget);
+        p.mIcons.last.result(null,0xff123456,true,0);
+        check(activeTarget.iconResults==1&&activeTarget.bitmap==null&&activeTarget.iconUrl.equals("https://native.test/")&&activeTarget.fallbackColor==0xff123456,
+            "active null bitmap forwards native bookmark URL and returned color to favicon fallback presentation");
+        Object realIcon=new Object();p.mIcons.last.result(realIcon,0,false,0);
+        check(activeTarget.iconResults==2&&activeTarget.bitmap==realIcon,"active native site bitmap reaches the same presentation boundary");
+        ImageButton target=new ImageButton();oldView.icons.accept(item,target);
         Icons.Callback pending=p.mIcons.last;p.clearCollections();
         check(old.destroyed&&oldView.destroyed&&!oldView.attached&&p.mNativeBookmarks==null&&p.mTabSession==null&&p.mSessionModel==null&&p.mNativeTabListCoordinator.predicate==null,
             "root teardown detaches native bookmark projection and restores unfiltered native tabs");
         check(Trace.events.indexOf("bridge")<Trace.events.indexOf("view")&&Trace.events.indexOf("bridge")<Trace.events.indexOf("session"),
             "bridge destroyed before its target view/session");
         old.emit();pending.result(new Object(),0,false,0);
-        check(oldView.refreshes==2&&target.bitmap==null,"torn-down bridge and pending icon cannot repaint the detached view");
+        check(oldView.refreshes==2&&target.bitmap==null&&target.iconResults==0,"torn-down bridge and pending icon cannot repaint the detached view");
         BookmarkWiringProbe privateWindow=new BookmarkWiringProbe();privateWindow.mSessionModel.profile.privateMode=true;privateWindow.bind();
         check(privateWindow.mNativeBookmarks.profile.isOffTheRecord(),"private session remains native opener context");
         privateWindow.mCollectionsView.icons.accept(item,new ImageButton());

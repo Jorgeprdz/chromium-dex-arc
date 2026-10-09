@@ -83,6 +83,8 @@ class FrameRegression {
     final SurfaceHolder.Callback mSurfaceCallback=null;
     final Runnable mGeometryUpdate=()->{};
     boolean mDestroyed,mArcToolbarCompositionActive=true,mArcFrameActive,mRejectingRoundedCornerGesture;
+    boolean mArcViewportAnimationPending,mArcViewportAnimationActive;
+    int mArcVisualReservedLeftWidth=-1,mArcViewportAnimationGeneration;
     View mClippedSurface;ViewOutlineProvider mClippedSurfaceOriginalOutlineProvider;boolean mClippedSurfaceOriginalClipToOutline;
     Rect mClippedSurfaceOriginalClipBounds;
     ArcDesktopPolicy.Geometry mFrameGeometry;
@@ -120,6 +122,12 @@ class FrameRegression {
         } else if(scenario.equals("inactive")) {
             r.mArcToolbarCompositionActive=false;r.applyFrameGeometry();
             check(!r.mArcFrameActive&&r.mCompositorViewHolder.layouts==0,"queued geometry must not resurrect Arc after MOBILE");
+        } else if(scenario.equals("animationClear")) {
+            r.mArcViewportAnimationActive=true;r.mArcVisualReservedLeftWidth=200;
+            r.applyFrameGeometry();
+            check(r.arcClipBoundsForView(r.mCompositorViewHolder).left==200,"animated holder clip follows visual width instead of committed334");
+            r.clearFrameGeometry();
+            check(!r.mArcViewportAnimationActive&&r.reservedLeftWidth()==334,"MOBILE restores supplier ownership instead of stale intermediate width");
         } else if(scenario.equals("surface")) {
             SurfaceView first=new SurfaceView();ViewOutlineProvider original=first.outline;
             r.mCompositorViewHolder.active=first;r.applyFrameGeometry();check(first.clip,"live surface must be clipped");
@@ -155,6 +163,7 @@ class ArcFrameRuntimeTest(unittest.TestCase):
             "reservedLeftWidth":"private int reservedLeftWidth()",
             "arcClipLeftForView":"private int arcClipLeftForView(View view)",
             "isInsideArcContent":"private boolean isInsideArcContent(float x, float y)",
+            "finishArcViewportAnimation":"private void finishArcViewportAnimation()",
         }
         for name,signature in {
             "currentFrameGeometry":"private ArcDesktopPolicy.Geometry currentFrameGeometry()",
@@ -188,6 +197,7 @@ class ArcFrameRuntimeTest(unittest.TestCase):
     def test_destroyed_callback(self):self.run_case("destroyed")
     def test_hit_bounds(self):self.run_case("hit")
     def test_fullscreen_frame_round_trip(self):self.run_case("fullscreen")
+    def test_mobile_releases_intermediate_animation_geometry(self):self.run_case("animationClear")
 
 class ArcCaptionGeometryTest(unittest.TestCase):
     def test_caption_bookmarks_fullscreen_and_nullable_state(self):

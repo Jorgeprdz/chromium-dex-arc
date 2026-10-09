@@ -5,9 +5,12 @@ package org.chromium.chrome.browser.arc;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.graphics.Bitmap;
+import android.graphics.Typeface;
 import android.text.TextUtils;
 import android.view.Gravity;
 import android.view.View;
+import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
@@ -17,8 +20,11 @@ import android.widget.ScrollView;
 import android.widget.Toast;
 
 import org.chromium.chrome.R;
+import org.chromium.chrome.browser.ui.favicon.FaviconUtils;
+import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance;
 import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy;
 import org.chromium.components.bookmarks.BookmarkItem;
+import org.chromium.url.GURL;
 
 import java.util.List;
 import java.util.function.BiConsumer;
@@ -51,6 +57,7 @@ public final class ArcCollectionsView extends LinearLayout {
     private AlertDialog mDialog;
     private PopupMenu mMenu;
     private boolean mDestroyed;
+    private boolean mIncognito;
     private ArcDesktopPolicy.Geometry mGeometry;
 
     public ArcCollectionsView(Activity activity, ArcCollectionsController controller,
@@ -72,18 +79,23 @@ public final class ArcCollectionsView extends LinearLayout {
         mSpace = button("", this::showSpaces);
         mSpace.setTag("arc-current-space");
         mSpace.setContentDescription(activity.getString(R.string.arc_spaces));
+        mSpace.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
+        mSpace.setTextSize(ArcDesktopPolicy.ARC_PRINCIPAL_TEXT_SIZE_SP);
         addView(mSpace, new LayoutParams(-1, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
         mEntries = new LinearLayout(activity);
         mEntries.setOrientation(VERTICAL);
         mEntries.setContentDescription(activity.getString(R.string.arc_pinned_tabs));
         mScroll = new ScrollView(activity);
+        mScroll.setVerticalScrollBarEnabled(false);
         mScroll.addView(mEntries);
         addView(mScroll, new LayoutParams(-1, dp(112)));
         LinearLayout controls = new LinearLayout(activity);
         Button pin = button(activity.getString(R.string.arc_pin_current), () -> remember(false));
         pin.setTag("arc-pin-current");
+        pin.setTextSize(ArcDesktopPolicy.ARC_SECONDARY_TEXT_SIZE_SP);
         Button favorite = button(activity.getString(R.string.arc_favorite_current), () -> remember(true));
         favorite.setTag("arc-favorite-current");
+        favorite.setTextSize(ArcDesktopPolicy.ARC_SECONDARY_TEXT_SIZE_SP);
         controls.addView(pin, new LayoutParams(0, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP), 1));
         controls.addView(favorite, new LayoutParams(0, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP), 1));
         addView(controls);
@@ -100,12 +112,62 @@ public final class ArcCollectionsView extends LinearLayout {
         result.setAllCaps(false);
         result.setTextSize(ArcDesktopPolicy.ARC_TAB_TEXT_SIZE_SP);
         result.setMinWidth(0); result.setMinimumWidth(0);
+        result.setMinHeight(0); result.setMinimumHeight(0);
         result.setPadding(dp(8), 0, dp(8), 0);
         result.setSingleLine(true);
         result.setEllipsize(TextUtils.TruncateAt.END);
         result.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        styleAction(result);
         result.setOnClickListener(view -> runCommand(action));
         return result;
+    }
+
+    private void styleAction(Button button) {
+        button.setBackgroundTintList(null);
+        button.setStateListAnimator(null);
+        button.setElevation(0);
+        button.setTextColor(ArcDesktopAppearance.rowTextColor(mActivity, false, mIncognito));
+        button.setBackground(ArcDesktopAppearance.controlBackground(mActivity, mIncognito, 12));
+    }
+
+    private void styleFavorite(ImageButton favorite) {
+        favorite.setBackgroundTintList(null);
+        favorite.setStateListAnimator(null);
+        favorite.setElevation(0);
+        favorite.setBackground(ArcDesktopAppearance.favoriteBackground(mActivity, mIncognito, 12));
+    }
+
+    /** Repaint only collection controls; native bookmark and favorite icons retain their colors. */
+    public void applyAppearance(boolean incognito) {
+        mIncognito = incognito;
+        styleCollectionControls(this);
+    }
+
+    private void styleCollectionControls(View view) {
+        if (view instanceof ImageButton) styleFavorite((ImageButton) view);
+        else if (view instanceof Button) styleAction((Button) view);
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) styleCollectionControls(group.getChildAt(i));
+        }
+    }
+
+    private void initializeFavoriteIcon(ImageButton favorite) {
+        favorite.setImageBitmap(FaviconUtils.createGenericFaviconBitmap(mActivity, dp(24), null));
+    }
+
+    /** Consume both bitmap and fallback results from Chromium's profile-bound LargeIconBridge. */
+    public static void applyFavoriteIcon(ImageButton button, GURL url, Bitmap icon, int fallbackColor) {
+        button.clearColorFilter();
+        button.setImageTintList(null);
+        int size = Math.round(24 * button.getResources().getDisplayMetrics().density);
+        if (icon == null && (url == null || url.isEmpty())) {
+            button.setImageBitmap(FaviconUtils.createGenericFaviconBitmap(button.getContext(), size, null));
+            return;
+        }
+        button.setImageDrawable(FaviconUtils.getIconDrawableWithoutFilter(icon, url, fallbackColor,
+                FaviconUtils.createRoundedRectangleIconGenerator(button.getContext()),
+                button.getResources(), size));
     }
 
     private void runCommand(Runnable command) {
@@ -256,8 +318,9 @@ public final class ArcCollectionsView extends LinearLayout {
         if (mNativeBookmarks != null) {
             for (BookmarkItem item : mNativeBookmarks.items()) {
                 ImageButton favorite = new ImageButton(mActivity);
-                favorite.setImageResource(item.isFolder() ? android.R.drawable.ic_menu_agenda
-                        : android.R.drawable.ic_menu_view);
+                if (item.isFolder()) favorite.setImageResource(android.R.drawable.ic_menu_agenda);
+                else initializeFavoriteIcon(favorite);
+                styleFavorite(favorite);
                 favorite.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
                 favorite.setPadding(dp(12), dp(12), dp(12), dp(12));
                 favorite.setContentDescription(item.getTitle());
@@ -274,7 +337,8 @@ public final class ArcCollectionsView extends LinearLayout {
         }
         for (ArcSidebarState.Entry entry : entries) {
             ImageButton favorite = new ImageButton(mActivity);
-            favorite.setImageResource(android.R.drawable.ic_menu_view);
+            initializeFavoriteIcon(favorite);
+            styleFavorite(favorite);
             favorite.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
             favorite.setPadding(dp(12), dp(12), dp(12), dp(12));
             favorite.setContentDescription(entry.title);

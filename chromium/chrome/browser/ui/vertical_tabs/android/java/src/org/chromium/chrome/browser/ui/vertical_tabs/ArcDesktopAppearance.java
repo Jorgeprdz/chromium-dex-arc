@@ -10,6 +10,9 @@ import android.content.res.ColorStateList;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.InsetDrawable;
+import android.graphics.drawable.LayerDrawable;
+import android.graphics.drawable.RippleDrawable;
+import android.graphics.drawable.StateListDrawable;
 import android.util.TypedValue;
 import android.view.View;
 import android.widget.TextView;
@@ -22,7 +25,7 @@ import java.util.WeakHashMap;
 public final class ArcDesktopAppearance {
     public static final String COLOR_KEY = "frame_color";
     public static final String UI_MODE_KEY = "ui_mode";
-    public static final int DEFAULT_COLOR = 0xff53657b;
+    public static final int DEFAULT_COLOR = 0xff706b86;
     public static final int WARM_COLOR = 0xffedae9f;
 
     private static ColorStateList sNewTabBackgroundTint;
@@ -116,7 +119,7 @@ public final class ArcDesktopAppearance {
 
     /** Keep New Tab quiet at rest while preserving visible native hover, press and focus states. */
     public static ColorStateList newTabBackgroundTint(Context context, boolean incognito) {
-        int interaction = selection(context, incognito);
+        int interaction = interaction(context, incognito);
         if (sNewTabBackgroundTint == null || sNewTabBackgroundColor != interaction) {
             sNewTabBackgroundColor = interaction;
             sNewTabBackgroundTint = new ColorStateList(
@@ -125,6 +128,46 @@ public final class ArcDesktopAppearance {
                     new int[] {interaction, interaction, interaction, 0x00000000});
         }
         return sNewTabBackgroundTint;
+    }
+
+    /** Native drawables own interaction rendering; callers retain their own focus/click behavior. */
+    public static Drawable controlBackground(Context context, boolean incognito, float radiusDp) {
+        int color = interaction(context, incognito);
+        StateListDrawable states = new StateListDrawable();
+        states.addState(new int[] {android.R.attr.state_pressed},
+                controlShape(context, color, radiusDp));
+        states.addState(new int[] {android.R.attr.state_hovered},
+                controlShape(context, color, radiusDp));
+        states.addState(new int[] {android.R.attr.state_focused},
+                controlShape(context, color, radiusDp));
+        states.addState(new int[] {}, controlShape(context, 0x00000000, radiusDp));
+        int ripple = (foreground(context, incognito) & 0x00ffffff) | 0x24000000;
+        return new RippleDrawable(ColorStateList.valueOf(ripple), states,
+                controlShape(context, 0xffffffff, radiusDp));
+    }
+
+    /** Favorite destinations have a faint tile surface; section actions remain transparent. */
+    public static Drawable favoriteBackground(Context context, boolean incognito, float radiusDp) {
+        int base = (foreground(context, incognito) & 0x00ffffff) | 0x0c000000;
+        return new LayerDrawable(new Drawable[] {controlShape(context, base, radiusDp),
+                controlBackground(context, incognito, radiusDp)});
+    }
+
+    private static GradientDrawable controlShape(Context context, int color, float radiusDp) {
+        GradientDrawable shape = new GradientDrawable();
+        shape.setColor(color);
+        shape.setCornerRadius(radiusDp * context.getResources().getDisplayMetrics().density);
+        return shape;
+    }
+
+    public static int interaction(Context context, boolean incognito) {
+        return ArcDesktopPolicy.interaction(preferences(context).getInt(COLOR_KEY, DEFAULT_COLOR),
+                isDark(context, incognito));
+    }
+
+    public static int rowTextColor(Context context, boolean selected, boolean incognito) {
+        return selected ? ArcDesktopPolicy.foreground(selection(context, incognito))
+                : foreground(context, incognito);
     }
 
     /** Native SP conversion respects font accessibility; MOBILE restores the measured XML size. */

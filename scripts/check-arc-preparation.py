@@ -102,7 +102,13 @@ def main():
             'org.chromium.chrome.R': 'public final class R { public static final class string { public static final int arc_bookmarks=1, arc_frame_color=2, arc_bookmark_root=3, arc_google_login=4, arc_autofill=5, arc_reset_color=6, arc_color_format=7, arc_interface=8, arc_interface_auto=9, arc_interface_arc=10, arc_interface_mobile=11; } public static final class id { public static final int toolbar=1, desktop_window_spacer=2; } }',
             'org.chromium.chrome.browser.profiles.Profile': 'public class Profile { public boolean isOffTheRecord(){return false;} public boolean shutdownStarted(){return false;} public Profile getOriginalProfile(){return this;} }',
             'org.chromium.components.bookmarks.BookmarkId': 'public class BookmarkId { public long getId(){return 0;} public int getType(){return 0;} }',
-            'org.chromium.url.GURL': 'public class GURL { public GURL(){} public GURL(String url){} public String getSpec() { return ""; } }',
+            'org.chromium.url.GURL': 'public class GURL { public GURL(){} public GURL(String url){} public String getSpec() { return ""; } public boolean isEmpty(){return false;} }',
+            'org.chromium.components.browser_ui.widget.RoundedIconGenerator': 'public class RoundedIconGenerator {}',
+            'org.chromium.chrome.browser.ui.favicon.FaviconUtils': '''public class FaviconUtils {
+                public static android.graphics.Bitmap createGenericFaviconBitmap(android.content.Context c,int size,Integer color){return null;}
+                public static org.chromium.components.browser_ui.widget.RoundedIconGenerator createRoundedRectangleIconGenerator(android.content.Context c){return null;}
+                public static android.graphics.drawable.Drawable getIconDrawableWithoutFilter(android.graphics.Bitmap icon,org.chromium.url.GURL url,int color,org.chromium.components.browser_ui.widget.RoundedIconGenerator generator,android.content.res.Resources resources,int size){return null;}
+            }''',
             'org.chromium.components.bookmarks.BookmarkItem': 'public class BookmarkItem { public String getTitle(){return "";} public boolean isFolder(){return false;} public boolean isEditable(){return true;} public BookmarkId getId(){return null;} public BookmarkId getParentId(){return null;} public org.chromium.url.GURL getUrl(){return null;} }',
             'org.chromium.chrome.browser.bookmarks.BookmarkModelObserver': 'public abstract class BookmarkModelObserver { public abstract void bookmarkModelChanged(); }',
             'org.chromium.chrome.browser.bookmarks.BookmarkModel': 'public class BookmarkModel { public void addObserver(BookmarkModelObserver o){} public void removeObserver(BookmarkModelObserver o){} public boolean isBookmarkModelLoaded(){return true;} public boolean finishLoadingBookmarkModel(Runnable r){return false;} public org.chromium.components.bookmarks.BookmarkId getDesktopFolderId(){return null;} public java.util.List<org.chromium.components.bookmarks.BookmarkId> getChildIds(org.chromium.components.bookmarks.BookmarkId id){return null;} public java.util.List<org.chromium.components.bookmarks.BookmarkId> getTopLevelFolderIds(){return null;} public org.chromium.components.bookmarks.BookmarkItem getBookmarkById(org.chromium.components.bookmarks.BookmarkId id){return null;} }',
@@ -143,7 +149,7 @@ def main():
         string_ids = ', '.join(f'{name}={i}' for i, name in enumerate(string_names, 1))
         id_names = ('toolbar', 'desktop_window_spacer', 'location_bar',
                     'location_bar_holder', 'collapse_button', 'menu_button_wrapper',
-                    'extensions_toolbar_container', 'coordinator')
+                    'extensions_toolbar_container', 'coordinator', 'url_bar')
         view_ids = ', '.join(f'{name}={i}' for i, name in enumerate(id_names, 1))
         definitions['org.chromium.chrome.R'] = ('public final class R { public static final class string { public static final int '
                 + string_ids + '; } public static final class id { public static final int '
@@ -166,9 +172,10 @@ def main():
                 void startFolderPickerActivity(android.app.Activity a,org.chromium.chrome.browser.profiles.Profile p,org.chromium.components.bookmarks.BookmarkId... ids);
             }''',
             'org.chromium.chrome.browser.bookmarks.R': 'public final class R { public static final class string { public static final int contextmenu_open_in_new_tab=1, contextmenu_open_in_new_window=2, contextmenu_edit_bookmark_ellipsis=3, bookmark_item_move=4, contextmenu_open_bookmarks_manager=5; } }',
-            'org.chromium.chrome.browser.ui.side_ui.SideUiCoordinator': 'public interface SideUiCoordinator { class SideUiSpecs {} class UiUpdateRequest {} }',
+            'org.chromium.chrome.browser.ui.side_ui.SideUiCoordinator': 'public interface SideUiCoordinator { class AnchorSide {public static final int LEFT=0;} class SideUiSpecs {public int getReservedWidth(int side){return 0;}} class UiUpdateRequest {} }',
             'org.chromium.chrome.browser.ui.side_ui.SideUiStateProvider': 'public interface SideUiStateProvider { void addObserver(SideUiObserver o); void removeObserver(SideUiObserver o); }',
             'org.chromium.chrome.browser.ui.side_ui.SideUiObserver': '''public interface SideUiObserver {
+                default android.transition.Transition onPreSideUiSpecsChange(SideUiCoordinator.SideUiSpecs s,SideUiCoordinator.UiUpdateRequest r){return null;}
                 default void onTransitionBegun(SideUiCoordinator.SideUiSpecs s,SideUiCoordinator.UiUpdateRequest r){}
                 default void onTransitionEnded(SideUiCoordinator.SideUiSpecs s,SideUiCoordinator.UiUpdateRequest r){}
                 default void onSideUiSpecsChanged(SideUiCoordinator.SideUiSpecs s,SideUiCoordinator.UiUpdateRequest r){}
@@ -182,6 +189,8 @@ def main():
                 public org.chromium.chrome.browser.fullscreen.FullscreenManager getFullscreenManager(){return new org.chromium.chrome.browser.fullscreen.FullscreenManager();}
                 public void addTouchEventObserver(org.chromium.components.browser_ui.widget.TouchEventObserver o){}
                 public void removeTouchEventObserver(org.chromium.components.browser_ui.widget.TouchEventObserver o){}
+                public void prepareArcSideUiAnimation(int initialLeftWidth, int finalLeftWidth){}
+                public void setArcSideUiContentOffsetX(int leftWidth){}
             }''',
             'org.chromium.chrome.browser.fullscreen.FullscreenManager': 'public class FullscreenManager { public boolean getPersistentFullscreenMode(){return false;} }',
             'org.chromium.components.browser_ui.widget.TouchEventObserver': '''public interface TouchEventObserver {

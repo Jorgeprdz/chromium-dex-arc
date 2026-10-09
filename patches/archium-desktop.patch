@@ -12,12 +12,13 @@ diff --git a/chrome/android/chrome_java_resources.gni b/chrome/android/chrome_ja
 diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java_sources.gni
 --- a/chrome/android/chrome_java_sources.gni
 +++ b/chrome/android/chrome_java_sources.gni
-@@ -5,6 +5,19 @@
+@@ -5,6 +5,20 @@
  import("//content/public/common/features.gni")
 
  chrome_java_sources = [
 +  "java/src/org/chromium/chrome/browser/arc/ArcNativeBookmarksBridge.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcNavigationState.java",
++  "java/src/org/chromium/chrome/browser/arc/ArcViewportTransition.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcFavoriteTiles.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcCollectionsController.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java",
@@ -217,7 +218,88 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
  import org.chromium.chrome.browser.ui.vertical_tabs.VerticalTabUtils;
  import org.chromium.chrome.tab_ui.R;
  import org.chromium.components.browser_ui.styles.ChromeColors;
-@@ -506,6 +508,8 @@
+@@ -49,9 +51,14 @@
+ import org.chromium.ui.modelutil.PropertyKey;
+ import org.chromium.ui.modelutil.PropertyModel;
+
++import java.util.WeakHashMap;
++
+ /** View binder for the Vertical Tab List item rows. */
+ @NullMarked
+ class TabVerticalViewBinder {
++    // Input belongs to the row, not a vendor/device flag: hybrid windows support both mouse
++    // and touch. Weak keys avoid retaining recycled/destroyed native rows.
++    private static final WeakHashMap<View, Boolean> sArcPointerRows = new WeakHashMap<>();
+     private static final float ROTATION_COLLAPSED = 0f;
+     private static final float ROTATION_EXPANDED = 180f;
+     @VisibleForTesting static final long CHEVRON_ANIMATION_DURATION_MS = 200L;
+@@ -279,6 +286,13 @@
+             view.setOnTouchListener(
+                     (View _, MotionEvent event) -> {
+                         lastMotion[0] = MotionEventInfo.fromMotionEvent(event);
++                        if (view instanceof VerticalTabItemLayout tabRow
++                                && ArcDesktopAppearance.isDesktopWindow(view.getContext())
++                                && event.getActionMasked() == MotionEvent.ACTION_DOWN) {
++                            sArcPointerRows.put(view,
++                                    event.getToolType(0) == MotionEvent.TOOL_TYPE_MOUSE);
++                            updateIcons(propertyModel, tabRow);
++                        }
+                         return false;
+                     });
+
+@@ -318,15 +332,19 @@
+
+         // 1. Resolve independent "wanted" states
+         TabActionButtonData actionData = model.get(TabProperties.TAB_ACTION_BUTTON_DATA);
+-        // Close button is always visible on touch devices, but only visible on select/hover on
+-        // desktop. Pinned tabs never show a close button.
++        // Arc close follows current pointer/focus interaction, keeping touch close accessible.
++        // MOBILE retains native select/hover policy; pinned tabs never show close.
+         boolean actionWanted =
+                 !isPinned
+                         && actionButton != null
+                         && actionData != null
+-                        && (showIconOnly
+-                                ? (isSelected && (!DeviceInfo.isDesktop() || isHovered))
+-                                : (!DeviceInfo.isDesktop() || isSelected || isHovered));
++                        && (ArcDesktopAppearance.isDesktopWindow(view.getContext())
++                                ? (sArcPointerRows.getOrDefault(view, DeviceInfo.isDesktop())
++                                        ? (isHovered || view.hasFocus())
++                                        : (!showIconOnly || isSelected))
++                                : (showIconOnly
++                                        ? (isSelected && (!DeviceInfo.isDesktop() || isHovered))
++                                        : (!DeviceInfo.isDesktop() || isSelected || isHovered)));
+         @TabAlert
+         int alertState =
+                 model.containsKey(TabProperties.ALERT_STATE)
+@@ -369,7 +387,7 @@
+     }
+
+     private static @ColorInt int getLoadingSpinnerColor(PropertyModel model, Context context) {
+-        return isIncognito(model)
++        return isIncognito(model, context)
+                 ? context.getColor(R.color.default_icon_color_blue_light)
+                 : SemanticColorUtils.getDefaultIconColorAccent1(context);
+     }
+@@ -434,7 +452,7 @@
+                     model.containsKey(TabProperties.ALERT_STATE)
+                             ? model.get(TabProperties.ALERT_STATE)
+                             : TabAlert.NONE;
+-            boolean isIncognito = isIncognito(model);
++            boolean isIncognito = isIncognito(model, view.getContext());
+             boolean isSelected = model.get(TabProperties.IS_SELECTED);
+             Context context = view.getContext();
+
+@@ -470,7 +488,7 @@
+             @Nullable ColorStateList defaultBgColor) {
+         boolean isSelected = model.get(TabProperties.IS_SELECTED);
+         boolean isMultiSelected = model.get(TabProperties.IS_MULTI_SELECTED);
+-        boolean isIncognito = isIncognito(model);
++        boolean isIncognito = isIncognito(model, view.getContext());
+         Context context = view.getContext();
+         view.setSelected(isSelected || isMultiSelected);
+
+@@ -506,14 +524,24 @@
      private static void updateRegularColors(PropertyModel model, VerticalTabItemLayout view) {
          updateSelectionAndBackground(model, view, ColorStateList.valueOf(Color.TRANSPARENT));
          updateBackgroundInsets(view);
@@ -225,8 +307,46 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 +        ArcDesktopAppearance.applyTabTextSize(view.getTitleView());
 
          boolean isSelected = model.get(TabProperties.IS_SELECTED);
-         boolean isIncognito = isIncognito(model);
-@@ -612,6 +616,11 @@
+-        boolean isIncognito = isIncognito(model);
++        boolean isIncognito = isIncognito(model, view.getContext());
+         Context context = view.getContext();
+
+-        view.getTitleView().setTextColor(getTextColor(context, isSelected, isIncognito));
+-        ImageViewCompat.setImageTintList(
+-                view.getActionButton(), getActionButtonTintList(context, isSelected, isIncognito));
++        int textColor = getTextColor(context, isSelected, isIncognito);
++        boolean arcMultiSelected = ArcDesktopAppearance.isDesktopWindow(context)
++                && !isSelected && model.get(TabProperties.IS_MULTI_SELECTED);
++        if (arcMultiSelected) {
++            textColor = ArcDesktopPolicy.foreground(
++                    getBackgroundTintList(context, false, true, isIncognito).getDefaultColor());
++        }
++        view.getTitleView().setTextColor(textColor);
++        ImageViewCompat.setImageTintList(view.getActionButton(), arcMultiSelected
++                ? ColorStateList.valueOf(textColor)
++                : getActionButtonTintList(context, isSelected, isIncognito));
+     }
+
+     /**
+@@ -529,7 +557,7 @@
+      * @param view the root VerticalTabItemLayout representing the pinned tab row item.
+      */
+     private static void updatePinnedColors(PropertyModel model, VerticalTabItemLayout view) {
+-        boolean isIncognito = isIncognito(model);
++        boolean isIncognito = isIncognito(model, view.getContext());
+         @Nullable ColorStateList defaultBackgroundColor =
+                 isIncognito
+                         ? ColorStateList.valueOf(
+@@ -553,7 +581,7 @@
+      */
+     private static void updateGroupHeaderColors(PropertyModel model, ViewGroup view) {
+         @Nullable Integer colorId = model.get(TabProperties.TAB_GROUP_CARD_COLOR);
+-        boolean isIncognito = isIncognito(model);
++        boolean isIncognito = isIncognito(model, view.getContext());
+         Context context = view.getContext();
+         updateBackgroundInsets(view);
+
+@@ -612,6 +640,11 @@
 
          int width = isRailCollapsed ? getCollapsedTabItemWidth(context) : expandedWidth;
          int height = usesCollapsedPositioning ? getCollapsedTabItemHeight(context) : expandedHeight;
@@ -238,7 +358,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 
          if (params.width != width || params.height != height) {
              params.width = width;
-@@ -639,6 +648,7 @@
+@@ -639,6 +672,7 @@
      private static void updateTitle(int titleViewId, PropertyModel model, ViewGroup view) {
          TextView titleView = view.findViewById(titleViewId);
          if (titleView == null) return;
@@ -246,30 +366,41 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 
          if (shouldShowIconOnly(model, view)) {
              titleView.setVisibility(View.GONE);
-@@ -825,6 +835,10 @@
+@@ -811,6 +845,13 @@
+                 && model.get(TabProperties.IS_INCOGNITO);
+     }
+
++    private static boolean isIncognito(PropertyModel model, Context context) {
++        // Arc supplies its own palette even when the native activity owns a dedicated incognito
++        // theme. MOBILE keeps Chromium's activity-theme routing unchanged.
++        return ArcDesktopAppearance.isDesktopWindow(context)
++                ? model.get(TabProperties.IS_INCOGNITO) : isIncognito(model);
++    }
++
+     /**
+      * Resolves the background tint list for a vertical tab row based on active selection,
+      * multi-selection, and incognito state.
+@@ -825,6 +866,9 @@
       */
      private static ColorStateList getBackgroundTintList(
              Context context, boolean isSelected, boolean isMultiSelected, boolean isIncognito) {
-+        if (ArcDesktopAppearance.isDesktopWindow(context)) {
-+            return ColorStateList.valueOf(isSelected || isMultiSelected
-+                    ? ArcDesktopAppearance.selection(context, isIncognito) : Color.TRANSPARENT);
++        if (ArcDesktopAppearance.isDesktopWindow(context) && isSelected) {
++            return ColorStateList.valueOf(ArcDesktopAppearance.selection(context, isIncognito));
 +        }
          if (!isSelected && !isMultiSelected) {
              return ColorStateList.valueOf(Color.TRANSPARENT);
          }
-@@ -850,6 +864,11 @@
+@@ -850,6 +894,9 @@
       */
      private static @ColorInt int getTextColor(
              Context context, boolean isSelected, boolean isIncognito) {
 +        if (ArcDesktopAppearance.isDesktopWindow(context)) {
-+            return isSelected
-+                    ? ArcDesktopPolicy.foreground(ArcDesktopAppearance.selection(context, isIncognito))
-+                    : ArcDesktopAppearance.foreground(context, isIncognito);
++            return ArcDesktopAppearance.rowTextColor(context, isSelected, isIncognito);
 +        }
          if (isSelected) {
              return isIncognito
                      ? context.getColor(R.color.default_text_color_light)
-@@ -871,6 +890,9 @@
+@@ -871,6 +918,9 @@
       */
      private static ColorStateList getActionButtonTintList(
              Context context, boolean isSelected, boolean isIncognito) {
@@ -279,6 +410,55 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          if (isIncognito) {
              return isSelected
                      ? ChromeColors.getPrimaryIconTint(context, /* isIncognito= */ true)
+@@ -904,14 +954,17 @@
+                 ViewCompat.setBackgroundTintList(
+                         view,
+                         ColorStateList.valueOf(
+-                                TabUiThemeUtil.getHoveredTabContainerColor(
+-                                        view.getContext(), isIncognito(model))));
++                                ArcDesktopAppearance.isDesktopWindow(view.getContext())
++                                        ? ArcDesktopAppearance.interaction(
++                                                view.getContext(), isIncognito(model, view.getContext()))
++                                        : TabUiThemeUtil.getHoveredTabContainerColor(
++                                                view.getContext(), isIncognito(model, view.getContext()))));
+             } else if (isMultiSelected && !isSelected) {
+                 ViewCompat.setBackgroundTintList(
+                         view,
+                         ColorStateList.valueOf(
+                                 TabUiThemeUtil.getTabStripMultiSelectedHoveredTabColor(
+-                                        view.getContext(), isIncognito(model))));
++                                        view.getContext(), isIncognito(model, view.getContext()))));
+             }
+         } else {
+             if (!isSelected) {
+@@ -947,9 +1000,26 @@
+                 view,
+                 actionButton,
+                 (isHovered) -> {
++                    if (ArcDesktopAppearance.isDesktopWindow(view.getContext()) && view.isHovered()) {
++                        sArcPointerRows.put(view, true);
++                    }
+                     applyHoverBackgroundState(model, view, isHovered, defaultBackgroundColor);
+-                    updateIcons(model, view, isHovered);
++                    updateIcons(model, view, isHovered
++                            || (ArcDesktopAppearance.isDesktopWindow(view.getContext())
++                                    && view.hasFocus()));
+                 });
++        if (!ArcDesktopAppearance.isDesktopWindow(view.getContext())) return;
++        // The native focus listener notifies the hover-card presenter; its visual callback is
++        // gated on actual mouse hover. Add focus visuals while forwarding that native event once.
++        View.@Nullable OnFocusChangeListener nativeFocus = view.getOnFocusChangeListener();
++        view.setOnFocusChangeListener((v, hasFocus) -> {
++            if (nativeFocus != null) nativeFocus.onFocusChange(v, hasFocus);
++            if (ArcDesktopAppearance.isDesktopWindow(view.getContext())) {
++                boolean interacting = hasFocus || view.isHovered();
++                applyHoverBackgroundState(model, view, interacting, defaultBackgroundColor);
++                updateIcons(model, view, interacting);
++            }
++        });
+     }
+
+     /**
 diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinator.java b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinator.java
 --- a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinator.java
 +++ b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinator.java
@@ -1089,6 +1269,70 @@ diff --git a/chrome/android/java/res_chromium_base/values/channel_constants.xml 
 +    <string name="search_widget_title" translatable="false">Archium search</string>
 +    <string name="quick_action_search_widget_title" translatable="false">Archium quick action search</string>
  </resources>
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/CompositorViewHolder.java b/chrome/android/java/src/org/chromium/chrome/browser/compositor/CompositorViewHolder.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/compositor/CompositorViewHolder.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/compositor/CompositorViewHolder.java
+@@ -206,6 +206,7 @@
+     private @Nullable OneshotSupplier<SideUiStateProvider> mSideUiStateProviderSupplier;
+     private @Nullable SideUiStateProvider mSideUiStateProvider;
+     private @Nullable Runnable mResetClipToPaddingRunnable;
++    private int mSideUiSizingGeneration;
+
+     /** The toolbar control container. */
+     private @Nullable ControlContainer mControlContainer;
+@@ -825,6 +826,7 @@
+
+     /** Should be called for cleanup when the CompositorView instance is no longer used. */
+     public void shutDown() {
++        ++mSideUiSizingGeneration;
+         if (mSystemUiFullscreenResizeRunnable != null) {
+             assumeNonNull(getHandler()).removeCallbacks(mSystemUiFullscreenResizeRunnable);
+         }
+@@ -1599,6 +1601,7 @@
+      * @param isLiveResize Whether the update is part of a live resize drag.
+      */
+     private void updateForSideUiSpecs(SideUiSpecs sideUiSpecs, boolean isLiveResize) {
++        final int generation = ++mSideUiSizingGeneration;
+         if (isLiveResize) {
+             // Translate the composited layer without resizing WebContents during a live drag,
+             // avoiding per-frame layout passes that cause jank.
+@@ -1609,6 +1612,9 @@
+             // contents are updated synchronously.
+             post(
+                     () -> {
++                        // A replacement transition, live resize or shutdown supersedes this
++                        // settlement. Never apply an old offset to the new expected canvas.
++                        if (generation != mSideUiSizingGeneration) return;
+                         updateWebContentsSize();
+                         applySideUiContentOffsetX(sideUiSpecs);
+                     });
+@@ -1682,6 +1688,26 @@
+
+         mResetClipToPaddingRunnable.run();
+         mResetClipToPaddingRunnable = null;
++    }
++
++    /** Keeps the larger native canvas available while Arc animates its visible content edge. */
++    public void prepareArcSideUiAnimation(int initialLeftWidth, int finalLeftWidth) {
++        // Ending the preceding transition can have queued a settlement before this one begins.
++        ++mSideUiSizingGeneration;
++        // A shrinking sidebar exposes more page: prepare its wider canvas before moving.
++        // A growing sidebar retains the wider current canvas until the native end resize,
++        // otherwise a translated, already-narrowed renderer frame can leave a right-side gap.
++        if (finalLeftWidth < initialLeftWidth) updateWebContentsSize();
++        // Sizing uses expected target specs and updates ContentView's offset. Restore the start
++        // position so the native transition can advance visual and input coordinates together.
++        setArcSideUiContentOffsetX(initialLeftWidth);
++    }
++
++    /** Updates only compositor/input position; this never resizes Blink or requests a layout. */
++    public void setArcSideUiContentOffsetX(int leftWidth) {
++        mLayoutManager.setContentOffsetX(leftWidth);
++        ContentView contentView = getContentView();
++        if (contentView != null) contentView.setContentOffsetXPix(leftWidth);
+     }
+
+     /**
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
 --- a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
@@ -1412,7 +1656,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
          if (mVerticalTabsPreferenceListener != null) {
              ContextUtils.getAppSharedPreferences()
                      .unregisterOnSharedPreferenceChangeListener(mVerticalTabsPreferenceListener);
-@@ -1977,6 +2062,76 @@
+@@ -1977,6 +2062,79 @@
          return mGlicPromoCoordinator != null;
      }
 
@@ -1452,6 +1696,9 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
 +        if (toolbarView == null) return;
 +        View toolbarHairline = mActivity.findViewById(R.id.toolbar_hairline);
 +
++        // Android visibility does not hide TopToolbarSceneLayer's captured native resource.
++        // Keep Arc as an independent reason in the native supplier shared by XR and resize.
++        mToolbarManager.setArcToolbarSceneLayerSuppressed(suppressed);
 +        var toolbarCoordinator = mToolbarManager.getTopToolbarCoordinator();
 +        if (suppressed) {
 +            mArcToolbarOriginalVisibility = toolbarView.getVisibility();
@@ -1489,7 +1736,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
      private void updateTopControlsHeight() {
          updateTopControlsHeight(/* allowAnimations= */ true);
      }
-@@ -2399,31 +2554,47 @@
+@@ -2399,31 +2557,47 @@
                          assumeNonNull(webContentHairlineContainerStub));
      }
 
@@ -1556,7 +1803,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
 
          mSideUiCoordinator =
                  SideUiCoordinatorFactory.create(
-@@ -2473,34 +2644,79 @@
+@@ -2473,34 +2647,79 @@
          }
 
          if (VerticalTabUtils.isVerticalTabsEligible(mActivity)) {
@@ -1659,7 +1906,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
              if (mToolbarManager != null) {
                  mToolbarManager.setVerticalTabsAutoHiddenSupplier(
                          mVerticalTabsSideUiCoordinator.getIsAutoHiddenSupplier());
-@@ -2600,7 +2816,14 @@
+@@ -2600,7 +2819,14 @@
                              var transitionCoord =
                                      assumeNonNull(mToolbarManager)
                                              .getTabStripTransitionCoordinator();
@@ -1675,7 +1922,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
                          } else {
                              assumeNonNull(mVerticalTabsSideUiCoordinator)
                                      .setVisible(/* show= */ false, /* suppressAnimations= */ false);
-@@ -2679,9 +2902,11 @@
+@@ -2679,9 +2905,11 @@
      private void onVerticalTabsActiveChanged(boolean active) {
          var transitionCoordinator =
                  assumeNonNull(mToolbarManager).getTabStripTransitionCoordinator();
@@ -1688,7 +1935,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
          if (active) {
              transitionCoordinator.suppressTabStrip(true);
          } else {
-@@ -3067,7 +3292,7 @@
+@@ -3067,7 +3295,7 @@
          return false;
      }
 
@@ -1697,7 +1944,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
          if (mBookmarkOpener == null) {
              mBookmarkOpener =
                      new BookmarkOpenerImpl(
-@@ -3076,7 +3301,11 @@
+@@ -3076,7 +3304,11 @@
                              mActivity.getComponentName(),
                              mMultiInstanceManager);
          }
@@ -1710,7 +1957,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
          if (mBookmarkBarCoordinator == null) {
              assert mLayoutManager != null;
              mBookmarkBarCoordinator =
-@@ -3092,7 +3321,7 @@
+@@ -3092,7 +3324,7 @@
                              mProfileSupplier,
                              mActivity.findViewById(R.id.bookmark_bar_stub),
                              mActivityTabProvider.get(),
@@ -1719,7 +1966,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
                              mBookmarkManagerOpenerSupplier,
                              mTopControlsStacker,
                              mActivityTabProvider.asObservable(),
-@@ -3124,7 +3353,12 @@
+@@ -3124,7 +3356,12 @@
          }
      }
 
@@ -1732,7 +1979,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
          if (visible) {
              // We create the BookmarkBar, but we do not update the Top Controls height here since
              // the view's height requires a layout pass to be correct (until then it will return the
-@@ -3151,6 +3385,7 @@
+@@ -3151,6 +3388,7 @@
 
      @Override
      public boolean getBookmarkBarVisibility() {
@@ -1740,7 +1987,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
          if (!ChromeFeatureList.isEnabled(ChromeFeatureList.BOOKMARKS_BAR_NTP)) {
              return BookmarkBarUtils.isBookmarkBarVisible(
                      mActivity, mProfileSupplier.get(), mXrSpaceModeObservableSupplier.get());
-@@ -3405,6 +3640,7 @@
+@@ -3405,6 +3643,7 @@
       * @param entryPoint The entry point from which Tab Search is being invoked.
       */
      public void showTabSearchOverlay(@TabSearchEntryPoint int entryPoint) {
@@ -1748,7 +1995,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
          if (mTabSearchOverlayCoordinator != null) {
              mTabSearchOverlayCoordinator.show(entryPoint);
          }
-@@ -3429,8 +3665,12 @@
+@@ -3429,8 +3668,12 @@
       * activated.
       */
      public BooleanSupplier canActivateTabLayoutToggleMenu() {
@@ -1762,6 +2009,43 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
                          && mVerticalTabsSideUiCoordinator.canActivateTabLayoutToggleMenu()
                          && !VerticalTabUtils.isTabLayoutSwitchingInProgress();
      }
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java b/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java
+@@ -362,6 +362,7 @@
+             mTabGroupUiBottomControlsCoordinatorSupplier = ObservableSuppliers.createMonotonic();
+     private SettableMonotonicObservableSupplier<BottomControlsCoordinator>
+             mBottomAppBarCoordinatorSupplier = ObservableSuppliers.createMonotonic();
++    private boolean mArcToolbarSceneLayerSuppressed;
+     private final SettableNonNullObservableSupplier<Boolean> mSuppressToolbarSceneLayerSupplier =
+             ObservableSuppliers.createNonNull(false);
+     private final SettableMonotonicObservableSupplier<Long> mCaptureResourceIdSupplier =
+@@ -2991,6 +2992,7 @@
+     @SuppressWarnings("NullAway")
+     public void destroy() {
+         if (mIsDestroyed) return;
++        setArcToolbarSceneLayerSuppressed(false);
+         mIsDestroyed = true;
+
+         if (mAppInstalledDelegate != null) {
+@@ -3945,8 +3947,16 @@
+         updateToolbarSceneLayerSuppression();
+     }
+
++    /** Suppress only Arc's native toolbar overlay ownership; preserve XR and narrow reasons. */
++    public void setArcToolbarSceneLayerSuppressed(boolean suppressed) {
++        if (mIsDestroyed || mArcToolbarSceneLayerSuppressed == suppressed) return;
++        mArcToolbarSceneLayerSuppressed = suppressed;
++        updateToolbarSceneLayerSuppression();
++    }
++
+     private void updateToolbarSceneLayerSuppression() {
+-        mSuppressToolbarSceneLayerSupplier.set(mIsXrFsm || mIsVerticalTabsHiddenDueToNarrow);
++        mSuppressToolbarSceneLayerSupplier.set(
++                mIsXrFsm || mIsVerticalTabsHiddenDueToNarrow || mArcToolbarSceneLayerSuppressed);
+     }
+
+     @VisibleForTesting
 diff --git a/chrome/browser/BUILD.gn b/chrome/browser/BUILD.gn
 --- a/chrome/browser/BUILD.gn
 +++ b/chrome/browser/BUILD.gn
@@ -2444,7 +2728,15 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
              }
              int topMarginExpansion = Math.min(expansionPx, availableTopHeadroomPx);
              parentParams.topMargin = mIsReparentedToPopover ? 0 : -topMarginExpansion;
-@@ -754,6 +776,7 @@
+@@ -747,13 +769,13 @@
+             // Null out the outline provider to avoid casting a shadow on views with translationZ
+             // lower than ours.
+             super.setOutlineProvider(null);
+-            ViewUtils.setAncestorsShouldClipToPadding(this, false, View.NO_ID);
+-            ViewUtils.setAncestorsShouldClipChildren(this, false, View.NO_ID);
++            setExpansionAncestorClipping(false);
+             setBackground(mFocusedPopupDrawable);
+         } else {
              parentParams.leftMargin = 0;
              parentParams.rightMargin = 0;
              parentParams.topMargin = 0;
@@ -2452,10 +2744,43 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
              mTargetPopoverWidth = 0;
              mTargetPopoverLeftOffset = 0;
              parentParams.height =
-@@ -845,21 +868,102 @@
+@@ -762,8 +784,7 @@
+             setPadding(0, 0, 0, getPaddingBottom());
+             mHolder.setTranslationZ(NEUTRAL_Z_TRANSLATION);
+             super.setOutlineProvider(mOutlineProvider);
+-            ViewUtils.setAncestorsShouldClipToPadding(this, true, View.NO_ID);
+-            ViewUtils.setAncestorsShouldClipChildren(this, true, View.NO_ID);
++            setExpansionAncestorClipping(true);
+             // Reset our background to reflect non-zero suggestion count, which is the typical
+             // state. Not setting this risks visual glitches when returning to the fusebox.
+             setBackground(mLocationBarBackground);
+@@ -845,21 +866,125 @@
          }
      }
 
++    /** Allow native focus expansion inside Arc's header without unclipping its scroll viewport. */
++    private void setExpansionAncestorClipping(boolean clip) {
++        View container = getExpansionContainerView();
++        if (!mIsReparentedToPopover
++                && container != mContainerView
++                && container instanceof ScrollView viewport) {
++            ViewGroup ancestor = this;
++            while (ancestor != viewport) {
++                ancestor.setClipToPadding(clip);
++                ancestor.setClipChildren(clip);
++                if (!(ancestor.getParent() instanceof ViewGroup parent)) return;
++                ancestor = parent;
++            }
++            // Suggestions live in the coordinator's sibling dropdown, outside this viewport.
++            // Only header content must stay within the header's visible scroll area.
++            viewport.setClipToPadding(true);
++            viewport.setClipChildren(true);
++            return;
++        }
++        ViewUtils.setAncestorsShouldClipToPadding(this, clip, View.NO_ID);
++        ViewUtils.setAncestorsShouldClipChildren(this, clip, View.NO_ID);
++    }
++
 +    /** Keep the native container while it is an ancestor; otherwise use the holder's live host. */
 +    private @Nullable View getExpansionContainerView() {
 +        if (mHolder == null || !(mHolder.getParent() instanceof View holderParent)) return null;
@@ -2561,7 +2886,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
          int unexpandedRight = unexpandedLeft + unexpandedWidth;
 
          // Step 2: Determine target width
-@@ -911,11 +1015,17 @@
+@@ -911,11 +1036,17 @@
          if (isPopoverMode) {
              mTargetPopoverWidth = finalRight - finalLeft;
              mTargetPopoverLeftOffset = finalLeft - unexpandedLeft;
@@ -2583,7 +2908,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
          }
      }
 
-@@ -996,8 +1106,13 @@
+@@ -996,8 +1127,13 @@
       * falling back to the window width before the container has been laid out.
       */
      private @Px int getAvailableContainerWidth() {
@@ -4618,7 +4943,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollecti
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java
-@@ -0,0 +1,374 @@
+@@ -0,0 +1,438 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -4626,9 +4951,12 @@ new file mode 100644
 +
 +import android.app.Activity;
 +import android.app.AlertDialog;
++import android.graphics.Bitmap;
++import android.graphics.Typeface;
 +import android.text.TextUtils;
 +import android.view.Gravity;
 +import android.view.View;
++import android.view.ViewGroup;
 +import android.widget.Button;
 +import android.widget.EditText;
 +import android.widget.ImageButton;
@@ -4638,8 +4966,11 @@ new file mode 100644
 +import android.widget.Toast;
 +
 +import org.chromium.chrome.R;
++import org.chromium.chrome.browser.ui.favicon.FaviconUtils;
++import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance;
 +import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy;
 +import org.chromium.components.bookmarks.BookmarkItem;
++import org.chromium.url.GURL;
 +
 +import java.util.List;
 +import java.util.function.BiConsumer;
@@ -4672,6 +5003,7 @@ new file mode 100644
 +    private AlertDialog mDialog;
 +    private PopupMenu mMenu;
 +    private boolean mDestroyed;
++    private boolean mIncognito;
 +    private ArcDesktopPolicy.Geometry mGeometry;
 +
 +    public ArcCollectionsView(Activity activity, ArcCollectionsController controller,
@@ -4693,18 +5025,23 @@ new file mode 100644
 +        mSpace = button("", this::showSpaces);
 +        mSpace.setTag("arc-current-space");
 +        mSpace.setContentDescription(activity.getString(R.string.arc_spaces));
++        mSpace.setTypeface(Typeface.create("sans-serif-medium", Typeface.NORMAL));
++        mSpace.setTextSize(ArcDesktopPolicy.ARC_PRINCIPAL_TEXT_SIZE_SP);
 +        addView(mSpace, new LayoutParams(-1, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
 +        mEntries = new LinearLayout(activity);
 +        mEntries.setOrientation(VERTICAL);
 +        mEntries.setContentDescription(activity.getString(R.string.arc_pinned_tabs));
 +        mScroll = new ScrollView(activity);
++        mScroll.setVerticalScrollBarEnabled(false);
 +        mScroll.addView(mEntries);
 +        addView(mScroll, new LayoutParams(-1, dp(112)));
 +        LinearLayout controls = new LinearLayout(activity);
 +        Button pin = button(activity.getString(R.string.arc_pin_current), () -> remember(false));
 +        pin.setTag("arc-pin-current");
++        pin.setTextSize(ArcDesktopPolicy.ARC_SECONDARY_TEXT_SIZE_SP);
 +        Button favorite = button(activity.getString(R.string.arc_favorite_current), () -> remember(true));
 +        favorite.setTag("arc-favorite-current");
++        favorite.setTextSize(ArcDesktopPolicy.ARC_SECONDARY_TEXT_SIZE_SP);
 +        controls.addView(pin, new LayoutParams(0, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP), 1));
 +        controls.addView(favorite, new LayoutParams(0, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP), 1));
 +        addView(controls);
@@ -4721,12 +5058,62 @@ new file mode 100644
 +        result.setAllCaps(false);
 +        result.setTextSize(ArcDesktopPolicy.ARC_TAB_TEXT_SIZE_SP);
 +        result.setMinWidth(0); result.setMinimumWidth(0);
++        result.setMinHeight(0); result.setMinimumHeight(0);
 +        result.setPadding(dp(8), 0, dp(8), 0);
 +        result.setSingleLine(true);
 +        result.setEllipsize(TextUtils.TruncateAt.END);
 +        result.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
++        styleAction(result);
 +        result.setOnClickListener(view -> runCommand(action));
 +        return result;
++    }
++
++    private void styleAction(Button button) {
++        button.setBackgroundTintList(null);
++        button.setStateListAnimator(null);
++        button.setElevation(0);
++        button.setTextColor(ArcDesktopAppearance.rowTextColor(mActivity, false, mIncognito));
++        button.setBackground(ArcDesktopAppearance.controlBackground(mActivity, mIncognito, 12));
++    }
++
++    private void styleFavorite(ImageButton favorite) {
++        favorite.setBackgroundTintList(null);
++        favorite.setStateListAnimator(null);
++        favorite.setElevation(0);
++        favorite.setBackground(ArcDesktopAppearance.favoriteBackground(mActivity, mIncognito, 12));
++    }
++
++    /** Repaint only collection controls; native bookmark and favorite icons retain their colors. */
++    public void applyAppearance(boolean incognito) {
++        mIncognito = incognito;
++        styleCollectionControls(this);
++    }
++
++    private void styleCollectionControls(View view) {
++        if (view instanceof ImageButton) styleFavorite((ImageButton) view);
++        else if (view instanceof Button) styleAction((Button) view);
++        if (view instanceof ViewGroup) {
++            ViewGroup group = (ViewGroup) view;
++            for (int i = 0; i < group.getChildCount(); i++) styleCollectionControls(group.getChildAt(i));
++        }
++    }
++
++    private void initializeFavoriteIcon(ImageButton favorite) {
++        favorite.setImageBitmap(FaviconUtils.createGenericFaviconBitmap(mActivity, dp(24), null));
++    }
++
++    /** Consume both bitmap and fallback results from Chromium's profile-bound LargeIconBridge. */
++    public static void applyFavoriteIcon(ImageButton button, GURL url, Bitmap icon, int fallbackColor) {
++        button.clearColorFilter();
++        button.setImageTintList(null);
++        int size = Math.round(24 * button.getResources().getDisplayMetrics().density);
++        if (icon == null && (url == null || url.isEmpty())) {
++            button.setImageBitmap(FaviconUtils.createGenericFaviconBitmap(button.getContext(), size, null));
++            return;
++        }
++        button.setImageDrawable(FaviconUtils.getIconDrawableWithoutFilter(icon, url, fallbackColor,
++                FaviconUtils.createRoundedRectangleIconGenerator(button.getContext()),
++                button.getResources(), size));
 +    }
 +
 +    private void runCommand(Runnable command) {
@@ -4877,8 +5264,9 @@ new file mode 100644
 +        if (mNativeBookmarks != null) {
 +            for (BookmarkItem item : mNativeBookmarks.items()) {
 +                ImageButton favorite = new ImageButton(mActivity);
-+                favorite.setImageResource(item.isFolder() ? android.R.drawable.ic_menu_agenda
-+                        : android.R.drawable.ic_menu_view);
++                if (item.isFolder()) favorite.setImageResource(android.R.drawable.ic_menu_agenda);
++                else initializeFavoriteIcon(favorite);
++                styleFavorite(favorite);
 +                favorite.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
 +                favorite.setPadding(dp(12), dp(12), dp(12), dp(12));
 +                favorite.setContentDescription(item.getTitle());
@@ -4895,7 +5283,8 @@ new file mode 100644
 +        }
 +        for (ArcSidebarState.Entry entry : entries) {
 +            ImageButton favorite = new ImageButton(mActivity);
-+            favorite.setImageResource(android.R.drawable.ic_menu_view);
++            initializeFavoriteIcon(favorite);
++            styleFavorite(favorite);
 +            favorite.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
 +            favorite.setPadding(dp(12), dp(12), dp(12), dp(12));
 +            favorite.setContentDescription(entry.title);
@@ -4997,7 +5386,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopC
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
-@@ -0,0 +1,1287 @@
+@@ -0,0 +1,1367 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -5006,6 +5395,7 @@ new file mode 100644
 +import android.app.Activity;
 +import android.app.AlertDialog;
 +import android.content.SharedPreferences;
++import android.content.res.ColorStateList;
 +import android.graphics.Color;
 +import android.graphics.Outline;
 +import android.graphics.Rect;
@@ -5013,6 +5403,7 @@ new file mode 100644
 +import android.graphics.drawable.GradientDrawable;
 +import android.text.InputType;
 +import android.text.TextUtils;
++import android.transition.Transition;
 +import android.view.MotionEvent;
 +import android.view.View;
 +import android.view.ViewOutlineProvider;
@@ -5037,6 +5428,7 @@ new file mode 100644
 +import org.chromium.chrome.browser.ui.side_ui.SideUiStateProvider;
 +import org.chromium.chrome.browser.ui.side_ui.SideUiObserver;
 +import org.chromium.chrome.browser.ui.side_ui.SideUiCoordinator.SideUiSpecs;
++import org.chromium.chrome.browser.ui.side_ui.SideUiCoordinator.AnchorSide;
 +import org.chromium.chrome.browser.ui.side_ui.SideUiCoordinator.UiUpdateRequest;
 +import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance;
 +import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy;
@@ -5111,17 +5503,24 @@ new file mode 100644
 +    private final SideUiStateProvider mSideUiStateProvider;
 +    private final SideUiObserver mSideUiObserver = new SideUiObserver() {
 +        @Override
++        public Transition onPreSideUiSpecsChange(SideUiSpecs specs, UiUpdateRequest request) {
++            return createArcViewportTransition(specs);
++        }
++
++        @Override
 +        public void onTransitionBegun(SideUiSpecs specs, UiUpdateRequest request) {
-+            // The provider still exposes the previous reserved width during the animation.
++            beginArcViewportAnimation(specs);
 +        }
 +
 +        @Override
 +        public void onTransitionEnded(SideUiSpecs specs, UiUpdateRequest request) {
++            finishArcViewportAnimation();
 +            onSidebarGeometryChanged();
 +        }
 +
 +        @Override
 +        public void onSideUiSpecsChanged(SideUiSpecs specs, UiUpdateRequest request) {
++            finishArcViewportAnimation();
 +            onSidebarGeometryChanged();
 +        }
 +    };
@@ -5155,6 +5554,10 @@ new file mode 100644
 +    private boolean mDestroyed;
 +    private boolean mArcToolbarCompositionActive;
 +    private boolean mArcFrameActive;
++    private boolean mArcViewportAnimationPending;
++    private boolean mArcViewportAnimationActive;
++    private int mArcVisualReservedLeftWidth = -1;
++    private int mArcViewportAnimationGeneration;
 +    private boolean mRejectingRoundedCornerGesture;
 +    private View mClippedSurface;
 +    private ViewOutlineProvider mClippedSurfaceOriginalOutlineProvider;
@@ -5634,8 +6037,10 @@ new file mode 100644
 +            if (model.getProfile().isOffTheRecord()) return;
 +            mIcons.getLargeIconForUrl(new org.chromium.url.GURL(entry.url), dp(24),
 +                    (icon, color, fallback, type) -> {
-+                        if (!mDestroyed && mTabSession == session && mCurrentModel.get() == model
-+                                && icon != null) button.setImageBitmap(icon);
++                        if (!mDestroyed && mTabSession == session && mCurrentModel.get() == model) {
++                            ArcCollectionsView.applyFavoriteIcon(
++                                    button, new org.chromium.url.GURL(entry.url), icon, color);
++                        }
 +                    });
 +        });
 +        // Native model loading can invoke the bridge callback synchronously. Attach first so
@@ -5654,9 +6059,8 @@ new file mode 100644
 +        mCollectionsView.setNativeBookmarks(mNativeBookmarks, (item, button) -> {
 +            if (model.getProfile().isOffTheRecord() || item.isFolder()) return;
 +            mIcons.getLargeIconForUrl(item.getUrl(), dp(24), (icon, color, fallback, type) -> {
-+                if (!mDestroyed && mTabSession == session && mCurrentModel.get() == model
-+                        && icon != null) {
-+                    button.setImageBitmap(icon);
++                if (!mDestroyed && mTabSession == session && mCurrentModel.get() == model) {
++                    ArcCollectionsView.applyFavoriteIcon(button, item.getUrl(), icon, color);
 +                }
 +            });
 +        });
@@ -5827,6 +6231,12 @@ new file mode 100644
 +        boolean desktop = ArcDesktopAppearance.isDesktopWindow(mActivity);
 +        boolean incognito = mIncognitoStateProvider.isIncognitoSelected();
 +        setArcToolbarCompositionActive(desktop);
++        View urlText = mLocationBarHost.findViewById(R.id.url_bar);
++        if (urlText instanceof TextView) {
++            // The shared 14sp text policy snapshots the original native size and restores it
++            // in MOBILE. It changes presentation without changing the UrlBar/editing model.
++            ArcDesktopAppearance.applyTabTextSize((TextView) urlText);
++        }
 +        mNavigationState.setActive(desktop);
 +        if (mNativeTabs instanceof VerticalTabRailLayout) {
 +            // This binder restores upstream colors/tints too when ARC is no longer active.
@@ -5900,8 +6310,62 @@ new file mode 100644
 +    }
 +
 +    private int reservedLeftWidth() {
++        if (mArcViewportAnimationActive) return Math.max(0, mArcVisualReservedLeftWidth);
 +        Integer width = mReservedLeftWidth.get();
 +        return Math.max(0, width == null ? 0 : width);
++    }
++
++    private Transition createArcViewportTransition(SideUiSpecs specs) {
++        if (mDestroyed || !mArcToolbarCompositionActive || !mArcFrameActive
++                || mCompositorViewHolder.getFullscreenManager().getPersistentFullscreenMode()) {
++            finishArcViewportAnimation();
++            return null;
++        }
++        int start = reservedLeftWidth();
++        int end = Math.max(0, specs.getReservedWidth(AnchorSide.LEFT));
++        if (start == end) {
++            // Hover expands the rail without reserving more page width; stale pending work
++            // from an interrupted request must not prepare a second renderer canvas.
++            finishArcViewportAnimation();
++            return null;
++        }
++        final int generation = ++mArcViewportAnimationGeneration;
++        mArcVisualReservedLeftWidth = start;
++        mArcViewportAnimationPending = true;
++        return new ArcViewportTransition(mCompositorViewHolder, start, end, width -> {
++            if (generation == mArcViewportAnimationGeneration) updateArcAnimatedViewportWidth(width);
++        });
++    }
++
++    private void beginArcViewportAnimation(SideUiSpecs specs) {
++        if (mDestroyed || !mArcToolbarCompositionActive || !mArcViewportAnimationPending) return;
++        if (!mArcFrameActive
++                || mCompositorViewHolder.getFullscreenManager().getPersistentFullscreenMode()) {
++            finishArcViewportAnimation();
++            return;
++        }
++        mArcViewportAnimationPending = false;
++        mArcViewportAnimationActive = true;
++        // Keep the larger canvas available throughout both directions. Collapse prepares the
++        // larger target now; expansion keeps its current canvas until native settlement.
++        mCompositorViewHolder.prepareArcSideUiAnimation(
++                mArcVisualReservedLeftWidth, specs.getReservedWidth(AnchorSide.LEFT));
++    }
++
++    private void finishArcViewportAnimation() {
++        mArcViewportAnimationPending = false;
++        mArcViewportAnimationActive = false;
++        mArcVisualReservedLeftWidth = -1;
++        ++mArcViewportAnimationGeneration;
++    }
++
++    private void updateArcAnimatedViewportWidth(int width) {
++        if (mDestroyed || !mArcToolbarCompositionActive || !mArcViewportAnimationActive) return;
++        mArcVisualReservedLeftWidth = Math.max(0, width);
++        mCompositorViewHolder.setArcSideUiContentOffsetX(mArcVisualReservedLeftWidth);
++        mFrameGeometry = currentFrameGeometry();
++        mCompositorViewHolder.invalidateOutline();
++        applyActiveSurfaceClip();
 +    }
 +
 +    private int captionHeight() {
@@ -6128,6 +6592,7 @@ new file mode 100644
 +    }
 +
 +    private void clearFrameGeometry() {
++        finishArcViewportAnimation();
 +        if (!mArcFrameActive) return;
 +        mArcFrameActive = false;
 +        mCompositorViewHolder.removeCallbacks(mGeometryUpdate);
@@ -6218,23 +6683,27 @@ new file mode 100644
 +    }
 +
 +    private void tintHeader(View view, int foreground, int selection) {
-+        // Native Chromium controls keep their own ripple, hover, accessibility and icon-tint
-+        // state. Arc only styles views that it owns.
++        // Native Chromium controls retain their own input/state; only owned Arc views are styled.
 +        if (view == mLocationBarHost
-+                || view == mNavigationControls
 +                || view == mCollapseButton
 +                || view == mMenuButtonWrapper
 +                || view == mExtensionsToolbarHost) {
 +            return;
 +        }
++        if (view instanceof ArcCollectionsView) {
++            ((ArcCollectionsView) view).applyAppearance(mIncognitoStateProvider.isIncognitoSelected());
++            return;
++        }
 +        if (view instanceof TextView) ((TextView) view).setTextColor(foreground);
 +        if (view instanceof Button || view instanceof ImageButton) {
-+            GradientDrawable background = new GradientDrawable();
-+            background.setColor(selection);
-+            background.setCornerRadius(dp(8));
-+            view.setBackground(background);
++            view.setBackground(ArcDesktopAppearance.controlBackground(
++                    mActivity, mIncognitoStateProvider.isIncognitoSelected(), 8));
 +            if (view instanceof ImageButton) {
-+                ((ImageButton) view).setColorFilter(foreground);
++                ImageButton button = (ImageButton) view;
++                button.clearColorFilter();
++                button.setImageTintList(new ColorStateList(
++                        new int[][] {new int[] {-android.R.attr.state_enabled}, new int[] {}},
++                        new int[] {(foreground & 0x00ffffff) | 0x61000000, foreground}));
 +            }
 +        }
 +        // Website favicons are intentionally never tinted.
@@ -7671,6 +8140,72 @@ new file mode 100644
 +    public void destroy() {
 +        mDestroyed = true;
 +        mUncommittedTabs.clear();
++    }
++}
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcViewportTransition.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcViewportTransition.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcViewportTransition.java
+@@ -0,0 +1,61 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++import android.animation.Animator;
++import android.animation.ValueAnimator;
++import android.transition.Transition;
++import android.transition.TransitionValues;
++import android.view.View;
++import android.view.ViewGroup;
++
++import org.chromium.build.annotations.Nullable;
++
++import java.util.function.IntConsumer;
++
++/** Joins the native SideUi transition so the content edge moves with the rail. */
++public final class ArcViewportTransition extends Transition {
++    private static final String WIDTH = "archium:viewport:reservedWidth";
++    private final View mViewport;
++    private final int mStartWidth;
++    private final int mEndWidth;
++    private final IntConsumer mUpdateWidth;
++
++    public ArcViewportTransition(View viewport, int startWidth, int endWidth,
++            IntConsumer updateWidth) {
++        mViewport = viewport;
++        mStartWidth = Math.max(0, startWidth);
++        mEndWidth = Math.max(0, endWidth);
++        mUpdateWidth = updateWidth;
++        addTarget(viewport);
++    }
++
++    @Override
++    public void captureStartValues(TransitionValues values) {
++        if (values.view == mViewport) values.values.put(WIDTH, mStartWidth);
++    }
++
++    @Override
++    public void captureEndValues(TransitionValues values) {
++        if (values.view == mViewport) values.values.put(WIDTH, mEndWidth);
++    }
++
++    @Override
++    public String[] getTransitionProperties() {
++        return new String[] {WIDTH};
++    }
++
++    @Override
++    public @Nullable Animator createAnimator(ViewGroup sceneRoot,
++            @Nullable TransitionValues startValues, @Nullable TransitionValues endValues) {
++        if (startValues == null || endValues == null) return null;
++        Object start = startValues.values.get(WIDTH);
++        Object end = endValues.values.get(WIDTH);
++        if (!(start instanceof Integer) || !(end instanceof Integer) || start.equals(end)) return null;
++        ValueAnimator animator = ValueAnimator.ofInt((Integer) start, (Integer) end);
++        animator.addUpdateListener(value -> mUpdateWidth.accept((Integer) value.getAnimatedValue()));
++        // Duration and interpolation come from the owning native TransitionSet.
++        return animator;
 +    }
 +}
 diff --git a/chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/ArchiumAutofillPolicy.java b/chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/ArchiumAutofillPolicy.java
@@ -11762,7 +12297,7 @@ diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrom
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java
-@@ -0,0 +1,167 @@
+@@ -0,0 +1,210 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -11775,6 +12310,9 @@ new file mode 100644
 +import android.graphics.drawable.Drawable;
 +import android.graphics.drawable.GradientDrawable;
 +import android.graphics.drawable.InsetDrawable;
++import android.graphics.drawable.LayerDrawable;
++import android.graphics.drawable.RippleDrawable;
++import android.graphics.drawable.StateListDrawable;
 +import android.util.TypedValue;
 +import android.view.View;
 +import android.widget.TextView;
@@ -11787,7 +12325,7 @@ new file mode 100644
 +public final class ArcDesktopAppearance {
 +    public static final String COLOR_KEY = "frame_color";
 +    public static final String UI_MODE_KEY = "ui_mode";
-+    public static final int DEFAULT_COLOR = 0xff53657b;
++    public static final int DEFAULT_COLOR = 0xff706b86;
 +    public static final int WARM_COLOR = 0xffedae9f;
 +
 +    private static ColorStateList sNewTabBackgroundTint;
@@ -11881,7 +12419,7 @@ new file mode 100644
 +
 +    /** Keep New Tab quiet at rest while preserving visible native hover, press and focus states. */
 +    public static ColorStateList newTabBackgroundTint(Context context, boolean incognito) {
-+        int interaction = selection(context, incognito);
++        int interaction = interaction(context, incognito);
 +        if (sNewTabBackgroundTint == null || sNewTabBackgroundColor != interaction) {
 +            sNewTabBackgroundColor = interaction;
 +            sNewTabBackgroundTint = new ColorStateList(
@@ -11890,6 +12428,46 @@ new file mode 100644
 +                    new int[] {interaction, interaction, interaction, 0x00000000});
 +        }
 +        return sNewTabBackgroundTint;
++    }
++
++    /** Native drawables own interaction rendering; callers retain their own focus/click behavior. */
++    public static Drawable controlBackground(Context context, boolean incognito, float radiusDp) {
++        int color = interaction(context, incognito);
++        StateListDrawable states = new StateListDrawable();
++        states.addState(new int[] {android.R.attr.state_pressed},
++                controlShape(context, color, radiusDp));
++        states.addState(new int[] {android.R.attr.state_hovered},
++                controlShape(context, color, radiusDp));
++        states.addState(new int[] {android.R.attr.state_focused},
++                controlShape(context, color, radiusDp));
++        states.addState(new int[] {}, controlShape(context, 0x00000000, radiusDp));
++        int ripple = (foreground(context, incognito) & 0x00ffffff) | 0x24000000;
++        return new RippleDrawable(ColorStateList.valueOf(ripple), states,
++                controlShape(context, 0xffffffff, radiusDp));
++    }
++
++    /** Favorite destinations have a faint tile surface; section actions remain transparent. */
++    public static Drawable favoriteBackground(Context context, boolean incognito, float radiusDp) {
++        int base = (foreground(context, incognito) & 0x00ffffff) | 0x0c000000;
++        return new LayerDrawable(new Drawable[] {controlShape(context, base, radiusDp),
++                controlBackground(context, incognito, radiusDp)});
++    }
++
++    private static GradientDrawable controlShape(Context context, int color, float radiusDp) {
++        GradientDrawable shape = new GradientDrawable();
++        shape.setColor(color);
++        shape.setCornerRadius(radiusDp * context.getResources().getDisplayMetrics().density);
++        return shape;
++    }
++
++    public static int interaction(Context context, boolean incognito) {
++        return ArcDesktopPolicy.interaction(preferences(context).getInt(COLOR_KEY, DEFAULT_COLOR),
++                isDark(context, incognito));
++    }
++
++    public static int rowTextColor(Context context, boolean selected, boolean incognito) {
++        return selected ? ArcDesktopPolicy.foreground(selection(context, incognito))
++                : foreground(context, incognito);
 +    }
 +
 +    /** Native SP conversion respects font accessibility; MOBILE restores the measured XML size. */
@@ -11934,7 +12512,7 @@ diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrom
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java
-@@ -0,0 +1,250 @@
+@@ -0,0 +1,263 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -11970,6 +12548,9 @@ new file mode 100644
 +    public static final int NATIVE_MAX_EXPANDED_WIDTH_DP = 500;
 +    public static final int COLLAPSED_WIDTH_DP = 52;
 +    public static final float ARC_TAB_TEXT_SIZE_SP = 14f;
++    public static final float ARC_PRINCIPAL_TEXT_SIZE_SP = 14f;
++    public static final float ARC_SECONDARY_TEXT_SIZE_SP = 12f;
++    public static final float ARC_OMNIBOX_TEXT_SIZE_SP = 14f;
 +    public static final int ARC_NEW_TAB_ICON_SIZE_DP = 18;
 +    public static final int ARC_NEW_TAB_ICON_ALPHA = 204;
 +
@@ -12091,11 +12672,11 @@ new file mode 100644
 +    }
 +
 +    public static int gradientStart(int seed, boolean dark) {
-+        return blend(seed, dark ? 0xff17151a : 0xfffaf8f5, dark ? 0.22 : 0.16);
++        return blend(seed, dark ? 0xff17151a : 0xfffaf8f5, dark ? 0.22 : 0.32);
 +    }
 +
 +    public static int gradientEnd(int seed, boolean dark) {
-+        return blend(seed, dark ? 0xff261a27 : 0xfff2e4ec, dark ? 0.22 : 0.16);
++        return blend(seed, dark ? 0xff261a27 : 0xfff2e4ec, dark ? 0.22 : 0.32);
 +    }
 +
 +    /** One text color remains legible across the whole vertical gradient. */
@@ -12108,7 +12689,17 @@ new file mode 100644
 +    }
 +
 +    public static int selection(int surface) {
-+        return blend(foreground(surface), surface, 0.24);
++        // Light palettes use an illuminated capsule. Almost-white custom palettes need a
++        // darker capsule to remain distinguishable; dark/incognito palettes lift their surface.
++        if (foreground(surface) == 0xffffffff) return blend(0xffffffff, surface, 0.34);
++        if (contrast(surface, 0xffffffff) >= 1.5) return 0xffffffff;
++        return blend(0xff000000, surface, 0.32);
++    }
++
++    /** Quiet controls/rows gain a theme-derived surface only while interacting. */
++    public static int interaction(int seed, boolean dark) {
++        int surface = gradientStart(seed, dark);
++        return blend(gradientForeground(seed, dark), surface, 0.10);
 +    }
 +
 +    public static int foreground(int background) {

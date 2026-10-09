@@ -58,7 +58,12 @@ class LocationBarContainerProbe {
         int getMarginEnd(){return end==Integer.MIN_VALUE?rightMargin:end;}
         void setMarginStart(int v){start=v;}void setMarginEnd(int v){end=v;}
     }
-    static class ViewGroup extends View { static class LayoutParams {static final int WRAP_CONTENT=-2;} }
+    static class ViewGroup extends View {
+        boolean clipChildren=true,clipToPadding=true;
+        void setClipChildren(boolean clip){clipChildren=clip;}
+        void setClipToPadding(boolean clip){clipToPadding=clip;}
+        static class LayoutParams {static final int WRAP_CONTENT=-2;}
+    }
     static class FrameLayout {static class LayoutParams extends MarginLayoutParams {}}
     static class LinearLayout {static class LayoutParams extends MarginLayoutParams {}}
     static class ScrollView extends ViewGroup {}
@@ -82,10 +87,14 @@ class LocationBarContainerProbe {
     }}
     static class ViewUtils {
         static void getRelativeLayoutPosition(View rootView,View childView,int[] outPosition) RELATIVE
-        static void setAncestorsShouldClipToPadding(View v,boolean b,int id){}
-        static void setAncestorsShouldClipChildren(View v,boolean b,int id){}
+        static void setAncestorsShouldClipToPadding(ViewGroup v,boolean clip,int id){
+            while(v!=null){v.setClipToPadding(clip);v=v.getParent() instanceof ViewGroup parent?parent:null;}
+        }
+        static void setAncestorsShouldClipChildren(ViewGroup v,boolean clip,int id){
+            while(v!=null){v.setClipChildren(clip);v=v.getParent() instanceof ViewGroup parent?parent:null;}
+        }
     }
-    static class Tablet extends View {
+    static class Tablet extends ViewGroup {
         private View mHolder;private View mContainerView;
         private BooleanSupplier mIsFullWidthExpansionAllowedSupplier;
         int mLayoutMode,mFuseboxState=FuseboxState.COMPACT;boolean mShowFocusRing,mIsReparentedToPopover,mIsGlifActive;
@@ -109,7 +118,7 @@ class LocationBarContainerProbe {
         }
     }
     static class Fixture {
-        final View root=new View(),toolbar=new View(),nativeRow=new View(),header=new View();
+        final ViewGroup root=new ViewGroup(),toolbar=new ViewGroup(),nativeRow=new ViewGroup(),header=new ViewGroup();
         final ScrollView viewport=new ScrollView();final ViewGroup holder=new ViewGroup();
         final Tablet bar=new Tablet();final LinearLayout.LayoutParams margins=new LinearLayout.LayoutParams();
         Fixture(){root.parent=new ViewRootImpl();root.width=1000;
@@ -127,8 +136,10 @@ class LocationBarContainerProbe {
             check(f.margins.topMargin==-6,"native headroom path");
             check(f.margins.leftMargin==-6&&f.margins.rightMargin==-6,"native expansion margins");
             check(f.bar.getAvailableContainerWidth()==800,"native activation-chip width");
+            check(!f.root.clipChildren&&!f.root.clipToPadding,"native focus retains full ancestor expansion");
             f.bar.mFuseboxState=0;f.bar.updateLayoutAndBackground();
             check(f.margins.leftMargin==0&&f.margins.topMargin==0&&f.holder.z==0,"native collapse restored");
+            check(f.root.clipChildren&&f.root.clipToPadding,"native collapse restores ancestor clipping");
         } else if(s.equals("nullcontainer")) {
             f.bar.setHolderAndContainer(f.holder,null);f.bar.updateLayoutAndBackground();
             check(f.margins.topMargin==-6,"unspecified native container keeps inset headroom");
@@ -144,6 +155,9 @@ class LocationBarContainerProbe {
             if(s.equals("width")) {check(f.bar.getAvailableContainerWidth()==334,"sidebar width replaces cached800px toolbar");}
             else if(s.equals("headroom")) {
                 f.bar.updateLayoutAndBackground();check(f.margins.topMargin==-6,"54px visible sidebar headroom permits6px expansion");
+                check(f.viewport.clipChildren&&f.viewport.clipToPadding&&f.root.clipChildren&&f.root.clipToPadding,
+                        "Arc focus keeps the scroll viewport and coordinator clipped");
+                check(!f.header.clipChildren&&!f.header.clipToPadding,"Arc focus allows inner native URL expansion");
                 // Simulate the completed Android layout after topMargin=-6.
                 f.holder.top=48;f.viewport.scrollY=51;f.bar.updateLayoutAndBackground();
                 check(f.margins.topMargin==-3,"scroll leaves only3px unexpanded headroom");
@@ -276,6 +290,7 @@ class ArcLocationBarContainerTest(unittest.TestCase):
         ]
         # Include additional production helpers without inventing test implementations.
         for signature in ['private @Nullable View getExpansionContainerView()',
+                          'private void setExpansionAncestorClipping(boolean clip)',
                           'private void getExpansionPosition(View containerView, View childView)',
                           'private void restoreReparentedHolderMargins(MarginLayoutParams layoutParams)']:
             if signature in source:signatures.append(signature)
@@ -328,6 +343,7 @@ class ArcLocationBarContainerTest(unittest.TestCase):
         source=(ROOT/'.source-modified'/LOCATION).read_text()
         helpers=[]
         for signature in ['private @Nullable View getExpansionContainerView()',
+                          'private void setExpansionAncestorClipping(boolean clip)',
                           'private void getExpansionPosition(View containerView, View childView)',
                           'private void restoreReparentedHolderMargins(MarginLayoutParams layoutParams)']:
             if signature in source:helpers.append(signature+' '+method_body(source,re.escape(signature)))
@@ -335,12 +351,23 @@ class ArcLocationBarContainerTest(unittest.TestCase):
         program = """
 import android.content.Context;
 import android.view.View;
+import android.view.ViewGroup;
 import android.view.ViewGroup.MarginLayoutParams;
+import android.widget.FrameLayout;
 import android.widget.ScrollView;
-class LocationBarAndroidApiProbe extends View {
+class LocationBarAndroidApiProbe extends FrameLayout {
     LocationBarAndroidApiProbe(Context context){super(context);}
     View mHolder,mContainerView;MarginLayoutParams mReparentedHolderParams;
     int mReparentedMarginStart,mReparentedMarginEnd;int[] mPositionArray=new int[2];
+    boolean mIsReparentedToPopover;
+    static class ViewUtils {
+        static void setAncestorsShouldClipToPadding(ViewGroup view,boolean clip,int id){
+            while(view!=null){view.setClipToPadding(clip);view=view.getParent() instanceof ViewGroup parent?parent:null;}
+        }
+        static void setAncestorsShouldClipChildren(ViewGroup view,boolean clip,int id){
+            while(view!=null){view.setClipChildren(clip);view=view.getParent() instanceof ViewGroup parent?parent:null;}
+        }
+    }
     HELPERS
 }
 """.replace('HELPERS','\n'.join(helpers).replace('@Nullable ',''))

@@ -58,6 +58,7 @@ class SideUiTransitionProbe {
         void end(){callback.onResult(specs);}
     }
     static class SideUiObserver {
+        public Transition onPreSideUiSpecsChange(SideUiSpecs s,UiUpdateRequest r){return null;}
         public void onTransitionBegun(SideUiSpecs s,UiUpdateRequest r){onSideUiSpecsChanged(s,r);}
         public void onTransitionEnded(SideUiSpecs s,UiUpdateRequest r){}
         public void onSideUiSpecsChanged(SideUiSpecs s,UiUpdateRequest r){}
@@ -67,6 +68,23 @@ class SideUiTransitionProbe {
         void notifyTransitionEnded(SideUiSpecs s,UiUpdateRequest r){mSideUiObserver.onTransitionEnded(s,r);}
     }
     final Activity mActivity=new Activity(); boolean mDestroyed,mArcToolbarCompositionActive=true;
+    // This probe checks the upstream post-commit callback ordering. Intermediate
+    // Arc frame ownership is exercised by test_arc_content_animation instead.
+    boolean mArcFrameActive,mArcViewportAnimationPending,mArcViewportAnimationActive;
+    int mArcVisualReservedLeftWidth=-1,mArcViewportAnimationGeneration;
+    static class Transition {}
+    static class ArcViewportTransition extends Transition {
+        ArcViewportTransition(Object view,int start,int end,java.util.function.IntConsumer update){}
+    }
+    static class Holder {
+        Holder getFullscreenManager(){return this;}boolean getPersistentFullscreenMode(){return false;}
+        void prepareArcSideUiAnimation(int width,int finalWidth){}void setArcSideUiContentOffsetX(int width){}
+        void invalidateOutline(){}
+    }
+    final Holder mCompositorViewHolder=new Holder();Object mFrameGeometry;
+    int reservedLeftWidth(){return mCurrentSideUiSpecs.width;}
+    Object currentFrameGeometry(){return new Object();}
+    void applyActiveSurfaceClip(){applyFrameGeometry();}
     final ViewGroup mAnchorContainerParent=new ViewGroup();
     final Map<Integer,ViewGroup> mAnchorContainers=Map.of(0,new ViewGroup());
     final SideUiContainer container=new SideUiContainer(this);
@@ -183,7 +201,7 @@ class ContentResizeProbe {
     Integer mLastViewportHeightForWebContentsSizing,mLastStableOutsetModeWebContentsHeight;
     Integer mKeyboardClosedStableWebContentsHeight,mKeyboardOpenStableWebContentsHeight;
     int mAppliedWebContentsHeightInset,mVirtualKeyboardMode=VirtualKeyboardMode.RESIZES_VISUAL;
-    boolean mControlsResizeView; int viewportEvents,clipResets;
+    boolean mControlsResizeView; int viewportEvents,clipResets,mSideUiSizingGeneration;
     final Point viewport=new Point(); final ArrayDeque<Runnable> queue=new ArrayDeque<>();
     Point getViewportSize(){return viewport;} Tab getCurrentTab(){return tab;}
     ContentView getContentView(){return mView;}
@@ -309,7 +327,12 @@ class ArcCommittedSideUiGeometryTest(unittest.TestCase):
         if re.search(observer_signature, arc_source):
             observer = method_body(arc_source, observer_signature)
         helper_signature = "private void onSidebarGeometryChanged()"
-        helper = helper_signature + " " + method_body(arc_source, re.escape(helper_signature))
+        helper_signatures=(helper_signature,
+            "private Transition createArcViewportTransition(SideUiSpecs specs)",
+            "private void beginArcViewportAnimation(SideUiSpecs specs)",
+            "private void finishArcViewportAnimation()",
+            "private void updateArcAnimatedViewportWidth(int width)")
+        helper = "\n".join(sig+" "+method_body(arc_source,re.escape(sig)) for sig in helper_signatures)
         cls.tmp = tempfile.TemporaryDirectory(prefix="arc-sideui-commit-")
         cls.work = Path(cls.tmp.name)
         java = cls.work / "SideUiTransitionProbe.java"

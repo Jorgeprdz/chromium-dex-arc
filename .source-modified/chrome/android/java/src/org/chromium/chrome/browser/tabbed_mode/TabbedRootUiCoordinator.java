@@ -2098,6 +2098,9 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
         if (toolbarView == null) return;
         View toolbarHairline = mActivity.findViewById(R.id.toolbar_hairline);
 
+        // Android visibility does not hide TopToolbarSceneLayer's captured native resource.
+        // Keep Arc as an independent reason in the native supplier shared by XR and resize.
+        mToolbarManager.setArcToolbarSceneLayerSuppressed(suppressed);
         var toolbarCoordinator = mToolbarManager.getTopToolbarCoordinator();
         if (suppressed) {
             mArcToolbarOriginalVisibility = toolbarView.getVisibility();

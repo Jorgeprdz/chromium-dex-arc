@@ -51,9 +51,14 @@ import org.chromium.components.tabs.TabAlert;
 import org.chromium.ui.modelutil.PropertyKey;
 import org.chromium.ui.modelutil.PropertyModel;
 
+import java.util.WeakHashMap;
+
 /** View binder for the Vertical Tab List item rows. */
 @NullMarked
 class TabVerticalViewBinder {
+    // Input belongs to the row, not a vendor/device flag: hybrid windows support both mouse
+    // and touch. Weak keys avoid retaining recycled/destroyed native rows.
+    private static final WeakHashMap<View, Boolean> sArcPointerRows = new WeakHashMap<>();
     private static final float ROTATION_COLLAPSED = 0f;
     private static final float ROTATION_EXPANDED = 180f;
     @VisibleForTesting static final long CHEVRON_ANIMATION_DURATION_MS = 200L;
@@ -281,6 +286,13 @@ class TabVerticalViewBinder {
             view.setOnTouchListener(
                     (View _, MotionEvent event) -> {
                         lastMotion[0] = MotionEventInfo.fromMotionEvent(event);
+                        if (view instanceof VerticalTabItemLayout tabRow
+                                && ArcDesktopAppearance.isDesktopWindow(view.getContext())
+                                && event.getActionMasked() == MotionEvent.ACTION_DOWN) {
+                            sArcPointerRows.put(view,
+                                    event.getToolType(0) == MotionEvent.TOOL_TYPE_MOUSE);
+                            updateIcons(propertyModel, tabRow);
+                        }
                         return false;
                     });
 
@@ -320,15 +332,19 @@ class TabVerticalViewBinder {
 
         // 1. Resolve independent "wanted" states
         TabActionButtonData actionData = model.get(TabProperties.TAB_ACTION_BUTTON_DATA);
-        // Close button is always visible on touch devices, but only visible on select/hover on
-        // desktop. Pinned tabs never show a close button.
+        // Arc close follows current pointer/focus interaction, keeping touch close accessible.
+        // MOBILE retains native select/hover policy; pinned tabs never show close.
         boolean actionWanted =
                 !isPinned
                         && actionButton != null
                         && actionData != null
-                        && (showIconOnly
-                                ? (isSelected && (!DeviceInfo.isDesktop() || isHovered))
-                                : (!DeviceInfo.isDesktop() || isSelected || isHovered));
+                        && (ArcDesktopAppearance.isDesktopWindow(view.getContext())
+                                ? (sArcPointerRows.getOrDefault(view, DeviceInfo.isDesktop())
+                                        ? (isHovered || view.hasFocus())
+                                        : (!showIconOnly || isSelected))
+                                : (showIconOnly
+                                        ? (isSelected && (!DeviceInfo.isDesktop() || isHovered))
+                                        : (!DeviceInfo.isDesktop() || isSelected || isHovered)));
         @TabAlert
         int alertState =
                 model.containsKey(TabProperties.ALERT_STATE)
@@ -371,7 +387,7 @@ class TabVerticalViewBinder {
     }
 
     private static @ColorInt int getLoadingSpinnerColor(PropertyModel model, Context context) {
-        return isIncognito(model)
+        return isIncognito(model, context)
                 ? context.getColor(R.color.default_icon_color_blue_light)
                 : SemanticColorUtils.getDefaultIconColorAccent1(context);
     }
@@ -436,7 +452,7 @@ class TabVerticalViewBinder {
                     model.containsKey(TabProperties.ALERT_STATE)
                             ? model.get(TabProperties.ALERT_STATE)
                             : TabAlert.NONE;
-            boolean isIncognito = isIncognito(model);
+            boolean isIncognito = isIncognito(model, view.getContext());
             boolean isSelected = model.get(TabProperties.IS_SELECTED);
             Context context = view.getContext();
 
@@ -472,7 +488,7 @@ class TabVerticalViewBinder {
             @Nullable ColorStateList defaultBgColor) {
         boolean isSelected = model.get(TabProperties.IS_SELECTED);
         boolean isMultiSelected = model.get(TabProperties.IS_MULTI_SELECTED);
-        boolean isIncognito = isIncognito(model);
+        boolean isIncognito = isIncognito(model, view.getContext());
         Context context = view.getContext();
         view.setSelected(isSelected || isMultiSelected);
 
@@ -512,12 +528,20 @@ class TabVerticalViewBinder {
         ArcDesktopAppearance.applyTabTextSize(view.getTitleView());
 
         boolean isSelected = model.get(TabProperties.IS_SELECTED);
-        boolean isIncognito = isIncognito(model);
+        boolean isIncognito = isIncognito(model, view.getContext());
         Context context = view.getContext();
 
-        view.getTitleView().setTextColor(getTextColor(context, isSelected, isIncognito));
-        ImageViewCompat.setImageTintList(
-                view.getActionButton(), getActionButtonTintList(context, isSelected, isIncognito));
+        int textColor = getTextColor(context, isSelected, isIncognito);
+        boolean arcMultiSelected = ArcDesktopAppearance.isDesktopWindow(context)
+                && !isSelected && model.get(TabProperties.IS_MULTI_SELECTED);
+        if (arcMultiSelected) {
+            textColor = ArcDesktopPolicy.foreground(
+                    getBackgroundTintList(context, false, true, isIncognito).getDefaultColor());
+        }
+        view.getTitleView().setTextColor(textColor);
+        ImageViewCompat.setImageTintList(view.getActionButton(), arcMultiSelected
+                ? ColorStateList.valueOf(textColor)
+                : getActionButtonTintList(context, isSelected, isIncognito));
     }
 
     /**
@@ -533,7 +557,7 @@ class TabVerticalViewBinder {
      * @param view the root VerticalTabItemLayout representing the pinned tab row item.
      */
     private static void updatePinnedColors(PropertyModel model, VerticalTabItemLayout view) {
-        boolean isIncognito = isIncognito(model);
+        boolean isIncognito = isIncognito(model, view.getContext());
         @Nullable ColorStateList defaultBackgroundColor =
                 isIncognito
                         ? ColorStateList.valueOf(
@@ -557,7 +581,7 @@ class TabVerticalViewBinder {
      */
     private static void updateGroupHeaderColors(PropertyModel model, ViewGroup view) {
         @Nullable Integer colorId = model.get(TabProperties.TAB_GROUP_CARD_COLOR);
-        boolean isIncognito = isIncognito(model);
+        boolean isIncognito = isIncognito(model, view.getContext());
         Context context = view.getContext();
         updateBackgroundInsets(view);
 
@@ -821,6 +845,13 @@ class TabVerticalViewBinder {
                 && model.get(TabProperties.IS_INCOGNITO);
     }
 
+    private static boolean isIncognito(PropertyModel model, Context context) {
+        // Arc supplies its own palette even when the native activity owns a dedicated incognito
+        // theme. MOBILE keeps Chromium's activity-theme routing unchanged.
+        return ArcDesktopAppearance.isDesktopWindow(context)
+                ? model.get(TabProperties.IS_INCOGNITO) : isIncognito(model);
+    }
+
     /**
      * Resolves the background tint list for a vertical tab row based on active selection,
      * multi-selection, and incognito state.
@@ -835,9 +866,8 @@ class TabVerticalViewBinder {
      */
     private static ColorStateList getBackgroundTintList(
             Context context, boolean isSelected, boolean isMultiSelected, boolean isIncognito) {
-        if (ArcDesktopAppearance.isDesktopWindow(context)) {
-            return ColorStateList.valueOf(isSelected || isMultiSelected
-                    ? ArcDesktopAppearance.selection(context, isIncognito) : Color.TRANSPARENT);
+        if (ArcDesktopAppearance.isDesktopWindow(context) && isSelected) {
+            return ColorStateList.valueOf(ArcDesktopAppearance.selection(context, isIncognito));
         }
         if (!isSelected && !isMultiSelected) {
             return ColorStateList.valueOf(Color.TRANSPARENT);
@@ -865,9 +895,7 @@ class TabVerticalViewBinder {
     private static @ColorInt int getTextColor(
             Context context, boolean isSelected, boolean isIncognito) {
         if (ArcDesktopAppearance.isDesktopWindow(context)) {
-            return isSelected
-                    ? ArcDesktopPolicy.foreground(ArcDesktopAppearance.selection(context, isIncognito))
-                    : ArcDesktopAppearance.foreground(context, isIncognito);
+            return ArcDesktopAppearance.rowTextColor(context, isSelected, isIncognito);
         }
         if (isSelected) {
             return isIncognito
@@ -926,14 +954,17 @@ class TabVerticalViewBinder {
                 ViewCompat.setBackgroundTintList(
                         view,
                         ColorStateList.valueOf(
-                                TabUiThemeUtil.getHoveredTabContainerColor(
-                                        view.getContext(), isIncognito(model))));
+                                ArcDesktopAppearance.isDesktopWindow(view.getContext())
+                                        ? ArcDesktopAppearance.interaction(
+                                                view.getContext(), isIncognito(model, view.getContext()))
+                                        : TabUiThemeUtil.getHoveredTabContainerColor(
+                                                view.getContext(), isIncognito(model, view.getContext()))));
             } else if (isMultiSelected && !isSelected) {
                 ViewCompat.setBackgroundTintList(
                         view,
                         ColorStateList.valueOf(
                                 TabUiThemeUtil.getTabStripMultiSelectedHoveredTabColor(
-                                        view.getContext(), isIncognito(model))));
+                                        view.getContext(), isIncognito(model, view.getContext()))));
             }
         } else {
             if (!isSelected) {
@@ -969,9 +1000,26 @@ class TabVerticalViewBinder {
                 view,
                 actionButton,
                 (isHovered) -> {
+                    if (ArcDesktopAppearance.isDesktopWindow(view.getContext()) && view.isHovered()) {
+                        sArcPointerRows.put(view, true);
+                    }
                     applyHoverBackgroundState(model, view, isHovered, defaultBackgroundColor);
-                    updateIcons(model, view, isHovered);
+                    updateIcons(model, view, isHovered
+                            || (ArcDesktopAppearance.isDesktopWindow(view.getContext())
+                                    && view.hasFocus()));
                 });
+        if (!ArcDesktopAppearance.isDesktopWindow(view.getContext())) return;
+        // The native focus listener notifies the hover-card presenter; its visual callback is
+        // gated on actual mouse hover. Add focus visuals while forwarding that native event once.
+        View.@Nullable OnFocusChangeListener nativeFocus = view.getOnFocusChangeListener();
+        view.setOnFocusChangeListener((v, hasFocus) -> {
+            if (nativeFocus != null) nativeFocus.onFocusChange(v, hasFocus);
+            if (ArcDesktopAppearance.isDesktopWindow(view.getContext())) {
+                boolean interacting = hasFocus || view.isHovered();
+                applyHoverBackgroundState(model, view, interacting, defaultBackgroundColor);
+                updateIcons(model, view, interacting);
+            }
+        });
     }
 
     /**
