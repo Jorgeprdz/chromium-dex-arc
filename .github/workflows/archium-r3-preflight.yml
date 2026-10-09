@@ -32,6 +32,24 @@ jobs:
         run: |
           bash -n scripts/build-archium.sh
           bash -n scripts/build-baseline.sh
+          bash -n scripts/dispatch-archium-r3-1-build.sh
           test "$GITHUB_REF_NAME" = "assistant/archium-r3-visual-fixes"
           test "$(grep -c 'scripts/integrate-archium-portal.py' scripts/build-archium.sh)" -eq 3
           echo "R3.1 static, branding, and generator preflight PASS; native build and DeX still pending."
+  dispatch:
+    needs: preflight
+    if: github.event_name == 'push' && contains(github.event.head_commit.message, '[archium-r3.1-dispatch]')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: write
+    concurrency:
+      group: archium-r3-1-one-shot-dispatch
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Dispatch one native Chromium build only after green preflight
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash scripts/dispatch-archium-r3-1-build.sh
