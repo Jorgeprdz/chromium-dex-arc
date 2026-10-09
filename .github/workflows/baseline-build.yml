@@ -13,20 +13,52 @@ on:
   push:
     branches:
       - feat/arc-desktop
+      - assistant/archium-r3-visual-fixes
     paths:
       - .archium-final-dispatch
+      # Only a dedicated, explicitly committed marker triggers the R3.3 run.
+      - .archium-r3-3-final-dispatch
 permissions:
   contents: write
 concurrency:
   group: archium-build-staged
   cancel-in-progress: false
 jobs:
+  r3-final-gates:
+    if: github.ref_name == 'assistant/archium-r3-visual-fixes'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Block overlapping native build and unapproved checkpoint reuse
+        run: |
+          set -euo pipefail
+          test "${{ github.event_name }}" = 'push' || test "${{ inputs.source_checkpoint }}" = ''
+          test "${{ inputs.source_commit }}" = ''
+          test "$(gh api repos/${GITHUB_REPOSITORY}/actions/runs/37987348539 --jq '.status')" = 'completed'
+          test "$GITHUB_REF_NAME" = 'assistant/archium-r3-visual-fixes'
+      - name: Verify source preservation and exact Portal identities
+        run: |
+          set -euo pipefail
+          python3 -m unittest discover -s tests -p 'test_archium_portal_resources.py'
+          python3 -m unittest discover -s tests -p 'test_r3_3_portal_safe_zone.py'
+          python3 -m unittest discover -s tests -p 'test_r3_3_portal_apk_content.py'
+          python3 scripts/generate-arc-patch.py
+          git diff --exit-code -- patches/archium-desktop.patch patches/upstream-files.json
+          python3 -m compileall -q scripts/archium_portal_content_gate.py scripts/verify-archium-portal-apk.py
   stage1:
+    needs: r3-final-gates
+    if: always() && (needs.r3-final-gates.result == 'success' || github.ref_name != 'assistant/archium-r3-visual-fixes')
     uses: ./.github/workflows/archium-stage.yml
     with:
       stage: 1
-      source_tag: ${{ github.event_name == 'push' && 'archium-checkpoint-37255997027-7' || inputs.source_checkpoint }}
-      source_commit: ${{ github.event_name == 'push' && 'c8ffd13ee7fe1c6baab4913da6a01e8009febe18' || inputs.source_commit }}
+      source_tag: ${{ github.event_name == 'push' && github.ref_name == 'feat/arc-desktop' && 'archium-checkpoint-37255997027-7' || inputs.source_checkpoint }}
+      source_commit: ${{ github.event_name == 'push' && github.ref_name == 'feat/arc-desktop' && 'c8ffd13ee7fe1c6baab4913da6a01e8009febe18' || inputs.source_commit }}
   stage2:
     needs: stage1
     if: needs.stage1.outputs.complete != 'true'

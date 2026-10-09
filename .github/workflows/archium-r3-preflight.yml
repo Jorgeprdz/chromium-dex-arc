@@ -10,6 +10,7 @@ on:
       - 'patches/**'
       - 'assets/branding/archium/**'
       - '.github/workflows/archium-r3-preflight.yml'
+      - '.github/workflows/baseline-build.yml'
   workflow_dispatch:
 permissions:
   contents: read
