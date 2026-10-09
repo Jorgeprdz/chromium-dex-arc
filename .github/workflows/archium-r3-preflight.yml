@@ -46,9 +46,14 @@ jobs:
             .github/workflows/archium-branding.yml \
             .github/workflows/baseline-build.yml \
             .github/workflows/archium-stage.yml
-      - name: Reproduce official Chromium patch and manifest
+      - name: Reproduce official Chromium patch and manifest twice, byte-for-byte
         run: |
           python3 scripts/generate-arc-patch.py
+          git diff --exit-code -- patches/archium-desktop.patch patches/upstream-files.json
+          sha256sum patches/archium-desktop.patch patches/upstream-files.json > /tmp/archium-first-sha256
+          python3 scripts/generate-arc-patch.py
+          sha256sum patches/archium-desktop.patch patches/upstream-files.json > /tmp/archium-second-sha256
+          cmp /tmp/archium-first-sha256 /tmp/archium-second-sha256
           git diff --exit-code -- patches/archium-desktop.patch patches/upstream-files.json
       - name: Verify build shell and protect branch isolation
         run: |
