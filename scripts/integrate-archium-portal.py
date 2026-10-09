@@ -53,6 +53,131 @@ APP_XML = """<?xml version="1.0" encoding="utf-8"?>
 """
 
 
+# The Portal masters are immutable: launcher-safe APK variants are generated in
+# memory, never re-exported into the 29 PNG / 7 SVG approved source files.
+# The implementation deliberately needs only Python's standard library on GN
+# build workers (no optional Pillow/CairoSVG dependency).
+from functools import lru_cache
+import binascii
+import zlib
+
+
+def png_pixels(blob):
+    """Read the approved non-interlaced RGBA8 PNG into straight-alpha bytes."""
+    width = png_size(blob)
+    chunks = []
+    pos = 8
+    while pos + 12 <= len(blob):
+        n = struct.unpack_from(">I", blob, pos)[0]
+        tag = blob[pos + 4:pos + 8]
+        body = blob[pos + 8:pos + 8 + n]
+        if len(body) != n or pos + 12 + n > len(blob):
+            raise ValueError("Truncated Portal PNG chunk")
+        if binascii.crc32(tag + body) & 0xffffffff != struct.unpack_from(">I", blob, pos + 8 + n)[0]:
+            raise ValueError("Portal PNG CRC mismatch")
+        if tag == b"IHDR":
+            if body[8:] != bytes([8, 6, 0, 0, 0]):
+                raise ValueError("Only non-interlaced RGBA8 PNG is approved")
+        if tag == b"IDAT":
+            chunks.append(body)
+        pos += 12 + n
+        if tag == b"IEND":
+            break
+    if not chunks:
+        raise ValueError("Missing Portal PNG pixels")
+    decompressed = zlib.decompress(b"".join(chunks))
+    stride = 4 * width
+    if len(decompressed) != (stride + 1) * width:
+        raise ValueError("Wrong Portal PNG pixel buffer length")
+    result = bytearray(width * stride)
+    previous = bytes(stride)
+    for y in range(width):
+        offset = y * (stride + 1)
+        filt = decompressed[offset]
+        line = bytearray(decompressed[offset + 1:offset + 1 + stride])
+        if filt not in range(5):
+            raise ValueError("Invalid Portal PNG filter")
+        for i in range(stride):
+            left = line[i - 4] if i >= 4 else 0
+            above = previous[i]
+            upper_left = previous[i - 4] if i >= 4 else 0
+            if filt == 1:
+                line[i] = (line[i] + left) & 255
+            elif filt == 2:
+                line[i] = (line[i] + above) & 255
+            elif filt == 3:
+                line[i] = (line[i] + (left + above) // 2) & 255
+            elif filt == 4:
+                predictor = left + above - upper_left
+                distances = (abs(predictor - left), abs(predictor - above),
+                             abs(predictor - upper_left))
+                selected = (left, above, upper_left)[distances.index(min(distances))]
+                line[i] = (line[i] + selected) & 255
+        result[y * stride:(y + 1) * stride] = line
+        previous = line
+    return width, bytes(result)
+
+
+def encode_rgba_png(width, pixels):
+    if len(pixels) != width * width * 4:
+        raise ValueError("PNG pixel count mismatch")
+    def chunk(name, content):
+        return (struct.pack(">I", len(content)) + name + content
+                + struct.pack(">I", binascii.crc32(name + content) & 0xffffffff))
+    rows = b"".join(b"\x00" + pixels[y * width * 4:(y + 1) * width * 4]
+                    for y in range(width))
+    ihdr = struct.pack(">IIBBBBB", width, width, 8, 6, 0, 0, 0)
+    return (b"\x89PNG\r\n\x1a\n" + chunk(b"IHDR", ihdr)
+            + chunk(b"IDAT", zlib.compress(rows, 9)) + chunk(b"IEND", b""))
+
+
+@lru_cache(maxsize=16)
+def safe_foreground(source):
+    """Centre-scale Portal glyph inside the circular Android adaptive safe zone."""
+    width, pixels = png_pixels(source)
+    scale = 0.75
+    output = bytearray(len(pixels))
+    for y in range(width):
+        sy = int((y + 0.5 - width / 2) / scale + width / 2)
+        if not 0 <= sy < width:
+            continue
+        for x in range(width):
+            sx = int((x + 0.5 - width / 2) / scale + width / 2)
+            if 0 <= sx < width:
+                dest = 4 * (y * width + x)
+                start = 4 * (sy * width + sx)
+                output[dest:dest + 4] = pixels[start:start + 4]
+    return encode_rgba_png(width, bytes(output))
+
+
+@lru_cache(maxsize=16)
+def opaque_background(source):
+    """Preserve approved artwork over an opaque Portal base; no mask holes."""
+    width, pixels = png_pixels(source)
+    output = bytearray(pixels)
+    base = (23, 21, 35)  # Portal #171523, as approved in SVG background.
+    for offset in range(0, len(output), 4):
+        alpha = output[offset + 3]
+        for channel in range(3):
+            output[offset + channel] = (
+                output[offset + channel] * alpha + base[channel] * (255 - alpha) + 127
+            ) // 255
+        output[offset + 3] = 255
+    return encode_rgba_png(width, bytes(output))
+
+
+def assert_adaptive_safe_zone(png):
+    size, rgba = png_pixels(png)
+    # Circle inscribed in Android's guaranteed central 66dp of a 108dp icon;
+    # allow 0 alpha outside, not merely visually negligible pixels.
+    radius_sq = (size * 33 / 108) ** 2
+    for y in range(size):
+        for x in range(size):
+            if rgba[(y * size + x) * 4 + 3] and (
+                (x + 0.5 - size / 2) ** 2 + (y + 0.5 - size / 2) ** 2
+            ) > radius_sq:
+                raise ValueError("Portal foreground exceeds Android adaptive safe circle")
+
 def git_blob(data):
     return hashlib.sha1(b"blob " + str(len(data)).encode() + b"\0" + data).hexdigest()
 
@@ -96,7 +221,7 @@ def make_themed_vector(svg):
         '<vector xmlns:android="http://schemas.android.com/apk/res/android"\n'
         '    android:width="108dp" android:height="108dp"\n'
         '    android:viewportWidth="1024" android:viewportHeight="1024">\n'
-        f'    <path android:fillColor="#000000" android:pathData="{path}"/>\n'
+        '    <group android:translateX="179.2" android:translateY="179.2"\n'\n        '        android:scaleX="0.65" android:scaleY="0.65">\n'\n        f'        <path android:fillColor="#000000" android:pathData="{path}"/>\n'\n        '    </group>\n'
         '</vector>\n'
     ).encode("utf-8")
 
@@ -107,8 +232,8 @@ def expected_resources():
     for density, (flat, foreground, background) in DENSITIES.items():
         prefix = f"{BASE}/mipmap-{density}"
         resources[f"{prefix}/app_icon.png"] = assets[flat]
-        resources[f"{prefix}/layered_app_icon.png"] = assets[foreground]
-        resources[f"{prefix}/layered_app_icon_background.png"] = assets[background]
+        resources[f"{prefix}/layered_app_icon.png"] = safe_foreground(assets[foreground])
+        resources[f"{prefix}/layered_app_icon_background.png"] = opaque_background(assets[background])
     # The original AndroidManifest.xml already references these official Chromium
     # drawable aliases. Do not modify the manifest or the app ID.
     resources["chrome/android/java/res_base/drawable/ic_launcher.xml"] = APP_XML.encode()
