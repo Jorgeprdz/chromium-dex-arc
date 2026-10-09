@@ -62,9 +62,21 @@ import binascii
 import zlib
 
 
-def png_pixels(blob):
-    """Read the approved non-interlaced RGBA8 PNG into straight-alpha bytes."""
-    width = png_size(blob)
+def png_pixels(blob, *, allow_rgb=False):
+    """Decode non-interlaced RGB8/RGBA8 PNGs to RGBA for pixel comparison.
+
+    Approved source assets must be RGBA8. The packaged version may be
+    losslessly crunched to RGB8 by Android aapt2 if fully opaque.
+    """
+    if len(blob) < 33 or blob[:8] != b"\\x89PNG\\r\\n\\x1a\\n" or blob[12:16] != b"IHDR":
+        raise ValueError("Invalid packaged PNG signature")
+    width, height = struct.unpack_from(">II", blob, 16)
+    if not 16 <= width <= 1024 or height != width:
+        raise ValueError("Invalid PNG canvas dimensions")
+    color = blob[25]
+    if color not in ((2, 6) if allow_rgb else (6,)):
+        raise ValueError("Unapproved packaged PNG color format")
+    bpp = 4 if color == 6 else 3
     chunks = []
     pos = 8
     while pos + 12 <= len(blob):
@@ -76,8 +88,8 @@ def png_pixels(blob):
         if binascii.crc32(tag + body) & 0xffffffff != struct.unpack_from(">I", blob, pos + 8 + n)[0]:
             raise ValueError("Portal PNG CRC mismatch")
         if tag == b"IHDR":
-            if body[8:] != bytes([8, 6, 0, 0, 0]):
-                raise ValueError("Only non-interlaced RGBA8 PNG is approved")
+            if body[8:] != bytes([8, color, 0, 0, 0]):
+                raise ValueError("Only non-interlaced PNG RGBA8 or RGB8 is allowed")
         if tag == b"IDAT":
             chunks.append(body)
         pos += 12 + n
@@ -85,9 +97,11 @@ def png_pixels(blob):
             break
     if not chunks:
         raise ValueError("Missing Portal PNG pixels")
-    decompressed = zlib.decompress(b"".join(chunks))
-    stride = 4 * width
-    if len(decompressed) != (stride + 1) * width:
+    stride = bpp * width
+    limit = (stride + 1) * width
+    decoder = zlib.decompressobj()
+    decompressed = decoder.decompress(b"".join(chunks), limit + 1)
+    if decoder.unconsumed_tail or not decoder.eof or len(decompressed) != limit:
         raise ValueError("Wrong Portal PNG pixel buffer length")
     result = bytearray(width * stride)
     previous = bytes(stride)
@@ -98,9 +112,9 @@ def png_pixels(blob):
         if filt not in range(5):
             raise ValueError("Invalid Portal PNG filter")
         for i in range(stride):
-            left = line[i - 4] if i >= 4 else 0
+            left = line[i - bpp] if i >= bpp else 0
             above = previous[i]
-            upper_left = previous[i - 4] if i >= 4 else 0
+            upper_left = previous[i - bpp] if i >= bpp else 0
             if filt == 1:
                 line[i] = (line[i] + left) & 255
             elif filt == 2:
@@ -115,6 +129,12 @@ def png_pixels(blob):
                 line[i] = (line[i] + selected) & 255
         result[y * stride:(y + 1) * stride] = line
         previous = line
+    if bpp == 3:
+        converted = bytearray(width * width * 4)
+        for index in range(width * width):
+            converted[index * 4:index * 4 + 3] = result[index * 3:index * 3 + 3]
+            converted[index * 4 + 3] = 255
+        return width, bytes(converted)
     return width, bytes(result)
 
 
