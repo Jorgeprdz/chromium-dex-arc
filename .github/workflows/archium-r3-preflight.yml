@@ -36,6 +36,19 @@ jobs:
             test -s "${ANDROID_HOME}/platforms/android-36/android.jar"
           }
           test -s "${ANDROID_HOME}/platforms/android-36/android.jar"
+      - name: Compile isolated Portal resource fixture with genuine Android AAPT2
+        run: |
+          set -euo pipefail
+          SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$SDKMANAGER" ]]; then SDKMANAGER="$(command -v sdkmanager)"; fi
+          AAPT2="${ANDROID_HOME}/build-tools/36.0.0/aapt2"
+          if [[ ! -x "$AAPT2" ]]; then
+            yes | "$SDKMANAGER" --install 'build-tools;36.0.0' > /dev/null || test -x "$AAPT2"
+          fi
+          test -x "$AAPT2"
+          python3 scripts/check_portal_aapt2_fixture.py \\
+            --android-jar "${ANDROID_HOME}/platforms/android-36/android.jar" \\
+            --aapt2 "$AAPT2"
       - name: Execute full sparse preparation with pinned Window Core
         run: |
           python3 scripts/check-arc-preparation.py --android-jar "${ANDROID_HOME}/platforms/android-36/android.jar"
