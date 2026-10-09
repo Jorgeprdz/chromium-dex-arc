@@ -73,6 +73,15 @@ iniciales de la suite general eran un doble de favoritos desactualizado y una
 aserción textual de New Tab; se actualizó el doble sin reducir las comprobaciones
 de dimensiones y se conservó el comentario correcto de propiedad nativa.
 
+El primer run, `37887156546`, detectó otro fallo del harness: la nueva prueba de
+caption referenciaba un JAR de caché sin resolverlo. Localmente existía; CI limpio
+ejecutó 185 pruebas y falló solamente esa compilación de fixture. Se corrigió para
+usar `window_core_jar()`, el resolver pinned y verificado que usan las demás
+regresiones. Una ejecución separada con caché vacía descarga/verifica la dependencia
+y pasa el contrato de caption. Ambos checks completos se repitieron con PASS,
+197/197 pruebas, antes del nuevo commit y relanzamiento; no se elimina ni relaja
+ningún gate.
+
 ## Archivos de esta entrega
 
 - LocationBarTablet: original pinned nuevo y fuente modificada en `.source-reference` / `.source-modified`.

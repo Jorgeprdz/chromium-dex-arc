@@ -15,7 +15,7 @@ import subprocess
 import tempfile
 import unittest
 
-from arc_toolbar_probe import ROOT, method_body
+from arc_toolbar_probe import ROOT, method_body, window_core_jar
 
 FIXTURES = ROOT / 'tests/fixtures/arc-caption'
 COORD = ROOT / '.source-modified/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java'
@@ -153,7 +153,7 @@ class ArcCaptionStackerTest(unittest.TestCase):
         with tempfile.TemporaryDirectory(prefix='arc-caption-stacker-') as tmp:
             java = Path(tmp) / 'CaptionStackerContract.java'
             java.write_text(program)
-            jar = ROOT / '.sync-audit/androidx-window-core.jar'
+            jar = window_core_jar()
             sources = list((ROOT / 'chromium').rglob('ArcDesktopPolicy.java')) + list((ROOT / 'chromium').rglob('ArchiumWindowClass.java'))
             result = subprocess.run(['javac', '--release', '17', '-cp', str(jar), '-d', tmp, *map(str, sources), str(java)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
