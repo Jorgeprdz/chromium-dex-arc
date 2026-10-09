@@ -371,14 +371,20 @@ public final class ArcDesktopCoordinator {
                             outline.setEmpty();
                             return;
                         }
-                        // The interior bottom-left join is square; three exterior corners round.
+                        // On API 33+ clip the internal lower-left seam square. Older Android
+                        // compositor outlines do not reliably clip asymmetric paths, so retain
+                        // a supported round-rect instead of risking unmasked website content.
                         float radius = Math.min(dp(ArcDesktopPolicy.ARC_CONTENT_RADIUS_DP),
                                 Math.min((view.getWidth() - left) / 2f, view.getHeight() / 2f));
-                        Path path = new Path();
-                        path.addRoundRect(left, 0, view.getWidth(), view.getHeight(),
-                                new float[] {radius, radius, radius, radius,
-                                        radius, radius, 0f, 0f}, Path.Direction.CW);
-                        outline.setConvexPath(path);
+                        if (android.os.Build.VERSION.SDK_INT >= 33) {
+                            Path path = new Path();
+                            path.addRoundRect(left, 0, view.getWidth(), view.getHeight(),
+                                    new float[] {radius, radius, radius, radius,
+                                            radius, radius, 0f, 0f}, Path.Direction.CW);
+                            outline.setPath(path);
+                        } else {
+                            outline.setRoundRect(left, 0, view.getWidth(), view.getHeight(), radius);
+                        }
                     }
                 };
         mArcTouchEventObserver =
@@ -755,9 +761,15 @@ public final class ArcDesktopCoordinator {
     }
 
     private boolean isInsideArcContent(float x, float y) {
-        return ArcDesktopPolicy.containsArcViewportPoint(
-                x, y, reservedLeftWidth(), 0, mCompositorViewHolder.getWidth(),
-                mCompositorViewHolder.getHeight(), dp(ArcDesktopPolicy.ARC_CONTENT_RADIUS_DP));
+        int left = reservedLeftWidth();
+        int right = mCompositorViewHolder.getWidth();
+        int bottom = mCompositorViewHolder.getHeight();
+        float radius = dp(ArcDesktopPolicy.ARC_CONTENT_RADIUS_DP);
+        if (android.os.Build.VERSION.SDK_INT < 33) {
+            return ArcDesktopPolicy.containsRoundedRectPoint(
+                    x, y, left, 0, right, bottom, radius);
+        }
+        return ArcDesktopPolicy.containsArcViewportPoint(x, y, left, 0, right, bottom, radius);
     }
 
     private void restoreClippedSurface() {
