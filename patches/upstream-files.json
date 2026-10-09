@@ -152,8 +152,8 @@
     "chrome/android/java/res/values/arc_strings.xml": "e7f08c1b99213ef186cdd6aeb8f23b1b3751a4d37d6276d3af1cdd3092b4a94c",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAppearanceDialog.java": "466f7bd99df2721b289905b7662268c1f82811bf08fc2a1537661a582641a33a",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsController.java": "c2a9e014f6bd5a0cf9a26003b1498dfcb5d28bfba28062172535b371858f126b",
-    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java": "52a0a46d2a494e2248afcca3934bb0fc361e8c2a9e947d6c1a49f65772e8de74",
-    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java": "293f3f0ae986923c308513b3de8ab5c9d222ac8ed3f94f82082512dbd7e0878f",
+    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java": "ed325b7ae65192076976b3bbbf47ebba21be82a09d0f2d802becb6909944b152",
+    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java": "e34fd0a6e0721fbf35b4a56a7679d665dc1b3acecc225b6dec537f8330446a2e",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopWindowObserver.java": "0cdde8640e59b8d5d5349a18ba19556bbc7f10e7c6d3ab32820c03064705258c",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcNativeTabSession.java": "6cb8696d8c1444cdb3a6a99441700c1d91773af9a16cf7bc317a189e11eb9b16",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarProfiles.java": "16ca484649483c7255aac1d31e3e55a391f5c36cce8921509232cf8ac9ffb52c",
@@ -179,7 +179,7 @@
     "chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordManagerBridge.java": "dd3e257ba2793f6f242141396818d89b1906f3fcfb6cb0ca30d010548a6b46f4",
     "chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordSettingsFragment.java": "b529ab8f1a7c53b814397770698d38cde9869115e47c117bb638d009275e9f6e",
     "chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java": "6a8e274cd2a387592eb766c8dbe782ceb25c2aad479dcbc34c4c7b7bf5456f24",
-    "chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java": "dce17bf2063dedbb21f02ec9296280987a0dadb318d383cf5356d7d582f71cc6",
+    "chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java": "194f43ca23d49cc2532d20d02245cccd0d7a6fe83a9d611e6bd9cbb949163d3b",
     "components/password_manager/core/browser/import/archium_password_import_preview.cc": "5ec8255bf6346ac15d04c143d5f70e21708406c024d1f12382fd49a8b25e14bb",
     "components/password_manager/core/browser/import/archium_password_import_preview.h": "415317397105cd6cab059ac00acb1e1e6e2317e4170b711aa8e1293ed8afd9ec",
     "components/password_manager/core/browser/import/archium_password_import_preview_unittest.cc": "7f6c4cb7dfcd816e1f3a8268b01b4c5ae242fc56bc3f8b4cb1a956af1edcc41a",
@@ -188,5 +188,5 @@
     "components/password_manager/core/browser/password_store/password_store_backend.cc": "45764d4ad0e05acc5a216944a5a6763212f6c17e71bf689e9c973f12fb5c87d8",
     "components/password_manager/core/browser/password_store/password_store_interface.cc": "7e9dd5813ce8ece459ec66abdd3306028b7b3d6bbae048664872a34d8d097268"
   },
-  "patch_sha256": "02a1058838976e65adcc37ce664ace723a249b1ede93f3d2cf3b606c596086f0"
+  "patch_sha256": "46da5b1a43e355524c4ea0b037382272e44c4dae2129316b9a304f575addc00f"
 }

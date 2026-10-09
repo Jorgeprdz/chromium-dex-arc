@@ -89,13 +89,15 @@ public final class ArcDesktopPolicyTest {
             check(ArcDesktopPolicy.collectionScrollBudgetPx(height, 1f, 32) == 0,
                     "short rails cannot starve Chromium native tabs");
         }
-        check(ArcDesktopPolicy.collectionScrollBudgetPx(600, 1f, 32) == 88,
-                "600dp rail allocates measured collection remainder");
-        check(ArcDesktopPolicy.collectionScrollBudgetPx(700, 1f, 32) == 188,
+        check(ArcDesktopPolicy.collectionScrollBudgetPx(600, 1f, 32) == 60,
+                "600dp rail keeps compact controls and usable native tabs");
+        check(ArcDesktopPolicy.collectionScrollBudgetPx(640, 1f, 32) == 100,
+                "640dp rail can expand secondary collection controls");
+        check(ArcDesktopPolicy.collectionScrollBudgetPx(700, 1f, 32) == 160,
                 "taller rail expands its scroll section");
         check(ArcDesktopPolicy.collectionScrollBudgetPx(900, 1f, 32) == 240,
                 "collection scroll caps without changing sidebar width");
-        check(ArcDesktopPolicy.collectionScrollBudgetPx(1200, 2f, 64) == 176,
+        check(ArcDesktopPolicy.collectionScrollBudgetPx(1200, 2f, 64) == 120,
                 "height budget scales across densities");
         check(ArcDesktopPolicy.collectionScrollBudgetPx(600, 0f, 32) == 0,
                 "invalid density fails closed");

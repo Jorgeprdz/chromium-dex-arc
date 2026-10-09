@@ -14,6 +14,7 @@ import android.graphics.Outline;
 import android.graphics.Path;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
 import android.text.InputType;
 import android.text.TextUtils;
 import android.view.Gravity;
@@ -337,7 +338,7 @@ public final class ArcDesktopCoordinator {
         mArcNewTabRow.setFocusable(true);
         mArcNewTabRow.setClickable(true);
         mArcNewTabRow.setOnClickListener(v -> mNativeNewTabButton.performClick());
-        mColumn.addView(mArcNewTabRow, new LinearLayout.LayoutParams(-1, dp(40)));
+        mColumn.addView(mArcNewTabRow, new LinearLayout.LayoutParams(-1, dp(44)));
         mColumn.addView(mNativeTabs, new LinearLayout.LayoutParams(-1, 0, 1));
 
         mFooter = new LinearLayout(activity);
@@ -886,10 +887,8 @@ public final class ArcDesktopCoordinator {
         int foreground = ArcDesktopPolicy.foreground(surface);
         mColumn.setBackgroundColor(surface);
         mArcNewTabRow.setTextColor(foreground);
-        GradientDrawable rowBackground = new GradientDrawable();
-        rowBackground.setColor(ArcDesktopPolicy.selection(surface));
-        rowBackground.setCornerRadius(dp(8));
-        mArcNewTabRow.setBackground(rowBackground);
+        mArcNewTabRow.setBackground(arcButtonStates(
+                ArcDesktopPolicy.selection(surface), foreground));
         tintHeader(mHeader, foreground, ArcDesktopPolicy.selection(surface));
         tintHeader(mFooter, foreground, ArcDesktopPolicy.selection(surface));
     }
@@ -1097,6 +1096,28 @@ public final class ArcDesktopCoordinator {
                 mLocationBarHost, index, mLocationBarOriginalLayoutParams);
     }
 
+    private GradientDrawable arcButtonShape(int fill, int foreground, boolean focusRing) {
+        GradientDrawable background = new GradientDrawable();
+        background.setColor(fill);
+        background.setCornerRadius(dp(8));
+        if (focusRing) background.setStroke(dp(2), foreground);
+        return background;
+    }
+
+    /** State list instead of constant selection fill: keyboard/mouse/touch remain perceivable. */
+    private StateListDrawable arcButtonStates(int selected, int foreground) {
+        StateListDrawable states = new StateListDrawable();
+        states.addState(new int[] {android.R.attr.state_pressed},
+                arcButtonShape(selected, foreground, false));
+        states.addState(new int[] {android.R.attr.state_focused},
+                arcButtonShape(selected, foreground, true));
+        states.addState(new int[] {android.R.attr.state_hovered},
+                arcButtonShape(selected, foreground, false));
+        states.addState(new int[] {},
+                arcButtonShape(Color.TRANSPARENT, foreground, false));
+        return states;
+    }
+
     private void tintHeader(View view, int foreground, int selection) {
         // Native Chromium controls keep their own ripple, hover, accessibility and icon-tint
         // state. Arc only styles views that it owns.
@@ -1109,11 +1130,12 @@ public final class ArcDesktopCoordinator {
         }
         if (view instanceof TextView) ((TextView) view).setTextColor(foreground);
         if (view instanceof Button || view instanceof ImageButton) {
-            GradientDrawable background = new GradientDrawable();
-            background.setColor(selection);
-            background.setCornerRadius(dp(8));
-            view.setBackground(background);
-            if (view instanceof ImageButton) {
+            view.setBackground(arcButtonStates(selection, foreground));
+            // Favicons are content, not monochrome glyphs: retain each website's own colors.
+            Object tag = view.getTag();
+            boolean isEntry = tag instanceof String
+                    && ((String) tag).startsWith("arc-entry:");
+            if (view instanceof ImageButton && !isEntry) {
                 ((ImageButton) view).setColorFilter(foreground);
             }
         }

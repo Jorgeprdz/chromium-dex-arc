@@ -3313,7 +3313,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollecti
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java
-@@ -0,0 +1,289 @@
+@@ -0,0 +1,309 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -3385,7 +3385,7 @@ new file mode 100644
 +        mSpace = button("", this::showSpaces);
 +        mSpace.setTag("arc-current-space");
 +        mSpace.setContentDescription(activity.getString(R.string.arc_spaces));
-+        LayoutParams spaceParams = new LayoutParams(-1, dp(36));
++        LayoutParams spaceParams = new LayoutParams(-1, dp(44));
 +        spaceParams.bottomMargin = dp(4);
 +        addView(mSpace, spaceParams);
 +        mEntries = new LinearLayout(activity);
@@ -3401,8 +3401,8 @@ new file mode 100644
 +        pin.setTag("arc-pin-current");
 +        Button favorite = button(activity.getString(R.string.arc_favorite_current), () -> remember(true));
 +        favorite.setTag("arc-favorite-current");
-+        controls.addView(pin, new LayoutParams(0, dp(36), 1));
-+        controls.addView(favorite, new LayoutParams(0, dp(36), 1));
++        controls.addView(pin, new LayoutParams(0, dp(44), 1));
++        controls.addView(favorite, new LayoutParams(0, dp(44), 1));
 +        addView(controls);
 +        refresh();
 +    }
@@ -3467,6 +3467,16 @@ new file mode 100644
 +            mOpenFolder = null;
 +            mRenderedSpace = state.selectedSpace();
 +        }
++        // Record stable identity BEFORE rebuilding the two dynamic collections. Otherwise
++        // asynchronous bookmark/favicon refreshes silently move keyboard focus to the window.
++        View previousFavoriteFocus = mFavorites.findFocus();
++        View previousEntryFocus = mEntries.findFocus();
++        String favoriteFocusId = previousFavoriteFocus != null
++                && previousFavoriteFocus.getTag() instanceof String
++                ? (String) previousFavoriteFocus.getTag() : null;
++        String entryFocusId = previousEntryFocus != null
++                && previousEntryFocus.getTag() instanceof String
++                ? (String) previousEntryFocus.getTag() : null;
 +        mFavorites.removeAllViews();
 +        for (ArcSidebarState.Entry entry : state.favorites()) {
 +            ImageButton favorite = new ImageButton(mActivity);
@@ -3494,23 +3504,25 @@ new file mode 100644
 +            if (current == null) mOpenFolder = null;
 +            else {
 +                String parent = current.parentId;
-+                mEntries.addView(button("‹  " + current.name, () -> mOpenFolder = parent),
-+                        new LayoutParams(-1, dp(36)));
++                Button parentRow = button("‹  " + current.name, () -> mOpenFolder = parent);
++                parentRow.setTag("arc-folder-back:" + current.id);
++                mEntries.addView(parentRow, new LayoutParams(-1, dp(44)));
 +            }
 +        }
 +        for (ArcSidebarState.Folder folder : folders) {
 +            if (!java.util.Objects.equals(folder.parentId, mOpenFolder)) continue;
-+            mEntries.addView(button("▸  " + folder.name, () -> mOpenFolder = folder.id),
-+                    new LayoutParams(-1, dp(36)));
++            Button folderRow = button("▸  " + folder.name, () -> mOpenFolder = folder.id);
++            folderRow.setTag("arc-folder:" + folder.id);
++            mEntries.addView(folderRow, new LayoutParams(-1, dp(44)));
 +        }
 +        for (ArcSidebarState.Entry entry : state.entries(state.selectedSpace())) {
 +            if (!java.util.Objects.equals(entry.folderId, mOpenFolder)) continue;
 +            Button row = button(entry.title, () -> open(entry.id));
 +            row.setTag("arc-entry:" + entry.id);
 +            row.setOnLongClickListener(view -> { showEntryMenu(view, entry); return true; });
-+            mEntries.addView(row, new LayoutParams(-1, dp(36)));
++            mEntries.addView(row, new LayoutParams(-1, dp(44)));
 +        }
-+        mEntries.addView(button(mActivity.getString(R.string.arc_new_folder), () -> {
++        Button newFolder = button(mActivity.getString(R.string.arc_new_folder), () -> {
 +            String space = state.selectedSpace();
 +            String parent = mOpenFolder;
 +            requestName(R.string.arc_new_folder, name -> {
@@ -3519,7 +3531,15 @@ new file mode 100644
 +                }
 +                mController.createFolder(parent, name);
 +            });
-+        }), new LayoutParams(-1, dp(36)));
++        });
++        newFolder.setTag("arc-new-folder:" + state.selectedSpace() + ":" + mOpenFolder);
++        mEntries.addView(newFolder, new LayoutParams(-1, dp(44)));
++        // Restore to the same section and stable entry ID. A removed entry is not refocused.
++        View restored = favoriteFocusId == null ? null
++                : mFavorites.findViewWithTag(favoriteFocusId);
++        if (restored != null) restored.requestFocus();
++        restored = entryFocusId == null ? null : mEntries.findViewWithTag(entryFocusId);
++        if (restored != null) restored.requestFocus();
 +    }
 +
 +    private void open(String id) {
@@ -3607,7 +3627,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopC
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
-@@ -0,0 +1,1157 @@
+@@ -0,0 +1,1179 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -3624,6 +3644,7 @@ new file mode 100644
 +import android.graphics.Path;
 +import android.graphics.drawable.Drawable;
 +import android.graphics.drawable.GradientDrawable;
++import android.graphics.drawable.StateListDrawable;
 +import android.text.InputType;
 +import android.text.TextUtils;
 +import android.view.Gravity;
@@ -3947,7 +3968,7 @@ new file mode 100644
 +        mArcNewTabRow.setFocusable(true);
 +        mArcNewTabRow.setClickable(true);
 +        mArcNewTabRow.setOnClickListener(v -> mNativeNewTabButton.performClick());
-+        mColumn.addView(mArcNewTabRow, new LinearLayout.LayoutParams(-1, dp(40)));
++        mColumn.addView(mArcNewTabRow, new LinearLayout.LayoutParams(-1, dp(44)));
 +        mColumn.addView(mNativeTabs, new LinearLayout.LayoutParams(-1, 0, 1));
 +
 +        mFooter = new LinearLayout(activity);
@@ -4496,10 +4517,8 @@ new file mode 100644
 +        int foreground = ArcDesktopPolicy.foreground(surface);
 +        mColumn.setBackgroundColor(surface);
 +        mArcNewTabRow.setTextColor(foreground);
-+        GradientDrawable rowBackground = new GradientDrawable();
-+        rowBackground.setColor(ArcDesktopPolicy.selection(surface));
-+        rowBackground.setCornerRadius(dp(8));
-+        mArcNewTabRow.setBackground(rowBackground);
++        mArcNewTabRow.setBackground(arcButtonStates(
++                ArcDesktopPolicy.selection(surface), foreground));
 +        tintHeader(mHeader, foreground, ArcDesktopPolicy.selection(surface));
 +        tintHeader(mFooter, foreground, ArcDesktopPolicy.selection(surface));
 +    }
@@ -4707,6 +4726,28 @@ new file mode 100644
 +                mLocationBarHost, index, mLocationBarOriginalLayoutParams);
 +    }
 +
++    private GradientDrawable arcButtonShape(int fill, int foreground, boolean focusRing) {
++        GradientDrawable background = new GradientDrawable();
++        background.setColor(fill);
++        background.setCornerRadius(dp(8));
++        if (focusRing) background.setStroke(dp(2), foreground);
++        return background;
++    }
++
++    /** State list instead of constant selection fill: keyboard/mouse/touch remain perceivable. */
++    private StateListDrawable arcButtonStates(int selected, int foreground) {
++        StateListDrawable states = new StateListDrawable();
++        states.addState(new int[] {android.R.attr.state_pressed},
++                arcButtonShape(selected, foreground, false));
++        states.addState(new int[] {android.R.attr.state_focused},
++                arcButtonShape(selected, foreground, true));
++        states.addState(new int[] {android.R.attr.state_hovered},
++                arcButtonShape(selected, foreground, false));
++        states.addState(new int[] {},
++                arcButtonShape(Color.TRANSPARENT, foreground, false));
++        return states;
++    }
++
 +    private void tintHeader(View view, int foreground, int selection) {
 +        // Native Chromium controls keep their own ripple, hover, accessibility and icon-tint
 +        // state. Arc only styles views that it owns.
@@ -4719,11 +4760,12 @@ new file mode 100644
 +        }
 +        if (view instanceof TextView) ((TextView) view).setTextColor(foreground);
 +        if (view instanceof Button || view instanceof ImageButton) {
-+            GradientDrawable background = new GradientDrawable();
-+            background.setColor(selection);
-+            background.setCornerRadius(dp(8));
-+            view.setBackground(background);
-+            if (view instanceof ImageButton) {
++            view.setBackground(arcButtonStates(selection, foreground));
++            // Favicons are content, not monochrome glyphs: retain each website's own colors.
++            Object tag = view.getTag();
++            boolean isEntry = tag instanceof String
++                    && ((String) tag).startsWith("arc-entry:");
++            if (view instanceof ImageButton && !isEntry) {
 +                ((ImageButton) view).setColorFilter(foreground);
 +            }
 +        }
@@ -9900,15 +9942,15 @@ new file mode 100644
 +    public static final int ARC_OUTER_PADDING_DP = 8;
 +    public static final int ARC_FRAME_GAP_DP = 8;
 +    public static final int ARC_CONTENT_RADIUS_DP = 16;
-+    public static final int ARC_NAV_ROW_HEIGHT_DP = 42;
++    public static final int ARC_NAV_ROW_HEIGHT_DP = 44;
 +    public static final int ARC_NAV_BUTTON_WIDTH_DP = 44;
 +    public static final int ARC_LOCATION_BAR_SIDE_MARGIN_DP = 4;
 +    public static final int ARC_FULL_CONTROLS_MIN_WIDTH_DP = ARC_NAV_BUTTON_WIDTH_DP * 4;
 +    public static final int ARC_FULL_CONTROLS_MIN_HEIGHT_DP = 360;
 +    // Budget measured from the rail, not from the screenshot or the current sidebar width.
 +    // Nav (3 rows), new tab, footer, fixed collection chrome, rail padding and native tab room.
-+    private static final int ARC_COLLECTION_FIXED_CHROME_DP = 144;
-+    private static final int ARC_NEW_TAB_HEIGHT_DP = 40;
++    private static final int ARC_COLLECTION_FIXED_CHROME_DP = 160;
++    private static final int ARC_NEW_TAB_HEIGHT_DP = 44;
 +    private static final int ARC_MIN_NATIVE_TABS_DP = 112;
 +    public static final int ARC_MIN_COLLECTION_SCROLL_DP = 80;
 +
