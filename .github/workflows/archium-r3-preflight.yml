@@ -1,0 +1,37 @@
+name: Archium R3.1 guarded preflight
+on:
+  push:
+    branches:
+      - assistant/archium-r3-visual-fixes
+    paths:
+      - 'chromium/**'
+      - 'scripts/**'
+      - 'tests/**'
+      - 'patches/**'
+      - 'assets/branding/archium/**'
+      - '.github/workflows/archium-r3-preflight.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Python syntax and host gates
+        run: |
+          python3 -m py_compile scripts/integrate-archium-portal.py scripts/verify-archium-portal-apk.py scripts/generate-arc-patch.py
+          python3 -m unittest discover -s tests -p 'test_archium_portal_resources.py' -v
+          python3 -m unittest discover -s tests -p 'test_arc_visual_static_contract.py' -v
+      - name: Reproduce official Chromium patch and manifest
+        run: |
+          python3 scripts/generate-arc-patch.py
+          git diff --exit-code -- patches/archium-desktop.patch patches/upstream-files.json
+      - name: Verify build shell and protect branch isolation
+        run: |
+          bash -n scripts/build-archium.sh
+          bash -n scripts/build-baseline.sh
+          test "$GITHUB_REF_NAME" = "assistant/archium-r3-visual-fixes"
+          test "$(grep -c 'scripts/integrate-archium-portal.py' scripts/build-archium.sh)" -eq 3
+          echo "R3.1 static, branding, and generator preflight PASS; native build and DeX still pending."
