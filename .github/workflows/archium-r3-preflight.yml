@@ -39,6 +39,13 @@ jobs:
         run: |
           python3 scripts/check-arc-preparation.py --android-jar "${ANDROID_HOME}/platforms/android-36/android.jar"
           python3 -m unittest discover -s tests -p 'test_*.py' -v
+      - name: Check workflow definitions using pinned actionlint
+        run: |
+          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7 \
+            .github/workflows/archium-r3-preflight.yml \
+            .github/workflows/archium-branding.yml \
+            .github/workflows/baseline-build.yml \
+            .github/workflows/archium-stage.yml
       - name: Reproduce official Chromium patch and manifest
         run: |
           python3 scripts/generate-arc-patch.py
