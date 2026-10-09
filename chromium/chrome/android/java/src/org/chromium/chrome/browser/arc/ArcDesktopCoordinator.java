@@ -618,6 +618,8 @@ public final class ArcDesktopCoordinator {
         GridLayout palette = new GridLayout(mActivity);
         palette.setColumnCount(4);
         int[] presetColors = ArcDesktopAppearance.FRAME_COLOR_PRESETS;
+        View[] swatches = new View[presetColors.length];
+        GradientDrawable[] swatchBackgrounds = new GradientDrawable[presetColors.length];
         String[] presetNames = mActivity.getResources().getStringArray(
                 R.array.arc_frame_palette_names);
         for (int i = 0; i < presetColors.length; i++) {
@@ -631,6 +633,8 @@ public final class ArcDesktopCoordinator {
             circle.setColor(color);
             circle.setStroke(dp(2), 0xff808080);
             swatch.setBackground(circle);
+            swatches[i] = swatch;
+            swatchBackgrounds[i] = circle;
             swatch.setOnClickListener(v -> {
                 input.setText(String.format(Locale.ROOT, "#%06X", color & 0xffffff));
                 input.setSelection(input.length());
@@ -700,11 +704,13 @@ public final class ArcDesktopCoordinator {
             public void afterTextChanged(Editable value) {
                 String hex = value.toString().trim();
                 if (!hex.matches("#[0-9a-fA-F]{6}")) {
+                    updatePresetSelection(swatches, swatchBackgrounds, presetColors, -1);
                     preview.setText(R.string.arc_color_format);
                     preview.setBackgroundColor(Color.TRANSPARENT);
                     return;
                 }
                 int chosen = Color.parseColor(hex);
+                updatePresetSelection(swatches, swatchBackgrounds, presetColors, chosen);
                 for (int i = 0; i < channels.length; i++) {
                     channels[i].setProgress((chosen >>> shifts[i]) & 255);
                 }
@@ -713,6 +719,7 @@ public final class ArcDesktopCoordinator {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
             @Override public void onTextChanged(CharSequence s, int start, int before, int count) {}
         });
+        updatePresetSelection(swatches, swatchBackgrounds, presetColors, selected);
         updateFrameColorPreview(preview, selected);
 
         ScrollView scroll = new ScrollView(mActivity);
@@ -744,6 +751,18 @@ public final class ArcDesktopCoordinator {
                     dialog.dismiss();
                 }));
         dialog.show();
+    }
+
+    /** A selected swatch has a visible high-contrast ring and Android's selected state. */
+    private void updatePresetSelection(View[] swatches, GradientDrawable[] backgrounds,
+            int[] presets, int chosen) {
+        for (int i = 0; i < presets.length; i++) {
+            boolean selected = chosen == presets[i];
+            swatches[i].setSelected(selected);
+            backgrounds[i].setStroke(dp(selected ? 3 : 2),
+                    selected ? ArcDesktopPolicy.foreground(presets[i]) : 0xff808080);
+            swatches[i].invalidate();
+        }
     }
 
     /** Preview the actual opaque frame surface instead of the raw seed color. */
