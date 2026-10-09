@@ -69,7 +69,7 @@ class CheckpointTests(unittest.TestCase):
             (workspace / 'compiler').write_text('binary')
             (workspace / 'compiler').chmod(0o755)
             (workspace / 'link').symlink_to('compiler')
-            with patch.dict(os.environ, {'GITHUB_SHA': 'r3-commit'}), \\
+            with patch.dict(os.environ, {'GITHUB_SHA': 'r3-commit'}), \
                     patch.object(checkpoint, 'CHUNK_BYTES', 80):
                 checkpoint.pack_actions(workspace, 'archium-checkpoint-999-1', folder)
                 self.assertTrue((folder / 'group-00' / 'checkpoint.json').is_file())

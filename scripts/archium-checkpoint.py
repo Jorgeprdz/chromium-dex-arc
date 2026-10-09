@@ -189,7 +189,7 @@ def pack_actions(workspace, tag, folder):
         if digest.hexdigest() != part['sha256']:
             raise ValueError('Staged checkpoint hash changed')
     # The manifest is written LAST and uploaded in the first required group.
-    (folder / 'group-00' / 'checkpoint.json').write_text(json.dumps(receipt, indent=2) + '\\n')
+    (folder / 'group-00' / 'checkpoint.json').write_text(json.dumps(receipt, indent=2) + '\n')
     print(f'ACTIONS_CHECKPOINT_STAGED=PASS parts={len(receipt["parts"])}', flush=True)
 
 
