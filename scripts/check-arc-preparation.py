@@ -208,7 +208,13 @@ def main():
                 public void setTabVisibilityPredicate(java.util.function.IntPredicate predicate){}
                 public void refreshTabPresentation(){}
             }''',
-            'org.chromium.chrome.browser.tab.Tab': 'public class Tab { public int getId(){return 1;} public org.chromium.url.GURL getUrl(){return new org.chromium.url.GURL();} public String getTitle(){return "Title";} public boolean canGoBack(){return false;} public void goBack(){} public boolean canGoForward(){return false;} public void goForward(){} public void reload(){} }',
+            'org.chromium.chrome.browser.tab.Tab': 'public class Tab { public int getId(){return 1;} public org.chromium.url.GURL getUrl(){return new org.chromium.url.GURL();} public String getTitle(){return "Title";} public boolean canGoBack(){return false;} public void goBack(){} public boolean canGoForward(){return false;} public void goForward(){} public void reload(){} public void addObserver(TabObserver o){} public void removeObserver(TabObserver o){} }',
+            'org.chromium.chrome.browser.tab.TabObserver': ('public interface TabObserver { '
+                 'default void onUrlUpdated(Tab tab){} '
+                 'default void onNavigationEntriesDeleted(Tab tab){} '
+                 'default void onLoadStarted(Tab tab,boolean differentDocument){} '
+                 'default void onLoadStopped(Tab tab,boolean differentDocument){} '
+                 'default void onDestroyed(Tab tab){} }'),
             'org.chromium.chrome.browser.tab.TabLaunchType': 'public class TabLaunchType { public static final int FROM_CHROME_UI=1; }',
             'org.chromium.chrome.browser.tab.TabSelectionType': 'public class TabSelectionType { public static final int FROM_USER=1; }',
             'org.chromium.content_public.browser.LoadUrlParams': 'public class LoadUrlParams { public LoadUrlParams(String url){} }',

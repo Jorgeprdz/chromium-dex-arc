@@ -155,7 +155,7 @@
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAppearanceDialog.java": "466f7bd99df2721b289905b7662268c1f82811bf08fc2a1537661a582641a33a",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsController.java": "c2a9e014f6bd5a0cf9a26003b1498dfcb5d28bfba28062172535b371858f126b",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java": "ed325b7ae65192076976b3bbbf47ebba21be82a09d0f2d802becb6909944b152",
-    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java": "32b076c1663c1ccebf34985e72e4fdb0ad4395200f3932dee1483041230fbf1e",
+    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java": "acf689aff1ef64843a5280901f9a3bcb8155d0f541a66d3b58b7cf690693bdb4",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopWindowObserver.java": "0cdde8640e59b8d5d5349a18ba19556bbc7f10e7c6d3ab32820c03064705258c",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcNativeTabSession.java": "6cb8696d8c1444cdb3a6a99441700c1d91773af9a16cf7bc317a189e11eb9b16",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarProfiles.java": "16ca484649483c7255aac1d31e3e55a391f5c36cce8921509232cf8ac9ffb52c",
@@ -190,5 +190,5 @@
     "components/password_manager/core/browser/password_store/password_store_backend.cc": "45764d4ad0e05acc5a216944a5a6763212f6c17e71bf689e9c973f12fb5c87d8",
     "components/password_manager/core/browser/password_store/password_store_interface.cc": "7e9dd5813ce8ece459ec66abdd3306028b7b3d6bbae048664872a34d8d097268"
   },
-  "patch_sha256": "4792079a51599cfcbbec689b0dd55b05af20a5f59ab7d59e5ce6896b24fe7c78"
+  "patch_sha256": "1da62190aa0b1a0c223fcbbf2ebf688698daa864f1e2df32bc836bb099b0a9ad"
 }

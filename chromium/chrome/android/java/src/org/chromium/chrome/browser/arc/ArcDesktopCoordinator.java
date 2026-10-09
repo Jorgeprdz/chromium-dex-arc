@@ -44,6 +44,7 @@ import java.util.Locale;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.chromium.chrome.browser.tab.Tab;
+import org.chromium.chrome.browser.tab.TabObserver;
 import org.chromium.chrome.browser.tabmodel.TabCreator;
 import org.chromium.chrome.browser.tabmodel.TabModel;
 import org.chromium.chrome.browser.tabmodel.IncognitoStateProvider;
@@ -66,6 +67,30 @@ public final class ArcDesktopCoordinator {
     private final LinearLayout mHeader;
     private final LinearLayout mNavigationRow;
     private final LinearLayout mNavigationControls;
+    private final ImageButton mBackButton;
+    private final ImageButton mForwardButton;
+    private final ImageButton mReloadButton;
+    private Tab mObservedNavigationTab;
+    private final TabObserver mNavigationObserver = new TabObserver() {
+        @Override public void onUrlUpdated(Tab tab) {
+            if (tab == mObservedNavigationTab) updateNavigationButtons();
+        }
+        @Override public void onNavigationEntriesDeleted(Tab tab) {
+            if (tab == mObservedNavigationTab) updateNavigationButtons();
+        }
+        @Override public void onLoadStarted(Tab tab, boolean toDifferentDocument) {
+            if (tab == mObservedNavigationTab) updateNavigationButtons();
+        }
+        @Override public void onLoadStopped(Tab tab, boolean toDifferentDocument) {
+            if (tab == mObservedNavigationTab) updateNavigationButtons();
+        }
+        @Override public void onDestroyed(Tab tab) {
+            if (tab != mObservedNavigationTab) return;
+            tab.removeObserver(this);
+            mObservedNavigationTab = null;
+            updateNavigationButtons();
+        }
+    };
     private final View mMenuButtonWrapper;
     private final ViewGroup mMenuButtonOriginalParent;
     private final int mMenuButtonOriginalIndex;
@@ -272,25 +297,21 @@ public final class ArcDesktopCoordinator {
         // ToolbarPhone does not expose forward/reload Views in Chromium 157, while ARC can be
         // explicitly forced in a narrow window. Keep navigation real by dispatching directly to
         // the currently selected Chromium Tab instead of depending on a ToolbarTablet hierarchy.
-        mNavigationControls.addView(
-                navigationButton(
-                        R.drawable.btn_back,
-                        R.string.accessibility_toolbar_btn_back,
-                        tab -> {
-                            if (tab.canGoBack()) tab.goBack();
-                        }));
-        mNavigationControls.addView(
-                navigationButton(
-                        R.drawable.btn_forward,
-                        R.string.accessibility_toolbar_btn_forward,
-                        tab -> {
-                            if (tab.canGoForward()) tab.goForward();
-                        }));
-        mNavigationControls.addView(
-                navigationButton(
-                        R.drawable.btn_reload_stop,
-                        R.string.accessibility_btn_refresh,
-                        Tab::reload));
+        mBackButton = navigationButton(
+                R.drawable.btn_back,
+                R.string.accessibility_toolbar_btn_back,
+                tab -> { if (tab.canGoBack()) tab.goBack(); });
+        mForwardButton = navigationButton(
+                R.drawable.btn_forward,
+                R.string.accessibility_toolbar_btn_forward,
+                tab -> { if (tab.canGoForward()) tab.goForward(); });
+        mReloadButton = navigationButton(
+                R.drawable.btn_reload_stop,
+                R.string.accessibility_btn_refresh,
+                Tab::reload);
+        mNavigationControls.addView(mBackButton);
+        mNavigationControls.addView(mForwardButton);
+        mNavigationControls.addView(mReloadButton);
         mNavigationRow.addView(
                 mNavigationControls,
                 new LinearLayout.LayoutParams(
@@ -843,9 +864,35 @@ public final class ArcDesktopCoordinator {
         mArcToolbarCompositionActive = false;
     }
 
+    /** Only the selected native Chromium tab owns the navigation controls. */
+    private void bindNavigationTab(boolean desktop) {
+        Tab tab = desktop ? mCurrentTab.get() : null;
+        if (mObservedNavigationTab != tab) {
+            if (mObservedNavigationTab != null) {
+                mObservedNavigationTab.removeObserver(mNavigationObserver);
+            }
+            mObservedNavigationTab = tab;
+            if (tab != null) tab.addObserver(mNavigationObserver);
+        }
+        updateNavigationButtons();
+    }
+
+    private void updateNavigationButtons() {
+        Tab tab = mObservedNavigationTab;
+        boolean back = tab != null && tab.canGoBack();
+        boolean forward = tab != null && tab.canGoForward();
+        mBackButton.setEnabled(back);
+        mForwardButton.setEnabled(forward);
+        mReloadButton.setEnabled(tab != null);
+        mBackButton.setAlpha(back ? 1f : 0.42f);
+        mForwardButton.setAlpha(forward ? 1f : 0.42f);
+        mReloadButton.setAlpha(tab != null ? 1f : 0.42f);
+    }
+
     private void applyAppearance() {
         if (mDestroyed) return;
         boolean desktop = ArcDesktopAppearance.isDesktopWindow(mActivity);
+        bindNavigationTab(desktop);
         boolean incognito = mIncognitoStateProvider.isIncognitoSelected();
         setArcToolbarCompositionActive(desktop);
         if (mNativeTabs instanceof VerticalTabRailLayout) {
@@ -1181,6 +1228,10 @@ public final class ArcDesktopCoordinator {
     public void destroy() {
         if (mDestroyed) return;
         mDestroyed = true;
+        if (mObservedNavigationTab != null) {
+            mObservedNavigationTab.removeObserver(mNavigationObserver);
+            mObservedNavigationTab = null;
+        }
         mIncognitoStateProvider.removeObserver(mIncognitoObserver);
         ((VerticalTabRailLayout) mNativeTabs).setDesktopWindowSpacerHost(null);
         clearCollections();
