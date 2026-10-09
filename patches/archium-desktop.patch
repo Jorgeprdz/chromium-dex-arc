@@ -1773,6 +1773,38 @@ diff --git a/chrome/browser/sync/sync_service_factory.cc b/chrome/browser/sync/s
    builder.SetPrefService(profile->GetPrefs());
    builder.SetPrefServiceSyncable(PrefServiceSyncableFromProfile(profile));
    builder.SetTabGroupSyncService(GetTabGroupSyncService(profile));
+diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImpl.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImpl.java
+--- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImpl.java
++++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImpl.java
+@@ -340,7 +340,27 @@
+             }
+ 
+             // Tablet positioning logic common between fusebox and non-fusebox cases.
+-            ViewUtils.getRelativeLayoutPosition(mAnchorView, mAlignmentView, mPositionArray);
++            // An Arc desktop shell may move LocationBarTablet out of the original toolbar.
++            // ViewUtils requires an ancestor relationship; preserve its native fast path and
++            // calculate window-relative coordinates when the real omnibox is reparented.
++            android.view.ViewParent ancestor = mAlignmentView.getParent();
++            while (ancestor instanceof View && ancestor != mAnchorView) {
++                ancestor = ancestor.getParent();
++            }
++            if (ancestor == mAnchorView) {
++                ViewUtils.getRelativeLayoutPosition(mAnchorView, mAlignmentView, mPositionArray);
++            } else if (mAnchorView.isAttachedToWindow() && mAlignmentView.isAttachedToWindow()
++                    && mAnchorView.getRootView() == mAlignmentView.getRootView()) {
++                int[] anchorInWindow = new int[2];
++                mAnchorView.getLocationInWindow(anchorInWindow);
++                mAlignmentView.getLocationInWindow(mPositionArray);
++                mPositionArray[0] -= anchorInWindow[0];
++                mPositionArray[1] -= anchorInWindow[1];
++            } else {
++                // Detached during ARC->MOBILE or Activity teardown: no dropdown over a stale view.
++                mOmniboxAlignmentSupplier.set(new OmniboxAlignment(0, 0, 0, 0, 0, 0, 0, 0));
++                return;
++            }
+             int targetWidth = mAlignmentViewTargetWidthSupplier.get();
+             width = targetWidth + 2 * sideSpacing;
+             int leftOffset = mAlignmentViewLeftOffsetSupplier.get();
 diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java
 --- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java
 +++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java
