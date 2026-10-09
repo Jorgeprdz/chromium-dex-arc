@@ -53,8 +53,12 @@ class ArchiumPortalResourcesTest(unittest.TestCase):
         icon = ET.fromstring(resources[
             "chrome/android/java/res_chromium_base/drawable/themed_app_icon.xml"])
         self.assertEqual("vector", icon.tag)
-        self.assertEqual("#000000", list(icon)[0].get(ANDROID + "fillColor"))
-        self.assertIn("M 177 760", list(icon)[0].get(ANDROID + "pathData"))
+        group = list(icon)[0]
+        self.assertEqual("group", group.tag)
+        self.assertEqual("0.65", group.get(ANDROID + "scaleX"))
+        self.assertEqual("0.65", group.get(ANDROID + "scaleY"))
+        self.assertEqual("#000000", list(group)[0].get(ANDROID + "fillColor"))
+        self.assertIn("M 177 760", list(group)[0].get(ANDROID + "pathData"))
 
     def test_foreground_and_background_remain_distinct_rgba(self):
         resources = portal.expected_resources()
