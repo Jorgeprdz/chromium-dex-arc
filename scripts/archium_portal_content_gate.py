@@ -104,13 +104,13 @@ def check_content(apk, aapt_dump, xmltree):
                             # Validate ID *inside its specific element*, not
                             # simply present anywhere in the XML document.
                             block = re.search(
-                                r"(?ms)^\\s*E:\\s*" + label
-                                + r"\\b(.*?)(?=^\\s*E:|\\Z)", compiled)
+                                r"(?ms)^\s*E:\s*" + label
+                                + r"\b(.*?)(?=^\s*E:|\Z)", compiled)
                             resource_id = ids.get(layer)
                             if resource_id is None:
                                 resource_id = resource_entry(aapt_dump, layer)[0]
                             if block is None or not re.search(
-                                    r"@0x0*" + format(resource_id, "x") + r"\\b",
+                                    r"@0x0*" + format(resource_id, "x") + r"\b",
                                     block.group(1), flags=re.I):
                                 raise ValueError("Wrong adaptive icon layer for " + label)
                     elif ("M 177 760" not in compiled
