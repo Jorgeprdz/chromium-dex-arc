@@ -3113,7 +3113,7 @@ diff --git a/chrome/android/java/res/values/arc_strings.xml b/chrome/android/jav
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/res/values/arc_strings.xml
-@@ -0,0 +1,26 @@
+@@ -0,0 +1,27 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<resources>
 +    <string name="arc_bookmarks">Marcadores</string>
@@ -3131,6 +3131,7 @@ new file mode 100644
 +    <string name="arc_favorite_current">Añadir a favoritos</string>
 +    <string name="arc_new_space">Nuevo espacio</string>
 +    <string name="arc_new_folder">Nueva carpeta</string>
++    <string name="arc_new_tab">Nueva pestaña</string>
 +    <string name="arc_name">Nombre</string>
 +    <string name="arc_collection_error">No se pudo actualizar la colección</string>
 +    <string name="arc_remove_entry">Quitar de la barra lateral</string>
@@ -3293,7 +3294,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollecti
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java
-@@ -0,0 +1,283 @@
+@@ -0,0 +1,289 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -3359,17 +3360,23 @@ new file mode 100644
 +        HorizontalScrollView favoritesScroll = new HorizontalScrollView(activity);
 +        favoritesScroll.setHorizontalScrollBarEnabled(false);
 +        favoritesScroll.addView(mFavorites);
-+        addView(favoritesScroll, new LayoutParams(-1, dp(52)));
++        LayoutParams favoriteParams = new LayoutParams(-1, dp(52));
++        favoriteParams.bottomMargin = dp(4);
++        addView(favoritesScroll, favoriteParams);
 +        mSpace = button("", this::showSpaces);
 +        mSpace.setTag("arc-current-space");
 +        mSpace.setContentDescription(activity.getString(R.string.arc_spaces));
-+        addView(mSpace, new LayoutParams(-1, dp(36)));
++        LayoutParams spaceParams = new LayoutParams(-1, dp(36));
++        spaceParams.bottomMargin = dp(4);
++        addView(mSpace, spaceParams);
 +        mEntries = new LinearLayout(activity);
 +        mEntries.setOrientation(VERTICAL);
 +        mEntries.setContentDescription(activity.getString(R.string.arc_pinned_tabs));
 +        mScroll = new ScrollView(activity);
 +        mScroll.addView(mEntries);
-+        addView(mScroll, new LayoutParams(-1, dp(112)));
++        LayoutParams pinnedParams = new LayoutParams(-1, dp(112));
++        pinnedParams.bottomMargin = dp(4);
++        addView(mScroll, pinnedParams);
 +        LinearLayout controls = new LinearLayout(activity);
 +        Button pin = button(activity.getString(R.string.arc_pin_current), () -> remember(false));
 +        pin.setTag("arc-pin-current");
@@ -3581,7 +3588,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopC
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
-@@ -0,0 +1,917 @@
+@@ -0,0 +1,965 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -3592,9 +3599,12 @@ new file mode 100644
 +import android.content.SharedPreferences;
 +import android.graphics.Color;
 +import android.graphics.Outline;
++import android.graphics.Path;
 +import android.graphics.drawable.Drawable;
 +import android.graphics.drawable.GradientDrawable;
 +import android.text.InputType;
++import android.text.TextUtils;
++import android.view.Gravity;
 +import android.view.MotionEvent;
 +import android.view.View;
 +import android.view.ViewOutlineProvider;
@@ -3633,6 +3643,9 @@ new file mode 100644
 +    private final Activity mActivity;
 +    private final ViewGroup mRail;
 +    private final View mNativeTabs;
++    private final View mNativeNewTabButton;
++    private final int mNativeNewTabOriginalVisibility;
++    private final TextView mArcNewTabRow;
 +    private final LinearLayout mColumn;
 +    private final LinearLayout mHeader;
 +    private final LinearLayout mNavigationRow;
@@ -3737,6 +3750,10 @@ new file mode 100644
 +        if (!(nativeTabs instanceof VerticalTabRailLayout)) {
 +            throw new IllegalStateException("Arc requires Chromium's VerticalTabRailLayout");
 +        }
++        View nativeNewTabButton = nativeTabs.findViewById(R.id.new_tab_button);
++        if (nativeNewTabButton == null) {
++            throw new IllegalStateException("Arc requires Chromium's real new-tab button");
++        }
 +        View nativeSpacer = nativeTabs.findViewById(R.id.desktop_window_spacer);
 +        if (nativeSpacer == null || nativeSpacer.getLayoutParams() == null) {
 +            throw new IllegalStateException("Arc requires Chromium's desktop window spacer");
@@ -3788,6 +3805,8 @@ new file mode 100644
 +            mOriginalContentMarginBottom = 0;
 +        }
 +        mNativeTabs = nativeTabs;
++        mNativeNewTabButton = nativeNewTabButton;
++        mNativeNewTabOriginalVisibility = nativeNewTabButton.getVisibility();
 +        mMenuButtonWrapper = menuButtonWrapper;
 +        mMenuButtonOriginalParent = (ViewGroup) mMenuButtonWrapper.getParent();
 +        mMenuButtonOriginalIndex = mMenuButtonOriginalParent.indexOfChild(mMenuButtonWrapper);
@@ -3872,6 +3891,7 @@ new file mode 100644
 +        mHeader.addView(mLocationBarHost, locationBarParams);
 +
 +        mHeaderActions = new LinearLayout(activity);
++        mHeaderActions.setGravity(Gravity.CENTER_VERTICAL);
 +        Button bookmarksButton = button(activity.getString(R.string.arc_bookmarks), openBookmarks);
 +        Button googleButton = button("Google", () -> {});
 +        googleButton.setOnClickListener(v -> showGoogleMenu(v));
@@ -3885,9 +3905,24 @@ new file mode 100644
 +        }
 +        mHeader.addView(mHeaderActions);
 +        mColumn.addView(mHeader);
++        // This visual row delegates to Chromium's one native tab-opening action.
++        mArcNewTabRow = new TextView(activity);
++        mArcNewTabRow.setText("+  " + activity.getString(R.string.arc_new_tab));
++        mArcNewTabRow.setContentDescription(activity.getString(R.string.arc_new_tab));
++        mArcNewTabRow.setTooltipText(activity.getString(R.string.arc_new_tab));
++        mArcNewTabRow.setTextSize(13);
++        mArcNewTabRow.setSingleLine(true);
++        mArcNewTabRow.setEllipsize(TextUtils.TruncateAt.END);
++        mArcNewTabRow.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
++        mArcNewTabRow.setPadding(dp(16), 0, dp(12), 0);
++        mArcNewTabRow.setFocusable(true);
++        mArcNewTabRow.setClickable(true);
++        mArcNewTabRow.setOnClickListener(v -> mNativeNewTabButton.performClick());
++        mColumn.addView(mArcNewTabRow, new LinearLayout.LayoutParams(-1, dp(40)));
 +        mColumn.addView(mNativeTabs, new LinearLayout.LayoutParams(-1, 0, 1));
 +
 +        mFooter = new LinearLayout(activity);
++        mFooter.setGravity(Gravity.CENTER_VERTICAL);
 +        mPasswordButton = button(localPasswordsEnabled ? "Passwords" : "Autofill",
 +                openPasswordSettings);
 +        mPasswordButton.setContentDescription(
@@ -3927,8 +3962,14 @@ new file mode 100644
 +                            outline.setEmpty();
 +                            return;
 +                        }
-+                        outline.setRoundRect(left, 0, view.getWidth(), view.getHeight(),
-+                                dp(ArcDesktopPolicy.ARC_CONTENT_RADIUS_DP));
++                        // The interior bottom-left join is square; three exterior corners round.
++                        float radius = Math.min(dp(ArcDesktopPolicy.ARC_CONTENT_RADIUS_DP),
++                                Math.min((view.getWidth() - left) / 2f, view.getHeight() / 2f));
++                        Path path = new Path();
++                        path.addRoundRect(left, 0, view.getWidth(), view.getHeight(),
++                                new float[] {radius, radius, radius, radius,
++                                        radius, radius, 0f, 0f}, Path.Direction.CW);
++                        outline.setConvexPath(path);
 +                    }
 +                };
 +        mArcTouchEventObserver =
@@ -4233,6 +4274,8 @@ new file mode 100644
 +        }
 +        if (!desktop) {
 +            mHeader.setVisibility(View.GONE);
++            mArcNewTabRow.setVisibility(View.GONE);
++            mNativeNewTabButton.setVisibility(mNativeNewTabOriginalVisibility);
 +            mFooter.setVisibility(View.GONE);
 +            if (mCollectionsView != null) mCollectionsView.setVisibility(View.GONE);
 +            mColumn.setBackgroundColor(Color.TRANSPARENT);
@@ -4248,6 +4291,12 @@ new file mode 100644
 +        // Keep the real Chromium LocationBar visible even in collapsed mode so keyboard/focus
 +        // paths never target a GONE omnibox. Secondary Arc controls are restored on expansion.
 +        mHeader.setVisibility(View.VISIBLE);
++        mNativeNewTabButton.setVisibility(View.GONE);
++        mArcNewTabRow.setVisibility(View.VISIBLE);
++        mArcNewTabRow.setText(expanded
++                ? "+  " + mActivity.getString(R.string.arc_new_tab) : "+");
++        mArcNewTabRow.setGravity((expanded ? Gravity.START : Gravity.CENTER_HORIZONTAL)
++                | Gravity.CENTER_VERTICAL);
 +        mNavigationRow.setVisibility(View.VISIBLE);
 +        mNavigationControls.setVisibility(expanded ? View.VISIBLE : View.GONE);
 +        mHeaderActions.setVisibility(expanded ? View.VISIBLE : View.GONE);
@@ -4270,6 +4319,11 @@ new file mode 100644
 +        int surface = ArcDesktopAppearance.surface(mActivity, incognito);
 +        int foreground = ArcDesktopPolicy.foreground(surface);
 +        mColumn.setBackgroundColor(surface);
++        mArcNewTabRow.setTextColor(foreground);
++        GradientDrawable rowBackground = new GradientDrawable();
++        rowBackground.setColor(ArcDesktopPolicy.selection(surface));
++        rowBackground.setCornerRadius(dp(8));
++        mArcNewTabRow.setBackground(rowBackground);
 +        tintHeader(mHeader, foreground, ArcDesktopPolicy.selection(surface));
 +        tintHeader(mFooter, foreground, ArcDesktopPolicy.selection(surface));
 +    }
@@ -4292,7 +4346,7 @@ new file mode 100644
 +    }
 +
 +    private boolean isInsideArcContent(float x, float y) {
-+        return ArcDesktopPolicy.containsRoundedRectPoint(
++        return ArcDesktopPolicy.containsArcViewportPoint(
 +                x, y, reservedLeftWidth(), 0, mCompositorViewHolder.getWidth(),
 +                mCompositorViewHolder.getHeight(), dp(ArcDesktopPolicy.ARC_CONTENT_RADIUS_DP));
 +    }
@@ -4494,6 +4548,7 @@ new file mode 100644
 +        restoreFrameGeometry();
 +        setArcToolbarCompositionActive(false);
 +        mIcons.destroy();
++        mNativeNewTabButton.setVisibility(mNativeNewTabOriginalVisibility);
 +        mColumn.removeView(mNativeTabs);
 +        mRail.removeView(mColumn);
 +        mRail.addView(mNativeTabs, new ViewGroup.LayoutParams(-1, -1));
@@ -9610,7 +9665,7 @@ diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrom
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java
-@@ -0,0 +1,108 @@
+@@ -0,0 +1,134 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -9690,6 +9745,32 @@ new file mode 100644
 +        float dx = x - centerX;
 +        float dy = y - centerY;
 +        return dx * dx + dy * dy <= clampedRadius * clampedRadius;
++    }
++
++    /** R3 clip hitbox: the bottom-left interior join is square, other corners round. */
++    public static boolean containsArcViewportPoint(
++            float x, float y, int left, int top, int right, int bottom, float radius) {
++        if (right <= left || bottom <= top || x < left || x >= right || y < top || y >= bottom) {
++            return false;
++        }
++        float r = Math.max(0f, Math.min(radius,
++                Math.min((right - left) / 2f, (bottom - top) / 2f)));
++        if (r == 0f) return true;
++        float dx;
++        float dy;
++        if (x < left + r && y < top + r) {
++            dx = x - (left + r);
++            dy = y - (top + r);
++        } else if (x > right - r && y < top + r) {
++            dx = x - (right - r);
++            dy = y - (top + r);
++        } else if (x > right - r && y > bottom - r) {
++            dx = x - (right - r);
++            dy = y - (bottom - r);
++        } else {
++            return true;
++        }
++        return dx * dx + dy * dy <= r * r;
 +    }
 +
 +    public static double contrast(int first, int second) {
@@ -10481,7 +10562,7 @@ new file mode 100644
 +
 +TEST_F(ArchiumLoginDatabaseTest, FailedSecondRowRollsBackReplacement) {
 +  auto existing = Credential("one.example", u"original-secret");
-+  ASSERT_FALSE(db_->AddLogin(CloneStoredCredential(existing)).empty());
++  ASSERT_FALSE(db_->AddLogin(std::move(existing)).empty());
 +  std::vector<StoredCredential> rows;
 +  rows.push_back(Credential("one.example", u"replacement-secret"));
 +  rows.push_back(Credential("invalid.example", u"other-secret"));

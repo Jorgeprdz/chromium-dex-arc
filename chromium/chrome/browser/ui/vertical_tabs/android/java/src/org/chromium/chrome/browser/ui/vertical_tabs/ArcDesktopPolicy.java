@@ -79,6 +79,32 @@ public final class ArcDesktopPolicy {
         return dx * dx + dy * dy <= clampedRadius * clampedRadius;
     }
 
+    /** R3 clip hitbox: the bottom-left interior join is square, other corners round. */
+    public static boolean containsArcViewportPoint(
+            float x, float y, int left, int top, int right, int bottom, float radius) {
+        if (right <= left || bottom <= top || x < left || x >= right || y < top || y >= bottom) {
+            return false;
+        }
+        float r = Math.max(0f, Math.min(radius,
+                Math.min((right - left) / 2f, (bottom - top) / 2f)));
+        if (r == 0f) return true;
+        float dx;
+        float dy;
+        if (x < left + r && y < top + r) {
+            dx = x - (left + r);
+            dy = y - (top + r);
+        } else if (x > right - r && y < top + r) {
+            dx = x - (right - r);
+            dy = y - (top + r);
+        } else if (x > right - r && y > bottom - r) {
+            dx = x - (right - r);
+            dy = y - (bottom - r);
+        } else {
+            return true;
+        }
+        return dx * dx + dy * dy <= r * r;
+    }
+
     public static double contrast(int first, int second) {
         double a = luminance(first);
         double b = luminance(second);

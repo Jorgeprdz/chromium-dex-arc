@@ -65,6 +65,14 @@ public final class ArcDesktopPolicyTest {
                 "zero-radius rectangle retains normal rectangular hit testing");
         check(!ArcDesktopPolicy.containsRoundedRectPoint(0, 0, 0, 0, 2, 2, 99),
                 "oversized radius is clamped instead of exposing a square corner");
+        check(ArcDesktopPolicy.containsArcViewportPoint(240, 699, 240, 0, 1000, 700, 16),
+                "square internal lower-left seam");
+        check(!ArcDesktopPolicy.containsArcViewportPoint(240, 0, 240, 0, 1000, 700, 16),
+                "upper-left rounded corner");
+        check(!ArcDesktopPolicy.containsArcViewportPoint(999, 699, 240, 0, 1000, 700, 16),
+                "lower-right rounded corner");
+        check(!ArcDesktopPolicy.containsArcViewportPoint(239, 699, 240, 0, 1000, 700, 16),
+                "sidebar outside web bounds");
         check(ArcDesktopPolicy.showFullControls(240, 700, 1f),
                 "expanded 240dp rail exposes full Arc controls");
         check(!ArcDesktopPolicy.showFullControls(52, 700, 1f),

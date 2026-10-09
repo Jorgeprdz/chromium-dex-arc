@@ -15,6 +15,7 @@
     <string name="arc_favorite_current">Añadir a favoritos</string>
     <string name="arc_new_space">Nuevo espacio</string>
     <string name="arc_new_folder">Nueva carpeta</string>
+    <string name="arc_new_tab">Nueva pestaña</string>
     <string name="arc_name">Nombre</string>
     <string name="arc_collection_error">No se pudo actualizar la colección</string>
     <string name="arc_remove_entry">Quitar de la barra lateral</string>

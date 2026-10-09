@@ -230,7 +230,7 @@ TEST_F(ArchiumLoginDatabaseTest, FailedSecondRowRollsBackFirstInsert) {
 
 TEST_F(ArchiumLoginDatabaseTest, FailedSecondRowRollsBackReplacement) {
   auto existing = Credential("one.example", u"original-secret");
-  ASSERT_FALSE(db_->AddLogin(CloneStoredCredential(existing)).empty());
+  ASSERT_FALSE(db_->AddLogin(std::move(existing)).empty());
   std::vector<StoredCredential> rows;
   rows.push_back(Credential("one.example", u"replacement-secret"));
   rows.push_back(Credential("invalid.example", u"other-secret"));

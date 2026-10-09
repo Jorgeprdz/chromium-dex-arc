@@ -8,9 +8,12 @@ import android.app.AlertDialog;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Outline;
+import android.graphics.Path;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.text.InputType;
+import android.text.TextUtils;
+import android.view.Gravity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewOutlineProvider;
@@ -49,6 +52,9 @@ public final class ArcDesktopCoordinator {
     private final Activity mActivity;
     private final ViewGroup mRail;
     private final View mNativeTabs;
+    private final View mNativeNewTabButton;
+    private final int mNativeNewTabOriginalVisibility;
+    private final TextView mArcNewTabRow;
     private final LinearLayout mColumn;
     private final LinearLayout mHeader;
     private final LinearLayout mNavigationRow;
@@ -153,6 +159,10 @@ public final class ArcDesktopCoordinator {
         if (!(nativeTabs instanceof VerticalTabRailLayout)) {
             throw new IllegalStateException("Arc requires Chromium's VerticalTabRailLayout");
         }
+        View nativeNewTabButton = nativeTabs.findViewById(R.id.new_tab_button);
+        if (nativeNewTabButton == null) {
+            throw new IllegalStateException("Arc requires Chromium's real new-tab button");
+        }
         View nativeSpacer = nativeTabs.findViewById(R.id.desktop_window_spacer);
         if (nativeSpacer == null || nativeSpacer.getLayoutParams() == null) {
             throw new IllegalStateException("Arc requires Chromium's desktop window spacer");
@@ -204,6 +214,8 @@ public final class ArcDesktopCoordinator {
             mOriginalContentMarginBottom = 0;
         }
         mNativeTabs = nativeTabs;
+        mNativeNewTabButton = nativeNewTabButton;
+        mNativeNewTabOriginalVisibility = nativeNewTabButton.getVisibility();
         mMenuButtonWrapper = menuButtonWrapper;
         mMenuButtonOriginalParent = (ViewGroup) mMenuButtonWrapper.getParent();
         mMenuButtonOriginalIndex = mMenuButtonOriginalParent.indexOfChild(mMenuButtonWrapper);
@@ -288,6 +300,7 @@ public final class ArcDesktopCoordinator {
         mHeader.addView(mLocationBarHost, locationBarParams);
 
         mHeaderActions = new LinearLayout(activity);
+        mHeaderActions.setGravity(Gravity.CENTER_VERTICAL);
         Button bookmarksButton = button(activity.getString(R.string.arc_bookmarks), openBookmarks);
         Button googleButton = button("Google", () -> {});
         googleButton.setOnClickListener(v -> showGoogleMenu(v));
@@ -301,9 +314,24 @@ public final class ArcDesktopCoordinator {
         }
         mHeader.addView(mHeaderActions);
         mColumn.addView(mHeader);
+        // This visual row delegates to Chromium's one native tab-opening action.
+        mArcNewTabRow = new TextView(activity);
+        mArcNewTabRow.setText("+  " + activity.getString(R.string.arc_new_tab));
+        mArcNewTabRow.setContentDescription(activity.getString(R.string.arc_new_tab));
+        mArcNewTabRow.setTooltipText(activity.getString(R.string.arc_new_tab));
+        mArcNewTabRow.setTextSize(13);
+        mArcNewTabRow.setSingleLine(true);
+        mArcNewTabRow.setEllipsize(TextUtils.TruncateAt.END);
+        mArcNewTabRow.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        mArcNewTabRow.setPadding(dp(16), 0, dp(12), 0);
+        mArcNewTabRow.setFocusable(true);
+        mArcNewTabRow.setClickable(true);
+        mArcNewTabRow.setOnClickListener(v -> mNativeNewTabButton.performClick());
+        mColumn.addView(mArcNewTabRow, new LinearLayout.LayoutParams(-1, dp(40)));
         mColumn.addView(mNativeTabs, new LinearLayout.LayoutParams(-1, 0, 1));
 
         mFooter = new LinearLayout(activity);
+        mFooter.setGravity(Gravity.CENTER_VERTICAL);
         mPasswordButton = button(localPasswordsEnabled ? "Passwords" : "Autofill",
                 openPasswordSettings);
         mPasswordButton.setContentDescription(
@@ -343,8 +371,14 @@ public final class ArcDesktopCoordinator {
                             outline.setEmpty();
                             return;
                         }
-                        outline.setRoundRect(left, 0, view.getWidth(), view.getHeight(),
-                                dp(ArcDesktopPolicy.ARC_CONTENT_RADIUS_DP));
+                        // The interior bottom-left join is square; three exterior corners round.
+                        float radius = Math.min(dp(ArcDesktopPolicy.ARC_CONTENT_RADIUS_DP),
+                                Math.min((view.getWidth() - left) / 2f, view.getHeight() / 2f));
+                        Path path = new Path();
+                        path.addRoundRect(left, 0, view.getWidth(), view.getHeight(),
+                                new float[] {radius, radius, radius, radius,
+                                        radius, radius, 0f, 0f}, Path.Direction.CW);
+                        outline.setConvexPath(path);
                     }
                 };
         mArcTouchEventObserver =
@@ -649,6 +683,8 @@ public final class ArcDesktopCoordinator {
         }
         if (!desktop) {
             mHeader.setVisibility(View.GONE);
+            mArcNewTabRow.setVisibility(View.GONE);
+            mNativeNewTabButton.setVisibility(mNativeNewTabOriginalVisibility);
             mFooter.setVisibility(View.GONE);
             if (mCollectionsView != null) mCollectionsView.setVisibility(View.GONE);
             mColumn.setBackgroundColor(Color.TRANSPARENT);
@@ -664,6 +700,12 @@ public final class ArcDesktopCoordinator {
         // Keep the real Chromium LocationBar visible even in collapsed mode so keyboard/focus
         // paths never target a GONE omnibox. Secondary Arc controls are restored on expansion.
         mHeader.setVisibility(View.VISIBLE);
+        mNativeNewTabButton.setVisibility(View.GONE);
+        mArcNewTabRow.setVisibility(View.VISIBLE);
+        mArcNewTabRow.setText(expanded
+                ? "+  " + mActivity.getString(R.string.arc_new_tab) : "+");
+        mArcNewTabRow.setGravity((expanded ? Gravity.START : Gravity.CENTER_HORIZONTAL)
+                | Gravity.CENTER_VERTICAL);
         mNavigationRow.setVisibility(View.VISIBLE);
         mNavigationControls.setVisibility(expanded ? View.VISIBLE : View.GONE);
         mHeaderActions.setVisibility(expanded ? View.VISIBLE : View.GONE);
@@ -686,6 +728,11 @@ public final class ArcDesktopCoordinator {
         int surface = ArcDesktopAppearance.surface(mActivity, incognito);
         int foreground = ArcDesktopPolicy.foreground(surface);
         mColumn.setBackgroundColor(surface);
+        mArcNewTabRow.setTextColor(foreground);
+        GradientDrawable rowBackground = new GradientDrawable();
+        rowBackground.setColor(ArcDesktopPolicy.selection(surface));
+        rowBackground.setCornerRadius(dp(8));
+        mArcNewTabRow.setBackground(rowBackground);
         tintHeader(mHeader, foreground, ArcDesktopPolicy.selection(surface));
         tintHeader(mFooter, foreground, ArcDesktopPolicy.selection(surface));
     }
@@ -708,7 +755,7 @@ public final class ArcDesktopCoordinator {
     }
 
     private boolean isInsideArcContent(float x, float y) {
-        return ArcDesktopPolicy.containsRoundedRectPoint(
+        return ArcDesktopPolicy.containsArcViewportPoint(
                 x, y, reservedLeftWidth(), 0, mCompositorViewHolder.getWidth(),
                 mCompositorViewHolder.getHeight(), dp(ArcDesktopPolicy.ARC_CONTENT_RADIUS_DP));
     }
@@ -910,6 +957,7 @@ public final class ArcDesktopCoordinator {
         restoreFrameGeometry();
         setArcToolbarCompositionActive(false);
         mIcons.destroy();
+        mNativeNewTabButton.setVisibility(mNativeNewTabOriginalVisibility);
         mColumn.removeView(mNativeTabs);
         mRail.removeView(mColumn);
         mRail.addView(mNativeTabs, new ViewGroup.LayoutParams(-1, -1));

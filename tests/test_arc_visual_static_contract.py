@@ -61,6 +61,8 @@ class ArcVisualStaticContractTest(unittest.TestCase):
         # New tab remains owned by VerticalTabRailLayout/VerticalTabListCoordinator.
         self.assertNotIn('new LoadUrlParams("chrome://newtab/")', self.arc)
         self.assertIn('VerticalTabRailLayout already owns Chromium\'s real new-tab button', self.arc)
+        self.assertIn('mNativeNewTabButton.performClick()', self.arc)
+        self.assertIn('mNativeNewTabButton.setVisibility(mNativeNewTabOriginalVisibility)', self.arc)
 
     def test_side_ui_drives_real_viewport_geometry(self):
         self.assertIn('getCurrentSideUiSpecs()', self.tabbed)
@@ -76,7 +78,9 @@ class ArcVisualStaticContractTest(unittest.TestCase):
         self.assertIn('activeSurface.setClipToOutline(true)', self.arc)
         self.assertIn('new TouchEventObserver()', self.arc)
         self.assertIn('mayInterceptTouchSequenceInWebContents()', self.arc)
-        self.assertIn('ArcDesktopPolicy.containsRoundedRectPoint', self.arc)
+        self.assertIn('ArcDesktopPolicy.containsArcViewportPoint', self.arc)
+        self.assertIn('path.addRoundRect(', self.arc)
+        self.assertIn('radius, radius, 0f, 0f', self.arc)
         self.assertNotIn('Canvas', self.arc)
         self.assertNotIn('drawRoundRect', self.arc)
         self.assertNotIn('mCompositorViewHolder.setBackgroundColor', self.arc)
