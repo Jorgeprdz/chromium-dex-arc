@@ -137,6 +137,8 @@ if [[ -n "$source_tag" || -n "${ARCHIUM_PREVIOUS_TAG:-}" ]]; then
         run_prepare git -C "$GITHUB_WORKSPACE" fetch --depth 1 origin "$source_commit"
         run_prepare python3 "$GITHUB_WORKSPACE/scripts/transition-archium-patches.py" "$PWD" \
             --source-commit "$source_commit" --implementation-commit "$GITHUB_SHA"
+        # Re-apply the audited binary launcher resource overlay on checkpoint transitions.
+        run_prepare python3 "$GITHUB_WORKSPACE/scripts/integrate-archium-portal.py" "$PWD"
         cp "$GITHUB_WORKSPACE/config/archium-args.gn" out/Archium/args.gn
         run_prepare gn gen out/Archium
     elif ! cmp -s "$GITHUB_WORKSPACE/config/archium-args.gn" out/Archium/args.gn; then
@@ -176,9 +178,13 @@ run_prepare gclient runhooks
 
 mkdir -p out/Archium
 run_prepare python3 "$GITHUB_WORKSPACE/scripts/apply-arc-patches.py" "$PWD"
+run_prepare python3 "$GITHUB_WORKSPACE/scripts/integrate-archium-portal.py" "$PWD"
 cp "$GITHUB_WORKSPACE/config/archium-args.gn" out/Archium/args.gn
 run_prepare gn gen out/Archium
 fi
+# Applies to clean builds and resumed slices: resources must match approved Portal assets.
+run_prepare python3 "$GITHUB_WORKSPACE/scripts/integrate-archium-portal.py" "$PWD" --verify
+run_prepare python3 -m unittest discover -s "$GITHUB_WORKSPACE/tests" -p 'test_archium_portal_resources.py'
 printf '%s\n%s\n' "$GITHUB_SHA" "$job_started" > "$prepared_marker"
 if [[ "$build_phase" == --prepare ]]; then exit 0; fi
 else
@@ -280,7 +286,17 @@ run_work TERM "$host_seconds" 124 python3 "$GITHUB_WORKSPACE/scripts/archium-tes
 printf 'PHASE C: host gates passed; APK target is now allowed.\n'
 compile_slice chrome_public_apk
 test -s out/Archium/apks/ChromePublic.apk
+# Fail closed if packaged launcher aliases/resources are absent from the actual APK.
+android_tools_version="$(sed -n 's/^[[:space:]]*public_android_sdk_build_tools_version = "\([^"]*\)"/\1/p' build/config/android/config.gni | head -n1)"
+if [[ -z "$android_tools_version" ]]; then
+    printf 'Unable to resolve pinned Android build tools for Portal resource gate.\n' >&2
+    exit 2
+fi
 mkdir -p "$GITHUB_WORKSPACE/archium-output"
+run_work TERM "$host_seconds" 0 python3 "$GITHUB_WORKSPACE/scripts/verify-archium-portal-apk.py" \
+    --apk "$PWD/out/Archium/apks/ChromePublic.apk" \
+    --aapt2 "$PWD/third_party/android_sdk/public/build-tools/$android_tools_version/aapt2" \
+    --report "$GITHUB_WORKSPACE/archium-output/portal-branding-verified.json"
 cp out/Archium/apks/ChromePublic.apk "$GITHUB_WORKSPACE/archium-output/Archium-for-Android-arm64.apk"
 cp LICENSE "$GITHUB_WORKSPACE/archium-output/LICENSE.chromium"
 sha256sum "$GITHUB_WORKSPACE/archium-output/Archium-for-Android-arm64.apk" > "$GITHUB_WORKSPACE/archium-output/SHA256SUMS"
