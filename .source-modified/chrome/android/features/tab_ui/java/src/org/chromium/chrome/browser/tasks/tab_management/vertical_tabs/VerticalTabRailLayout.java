@@ -7,6 +7,7 @@ package org.chromium.chrome.browser.tasks.tab_management.vertical_tabs;
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Outline;
+import android.graphics.drawable.Drawable;
 import android.util.AttributeSet;
 import android.view.DragEvent;
 import android.view.Gravity;
@@ -46,6 +47,71 @@ public class VerticalTabRailLayout extends ConstraintLayout {
     private boolean mArcCompactChrome;
     private int mArcOriginalHeaderVisibility;
     private int mArcOriginalFooterVisibility;
+    private boolean mArcTransparentBackground;
+    private @Nullable Drawable mArcOriginalBackground;
+    private boolean mArcNewTabAppearance;
+    private int mArcNewTabOriginalLeft;
+    private int mArcNewTabOriginalTop;
+    private int mArcNewTabOriginalRight;
+    private int mArcNewTabOriginalBottom;
+    private int mArcNewTabOriginalMinWidth;
+    private int mArcNewTabOriginalMinHeight;
+    private int mArcNewTabOriginalImageAlpha;
+    private @Nullable ImageView.ScaleType mArcNewTabOriginalScaleType;
+
+    /** Let the containing frame supply one continuous gradient; keep the native MOBILE drawable. */
+    public void setArcTransparentBackground(boolean active) {
+        if (active) {
+            if (!mArcTransparentBackground) {
+                mArcOriginalBackground = getBackground();
+                mArcTransparentBackground = true;
+            }
+            if (getBackground() != null) setBackground(null);
+        } else if (mArcTransparentBackground) {
+            setBackground(mArcOriginalBackground);
+            mArcOriginalBackground = null;
+            mArcTransparentBackground = false;
+        }
+    }
+
+    /** De-emphasize the native plus glyph without shrinking its accessible click target. */
+    private void updateArcNewTabAppearance() {
+        if (ArcDesktopAppearance.isDesktopWindow(getContext())) {
+            if (!mArcNewTabAppearance) {
+                mArcNewTabOriginalLeft = mNewTabButton.getPaddingLeft();
+                mArcNewTabOriginalTop = mNewTabButton.getPaddingTop();
+                mArcNewTabOriginalRight = mNewTabButton.getPaddingRight();
+                mArcNewTabOriginalBottom = mNewTabButton.getPaddingBottom();
+                mArcNewTabOriginalMinWidth = mNewTabButton.getMinimumWidth();
+                mArcNewTabOriginalMinHeight = mNewTabButton.getMinimumHeight();
+                mArcNewTabOriginalImageAlpha = mNewTabButton.getImageAlpha();
+                mArcNewTabOriginalScaleType = mNewTabButton.getScaleType();
+                mArcNewTabAppearance = true;
+            }
+            float density = getResources().getDisplayMetrics().density;
+            int minimum = Math.round(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP * density);
+            LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) mNewTabButton.getLayoutParams();
+            if (params.width > 0) params.width = Math.max(minimum, params.width);
+            params.height = Math.max(minimum, params.height);
+            mNewTabButton.setMinimumWidth(Math.max(minimum, mArcNewTabOriginalMinWidth));
+            mNewTabButton.setMinimumHeight(Math.max(minimum, mArcNewTabOriginalMinHeight));
+            int verticalPadding = Math.max(0, (params.height
+                    - Math.round(ArcDesktopPolicy.ARC_NEW_TAB_ICON_SIZE_DP * density)) / 2);
+            mNewTabButton.setPadding(mArcNewTabOriginalLeft, verticalPadding,
+                    mArcNewTabOriginalRight, verticalPadding);
+            mNewTabButton.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+            mNewTabButton.setImageAlpha(ArcDesktopPolicy.ARC_NEW_TAB_ICON_ALPHA);
+            mNewTabButton.setLayoutParams(params);
+        } else if (mArcNewTabAppearance) {
+            mNewTabButton.setPadding(mArcNewTabOriginalLeft, mArcNewTabOriginalTop,
+                    mArcNewTabOriginalRight, mArcNewTabOriginalBottom);
+            mNewTabButton.setMinimumWidth(mArcNewTabOriginalMinWidth);
+            mNewTabButton.setMinimumHeight(mArcNewTabOriginalMinHeight);
+            mNewTabButton.setImageAlpha(mArcNewTabOriginalImageAlpha);
+            if (mArcNewTabOriginalScaleType != null) mNewTabButton.setScaleType(mArcNewTabOriginalScaleType);
+            mArcNewTabAppearance = false;
+        }
+    }
 
     /** Release optional search/new-tab chrome before it consumes the flexible native tab list. */
     public void setArcAvailableTabHeight(int heightPx, boolean active) {
@@ -125,9 +191,7 @@ public class VerticalTabRailLayout extends ConstraintLayout {
     @Override
     protected void onFinishInflate() {
         super.onFinishInflate();
-        if (ArcDesktopAppearance.isDesktopWindow(getContext())) {
-            setBackgroundColor(ArcDesktopAppearance.surface(getContext(), false));
-        }
+        setArcTransparentBackground(ArcDesktopAppearance.isDesktopWindow(getContext()));
         mRecyclerView = findViewById(R.id.tab_list_recycler_view);
         assert mRecyclerView != null;
 
@@ -586,6 +650,7 @@ public class VerticalTabRailLayout extends ConstraintLayout {
         incognitoParams.setMarginStart(
                 (!isCollapsed && isIncognitoVisible) ? mFooterButtonGapPx : 0);
         mIncognitoButton.setLayoutParams(incognitoParams);
+        updateArcNewTabAppearance();
     }
 
     @Px

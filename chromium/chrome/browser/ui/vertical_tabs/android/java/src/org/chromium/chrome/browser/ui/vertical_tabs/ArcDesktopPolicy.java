@@ -32,6 +32,16 @@ public final class ArcDesktopPolicy {
     public static final int NATIVE_MIN_EXPANDED_WIDTH_DP = 92;
     public static final int NATIVE_MAX_EXPANDED_WIDTH_DP = 500;
     public static final int COLLAPSED_WIDTH_DP = 52;
+    public static final float ARC_TAB_TEXT_SIZE_SP = 14f;
+    public static final int ARC_NEW_TAB_ICON_SIZE_DP = 18;
+    public static final int ARC_NEW_TAB_ICON_ALPHA = 204;
+
+    /** Radius follows reference proportions; row hit height remains native and at least48dp. */
+    public static int selectedTabRadius(int windowWidthPx, float density) {
+        if (!validDensity(density)) return 0;
+        return Math.round(14 * (windowWidthPx > 0
+                ? referenceScale(windowWidthPx, density) : density));
+    }
 
     /** Native Side UI owns availableWidthPx (including its minimum web-content constraint). */
     public static int expandedSidebarWidth(int windowWidthPx, int availableWidthPx, float density) {
@@ -143,8 +153,25 @@ public final class ArcDesktopPolicy {
         return blend(seed, dark ? 0xff141414 : 0xfffafafa, dark ? 0.22 : 0.12);
     }
 
+    public static int gradientStart(int seed, boolean dark) {
+        return blend(seed, dark ? 0xff17151a : 0xfffaf8f5, dark ? 0.22 : 0.16);
+    }
+
+    public static int gradientEnd(int seed, boolean dark) {
+        return blend(seed, dark ? 0xff261a27 : 0xfff2e4ec, dark ? 0.22 : 0.16);
+    }
+
+    /** One text color remains legible across the whole vertical gradient. */
+    public static int gradientForeground(int seed, boolean dark) {
+        int start = gradientStart(seed, dark);
+        int end = gradientEnd(seed, dark);
+        double black = Math.min(contrast(start, 0xff000000), contrast(end, 0xff000000));
+        double white = Math.min(contrast(start, 0xffffffff), contrast(end, 0xffffffff));
+        return black >= white ? 0xff000000 : 0xffffffff;
+    }
+
     public static int selection(int surface) {
-        return blend(foreground(surface), surface, 0.12);
+        return blend(foreground(surface), surface, 0.24);
     }
 
     public static int foreground(int background) {

@@ -508,6 +508,8 @@ class TabVerticalViewBinder {
     private static void updateRegularColors(PropertyModel model, VerticalTabItemLayout view) {
         updateSelectionAndBackground(model, view, ColorStateList.valueOf(Color.TRANSPARENT));
         updateBackgroundInsets(view);
+        ArcDesktopAppearance.applyTabCorners(view);
+        ArcDesktopAppearance.applyTabTextSize(view.getTitleView());
 
         boolean isSelected = model.get(TabProperties.IS_SELECTED);
         boolean isIncognito = isIncognito(model);
@@ -646,6 +648,7 @@ class TabVerticalViewBinder {
     private static void updateTitle(int titleViewId, PropertyModel model, ViewGroup view) {
         TextView titleView = view.findViewById(titleViewId);
         if (titleView == null) return;
+        ArcDesktopAppearance.applyTabTextSize(titleView);
 
         if (shouldShowIconOnly(model, view)) {
             titleView.setVisibility(View.GONE);
@@ -862,9 +865,9 @@ class TabVerticalViewBinder {
     private static @ColorInt int getTextColor(
             Context context, boolean isSelected, boolean isIncognito) {
         if (ArcDesktopAppearance.isDesktopWindow(context)) {
-            return ArcDesktopPolicy.foreground(isSelected
-                    ? ArcDesktopAppearance.selection(context, isIncognito)
-                    : ArcDesktopAppearance.surface(context, isIncognito));
+            return isSelected
+                    ? ArcDesktopPolicy.foreground(ArcDesktopAppearance.selection(context, isIncognito))
+                    : ArcDesktopAppearance.foreground(context, isIncognito);
         }
         if (isSelected) {
             return isIncognito

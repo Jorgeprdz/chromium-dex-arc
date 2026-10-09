@@ -7,10 +7,10 @@ if [[ -d /data/data/com.termux/files/usr/bin ]]; then
     export PATH="/data/data/com.termux/files/usr/bin:$PATH"
 fi
 readonly repo='Jorgeprdz/chromium-dex-arc'
-readonly run_id='37466225653'
+readonly run_id='37871846597'
 readonly api="https://api.github.com/repos/$repo/actions/runs/$run_id"
 readonly url="https://github.com/$repo/actions/runs/$run_id"
-readonly interval=900
+readonly interval=600
 once=false
 case "${1:-}" in
     --once) once=true ;;
@@ -24,8 +24,8 @@ for dependency in curl jq; do
     fi
 done
 trap 'printf "\nMonitor detenido. La compilación sigue en GitHub.\n"; exit 0' INT TERM
-printf 'Archium FINAL: Arc + contraseñas locales/CSV en compilación.\n%s\n' "$url"
-printf 'Consulta cada 15 minutos; Ctrl+C para salir. No requiere iniciar sesión.\n'
+printf 'Archium: geometría Arc + media, sin contraseñas locales.\n%s\n' "$url"
+printf 'Consulta cada 10 minutos; Ctrl+C para salir. No requiere iniciar sesión.\n'
 
 while :; do
     printf '\n[%s]\n' "$(date '+%Y-%m-%d %H:%M:%S')"

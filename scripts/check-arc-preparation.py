@@ -101,9 +101,9 @@ def main():
         definitions = {
             'org.chromium.chrome.R': 'public final class R { public static final class string { public static final int arc_bookmarks=1, arc_frame_color=2, arc_bookmark_root=3, arc_google_login=4, arc_autofill=5, arc_reset_color=6, arc_color_format=7, arc_interface=8, arc_interface_auto=9, arc_interface_arc=10, arc_interface_mobile=11; } public static final class id { public static final int toolbar=1, desktop_window_spacer=2; } }',
             'org.chromium.chrome.browser.profiles.Profile': 'public class Profile { public boolean isOffTheRecord(){return false;} public boolean shutdownStarted(){return false;} public Profile getOriginalProfile(){return this;} }',
-            'org.chromium.components.bookmarks.BookmarkId': 'public class BookmarkId {}',
+            'org.chromium.components.bookmarks.BookmarkId': 'public class BookmarkId { public long getId(){return 0;} public int getType(){return 0;} }',
             'org.chromium.url.GURL': 'public class GURL { public GURL(){} public GURL(String url){} public String getSpec() { return ""; } }',
-            'org.chromium.components.bookmarks.BookmarkItem': 'public class BookmarkItem { public String getTitle(){return "";} public boolean isFolder(){return false;} public org.chromium.url.GURL getUrl(){return null;} }',
+            'org.chromium.components.bookmarks.BookmarkItem': 'public class BookmarkItem { public String getTitle(){return "";} public boolean isFolder(){return false;} public boolean isEditable(){return true;} public BookmarkId getId(){return null;} public BookmarkId getParentId(){return null;} public org.chromium.url.GURL getUrl(){return null;} }',
             'org.chromium.chrome.browser.bookmarks.BookmarkModelObserver': 'public abstract class BookmarkModelObserver { public abstract void bookmarkModelChanged(); }',
             'org.chromium.chrome.browser.bookmarks.BookmarkModel': 'public class BookmarkModel { public void addObserver(BookmarkModelObserver o){} public void removeObserver(BookmarkModelObserver o){} public boolean isBookmarkModelLoaded(){return true;} public boolean finishLoadingBookmarkModel(Runnable r){return false;} public org.chromium.components.bookmarks.BookmarkId getDesktopFolderId(){return null;} public java.util.List<org.chromium.components.bookmarks.BookmarkId> getChildIds(org.chromium.components.bookmarks.BookmarkId id){return null;} public java.util.List<org.chromium.components.bookmarks.BookmarkId> getTopLevelFolderIds(){return null;} public org.chromium.components.bookmarks.BookmarkItem getBookmarkById(org.chromium.components.bookmarks.BookmarkId id){return null;} }',
             'org.chromium.chrome.browser.tabmodel.IncognitoStateProvider': 'public class IncognitoStateProvider { public interface IncognitoStateObserver { void onIncognitoStateChanged(boolean i); } public boolean isIncognitoSelected(){return false;} public void addIncognitoStateObserverAndTrigger(IncognitoStateObserver o){o.onIncognitoStateChanged(false);} public void removeObserver(IncognitoStateObserver o){} }',
@@ -138,7 +138,7 @@ def main():
         # these navigation strings/drawables and the real LocationBar IDs.
         string_names = [node.attrib['name'] for node in resources.getroot()] + [
             'accessibility_toolbar_btn_back', 'accessibility_toolbar_btn_forward',
-            'accessibility_btn_refresh',
+            'accessibility_btn_refresh', 'accessibility_btn_stop_loading',
         ]
         string_ids = ', '.join(f'{name}={i}' for i, name in enumerate(string_names, 1))
         id_names = ('toolbar', 'desktop_window_spacer', 'location_bar',
@@ -148,8 +148,31 @@ def main():
         definitions['org.chromium.chrome.R'] = ('public final class R { public static final class string { public static final int '
                 + string_ids + '; } public static final class id { public static final int '
                 + view_ids + '; } public static final class drawable { public static final int '
-                'btn_back=1, btn_forward=2, btn_reload_stop=3; } }')
+                'btn_back=1, btn_forward=2, btn_reload_stop=3; } public static final class integer { '
+                'public static final int reload_button_level_reload=1, reload_button_level_stop=2; } }')
         definitions.update({
+            # Shared native bookmark projection contracts, pinned at cfd94726. Persistence,
+            # native model behavior and actual JNI remain outside this isolated API check.
+            'org.chromium.chrome.browser.bookmarks.BookmarkUtils': 'public class BookmarkUtils { public static java.util.List<org.chromium.components.bookmarks.BookmarkId> getDesktopBookmarkIds(BookmarkModel m){return java.util.Collections.emptyList();} }',
+            'org.chromium.chrome.browser.bookmarks.BookmarkOpener': '''public interface BookmarkOpener {
+                boolean openBookmarkInCurrentTab(org.chromium.components.bookmarks.BookmarkId id,boolean incognito);
+                boolean openBookmarksInNewTabs(java.util.List<org.chromium.components.bookmarks.BookmarkId> ids,boolean incognito,Integer launchType);
+                boolean openBookmarksInNewWindow(java.util.List<org.chromium.components.bookmarks.BookmarkId> ids,boolean incognito);
+                boolean isOpenInNewWindowSupported();
+            }''',
+            'org.chromium.chrome.browser.bookmarks.BookmarkManagerOpener': '''public interface BookmarkManagerOpener {
+                void showBookmarkManager(android.app.Activity a,org.chromium.chrome.browser.tab.Tab t,org.chromium.chrome.browser.profiles.Profile p,org.chromium.components.bookmarks.BookmarkId folder);
+                void startEditActivity(android.app.Activity a,org.chromium.chrome.browser.profiles.Profile p,org.chromium.components.bookmarks.BookmarkId id);
+                void startFolderPickerActivity(android.app.Activity a,org.chromium.chrome.browser.profiles.Profile p,org.chromium.components.bookmarks.BookmarkId... ids);
+            }''',
+            'org.chromium.chrome.browser.bookmarks.R': 'public final class R { public static final class string { public static final int contextmenu_open_in_new_tab=1, contextmenu_open_in_new_window=2, contextmenu_edit_bookmark_ellipsis=3, bookmark_item_move=4, contextmenu_open_bookmarks_manager=5; } }',
+            'org.chromium.chrome.browser.ui.side_ui.SideUiCoordinator': 'public interface SideUiCoordinator { class SideUiSpecs {} class UiUpdateRequest {} }',
+            'org.chromium.chrome.browser.ui.side_ui.SideUiStateProvider': 'public interface SideUiStateProvider { void addObserver(SideUiObserver o); void removeObserver(SideUiObserver o); }',
+            'org.chromium.chrome.browser.ui.side_ui.SideUiObserver': '''public interface SideUiObserver {
+                default void onTransitionBegun(SideUiCoordinator.SideUiSpecs s,SideUiCoordinator.UiUpdateRequest r){}
+                default void onTransitionEnded(SideUiCoordinator.SideUiSpecs s,SideUiCoordinator.UiUpdateRequest r){}
+                default void onSideUiSpecsChanged(SideUiCoordinator.SideUiSpecs s,SideUiCoordinator.UiUpdateRequest r){}
+            }''',
             # Minimal type contracts from cfd94726's CompositorViewHolder,
             # TouchEventObserver and NullableObservableSupplier. Stub bodies are
             # never used as evidence of compositor/touch/browser runtime behavior.
@@ -167,17 +190,29 @@ def main():
                 default boolean onTouchEvent(android.view.MotionEvent e){return false;}
                 default boolean dispatchTouchEvent(android.view.MotionEvent e){return false;}
             }''',
-            'org.chromium.base.supplier.NullableObservableSupplier': 'public interface NullableObservableSupplier<T> extends java.util.function.Supplier<T> {}',
+            'org.chromium.base.supplier.NullableObservableSupplier': 'public interface NullableObservableSupplier<T> extends java.util.function.Supplier<T> { T addSyncObserverAndCall(org.chromium.base.Callback<T> c); void removeObserver(org.chromium.base.Callback<T> c); }',
             # These two presentation APIs are Archium additions in the delivered
             # .source-modified VerticalTabListCoordinator, not upstream inventions.
             'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabListCoordinator': '''public class VerticalTabListCoordinator {
                 public void setTabVisibilityPredicate(java.util.function.IntPredicate predicate){}
                 public void refreshTabPresentation(){}
             }''',
-            'org.chromium.chrome.browser.tab.Tab': 'public class Tab { public int getId(){return 1;} public org.chromium.url.GURL getUrl(){return new org.chromium.url.GURL();} public String getTitle(){return "Title";} public boolean canGoBack(){return false;} public void goBack(){} public boolean canGoForward(){return false;} public void goForward(){} public void reload(){} }',
-            'org.chromium.chrome.browser.tab.TabLaunchType': 'public class TabLaunchType { public static final int FROM_CHROME_UI=1; }',
+            'org.chromium.chrome.browser.tab.Tab': 'public class Tab { public int getId(){return 1;} public org.chromium.url.GURL getUrl(){return new org.chromium.url.GURL();} public String getTitle(){return "Title";} public boolean isDestroyed(){return false;} public boolean isClosing(){return false;} public boolean isLoading(){return false;} public boolean canGoBack(){return false;} public void goBack(){} public boolean canGoForward(){return false;} public void goForward(){} public void reload(){} public void stopLoading(){} public void addObserver(TabObserver o){} public void removeObserver(TabObserver o){} }',
+            'org.chromium.chrome.browser.tab.TabObserver': '''public interface TabObserver {
+                default void onLoadStarted(Tab t,boolean differentDocument){}
+                default void onLoadStopped(Tab t,boolean differentDocument){}
+                default void onNavigationStateChanged(){}
+                default void onNavigationEntriesAppended(Tab t){}
+                default void onNavigationEntriesDeleted(Tab t){}
+                default void onContentChanged(Tab t){}
+                default void onDidFinishNavigationInPrimaryMainFrame(Tab t,org.chromium.content_public.browser.NavigationHandle navigation){}
+                default void onClosingStateChanged(Tab t,boolean closing){}
+                default void onDestroyed(Tab t){}
+            }''',
+            'org.chromium.chrome.browser.tab.TabLaunchType': 'public class TabLaunchType { public static final int FROM_CHROME_UI=1, FROM_BOOKMARK_BAR_BACKGROUND=2; }',
             'org.chromium.chrome.browser.tab.TabSelectionType': 'public class TabSelectionType { public static final int FROM_USER=1; }',
             'org.chromium.content_public.browser.LoadUrlParams': 'public class LoadUrlParams { public LoadUrlParams(String url){} }',
+            'org.chromium.content_public.browser.NavigationHandle': 'public class NavigationHandle {}',
             'org.chromium.chrome.browser.tabmodel.TabCreator': 'public interface TabCreator { org.chromium.chrome.browser.tab.Tab createNewTab(org.chromium.content_public.browser.LoadUrlParams p,int type,org.chromium.chrome.browser.tab.Tab parent); }',
             'org.chromium.chrome.browser.tabmodel.TabClosureParams': 'public class TabClosureParams { public static Builder closeTab(org.chromium.chrome.browser.tab.Tab t){return new Builder();} public static class Builder { public Builder allowUndo(boolean b){return this;} public TabClosureParams build(){return new TabClosureParams();} } }',
             'org.chromium.chrome.browser.tabmodel.TabRemover': 'public interface TabRemover { void closeTabs(TabClosureParams p,boolean allowDialog); }',
@@ -188,6 +223,10 @@ def main():
             'org.chromium.components.user_prefs.UserPrefs': 'public class UserPrefs { public static org.chromium.components.prefs.PrefService get(org.chromium.chrome.browser.profiles.Profile p){return new org.chromium.components.prefs.PrefService();} }',
             'org.chromium.chrome.browser.profiles.ProfileKeyedMap': 'public class ProfileKeyedMap<T> { public @interface ProfileSelection { int OWN_INSTANCE=0; } public ProfileKeyedMap(int selection,org.chromium.base.Callback<T> cleanup){} public static <T> org.chromium.base.Callback<T> noRequiredCleanupAction(){return null;} public T getForProfile(Profile p,java.util.function.Function<Profile,T> factory){return factory.apply(p);} }',
         })
+        definitions['org.chromium.chrome.browser.bookmarks.BookmarkModel'] = definitions[
+            'org.chromium.chrome.browser.bookmarks.BookmarkModel'].replace(
+                'public class BookmarkModel {',
+                'public class BookmarkModel { public static BookmarkModel getForProfile(org.chromium.chrome.browser.profiles.Profile p){return new BookmarkModel();}')
         # Share the minimal, pinned authority contracts with the executed adapter regression.
         # These bodies remain synthetic and are not API/runtime compilation evidence.
         arc_spec = importlib.util.spec_from_file_location(

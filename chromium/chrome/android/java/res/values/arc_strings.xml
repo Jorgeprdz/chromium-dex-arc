@@ -3,6 +3,9 @@
     <string name="arc_bookmarks">Marcadores</string>
     <string name="arc_bookmark_root">‹ Carpetas</string>
     <string name="arc_frame_color">Color del navegador</string>
+    <string name="arc_warm_color">Melocotón y coral</string>
+    <string name="arc_custom_color">Color personalizado</string>
+    <string name="arc_automatic_sidebar_width">Ancho automático de barra lateral</string>
     <string name="arc_reset_color">Restablecer</string>
     <string name="arc_color_format">Introduce un color como #336699</string>
     <string name="arc_google_login">Iniciar sesión en la web de Google</string>

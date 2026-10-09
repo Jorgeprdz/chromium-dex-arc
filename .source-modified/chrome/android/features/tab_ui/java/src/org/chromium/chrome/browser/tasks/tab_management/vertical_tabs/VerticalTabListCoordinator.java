@@ -56,6 +56,7 @@ import org.chromium.chrome.browser.dragdrop.ChromeMultiTabDropDataAndroid;
 import org.chromium.chrome.browser.dragdrop.ChromeTabDropDataAndroid;
 import org.chromium.chrome.browser.dragdrop.ChromeTabGroupDropDataAndroid;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
+import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance;
 import org.chromium.chrome.browser.glic.GlicEnabling;
 import org.chromium.chrome.browser.incognito.IncognitoUtils;
 import org.chromium.chrome.browser.multiwindow.MultiInstanceManager;
@@ -305,6 +306,11 @@ public class VerticalTabListCoordinator {
                         }
                     });
         }
+    }
+
+    private static boolean shouldUseTabSearchOverlay(Activity activity) {
+        return ChromeFeatureList.sTabSearchForDesktop.isEnabled()
+                || ArcDesktopAppearance.isDesktopWindow(activity);
     }
 
     /**
@@ -595,7 +601,7 @@ public class VerticalTabListCoordinator {
                                 v -> {
                                     RecordUserAction.record(
                                             "Android.VerticalTabs.SearchButtonClicked");
-                                    if (ChromeFeatureList.sTabSearchForDesktop.isEnabled()) {
+                                    if (shouldUseTabSearchOverlay(activity)) {
                                         verticalTabsActionDelegate.openTabSearch();
                                     } else {
                                         verticalTabsActionDelegate.openHubSearch();

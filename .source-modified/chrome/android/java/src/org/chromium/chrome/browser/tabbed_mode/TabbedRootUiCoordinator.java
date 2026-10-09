@@ -291,6 +291,7 @@ import org.chromium.chrome.browser.ui.signin.ForcedSigninController;
 import org.chromium.chrome.browser.ui.signin.FullscreenSigninPromoLauncher;
 import org.chromium.chrome.browser.ui.system.StatusBarColorController.StatusBarColorProvider;
 import org.chromium.chrome.browser.ui.vertical_tabs.VerticalTabUtils;
+import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance;
 import org.chromium.chrome.browser.ui.web_content_hairline.WebContentHairlineCoordinator;
 import org.chromium.chrome.browser.ui.web_content_hairline.WebContentHairlineCoordinatorFactory;
 import org.chromium.chrome.browser.user_education.UserEducationUtils;
@@ -2106,6 +2107,7 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
             }
             toolbarView.clearFocus();
             toolbarView.setVisibility(View.GONE);
+            if (mControlContainer != null) mControlContainer.setArcToolbarSuppressed(true);
             // Removing the layer is what removes its BrowserControls height; GONE alone would
             // leave the stacker's layout contract stale. The hairline is a separate View and is
             // hidden explicitly so no residual horizontal Chrome divider survives in ARC.
@@ -2119,12 +2121,14 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
             // Restore the stack layer before exposing the View so browser-control geometry is
             // authoritative as soon as the toolbar can receive focus/input again.
             mTopControlsStacker.addControl(toolbarCoordinator);
+            if (mControlContainer != null) mControlContainer.setArcToolbarSuppressed(false);
             toolbarView.setVisibility(mArcToolbarOriginalVisibility);
             if (toolbarHairline != null) {
                 toolbarHairline.setVisibility(mArcToolbarHairlineOriginalVisibility);
             }
         }
         mArcToolbarSuppressed = suppressed;
+        updateBookmarkBarVisibility();
         mTopControlsStacker.requestLayerUpdateSync(/* requireAnimate= */ false);
     }
 
@@ -2550,31 +2554,47 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
                         assumeNonNull(webContentHairlineContainerStub));
     }
 
+    private void resetArcSidebarWidth() {
+        // Explicit user action. Keep the native persisted-width contract and allocation path.
+        VerticalTabUtils.setUserResizedWidthDp(0);
+        if (mSideUiCoordinator != null) {
+            mSideUiCoordinator.updateUi(new SideUiCoordinator.UiUpdateRequest(
+                    SideUiCoordinator.SideUiId.VERTICAL_TABS, /* suppressAnimations= */ true));
+        }
+    }
+
+    private boolean shouldInitializeTabSearchOverlay() {
+        return ChromeFeatureList.sTabSearchForDesktop.isEnabled()
+                || ArcDesktopAppearance.isDesktopWindow(mActivity);
+    }
+
+    private void initializeTabSearchOverlayIfNecessary() {
+        if (mTabSearchOverlayCoordinator != null || !shouldInitializeTabSearchOverlay()) return;
+        mTabSearchOverlayCoordinator =
+                new TabSearchOverlayCoordinator(
+                        mActivity,
+                        mWindowAndroid,
+                        mProfileSupplier,
+                        assumeNonNull(mSnackbarManagerSupplier.get()),
+                        mModalDialogManagerSupplier,
+                        mActivityLifecycleDispatcher,
+                        mTabModelSelectorSupplier,
+                        mEdgeToEdgeManager.getEdgeToEdgeSystemBarColorHelper(),
+                        mBackPressManager,
+                        mCompositorViewHolderSupplier,
+                        mTabGroupUiActionHandlerSupplier,
+                        getDesktopWindowStateManager(),
+                        mTabObscuringHandlerSupplier.get(),
+                        mToolbarManager);
+    }
+
     private void initializeSideUi(Profile currentlySelectedProfile) {
         ViewGroup anchorContainerParent = mActivity.findViewById(R.id.constrained_views_container);
         ViewStub sideUiStartAnchorContainerStub =
                 mActivity.findViewById(R.id.side_ui_left_anchor_container_stub);
         ViewStub sideUiEndAnchorContainerStub =
                 mActivity.findViewById(R.id.side_ui_right_anchor_container_stub);
-
-        if (ChromeFeatureList.sTabSearchForDesktop.isEnabled()) {
-            mTabSearchOverlayCoordinator =
-                    new TabSearchOverlayCoordinator(
-                            mActivity,
-                            mWindowAndroid,
-                            mProfileSupplier,
-                            assumeNonNull(mSnackbarManagerSupplier.get()),
-                            mModalDialogManagerSupplier,
-                            mActivityLifecycleDispatcher,
-                            mTabModelSelectorSupplier,
-                            mEdgeToEdgeManager.getEdgeToEdgeSystemBarColorHelper(),
-                            mBackPressManager,
-                            mCompositorViewHolderSupplier,
-                            mTabGroupUiActionHandlerSupplier,
-                            getDesktopWindowStateManager(),
-                            mTabObscuringHandlerSupplier.get(),
-                            mToolbarManager);
-        }
+        initializeTabSearchOverlayIfNecessary();
 
         mSideUiCoordinator =
                 SideUiCoordinatorFactory.create(
@@ -2680,6 +2700,7 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
                     mIncognitoStateProvider,
                     verticalTabListCoordinator,
                     mCompositorViewHolderSupplier.asNonNull().get(),
+                    mSideUiCoordinator,
                     () -> {
                         var sideUiStateProvider = mSideUiStateProviderSupplier.get();
                         if (sideUiStateProvider == null) return 0;
@@ -2692,7 +2713,10 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
                     () -> mTabModelSelectorSupplier.asNonNull().get().getCurrentModel(),
                     () -> mTabCreatorManagerSupplier.asNonNull().get().getTabCreator(
                             mTabModelSelectorSupplier.asNonNull().get().isIncognitoSelected()),
-                    () -> mActivityTabProvider.get());
+                    mActivityTabProvider.asObservable(),
+                    getOrCreateBookmarkOpener(),
+                    mBookmarkManagerOpenerSupplier::get,
+                    this::resetArcSidebarWidth);
             if (mToolbarManager != null) {
                 mToolbarManager.setVerticalTabsAutoHiddenSupplier(
                         mVerticalTabsSideUiCoordinator.getIsAutoHiddenSupplier());
@@ -3268,7 +3292,7 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
         return false;
     }
 
-    private void createBookmarkBarIfNecessary() {
+    private BookmarkOpener getOrCreateBookmarkOpener() {
         if (mBookmarkOpener == null) {
             mBookmarkOpener =
                     new BookmarkOpenerImpl(
@@ -3277,7 +3301,11 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
                             mActivity.getComponentName(),
                             mMultiInstanceManager);
         }
+        return mBookmarkOpener;
+    }
 
+    private void createBookmarkBarIfNecessary() {
+        BookmarkOpener bookmarkOpener = getOrCreateBookmarkOpener();
         if (mBookmarkBarCoordinator == null) {
             assert mLayoutManager != null;
             mBookmarkBarCoordinator =
@@ -3293,7 +3321,7 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
                             mProfileSupplier,
                             mActivity.findViewById(R.id.bookmark_bar_stub),
                             mActivityTabProvider.get(),
-                            mBookmarkOpener,
+                            bookmarkOpener,
                             mBookmarkManagerOpenerSupplier,
                             mTopControlsStacker,
                             mActivityTabProvider.asObservable(),
@@ -3325,7 +3353,12 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
         }
     }
 
+    private boolean shouldShowHorizontalBookmarkBar(boolean requestedVisible) {
+        return requestedVisible && !mArcToolbarSuppressed;
+    }
+
     private void updateBookmarkBarIfNecessary(boolean visible) {
+        visible = shouldShowHorizontalBookmarkBar(visible);
         if (visible) {
             // We create the BookmarkBar, but we do not update the Top Controls height here since
             // the view's height requires a layout pass to be correct (until then it will return the
@@ -3352,6 +3385,7 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
 
     @Override
     public boolean getBookmarkBarVisibility() {
+        if (mArcToolbarSuppressed) return false;
         if (!ChromeFeatureList.isEnabled(ChromeFeatureList.BOOKMARKS_BAR_NTP)) {
             return BookmarkBarUtils.isBookmarkBarVisible(
                     mActivity, mProfileSupplier.get(), mXrSpaceModeObservableSupplier.get());
@@ -3606,6 +3640,7 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
      * @param entryPoint The entry point from which Tab Search is being invoked.
      */
     public void showTabSearchOverlay(@TabSearchEntryPoint int entryPoint) {
+        initializeTabSearchOverlayIfNecessary();
         if (mTabSearchOverlayCoordinator != null) {
             mTabSearchOverlayCoordinator.show(entryPoint);
         }

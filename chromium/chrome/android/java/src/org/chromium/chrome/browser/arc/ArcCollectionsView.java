@@ -10,7 +10,6 @@ import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.HorizontalScrollView;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
@@ -19,6 +18,7 @@ import android.widget.Toast;
 
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy;
+import org.chromium.components.bookmarks.BookmarkItem;
 
 import java.util.List;
 import java.util.function.BiConsumer;
@@ -40,7 +40,9 @@ public final class ArcCollectionsView extends LinearLayout {
     private final Supplier<CurrentTab> mCurrentTab;
     private final BiConsumer<ArcSidebarState.Entry, ImageButton> mLoadIcon;
     private final LinearLayout mFavorites;
-    private final HorizontalScrollView mFavoritesScroll;
+    private final ScrollView mFavoritesScroll;
+    private ArcNativeBookmarksBridge mNativeBookmarks;
+    private BiConsumer<BookmarkItem, ImageButton> mLoadNativeIcon;
     private final LinearLayout mEntries;
     private final Button mSpace;
     private final ScrollView mScroll;
@@ -61,16 +63,16 @@ public final class ArcCollectionsView extends LinearLayout {
         mLoadIcon = loadIcon;
         setOrientation(VERTICAL);
         setPadding(dp(8), dp(4), dp(8), dp(4));
-        mFavorites = new LinearLayout(activity);
+        mFavorites = new ArcFavoriteTiles(activity);
         mFavorites.setContentDescription(activity.getString(R.string.arc_favorites));
-        mFavoritesScroll = new HorizontalScrollView(activity);
-        mFavoritesScroll.setHorizontalScrollBarEnabled(false);
+        mFavoritesScroll = new ScrollView(activity);
+        mFavoritesScroll.setVerticalScrollBarEnabled(false);
         mFavoritesScroll.addView(mFavorites);
         addView(mFavoritesScroll, new LayoutParams(-1, dp(52)));
         mSpace = button("", this::showSpaces);
         mSpace.setTag("arc-current-space");
         mSpace.setContentDescription(activity.getString(R.string.arc_spaces));
-        addView(mSpace, new LayoutParams(-1, dp(36)));
+        addView(mSpace, new LayoutParams(-1, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
         mEntries = new LinearLayout(activity);
         mEntries.setOrientation(VERTICAL);
         mEntries.setContentDescription(activity.getString(R.string.arc_pinned_tabs));
@@ -82,8 +84,8 @@ public final class ArcCollectionsView extends LinearLayout {
         pin.setTag("arc-pin-current");
         Button favorite = button(activity.getString(R.string.arc_favorite_current), () -> remember(true));
         favorite.setTag("arc-favorite-current");
-        controls.addView(pin, new LayoutParams(0, dp(36), 1));
-        controls.addView(favorite, new LayoutParams(0, dp(36), 1));
+        controls.addView(pin, new LayoutParams(0, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP), 1));
+        controls.addView(favorite, new LayoutParams(0, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP), 1));
         addView(controls);
         refresh();
     }
@@ -96,7 +98,7 @@ public final class ArcCollectionsView extends LinearLayout {
         Button result = new Button(mActivity);
         result.setText(text);
         result.setAllCaps(false);
-        result.setTextSize(12);
+        result.setTextSize(ArcDesktopPolicy.ARC_TAB_TEXT_SIZE_SP);
         result.setMinWidth(0); result.setMinimumWidth(0);
         result.setPadding(dp(8), 0, dp(8), 0);
         result.setSingleLine(true);
@@ -130,8 +132,14 @@ public final class ArcCollectionsView extends LinearLayout {
             mSpace.setLayoutParams(space);
         }
         LayoutParams row = (LayoutParams) mFavoritesScroll.getLayoutParams();
-        if (row.height != geometry.quickAccessHeight || row.bottomMargin != geometry.sectionGap) {
-            row.height = geometry.quickAccessHeight;
+        int rows = (mFavorites.getChildCount() + 2) / 3;
+        // Keep the native tab rail reachable even when the user's bookmark bar is very large.
+        // The vertical ScrollView retains every tile below this three-row viewport.
+        int visibleRows = Math.min(rows, 3);
+        int height = visibleRows * geometry.quickAccessHeight
+                + Math.max(0, visibleRows - 1) * geometry.sectionGap;
+        if (row.height != height || row.bottomMargin != geometry.sectionGap) {
+            row.height = height;
             row.bottomMargin = geometry.sectionGap;
             mFavoritesScroll.setLayoutParams(row);
         }
@@ -142,13 +150,15 @@ public final class ArcCollectionsView extends LinearLayout {
             LayoutParams tile = (LayoutParams) favorite.getLayoutParams();
             int column = i % 3;
             int width = (column + 1) * tilesWidth / 3 - column * tilesWidth / 3;
-            int gap = i + 1 == mFavorites.getChildCount() ? 0
+            int gap = i + 1 == mFavorites.getChildCount() || column == 2 ? 0
                     : column == 1 ? geometry.quickAccessSecondGap : geometry.quickAccessGap;
+            int rowGap = i / 3 + 1 < rows ? geometry.sectionGap : 0;
             if (tile.width != width || tile.height != geometry.quickAccessHeight
-                    || tile.getMarginEnd() != gap) {
+                    || tile.getMarginEnd() != gap || tile.bottomMargin != rowGap) {
                 tile.width = width;
                 tile.height = geometry.quickAccessHeight;
                 tile.setMarginEnd(gap);
+                tile.bottomMargin = rowGap;
                 favorite.setLayoutParams(tile);
             }
         }
@@ -176,8 +186,7 @@ public final class ArcCollectionsView extends LinearLayout {
         } catch (RuntimeException damagedOrUnavailableState) {
             // Preserve the original bytes for recovery. A metadata read failure
             // must not crash browser startup or silently replace a user's data.
-            mFavorites.removeAllViews();
-            mFavoritesScroll.setVisibility(View.GONE);
+            refreshFavorites(java.util.Collections.emptyList());
             mEntries.removeAllViews();
             mSpace.setText(R.string.arc_collection_error);
             findViewWithTag("arc-pin-current").setEnabled(false);
@@ -190,20 +199,7 @@ public final class ArcCollectionsView extends LinearLayout {
             mOpenFolder = null;
             mRenderedSpace = state.selectedSpace();
         }
-        mFavorites.removeAllViews();
-        for (ArcSidebarState.Entry entry : state.favorites()) {
-            ImageButton favorite = new ImageButton(mActivity);
-            favorite.setImageResource(android.R.drawable.ic_menu_view);
-            favorite.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
-            favorite.setPadding(dp(12), dp(12), dp(12), dp(12));
-            favorite.setContentDescription(entry.title);
-            favorite.setTooltipText(entry.title);
-            favorite.setTag("arc-entry:" + entry.id);
-            favorite.setOnClickListener(view -> runCommand(() -> open(entry.id)));
-            favorite.setOnLongClickListener(view -> { showEntryMenu(view, entry); return true; });
-            mFavorites.addView(favorite, new LayoutParams(dp(52), dp(48)));
-            mLoadIcon.accept(entry, favorite);
-        }
+        refreshFavorites(state.favorites());
         for (ArcSidebarState.Space space : state.spaces()) {
             if (space.id.equals(state.selectedSpace())) mSpace.setText(space.name + "  ▾");
         }
@@ -218,20 +214,20 @@ public final class ArcCollectionsView extends LinearLayout {
             else {
                 String parent = current.parentId;
                 mEntries.addView(button("‹  " + current.name, () -> mOpenFolder = parent),
-                        new LayoutParams(-1, dp(36)));
+                        new LayoutParams(-1, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
             }
         }
         for (ArcSidebarState.Folder folder : folders) {
             if (!java.util.Objects.equals(folder.parentId, mOpenFolder)) continue;
             mEntries.addView(button("▸  " + folder.name, () -> mOpenFolder = folder.id),
-                    new LayoutParams(-1, dp(36)));
+                    new LayoutParams(-1, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
         }
         for (ArcSidebarState.Entry entry : state.entries(state.selectedSpace())) {
             if (!java.util.Objects.equals(entry.folderId, mOpenFolder)) continue;
             Button row = button(entry.title, () -> open(entry.id));
             row.setTag("arc-entry:" + entry.id);
             row.setOnLongClickListener(view -> { showEntryMenu(view, entry); return true; });
-            mEntries.addView(row, new LayoutParams(-1, dp(36)));
+            mEntries.addView(row, new LayoutParams(-1, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
         }
         mFavoritesScroll.setVisibility(mFavorites.getChildCount() == 0 ? View.GONE : View.VISIBLE);
         mEntries.addView(button(mActivity.getString(R.string.arc_new_folder), () -> {
@@ -243,7 +239,54 @@ public final class ArcCollectionsView extends LinearLayout {
                 }
                 mController.createFolder(parent, name);
             });
-        }), new LayoutParams(-1, dp(36)));
+        }), new LayoutParams(-1, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
+    }
+
+    /** The bridge projects native bookmarks without persisting them in Arc's collection store. */
+    public void setNativeBookmarks(ArcNativeBookmarksBridge bookmarks,
+            BiConsumer<BookmarkItem, ImageButton> loadIcon) {
+        if (mDestroyed) return;
+        mNativeBookmarks = bookmarks;
+        mLoadNativeIcon = loadIcon;
+        refresh();
+    }
+
+    private void refreshFavorites(List<ArcSidebarState.Entry> entries) {
+        mFavorites.removeAllViews();
+        if (mNativeBookmarks != null) {
+            for (BookmarkItem item : mNativeBookmarks.items()) {
+                ImageButton favorite = new ImageButton(mActivity);
+                favorite.setImageResource(item.isFolder() ? android.R.drawable.ic_menu_agenda
+                        : android.R.drawable.ic_menu_view);
+                favorite.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
+                favorite.setPadding(dp(12), dp(12), dp(12), dp(12));
+                favorite.setContentDescription(item.getTitle());
+                favorite.setTooltipText(item.getTitle());
+                favorite.setTag("arc-bookmark:" + item.getId());
+                favorite.setOnClickListener(view -> runCommand(() -> mNativeBookmarks.open(item)));
+                favorite.setOnLongClickListener(view -> {
+                    if (!mDestroyed && mNativeBookmarks != null) mNativeBookmarks.showMenu(view, item);
+                    return true;
+                });
+                mFavorites.addView(favorite, new LayoutParams(dp(52), dp(48)));
+                if (!item.isFolder() && mLoadNativeIcon != null) mLoadNativeIcon.accept(item, favorite);
+            }
+        }
+        for (ArcSidebarState.Entry entry : entries) {
+            ImageButton favorite = new ImageButton(mActivity);
+            favorite.setImageResource(android.R.drawable.ic_menu_view);
+            favorite.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
+            favorite.setPadding(dp(12), dp(12), dp(12), dp(12));
+            favorite.setContentDescription(entry.title);
+            favorite.setTooltipText(entry.title);
+            favorite.setTag("arc-entry:" + entry.id);
+            favorite.setOnClickListener(view -> runCommand(() -> open(entry.id)));
+            favorite.setOnLongClickListener(view -> { showEntryMenu(view, entry); return true; });
+            mFavorites.addView(favorite, new LayoutParams(dp(52), dp(48)));
+            mLoadIcon.accept(entry, favorite);
+        }
+        mFavoritesScroll.setVisibility(mFavorites.getChildCount() == 0 ? View.GONE : View.VISIBLE);
+        if (mGeometry != null) applyGeometry(mGeometry, getWidth());
     }
 
     private void open(String id) {
@@ -323,6 +366,8 @@ public final class ArcCollectionsView extends LinearLayout {
     public void destroy() {
         if (mDestroyed) return;
         mDestroyed = true;
+        mNativeBookmarks = null;
+        mLoadNativeIcon = null;
         if (mDialog != null) mDialog.dismiss();
         if (mMenu != null) mMenu.dismiss();
     }

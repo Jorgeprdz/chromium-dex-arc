@@ -114,8 +114,14 @@ class ArcVisualStaticContractTest(unittest.TestCase):
         self.assertLess(restore_collapse, show_toolbar)
 
     def test_regular_incognito_paths_remain_distinct(self):
-        self.assertIn('mIncognitoStateProvider.isIncognitoSelected()', self.arc)
-        self.assertIn('ArcDesktopAppearance.surface(mActivity, incognito)', self.arc)
+        # Execute the real coordinator's palette argument propagation. A specific flat-surface
+        # source spelling would reject an intentional gradient without catching profile leakage.
+        from test_arc_geometry_runtime import ArcFrameRuntimeTest
+        ArcFrameRuntimeTest.setUpClass()
+        try:
+            ArcFrameRuntimeTest().run_case('incognito')
+        finally:
+            ArcFrameRuntimeTest.tearDownClass()
 
 
 if __name__ == '__main__':

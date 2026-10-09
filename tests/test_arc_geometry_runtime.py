@@ -31,7 +31,7 @@ class FrameRegression {
         static final int VISIBLE=0,GONE=8;int visibility=VISIBLE;
         int width=1382,height=863,x,y,paddingLeft,paddingTop,paddingRight,paddingBottom,layouts,invalidations,listeners;
         ViewGroup.LayoutParams params=new ViewGroup.MarginLayoutParams();
-        ViewOutlineProvider outline=new ViewOutlineProvider();boolean clip;Rect clipBounds;
+        ViewOutlineProvider outline=new ViewOutlineProvider();boolean clip,privatePalette;Rect clipBounds;
         int getWidth(){return width;}int getHeight(){return height;}
         int getVisibility(){return visibility;}
         int getPaddingLeft(){return paddingLeft;}int getPaddingTop(){return paddingTop;}
@@ -61,8 +61,12 @@ class FrameRegression {
         int callbacks;void addCallback(Callback c){callbacks++;}void removeCallback(Callback c){callbacks--;}
     }
     static class SurfaceView extends View {SurfaceHolder holder=new SurfaceHolder();SurfaceHolder getHolder(){return holder;}}
-    static class ArcDesktopAppearance {static int surface(Activity a,boolean b){return 0;}}
-    static class Incognito {boolean isIncognitoSelected(){return false;}}
+    static class ArcDesktopAppearance {
+        // Color rendering is exercised separately by test_arc_appearance. This boundary retains
+        // frame mutation checks without treating a synthetic Drawable as Android visual evidence.
+        static void applySidebarBackground(View view,boolean incognito){view.privatePalette=incognito;}
+    }
+    static class Incognito {boolean selected;boolean isIncognitoSelected(){return selected;}}
     final Activity mActivity=new Activity();final View mRail=new View();final View mFrameRoot=new View();
     final View mCaptionSpacer=new View();
     final CompositorViewHolder mCompositorViewHolder=new CompositorViewHolder();
@@ -96,6 +100,12 @@ class FrameRegression {
             int layouts=r.mCompositorViewHolder.layouts;r.applyFrameGeometry();
             check(r.mCompositorViewHolder.layouts==layouts,"stable geometry must not request repeated layouts");
             r.clearFrameGeometry();check(!r.mFrameRoot.clip,"MOBILE restores frame outline clipping");check(p.topMargin==0&&p.rightMargin==0&&p.bottomMargin==0,"MOBILE restores all original margins");
+        } else if(scenario.equals("incognito")) {
+            r.applyFrameGeometry();check(!r.mFrameRoot.privatePalette,"regular frame uses regular palette");
+            r.mIncognitoStateProvider.selected=true;r.applyFrameGeometry();
+            check(r.mFrameRoot.privatePalette,"switching private profile reaches the actual frame appearance boundary");
+            r.mIncognitoStateProvider.selected=false;r.applyFrameGeometry();
+            check(!r.mFrameRoot.privatePalette,"regular profile restores regular frame palette");
         } else if(scenario.equals("caption")) {
             r.mCaptionSpacer.params.height=40;r.mCompositorViewHolder.y=16;
             r.applyFrameGeometry();Rect bounds=r.arcClipBoundsForView(r.mCompositorViewHolder);

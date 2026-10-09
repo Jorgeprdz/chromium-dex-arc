@@ -24,9 +24,46 @@ import org.chromium.components.browser_ui.styles.SemanticColorUtils;
 import org.chromium.ui.modelutil.PropertyKey;
 import org.chromium.ui.modelutil.PropertyModel;
 
+import java.util.WeakHashMap;
+
 /** View binder for the Vertical Tab List. */
 @NullMarked
 public class VerticalTabListViewBinder {
+    private static final WeakHashMap<VerticalTabRailLayout, NativePalette> sArcNativePalettes =
+            new WeakHashMap<>();
+
+    private static final class NativePalette {
+        final @Nullable ColorStateList collapse;
+        final @Nullable ColorStateList search;
+        final @Nullable ColorStateList newTab;
+        final @Nullable ColorStateList incognito;
+        final @Nullable ColorStateList searchBackground;
+        final @Nullable ColorStateList newTabBackground;
+        final @Nullable ColorStateList incognitoBackground;
+        final ColorStateList label;
+
+        NativePalette(VerticalTabRailLayout view) {
+            collapse = ImageViewCompat.getImageTintList(view.getCollapseButton());
+            search = ImageViewCompat.getImageTintList(view.getSearchIcon());
+            newTab = ImageViewCompat.getImageTintList(view.getNewTabButton());
+            incognito = ImageViewCompat.getImageTintList(view.getIncognitoButton());
+            searchBackground = ViewCompat.getBackgroundTintList(view.getSearchButton());
+            newTabBackground = ViewCompat.getBackgroundTintList(view.getNewTabButton());
+            incognitoBackground = ViewCompat.getBackgroundTintList(view.getIncognitoButton());
+            label = view.getSearchLabel().getTextColors();
+        }
+
+        void restore(VerticalTabRailLayout view) {
+            ImageViewCompat.setImageTintList(view.getCollapseButton(), collapse);
+            ImageViewCompat.setImageTintList(view.getSearchIcon(), search);
+            ImageViewCompat.setImageTintList(view.getNewTabButton(), newTab);
+            ImageViewCompat.setImageTintList(view.getIncognitoButton(), incognito);
+            ViewCompat.setBackgroundTintList(view.getSearchButton(), searchBackground);
+            ViewCompat.setBackgroundTintList(view.getNewTabButton(), newTabBackground);
+            ViewCompat.setBackgroundTintList(view.getIncognitoButton(), incognitoBackground);
+            view.getSearchLabel().setTextColor(label);
+        }
+    }
 
     /**
      * Binds the given model to the view.
@@ -86,15 +123,24 @@ public class VerticalTabListViewBinder {
      * @param isIncognito Whether the active tab model is incognito branded.
      */
     private static void updateIncognitoColors(VerticalTabRailLayout view, boolean isIncognito) {
-        if (IncognitoUtils.shouldOpenIncognitoAsWindow()
-                && !ArcDesktopAppearance.isDesktopWindow(view.getContext())) {
+        boolean arc = ArcDesktopAppearance.isDesktopWindow(view.getContext());
+        if (arc) {
+            if (!sArcNativePalettes.containsKey(view)) {
+                sArcNativePalettes.put(view, new NativePalette(view));
+            }
+        } else {
+            NativePalette original = sArcNativePalettes.remove(view);
+            if (original != null) original.restore(view);
+        }
+        view.setArcTransparentBackground(arc);
+        view.updateFooterLayout();
+        if (IncognitoUtils.shouldOpenIncognitoAsWindow() && !arc) {
             return;
         }
         Context context = view.getContext();
-        int backgroundColor = ArcDesktopAppearance.isDesktopWindow(context)
-                ? ArcDesktopAppearance.surface(context, isIncognito)
-                : TabUiThemeUtil.getTabStripBackgroundColor(context, isIncognito);
-        view.setBackgroundColor(backgroundColor);
+        if (!arc) {
+            view.setBackgroundColor(TabUiThemeUtil.getTabStripBackgroundColor(context, isIncognito));
+        }
 
         ColorStateList iconTint =
                 isIncognito
@@ -127,7 +173,8 @@ public class VerticalTabListViewBinder {
                         : null;
 
         ViewCompat.setBackgroundTintList(view.getSearchButton(), buttonBgTint);
-        ViewCompat.setBackgroundTintList(newTabButton, buttonBgTint);
+        ViewCompat.setBackgroundTintList(newTabButton, arc
+                ? ArcDesktopAppearance.newTabBackgroundTint(context, isIncognito) : buttonBgTint);
         ViewCompat.setBackgroundTintList(incognitoButton, buttonBgTint);
     }
 

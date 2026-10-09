@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Read-only GitHub run monitor, with a desktop popup every fifteen minutes."""
+"""Read-only GitHub run monitor, refreshed every ten minutes."""
 import argparse
 from datetime import datetime, timezone
 import fcntl
@@ -15,10 +15,14 @@ import sys
 import urllib.request
 
 REPO = 'Jorgeprdz/chromium-dex-arc'
-RUN = '37466225653'
+RUN = '37871846597'
 
 
 def get_json(path):
+    if shutil.which('gh'):
+        result = subprocess.run(['gh', 'api', path], text=True, capture_output=True, timeout=30)
+        if result.returncode == 0:
+            return json.loads(result.stdout)
     request = urllib.request.Request('https://api.github.com/' + path,
         headers={'Accept': 'application/vnd.github+json', 'User-Agent': 'Archium-run-monitor'})
     with urllib.request.urlopen(request, timeout=30) as response:
@@ -48,7 +52,7 @@ def describe(run, jobs, now):
         lines.append('Esperando runner o siguiente etapa.')
     lines += [f'Jobs terminados: {len(finished)}',
               'Cada bloque compila hasta 2 h; despues guarda el avance.',
-              'Duracion total: sin estimacion garantizada.',
+              'ETA orientativa: 75-100 min desde el inicio; builds recientes: 63 y 88 min.',
               'Porcentaje Ninja: no disponible en el log publico en vivo.',
               run['html_url']]
     return '\n'.join(lines), events
@@ -81,7 +85,10 @@ def ascii_window(text):
         return palette[color] + value + '\033[0m' if colors else value
     def simplify(value):
         value = re.sub(r'Run actions/checkout@[a-f0-9]+', 'Descargar codigo', value)
-        for old, new in [('Compile for two hours and checkpoint', 'Compilar / guardar avance'),
+        for old, new in [('Compile, run gates and checkpoint', 'Compilación y pruebas'),
+                         ('Restore checkpoint and prepare Chromium', 'Preparar Chromium'),
+                         ('Check repository before checkpoint restore', 'Verificar repositorio'),
+                         ('Compile for two hours and checkpoint', 'Compilar / guardar avance'),
                          ('Set up job', 'Preparar runner'), ('Save completed APK', 'Guardar APK'),
                          ('in_progress', 'EN CURSO'), ('completed', 'TERMINADO'),
                          ('success', 'CORRECTO'), ('failure', 'FALLO'), ('cancelled', 'CANCELADO'),
@@ -91,42 +98,49 @@ def ascii_window(text):
     lines = text.splitlines()
     log_at = next((i for i, line in enumerate(lines) if line == 'Ultimos eventos:'), len(lines))
     main = lines[:log_at]
-    events = lines[log_at + 1:][-5:]
     get = lambda prefix: next((line[len(prefix):] for line in main if line.startswith(prefix)), '--')
-    status = next((line for line in main if line.startswith('Run ')), 'Sin conexion con GitHub')
+    status = next((line for line in main if line.startswith('Run ')), 'Sin conexión con GitHub')
     status_color = 'red' if any(x in status for x in ('failure', 'cancelled', 'timed_out')) else ('green' if 'success' in status else 'yellow')
-    rows = []
-    def box(title, content, color='white'):
-        label = ' ' + title + ' '
-        rows.append(paint('+' + label + '-' * max(0, width - 2 - len(label)) + '+', 'cyan'))
-        for value in content:
-            for line in textwrap.wrap(simplify(value), width=inside) or ['']:
-                rows.append(paint('|', 'cyan') + ' ' + paint(line.ljust(inside), color) + ' ' + paint('|', 'cyan'))
-        rows.append(paint('+' + '-' * (width - 2) + '+', 'cyan'))
-    box('ARCHIUM / BUILD MONITOR', ['FOR ANDROID   |   GitHub Actions',
-        'Refresco: 15 min   |   ' + get('Actualizado: ')], 'purple')
-    box('ESTADO ACTUAL', [status, 'Etapa: ' + get('Etapa actual: '),
-        'Actividad: ' + get('Paso: ')], status_color)
-    box('TIEMPO Y AVANCE', ['Transcurrido: ' + get('Tiempo transcurrido: '),
-        'Jobs terminados: ' + get('Jobs terminados: '),
-        'Duracion total: sin estimacion garantizada',
-        'Hasta 12 bloques de 2 h. Termina al generar la APK.',
-        'Porcentaje Ninja: pendiente de log en vivo'], 'white')
-    if 'Sin conexion' in status:
-        box('AVISO', main[-3:], 'red')
-    box('ULTIMAS NOVEDADES', events or ['Esperando novedades...'], 'dim')
-    box('CONTROLES', ['[r] Actualizar ahora   [q] Salir   [Ctrl+C] Cerrar'], 'green')
+    run_id = status.split(':', 1)[0].removeprefix('Run ')
+    rows = [paint('┌' + '─' * (width - 2) + '┐', 'cyan')]
+    def row(value, color='white'):
+        for line in textwrap.wrap(simplify(value), width=inside) or ['']:
+            rows.append(paint('│', 'cyan') + ' ' + paint(line.ljust(inside), color) + ' ' + paint('│', 'cyan'))
+    def separator():
+        rows.append(paint('├' + '─' * (width - 2) + '┤', 'cyan'))
+    row('ARCHIUM · ' + (run_id if status.startswith('Run ') else 'MONITOR'), 'purple')
+    separator()
+    row('Estado: ' + (status.split(':', 1)[1].strip() if ':' in status else status), status_color)
+    if status.startswith('Run '):
+        phase = get('Paso: ')
+        if phase != '--':
+            row('Fase: ' + phase)
+        row('Tiempo: ' + get('Tiempo transcurrido: '))
+        installation = get('Instalación: ')
+        if installation != '--':
+            row('Instalación: ' + installation,
+                'green' if installation == 'CONFIRMADA' else 'yellow')
+        if 'completed' not in status:
+            row('ETA: 80–110 min desde el inicio, si pasan los gates.')
+    else:
+        errors = [line for line in main if line.strip()]
+        row(errors[-1] if errors else 'Esperando conexión', 'red')
+    row('Actualizado: ' + get('Actualizado: ') + ' · cada 10 min', 'dim')
+    separator()
+    row('r Actualizar · q Salir', 'green')
+    rows.append(paint('└' + '─' * (width - 2) + '┘', 'cyan'))
     return '\n'.join(rows)
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--run', default=RUN)
-    parser.add_argument('--interval', type=int, default=900)
+    parser.add_argument('--interval', type=int, default=600)
     parser.add_argument('--once', action='store_true')
     parser.add_argument('--no-window', action='store_true')
     parser.add_argument('--ascii', action='store_true', help='Render a terminal ASCII window')
     parser.add_argument('--state-dir', type=Path, default=Path(__file__).resolve().parent / 'archium-monitor')
+    parser.add_argument('--update-state-dir', type=Path)
     args = parser.parse_args()
     if not args.run.isdigit() or args.interval < 10:
         parser.error('run must be numeric; interval must be >=10 seconds')
@@ -168,8 +182,21 @@ def main():
                     for event in new_events:
                         output.write(f'[{stamp}] {event}\n')
                 done = run['status'] == 'completed'
+                if args.update_state_dir:
+                    try:
+                        update = json.loads((args.update_state_dir / 'status.json').read_text())
+                    except (OSError, ValueError):
+                        update = {'stage': 'waiting_build'}
+                    stage = update.get('stage')
+                    label = {'installed': 'CONFIRMADA', 'waiting_device': 'Esperando dispositivo',
+                             'error': 'ERROR: ' + update.get('error', ''),
+                             'retrying': 'Reintentando conexión',
+                             'waiting_build': 'Pendiente del build'}.get(stage, 'En curso')
+                    summary += '\nInstalación: ' + label
+                    if done and run.get('conclusion') == 'success':
+                        done = stage in ('installed', 'error')
             except Exception as error:
-                summary = 'No se pudo consultar GitHub. Se intentara de nuevo en 15 minutos.\n' + str(error)
+                summary = f'No se pudo consultar GitHub. Se intentara de nuevo en {args.interval} segundos.\n' + str(error)
                 with log.open('a') as output:
                     output.write(f'[{stamp}] Error: {error}\n')
             recent = log.read_text().splitlines()[-12:]

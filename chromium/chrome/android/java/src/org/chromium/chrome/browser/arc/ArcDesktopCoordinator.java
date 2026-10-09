@@ -12,6 +12,7 @@ import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.text.InputType;
+import android.text.TextUtils;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewOutlineProvider;
@@ -28,8 +29,15 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 
 import org.chromium.chrome.R;
+import org.chromium.base.supplier.NullableObservableSupplier;
+import org.chromium.chrome.browser.bookmarks.BookmarkManagerOpener;
+import org.chromium.chrome.browser.bookmarks.BookmarkOpener;
 import org.chromium.chrome.browser.compositor.CompositorViewHolder;
 import org.chromium.chrome.browser.profiles.Profile;
+import org.chromium.chrome.browser.ui.side_ui.SideUiStateProvider;
+import org.chromium.chrome.browser.ui.side_ui.SideUiObserver;
+import org.chromium.chrome.browser.ui.side_ui.SideUiCoordinator.SideUiSpecs;
+import org.chromium.chrome.browser.ui.side_ui.SideUiCoordinator.UiUpdateRequest;
 import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance;
 import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy;
 import org.chromium.components.browser_ui.widget.TouchEventObserver;
@@ -62,6 +70,7 @@ public final class ArcDesktopCoordinator {
     private final View mCaptionSpacer;
     private final LinearLayout mNavigationRow;
     private final LinearLayout mNavigationControls;
+    private final ArcNavigationState mNavigationState;
     private final View mMenuButtonWrapper;
     private final ViewGroup mMenuButtonOriginalParent;
     private final int mMenuButtonOriginalIndex;
@@ -99,6 +108,23 @@ public final class ArcDesktopCoordinator {
     private final int mOriginalRailPaddingRight;
     private final int mOriginalRailPaddingBottom;
     private final Supplier<Integer> mReservedLeftWidth;
+    private final SideUiStateProvider mSideUiStateProvider;
+    private final SideUiObserver mSideUiObserver = new SideUiObserver() {
+        @Override
+        public void onTransitionBegun(SideUiSpecs specs, UiUpdateRequest request) {
+            // The provider still exposes the previous reserved width during the animation.
+        }
+
+        @Override
+        public void onTransitionEnded(SideUiSpecs specs, UiUpdateRequest request) {
+            onSidebarGeometryChanged();
+        }
+
+        @Override
+        public void onSideUiSpecsChanged(SideUiSpecs specs, UiUpdateRequest request) {
+            onSidebarGeometryChanged();
+        }
+    };
     private final Consumer<Boolean> mSetToolbarSuppressed;
     private final LargeIconBridge mIcons;
     private final Consumer<String> mNavigate;
@@ -116,12 +142,16 @@ public final class ArcDesktopCoordinator {
     private final View.OnAttachStateChangeListener mSurfaceAttachStateListener;
     private final Supplier<TabModel> mCurrentModel;
     private final Supplier<TabCreator> mCurrentCreator;
-    private final Supplier<Tab> mCurrentTab;
+    private final NullableObservableSupplier<Tab> mCurrentTab;
+    private final BookmarkOpener mBookmarkOpener;
+    private final Supplier<BookmarkManagerOpener> mBookmarkManagerOpener;
+    private final Runnable mUseAutomaticSidebarWidth;
     private final VerticalTabListCoordinator mNativeTabListCoordinator;
     private TabModel mSessionModel;
     private ArcNativeTabSession mTabSession;
     private ArcCollectionsController mCollections;
     private ArcCollectionsView mCollectionsView;
+    private ArcNativeBookmarksBridge mNativeBookmarks;
     private boolean mDestroyed;
     private boolean mArcToolbarCompositionActive;
     private boolean mArcFrameActive;
@@ -152,9 +182,12 @@ public final class ArcDesktopCoordinator {
             Runnable openBookmarks, Runnable openPasswordSettings,
             boolean localPasswordsEnabled, IncognitoStateProvider incognitoStateProvider,
             VerticalTabListCoordinator nativeTabListCoordinator,
-            CompositorViewHolder compositorViewHolder, Supplier<Integer> reservedLeftWidth,
+            CompositorViewHolder compositorViewHolder, SideUiStateProvider sideUiStateProvider,
+            Supplier<Integer> reservedLeftWidth,
             Consumer<Boolean> setToolbarSuppressed, Supplier<TabModel> currentModel,
-            Supplier<TabCreator> currentCreator, Supplier<Tab> currentTab) {
+            Supplier<TabCreator> currentCreator, NullableObservableSupplier<Tab> currentTab,
+            BookmarkOpener bookmarkOpener, Supplier<BookmarkManagerOpener> bookmarkManagerOpener,
+            Runnable useAutomaticSidebarWidth) {
         mActivity = activity;
         mRail = rail;
         mNavigate = navigate;
@@ -162,10 +195,14 @@ public final class ArcDesktopCoordinator {
         mNativeTabListCoordinator = nativeTabListCoordinator;
         mCompositorViewHolder = compositorViewHolder;
         mReservedLeftWidth = reservedLeftWidth;
+        mSideUiStateProvider = sideUiStateProvider;
         mSetToolbarSuppressed = setToolbarSuppressed;
         mCurrentModel = currentModel;
         mCurrentCreator = currentCreator;
         mCurrentTab = currentTab;
+        mBookmarkOpener = bookmarkOpener;
+        mBookmarkManagerOpener = bookmarkManagerOpener;
+        mUseAutomaticSidebarWidth = useAutomaticSidebarWidth;
         mIncognitoObserver = incognito -> { if (!mDestroyed) { rebindCollections(); applyAppearance(); } };
         mIcons = new LargeIconBridge(profile);
         mPreferences = ArcDesktopAppearance.preferences(activity);
@@ -317,6 +354,10 @@ public final class ArcDesktopCoordinator {
                         R.drawable.btn_reload_stop,
                         R.string.accessibility_btn_refresh,
                         Tab::reload));
+        mNavigationState = new ArcNavigationState(mCurrentTab,
+                (ImageButton) mNavigationControls.getChildAt(0),
+                (ImageButton) mNavigationControls.getChildAt(1),
+                (ImageButton) mNavigationControls.getChildAt(2));
         mNavigationRow.addView(
                 mNavigationControls,
                 new LinearLayout.LayoutParams(
@@ -340,7 +381,8 @@ public final class ArcDesktopCoordinator {
         Button bookmarksButton = button(activity.getString(R.string.arc_bookmarks), openBookmarks);
         Button googleButton = button("Google", () -> {});
         googleButton.setOnClickListener(v -> showGoogleMenu(v));
-        Button appearanceButton = button("●", this::showColorPicker);
+        Button appearanceButton = button("●", () -> {});
+        appearanceButton.setOnClickListener(this::showAppearanceMenu);
         appearanceButton.setContentDescription(activity.getString(R.string.arc_frame_color));
         for (Button action : new Button[] {bookmarksButton, googleButton, appearanceButton}) {
             mHeaderActions.addView(
@@ -497,6 +539,7 @@ public final class ArcDesktopCoordinator {
         mCaptionSpacer.addOnLayoutChangeListener(mHeaderLayoutListener);
         mIncognitoStateProvider.addIncognitoStateObserverAndTrigger(mIncognitoObserver);
         applyAppearance();
+        mSideUiStateProvider.addObserver(mSideUiObserver);
     }
 
     private LinearLayout column() {
@@ -513,7 +556,9 @@ public final class ArcDesktopCoordinator {
         Button button = new Button(mActivity);
         button.setText(text);
         button.setAllCaps(false);
-        button.setTextSize(12);
+        button.setTextSize(ArcDesktopPolicy.ARC_TAB_TEXT_SIZE_SP);
+        button.setSingleLine(true);
+        button.setEllipsize(TextUtils.TruncateAt.END);
         button.setMinWidth(0);
         button.setMinimumWidth(0);
         button.setPadding(dp(4), 0, dp(4), 0);
@@ -545,6 +590,8 @@ public final class ArcDesktopCoordinator {
         // Remove the old profile/Space predicate before changing models. This restores the native
         // global presentation and prevents one profile's Arc metadata from filtering another.
         mNativeTabListCoordinator.setTabVisibilityPredicate(null);
+        if (mNativeBookmarks != null) mNativeBookmarks.destroy();
+        mNativeBookmarks = null;
         if (mCollectionsView != null) {
             mCollectionsView.destroy();
             mHeader.removeView(mCollectionsView);
@@ -587,11 +634,32 @@ public final class ArcDesktopCoordinator {
             if (model.getProfile().isOffTheRecord()) return;
             mIcons.getLargeIconForUrl(new org.chromium.url.GURL(entry.url), dp(24),
                     (icon, color, fallback, type) -> {
-                        if (!mDestroyed && mTabSession == session && icon != null) button.setImageBitmap(icon);
+                        if (!mDestroyed && mTabSession == session && mCurrentModel.get() == model
+                                && icon != null) button.setImageBitmap(icon);
                     });
         });
-        // Real favorites immediately follow the native omnibox; secondary actions come later.
+        // Native model loading can invoke the bridge callback synchronously. Attach first so
+        // that geometry always sees real LayoutParams, including during private-model switches.
         mHeader.addView(mCollectionsView, 2);
+        // BookmarkModel redirects private profiles to the shared original-profile model. The
+        // bridge retains this session's profile so native opening still respects incognito.
+        mNativeBookmarks = new ArcNativeBookmarksBridge(mActivity, model.getProfile(),
+                () -> !mDestroyed && mTabSession == session && mCurrentModel.get() == model,
+                mBookmarkOpener, mBookmarkManagerOpener, mCurrentTab, items -> {
+                    if (!mDestroyed && mTabSession == session && mCollectionsView != null) {
+                        mCollectionsView.refresh();
+                        if (mArcToolbarCompositionActive) applySidebarGeometry();
+                    }
+                });
+        mCollectionsView.setNativeBookmarks(mNativeBookmarks, (item, button) -> {
+            if (model.getProfile().isOffTheRecord() || item.isFolder()) return;
+            mIcons.getLargeIconForUrl(item.getUrl(), dp(24), (icon, color, fallback, type) -> {
+                if (!mDestroyed && mTabSession == session && mCurrentModel.get() == model
+                        && icon != null) {
+                    button.setImageBitmap(icon);
+                }
+            });
+        });
     }
 
     private void showNavigationMenu(View anchor) {
@@ -603,13 +671,17 @@ public final class ArcDesktopCoordinator {
                 .setEnabled(tab != null && tab.canGoBack());
         mNavigationMenu.getMenu().add(0, 1, 1, R.string.accessibility_toolbar_btn_forward)
                 .setEnabled(tab != null && tab.canGoForward());
-        mNavigationMenu.getMenu().add(0, 2, 2, R.string.accessibility_btn_refresh);
+        mNavigationMenu.getMenu().add(0, 2, 2, tab != null && tab.isLoading()
+                ? R.string.accessibility_btn_stop_loading : R.string.accessibility_btn_refresh);
         mNavigationMenu.setOnMenuItemClickListener(item -> {
             Tab current = mCurrentTab.get();
             if (mDestroyed || current == null) return false;
             if (item.getItemId() == 0 && current.canGoBack()) current.goBack();
             else if (item.getItemId() == 1 && current.canGoForward()) current.goForward();
-            else if (item.getItemId() == 2) current.reload();
+            else if (item.getItemId() == 2) {
+                if (current.isLoading()) current.stopLoading();
+                else current.reload();
+            }
             return true;
         });
         mNavigationMenu.show();
@@ -628,6 +700,31 @@ public final class ArcDesktopCoordinator {
             return true;
         });
         menu.show();
+    }
+
+    private void showAppearanceMenu(View anchor) {
+        if (mDestroyed) return;
+        if (mNavigationMenu != null) mNavigationMenu.dismiss();
+        mNavigationMenu = new PopupMenu(mActivity, anchor);
+        mNavigationMenu.getMenu().add(0, 0, 0, R.string.arc_warm_color);
+        mNavigationMenu.getMenu().add(0, 1, 1, R.string.arc_custom_color);
+        mNavigationMenu.getMenu().add(0, 2, 2, R.string.arc_reset_color);
+        mNavigationMenu.getMenu().add(0, 3, 3, R.string.arc_automatic_sidebar_width);
+        mNavigationMenu.setOnMenuItemClickListener(item -> {
+            if (mDestroyed) return false;
+            if (item.getItemId() == 0) {
+                mPreferences.edit().putInt(ArcDesktopAppearance.COLOR_KEY,
+                        ArcDesktopAppearance.WARM_COLOR).apply();
+            } else if (item.getItemId() == 1) {
+                showColorPicker();
+            } else if (item.getItemId() == 2) {
+                mPreferences.edit().remove(ArcDesktopAppearance.COLOR_KEY).apply();
+            } else {
+                mUseAutomaticSidebarWidth.run();
+            }
+            return true;
+        });
+        mNavigationMenu.show();
     }
 
     private void showColorPicker() {
@@ -730,6 +827,7 @@ public final class ArcDesktopCoordinator {
         boolean desktop = ArcDesktopAppearance.isDesktopWindow(mActivity);
         boolean incognito = mIncognitoStateProvider.isIncognitoSelected();
         setArcToolbarCompositionActive(desktop);
+        mNavigationState.setActive(desktop);
         if (mNativeTabs instanceof VerticalTabRailLayout) {
             // This binder restores upstream colors/tints too when ARC is no longer active.
             VerticalTabListViewBinder.refreshArcAppearance(
@@ -750,11 +848,12 @@ public final class ArcDesktopCoordinator {
 
         updateSidebarControls();
         // Leave native tab selection, incognito and favicon rendering to its binders.
-        int surface = ArcDesktopAppearance.surface(mActivity, incognito);
-        int foreground = ArcDesktopPolicy.foreground(surface);
-        mColumn.setBackgroundColor(surface);
-        tintHeader(mHeader, foreground, ArcDesktopPolicy.selection(surface));
-        tintHeader(mFooter, foreground, ArcDesktopPolicy.selection(surface));
+        int foreground = ArcDesktopAppearance.foreground(mActivity, incognito);
+        // The native SideUi anchor has an opaque theme background. Paint this full-height column
+        // once so its children share a continuous gradient instead of restarting each section.
+        ArcDesktopAppearance.applySidebarBackground(mColumn, incognito);
+        tintHeader(mHeader, foreground, ArcDesktopAppearance.selection(mActivity, incognito));
+        tintHeader(mFooter, foreground, ArcDesktopAppearance.selection(mActivity, incognito));
     }
 
     /** Keep palette and collection refreshes out of animated width/resize callbacks. */
@@ -1020,9 +1119,8 @@ public final class ArcDesktopCoordinator {
         applyActiveSurfaceClip();
 
         boolean incognito = mIncognitoStateProvider.isIncognitoSelected();
-        int surface = ArcDesktopAppearance.surface(mActivity, incognito);
         if (mFrameRoot != null) {
-            mFrameRoot.setBackgroundColor(surface);
+            ArcDesktopAppearance.applySidebarBackground(mFrameRoot, incognito);
             mFrameRoot.setOutlineProvider(mArcFrameOutlineProvider);
             mFrameRoot.setClipToOutline(true);
             mFrameRoot.invalidateOutline();
@@ -1162,6 +1260,8 @@ public final class ArcDesktopCoordinator {
     public void destroy() {
         if (mDestroyed) return;
         mDestroyed = true;
+        mNavigationState.destroy();
+        mSideUiStateProvider.removeObserver(mSideUiObserver);
         mIncognitoStateProvider.removeObserver(mIncognitoObserver);
         ((VerticalTabRailLayout) mNativeTabs).setDesktopWindowSpacerHost(null);
         clearCollections();

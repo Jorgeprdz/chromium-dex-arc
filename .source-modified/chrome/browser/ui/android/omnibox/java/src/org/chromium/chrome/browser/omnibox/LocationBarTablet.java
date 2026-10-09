@@ -116,6 +116,7 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
     private int mTargetPopoverLeftOffset;
     private @BrandedColorScheme int mBrandedColorScheme = BrandedColorScheme.APP_DEFAULT;
     private boolean mShowFocusRing;
+    private boolean mShowsCompactUrl;
     private boolean mIsHovered;
     private boolean mIsGlifActive;
     private boolean mStartGlifOnNextLayout;
@@ -276,6 +277,7 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         super.onLayout(changed, left, top, right, bottom);
+        updateCompactUrlDisplay();
         mLayoutLeft = left;
         mLayoutRight = right;
 
@@ -505,6 +507,7 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
                 locationBarDataProvider,
                 windowAndroid);
         mWindowAndroid = windowAndroid;
+        updateCompactUrlDisplay();
     }
 
     @Override
@@ -878,6 +881,17 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
         // A header inside a ScrollView can exceed the visible height. Its viewport defines the
         // available expansion bounds, not the offscreen content or the former toolbar.
         return holderParent.getParent() instanceof ScrollView viewport ? viewport : holderParent;
+    }
+
+    /** Use native origin formatting in a sibling host, restoring the normal URL on MOBILE. */
+    private void updateCompactUrlDisplay() {
+        if (mUrlCoordinator == null || mContainerView == null) return;
+        View containerView = getExpansionContainerView();
+        if (containerView == null) return;
+        boolean compact = containerView != mContainerView;
+        if (compact == mShowsCompactUrl) return;
+        mShowsCompactUrl = compact;
+        mUrlCoordinator.setShowOriginOnly(compact);
     }
 
     /** Physical layout coordinates in the reparented viewport, including ancestor scrolling. */
