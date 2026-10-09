@@ -1778,7 +1778,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
 +++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImpl.java
 @@ -340,7 +340,27 @@
              }
- 
+
              // Tablet positioning logic common between fusebox and non-fusebox cases.
 -            ViewUtils.getRelativeLayoutPosition(mAnchorView, mAlignmentView, mPositionArray);
 +            // An Arc desktop shell may move LocationBarTablet out of the original toolbar.
