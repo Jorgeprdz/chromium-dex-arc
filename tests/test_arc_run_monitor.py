@@ -25,6 +25,37 @@ def load(name):
 
 
 class CompactMonitorTest(unittest.TestCase):
+    def test_completed_run_duration_stops_at_last_job_completion(self):
+        module = load("monitor-archium-run.py")
+        run = {"id": 37905612954, "created_at": "2026-10-09T08:32:46Z",
+               "status": "completed", "html_url": "https://example.com/run"}
+        jobs = [{"name": "stage1", "status": "completed", "completed_at": "2026-10-09T09:40:42Z"},
+                {"name": "stage2", "status": "completed", "completed_at": None}]
+        now = datetime(2026, 10, 9, 13, 0, tzinfo=timezone.utc)
+        for conclusion in ("failure", "success", "cancelled"):
+            with self.subTest(conclusion=conclusion):
+                run["conclusion"] = conclusion
+                output, _ = module.describe(run, jobs, now)
+                self.assertIn("Tiempo transcurrido: 1 h 7 min", output)
+        jobs.append({"name": "cleanup", "status": "completed", "completed_at": "2026-10-09T09:42:46Z"})
+        output, _ = module.describe(run, jobs, now)
+        self.assertIn("Tiempo transcurrido: 1 h 10 min", output)
+
+    def test_running_run_duration_continues_after_finished_job(self):
+        module = load("monitor-archium-run.py")
+        run = {"id": 1, "created_at": "2026-10-09T08:00:00Z", "status": "in_progress",
+               "html_url": "https://example.com/run"}
+        jobs = [{"name": "stage1", "status": "completed", "completed_at": "2026-10-09T09:00:00Z"}]
+        output, _ = module.describe(run, jobs, datetime(2026, 10, 9, 9, 30, tzinfo=timezone.utc))
+        self.assertIn("Tiempo transcurrido: 1 h 30 min", output)
+
+    def test_completed_run_without_job_timestamps_uses_run_finish_timestamp(self):
+        module = load("monitor-archium-run.py")
+        run = {"id": 1, "created_at": "2026-10-09T08:00:00Z", "status": "completed",
+               "updated_at": "2026-10-09T08:30:00Z", "html_url": "https://example.com/run"}
+        output, _ = module.describe(run, [], datetime(2026, 10, 9, 13, tzinfo=timezone.utc))
+        self.assertIn("Tiempo transcurrido: 0 h 30 min", output)
+
     def test_compact_panel_has_continuous_borders_and_ten_minute_refresh(self):
         module = load("monitor-archium-run.py")
         text = "Actualizado: 2026-10-09 02:34 UTC\nRun 37871846597: in_progress\nTiempo transcurrido: 0 h 42 min\nEtapa actual: stage1 / build\nPaso: Compile, run gates and checkpoint\nJobs terminados: 0\nUltimos eventos:\nold event"

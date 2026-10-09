@@ -57,7 +57,7 @@ public class VerticalTabRailLayout extends ConstraintLayout {
     private int mArcNewTabOriginalMinWidth;
     private int mArcNewTabOriginalMinHeight;
     private int mArcNewTabOriginalImageAlpha;
-    private @Nullable ImageView.ScaleType mArcNewTabOriginalScaleType;
+    private ImageView.@Nullable ScaleType mArcNewTabOriginalScaleType;
 
     /** Let the containing frame supply one continuous gradient; keep the native MOBILE drawable. */
     public void setArcTransparentBackground(boolean active) {

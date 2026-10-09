@@ -31,7 +31,14 @@ def get_json(path):
 
 def describe(run, jobs, now):
     start = datetime.fromisoformat(run['created_at'].replace('Z', '+00:00'))
-    elapsed = max(0, int((now - start).total_seconds()))
+    end = now
+    if run['status'] == 'completed':
+        # Job completion is stable across later refreshes of a finished run.
+        completions = [datetime.fromisoformat(job['completed_at'].replace('Z', '+00:00'))
+                       for job in jobs if job.get('completed_at')]
+        end = max(completions) if completions else datetime.fromisoformat(
+            run.get('updated_at', run['created_at']).replace('Z', '+00:00'))
+    elapsed = max(0, int((end - start).total_seconds()))
     active = [job for job in jobs if job['status'] == 'in_progress']
     finished = [job for job in jobs if job['status'] == 'completed']
     lines = [f"Run {run['id']}: {run['status']} {run.get('conclusion') or ''}".strip(),

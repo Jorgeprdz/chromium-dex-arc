@@ -194,6 +194,16 @@ import android.content.Context;
 public class ArchiumWindowMetrics {public static int currentWidthDp(Context c){return 1000;}}
 ''')
         rail=(NATIVE/'VerticalTabRailLayout.java').read_text()
+        # Compile the shipped declarations, including TYPE_USE-only Nullable:
+        # synthetic unannotated fields cannot detect invalid nested-type syntax.
+        fields='\n'.join(re.findall(r'^    private [^\n]+ mArc[^\n]+;',rail,re.MULTILINE))
+        nullable=self.work/'org/chromium/build/annotations/Nullable.java'
+        nullable.parent.mkdir(parents=True,exist_ok=True)
+        nullable.write_text('''package org.chromium.build.annotations;
+import java.lang.annotation.ElementType;
+import java.lang.annotation.Target;
+@Target(ElementType.TYPE_USE) public @interface Nullable {}
+''')
         helpers='\n'.join(sig+' '+method_body(rail,re.escape(sig)) for sig in [
             'public void setArcTransparentBackground(boolean active)',
             'private void updateArcNewTabAppearance()',
@@ -205,18 +215,17 @@ import android.graphics.drawable.Drawable;
 import android.widget.ImageButton;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
+import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance;
 import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy;
 class AppearanceAndroidApiProbe extends View {
     AppearanceAndroidApiProbe(Context c){super(c);}
-    boolean mArcTransparentBackground,mArcNewTabAppearance;Drawable mArcOriginalBackground;
-    int mArcNewTabOriginalLeft,mArcNewTabOriginalTop,mArcNewTabOriginalRight,mArcNewTabOriginalBottom,
-        mArcNewTabOriginalMinWidth,mArcNewTabOriginalMinHeight,mArcNewTabOriginalImageAlpha;
-    ImageView.ScaleType mArcNewTabOriginalScaleType;ImageButton mNewTabButton;
+    FIELDS
+    ImageButton mNewTabButton;
     HELPERS
 }
-'''.replace('HELPERS',helpers)
+'''.replace('HELPERS',helpers).replace('FIELDS',fields)
         p=self.work/'AppearanceAndroidApiProbe.java';p.write_text(program)
         cp=str(jar)+':'+str(window_core_jar())+':'+str(self.work)
-        result=subprocess.run([self.javac,'--release','17','-cp',cp,'-d',str(self.work),str(metric),str(APPEARANCE),str(p)],capture_output=True,text=True)
+        result=subprocess.run([self.javac,'--release','17','-cp',cp,'-d',str(self.work),str(nullable),str(metric),str(APPEARANCE),str(p)],capture_output=True,text=True)
         self.assertEqual(result.returncode,0,result.stderr)
