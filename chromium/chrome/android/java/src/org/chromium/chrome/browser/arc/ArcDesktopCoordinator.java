@@ -127,6 +127,10 @@ public final class ArcDesktopCoordinator {
     private ViewOutlineProvider mClippedSurfaceOriginalOutlineProvider;
     private boolean mClippedSurfaceOriginalClipToOutline;
     private AlertDialog mColorDialog;
+    // Async surface attach/detach may outlive ARC mode transitions. Never apply a stale frame.
+    private int mFrameGeometryGeneration;
+    private View mPendingFrameGeometryHost;
+    private Runnable mPendingFrameGeometry;
 
     public ArcDesktopCoordinator(Activity activity, ViewGroup rail,
             Profile profile, Consumer<String> navigate,
@@ -430,15 +434,14 @@ public final class ArcDesktopCoordinator {
                     @Override
                     public void onViewAttachedToWindow(View view) {
                         if (!mDestroyed && mArcFrameActive) {
-                            view.post(ArcDesktopCoordinator.this::applyFrameGeometry);
+                            postCurrentFrameGeometry(view);
                         }
                     }
 
                     @Override
                     public void onViewDetachedFromWindow(View view) {
                         if (!mDestroyed && mArcFrameActive) {
-                            mCompositorViewHolder.post(
-                                    ArcDesktopCoordinator.this::applyFrameGeometry);
+                            postCurrentFrameGeometry(mCompositorViewHolder);
                         }
                     }
                 };
@@ -942,8 +945,35 @@ public final class ArcDesktopCoordinator {
         activeSurface.invalidateOutline();
     }
 
+    private void invalidatePendingFrameGeometry() {
+        mFrameGeometryGeneration++;
+        if (mPendingFrameGeometryHost != null && mPendingFrameGeometry != null) {
+            mPendingFrameGeometryHost.removeCallbacks(mPendingFrameGeometry);
+        }
+        mPendingFrameGeometryHost = null;
+        mPendingFrameGeometry = null;
+    }
+
+    private void postCurrentFrameGeometry(View host) {
+        if (mDestroyed || !mArcFrameActive
+                || !ArcDesktopAppearance.isDesktopWindow(mActivity)) return;
+        // This invalidates and cancels any previously queued host callback.
+        invalidatePendingFrameGeometry();
+        final int generation = mFrameGeometryGeneration;
+        Runnable apply = () -> {
+            if (generation != mFrameGeometryGeneration || mDestroyed || !mArcFrameActive
+                    || !ArcDesktopAppearance.isDesktopWindow(mActivity)) return;
+            mPendingFrameGeometryHost = null;
+            mPendingFrameGeometry = null;
+            applyFrameGeometry();
+        };
+        mPendingFrameGeometryHost = host;
+        mPendingFrameGeometry = apply;
+        host.post(apply);
+    }
+
     private void applyFrameGeometry() {
-        if (mDestroyed) return;
+        if (mDestroyed || !ArcDesktopAppearance.isDesktopWindow(mActivity)) return;
         mArcFrameActive = true;
         mCompositorViewHolder.setOutlineProvider(mArcContentOutlineProvider);
         mCompositorViewHolder.setClipToOutline(true);
@@ -985,6 +1015,8 @@ public final class ArcDesktopCoordinator {
     }
 
     private void clearFrameGeometry() {
+        // Cancels queued geometry even if ARC already left this coordinator inactive.
+        invalidatePendingFrameGeometry();
         if (!mArcFrameActive) return;
         mArcFrameActive = false;
         mRejectingRoundedCornerGesture = false;
