@@ -1,0 +1,58 @@
+name: Archium branding PNG export
+
+on:
+  push:
+    branches:
+      - assistant/archium-r3-visual-fixes
+    paths:
+      - 'scripts/export-archium-icons.py'
+      - 'assets/branding/archium/README.md'
+      - '.github/workflows/archium-branding.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  export-assets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: true
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install render dependency
+        run: python -m pip install --disable-pip-version-check cairosvg Pillow
+      - name: Export all Archium icons
+        run: python scripts/export-archium-icons.py
+      - name: Assert expected assets and dimensions
+        run: |
+          python - <<'PY'
+          from PIL import Image
+          from pathlib import Path
+          root = Path('assets/branding/archium')
+          pngs = sorted(root.glob('archium-*.png'))
+          svgs = sorted(root.glob('archium-*.svg'))
+          assert len(pngs) == 29, f'Expected 29 PNGs, got {len(pngs)}'
+          assert len(svgs) == 7, f'Expected 7 SVG masters, got {len(svgs)}'
+          for png in pngs:
+              size = int(png.stem.rsplit('-', 1)[1])
+              with Image.open(png) as icon:
+                  assert icon.size == (size, size)
+                  assert icon.mode == 'RGBA'
+                  icon.verify()
+          print('PASS: 29 PNGs and 7 SVGs')
+          PY
+      - name: Commit generated assets to working branch
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add assets/branding/archium
+          if git diff --cached --quiet; then
+            echo 'Branding assets already up to date'
+          else
+            git commit -m 'assets(archium): export Portal app icons in PNG and SVG'
+            git push origin HEAD:assistant/archium-r3-visual-fixes
+          fi
