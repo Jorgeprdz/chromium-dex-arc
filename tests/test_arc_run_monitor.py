@@ -3,8 +3,11 @@ from pathlib import Path
 from datetime import datetime, timezone
 import hashlib
 import importlib.util
+import io
 import json
 import os
+import subprocess
+import sys
 import tempfile
 import unittest
 from unittest.mock import patch
@@ -25,6 +28,62 @@ def load(name):
 
 
 class CompactMonitorTest(unittest.TestCase):
+    def monitor_snapshot(self, *, conclusion="failure", update=None, status="completed"):
+        module = load("monitor-archium-run.py")
+        with tempfile.TemporaryDirectory(prefix="arc-monitor-test-") as directory:
+            state = Path(directory) / "monitor"
+            update_state = Path(directory) / "installer"
+            update_state.mkdir()
+            if update is not None:
+                (update_state / "status.json").write_text(json.dumps(update))
+            run = {"id": 123, "status": status, "conclusion": conclusion,
+                   "created_at": "2026-10-09T08:00:00Z", "updated_at": "2026-10-09T08:30:00Z",
+                   "html_url": "https://example.com/run"}
+
+            def github(argv, **kwargs):
+                if argv == ["gh", "api", "repos/Jorgeprdz/chromium-dex-arc/actions/runs/123"]:
+                    payload = run
+                elif argv == ["gh", "api", "repos/Jorgeprdz/chromium-dex-arc/actions/runs/123/jobs?per_page=100&page=1"]:
+                    payload = {"jobs": [], "total_count": 0}
+                else:
+                    raise AssertionError("Unexpected GitHub request: " + repr(argv))
+                return subprocess.CompletedProcess(argv, 0, stdout=json.dumps(payload), stderr="")
+
+            argv = ["monitor", "--run", "123", "--no-window", "--ascii",
+                    "--state-dir", str(state), "--update-state-dir", str(update_state)]
+            if status != "completed":
+                argv.append("--once")
+            output = io.StringIO()
+            with patch.object(sys, "argv", argv), patch.object(sys, "stdout", output), \
+                 patch.dict(os.environ, {"NO_COLOR": "1"}), \
+                 patch.object(module.shutil, "which", return_value="/usr/bin/gh"), \
+                 patch.object(module.subprocess, "run", side_effect=github), \
+                 patch.object(module.time, "sleep", side_effect=AssertionError("Terminal monitor must stop")):
+                module.main()
+            return (state / "estado.txt").read_text(), output.getvalue()
+
+    def test_terminal_failed_build_overrides_stale_or_missing_installer_status(self):
+        for conclusion in ("failure", "cancelled", "timed_out"):
+            for stage in (None, "waiting_build", "retrying", "installed"):
+                with self.subTest(conclusion=conclusion, stage=stage):
+                    update = {"stage": stage} if stage is not None else None
+                    snapshot, panel = self.monitor_snapshot(conclusion=conclusion, update=update)
+                    self.assertIn("Instalación: No instalada: build fallido", snapshot)
+                    self.assertIn("Instalación: No instalada: build fallido", panel)
+                    self.assertNotIn("Instalación: CONFIRMADA", panel)
+
+    def test_successful_build_preserves_confirmed_installer_status(self):
+        snapshot, panel = self.monitor_snapshot(conclusion="success", update={"stage": "installed"})
+        self.assertIn("Instalación: CONFIRMADA", snapshot)
+        self.assertIn("Instalación: CONFIRMADA", panel)
+
+    def test_running_build_preserves_connection_retry_status(self):
+        snapshot, panel = self.monitor_snapshot(status="in_progress", conclusion=None,
+                                                update={"stage": "retrying"})
+        self.assertIn("Instalación: Reintentando conexión", snapshot)
+        self.assertIn("Instalación: Reintentando conexión", panel)
+        self.assertIn("cada 10 min", panel)
+
     def test_completed_run_duration_stops_at_last_job_completion(self):
         module = load("monitor-archium-run.py")
         run = {"id": 37905612954, "created_at": "2026-10-09T08:32:46Z",

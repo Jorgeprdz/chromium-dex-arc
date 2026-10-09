@@ -199,6 +199,8 @@ def main():
                              'error': 'ERROR: ' + update.get('error', ''),
                              'retrying': 'Reintentando conexión',
                              'waiting_build': 'Pendiente del build'}.get(stage, 'En curso')
+                    if done and run.get('conclusion') != 'success':
+                        label = 'No instalada: build fallido'
                     summary += '\nInstalación: ' + label
                     if done and run.get('conclusion') == 'success':
                         done = stage in ('installed', 'error')

@@ -5,6 +5,7 @@ These probes cannot establish compositor pixels or native suggestion rendering.
 """
 from pathlib import Path
 import hashlib
+import os
 import re
 import subprocess
 import tempfile
@@ -36,7 +37,12 @@ def run_java(test, program, name, sdk=False):
         source.write_text(program)
         args = ['javac', '--release', '17', '-d', tmp]
         if sdk:
-            args += ['-cp', '/opt/android-sdk/platforms/android-37.0/android.jar']
+            jar = Path(os.environ.get('ANDROID_JAR',
+                       str(Path(os.environ.get('ANDROID_HOME', '/opt/android-sdk')) /
+                           'platforms/android-37.0/android.jar')))
+            if not jar.is_file():
+                test.skipTest('Android API prerequisite unavailable for SDK compilation: ' + str(jar))
+            args += ['-cp', str(jar)]
         result = subprocess.run(args + [str(source)], capture_output=True, text=True)
         test.assertEqual(result.returncode, 0, result.stderr)
         if not sdk:
@@ -232,3 +238,27 @@ class ArcNativeOverlayTest(unittest.TestCase):
                 }
             }'''.replace('EXPANSION', method_body(source, re.escape('private @Nullable View getExpansionContainerView()'))).replace('BODY', clipping_body(source))
         run_java(self, program, 'FocusClippingSdk', sdk=True)
+
+
+class ArcSdkPrerequisiteTest(unittest.TestCase):
+    def test_missing_configured_sdk_is_explicitly_reported_before_javac(self):
+        from unittest.mock import patch
+        with tempfile.TemporaryDirectory(prefix='arc-sdk-missing-') as tmp:
+            missing = str(Path(tmp) / 'android.jar')
+            with patch.dict('os.environ', {'ANDROID_JAR': missing}):
+                with self.assertRaises(unittest.SkipTest) as result:
+                    run_java(self, 'class MissingSdk {}', 'MissingSdk', sdk=True)
+                self.assertIn('Android', str(result.exception))
+                self.assertIn(missing, str(result.exception))
+
+    def test_configured_sdk_path_compiles_actual_android_types_when_available(self):
+        import os
+        from unittest.mock import patch
+        jar = Path(os.environ.get('ANDROID_JAR',
+                   str(Path(os.environ.get('ANDROID_HOME', '/opt/android-sdk')) /
+                       'platforms/android-37.0/android.jar')))
+        if not jar.is_file():
+            self.skipTest('Android API prerequisite unavailable for actual compilation: ' + str(jar))
+        with patch.dict('os.environ', {'ANDROID_JAR': str(jar)}):
+            run_java(self, 'import android.view.View; class ConfiguredSdk {View view;}',
+                     'ConfiguredSdk', sdk=True)
