@@ -221,7 +221,10 @@ def make_themed_vector(svg):
         '<vector xmlns:android="http://schemas.android.com/apk/res/android"\n'
         '    android:width="108dp" android:height="108dp"\n'
         '    android:viewportWidth="1024" android:viewportHeight="1024">\n'
-        '    <group android:translateX="179.2" android:translateY="179.2"\n'\n        '        android:scaleX="0.65" android:scaleY="0.65">\n'\n        f'        <path android:fillColor="#000000" android:pathData="{path}"/>\n'\n        '    </group>\n'
+        '    <group android:translateX="179.2" android:translateY="179.2"\n'
+        '        android:scaleX="0.65" android:scaleY="0.65">\n'
+        f'        <path android:fillColor="#000000" android:pathData="{path}"/>\n'
+        '    </group>\n'
         '</vector>\n'
     ).encode("utf-8")
 
