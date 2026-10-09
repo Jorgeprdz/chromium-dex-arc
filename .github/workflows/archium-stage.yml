@@ -34,6 +34,8 @@ jobs:
       ARCHIUM_RUN_HOST_GATES: 'true'
       ARCHIUM_PREVIOUS_TAG: ${{ inputs.previous_tag }}
       ARCHIUM_CHECKPOINT_TAG: archium-checkpoint-${{ github.run_id }}-${{ inputs.stage }}
+      ARCHIUM_CHECKPOINT_STORAGE: artifact
+      ARCHIUM_CHECKPOINT_DIR: ${{ runner.temp }}/archium-checkpoint
       ARCHIUM_SLICE_MINUTES: '120'
       ARCHIUM_PREPARE_SECONDS: '3600'
       ARCHIUM_WORK_SECONDS: '14400'
@@ -45,12 +47,91 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
           persist-credentials: false
+      - name: Download complete checkpoint artifact groups
+        if: inputs.previous_tag != ''
+        uses: actions/download-artifact@v4
+        with:
+          pattern: ${{ inputs.previous_tag }}-*
+          merge-multiple: true
+          path: ${{ runner.temp }}/archium-checkpoint
       - name: Restore checkpoint and prepare Chromium
         timeout-minutes: 62
         run: bash scripts/build-archium.sh --prepare
       - name: Compile, run gates and checkpoint
         id: compile
         run: bash scripts/build-archium.sh --work
+      - name: Upload checkpoint artifact group 00
+        if: steps.compile.outputs.complete == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: archium-checkpoint-${{ github.run_id }}-${{ inputs.stage }}-00
+          path: ${{ runner.temp }}/archium-checkpoint/group-00/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 14
+      - name: Upload checkpoint artifact group 01
+        if: steps.compile.outputs.complete == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: archium-checkpoint-${{ github.run_id }}-${{ inputs.stage }}-01
+          path: ${{ runner.temp }}/archium-checkpoint/group-01/
+          if-no-files-found: ignore
+          compression-level: 0
+          retention-days: 14
+      - name: Upload checkpoint artifact group 02
+        if: steps.compile.outputs.complete == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: archium-checkpoint-${{ github.run_id }}-${{ inputs.stage }}-02
+          path: ${{ runner.temp }}/archium-checkpoint/group-02/
+          if-no-files-found: ignore
+          compression-level: 0
+          retention-days: 14
+      - name: Upload checkpoint artifact group 03
+        if: steps.compile.outputs.complete == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: archium-checkpoint-${{ github.run_id }}-${{ inputs.stage }}-03
+          path: ${{ runner.temp }}/archium-checkpoint/group-03/
+          if-no-files-found: ignore
+          compression-level: 0
+          retention-days: 14
+      - name: Upload checkpoint artifact group 04
+        if: steps.compile.outputs.complete == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: archium-checkpoint-${{ github.run_id }}-${{ inputs.stage }}-04
+          path: ${{ runner.temp }}/archium-checkpoint/group-04/
+          if-no-files-found: ignore
+          compression-level: 0
+          retention-days: 14
+      - name: Upload checkpoint artifact group 05
+        if: steps.compile.outputs.complete == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: archium-checkpoint-${{ github.run_id }}-${{ inputs.stage }}-05
+          path: ${{ runner.temp }}/archium-checkpoint/group-05/
+          if-no-files-found: ignore
+          compression-level: 0
+          retention-days: 14
+      - name: Upload checkpoint artifact group 06
+        if: steps.compile.outputs.complete == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: archium-checkpoint-${{ github.run_id }}-${{ inputs.stage }}-06
+          path: ${{ runner.temp }}/archium-checkpoint/group-06/
+          if-no-files-found: ignore
+          compression-level: 0
+          retention-days: 14
+      - name: Upload checkpoint artifact group 07
+        if: steps.compile.outputs.complete == 'false'
+        uses: actions/upload-artifact@v4
+        with:
+          name: archium-checkpoint-${{ github.run_id }}-${{ inputs.stage }}-07
+          path: ${{ runner.temp }}/archium-checkpoint/group-07/
+          if-no-files-found: ignore
+          compression-level: 0
+          retention-days: 14
       - name: Save completed APK
         timeout-minutes: 30
         if: steps.compile.outputs.complete == 'true'
