@@ -59,8 +59,8 @@ def run_aapt2_fixture(android_jar, aapt2):
         run(str(aapt2), "link", "-o", str(apk), "-I", str(android_jar),
             "--manifest", str(manifest), "--auto-add-overlay",
             *[str(p) for p in entries])
-        from verify_archium_portal_apk import inspect
-        result = inspect(apk, aapt2, "app.archium.android")
+        verifier = load(here / "verify-archium-portal-apk.py")
+        result = verifier.inspect(apk, aapt2, "app.archium.android")
         if result["status"] != "PASS":
             raise AssertionError("AAPT2 fixture verification did not PASS")
         print("ARCHIUM_PORTAL_AAPT2_FIXTURE=PASS"
