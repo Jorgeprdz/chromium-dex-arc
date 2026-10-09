@@ -2507,6 +2507,8 @@ public class VerticalTabListCoordinator {
 
     private void updateSpacerVisibility(@Nullable AppHeaderState appHeaderState) {
         boolean isInDesktopWindow = appHeaderState != null && appHeaderState.isInDesktopWindow();
+        mContainerView.setDesktopWindowSpacerHeight(
+                appHeaderState != null && isInDesktopWindow ? appHeaderState.getAppHeaderHeight() : 0);
         mContainerView.setDesktopWindowSpacerVisible(isInDesktopWindow);
     }
 

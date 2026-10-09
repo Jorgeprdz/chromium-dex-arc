@@ -31,6 +31,7 @@ import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabListProperties.RailCollapseState;
 import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance;
 import org.chromium.chrome.browser.ui.vertical_tabs.VerticalTabUtils;
+import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy;
 import org.chromium.chrome.tab_ui.R;
 import org.chromium.ui.base.ViewUtils;
 
@@ -42,6 +43,27 @@ import org.chromium.ui.base.ViewUtils;
 // click handlers) from VerticalTabListCoordinator to VerticalTabRailLayout.
 @NullMarked
 public class VerticalTabRailLayout extends ConstraintLayout {
+    private boolean mArcCompactChrome;
+    private int mArcOriginalHeaderVisibility;
+    private int mArcOriginalFooterVisibility;
+
+    /** Release optional search/new-tab chrome before it consumes the flexible native tab list. */
+    public void setArcAvailableTabHeight(int heightPx, boolean active) {
+        if (mHeaderContainer == null || mFooterContainer == null) return;
+        if (active && !mArcCompactChrome) {
+            mArcOriginalHeaderVisibility = mHeaderContainer.getVisibility();
+            mArcOriginalFooterVisibility = mFooterContainer.getVisibility();
+            mArcCompactChrome = true;
+        }
+        if (!mArcCompactChrome) return;
+        float density = getResources().getDisplayMetrics().density;
+        mHeaderContainer.setVisibility(active && heightPx < Math.round(ArcDesktopPolicy.ARC_NATIVE_SEARCH_MIN_HEIGHT_DP * density)
+                ? View.GONE : mArcOriginalHeaderVisibility);
+        // In tiny windows Chromium's real app menu (in the scrollable Arc header) still owns New Tab.
+        mFooterContainer.setVisibility(active && heightPx < Math.round(ArcDesktopPolicy.ARC_NATIVE_FOOTER_MIN_HEIGHT_DP * density)
+                ? View.GONE : mArcOriginalFooterVisibility);
+        if (!active) mArcCompactChrome = false;
+    }
     /** Functional interface for delegating key events captured by the vertical tab rail. */
     @FunctionalInterface
     interface KeyEventListener {
@@ -293,7 +315,22 @@ public class VerticalTabRailLayout extends ConstraintLayout {
         boolean visible = (mDesktopWindowSpacerHost != null
                 ? mDesktopWindowSpacerHost : mSpacerView).getVisibility() == View.VISIBLE;
         mDesktopWindowSpacerHost = host;
+        if (host != null) setDesktopWindowSpacerHeight(mSpacerView.getLayoutParams().height);
         setDesktopWindowSpacerVisible(visible);
+    }
+
+    /** Use the live native caption height, including changes on desktop window resize. */
+    public void setDesktopWindowSpacerHeight(int heightPx) {
+        int height = Math.max(0, heightPx);
+        View[] spacers = {mSpacerView, mDesktopWindowSpacerHost};
+        for (View spacer : spacers) {
+            if (spacer == null || spacer.getLayoutParams() == null) continue;
+            ViewGroup.LayoutParams params = spacer.getLayoutParams();
+            if (params.height != height) {
+                params.height = height;
+                spacer.setLayoutParams(params);
+            }
+        }
     }
 
     public void setDesktopWindowSpacerVisible(boolean visible) {
@@ -328,15 +365,18 @@ public class VerticalTabRailLayout extends ConstraintLayout {
             int totalHeight = MeasureSpec.getSize(heightMeasureSpec);
 
             // Measure child containers to determine available space.
-            int headerHeight = mHeaderContainer != null ? mHeaderContainer.getMeasuredHeight() : 0;
-            int footerHeight = mFooterContainer != null ? mFooterContainer.getMeasuredHeight() : 0;
+            int headerHeight = mHeaderContainer != null && mHeaderContainer.getVisibility() != View.GONE
+                    ? mHeaderContainer.getMeasuredHeight() : 0;
+            int footerHeight = mFooterContainer != null && mFooterContainer.getVisibility() != View.GONE
+                    ? mFooterContainer.getMeasuredHeight() : 0;
             int spacerHeight =
                     (mSpacerView != null && mSpacerView.getVisibility() == View.VISIBLE)
                             ? mSpacerView.getMeasuredHeight()
                             : 0;
 
             int availableTabSpace = totalHeight - headerHeight - footerHeight - spacerHeight;
-            int maxPinnedTabHeight = Math.max(0, availableTabSpace / 2);
+            // ConstraintLayout uses zero as "unlimited". Keep a finite cap even at zero budget.
+            int maxPinnedTabHeight = Math.max(1, availableTabSpace / 2);
 
             ViewGroup.LayoutParams lp = mPinnedTabsRecyclerView.getLayoutParams();
             if (lp instanceof ConstraintLayout.LayoutParams clp) {

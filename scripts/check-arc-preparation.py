@@ -82,12 +82,13 @@ def main():
         pure += list((ROOT / 'chromium').rglob('ArcSidebarStore.java'))
         pure += list((ROOT / 'chromium').rglob('ArcTabActions.java'))
         pure += list((ROOT / 'chromium').rglob('ArcCollectionsController.java'))
-        run('javac', '-cp', str(window_jar), '-d', str(classes), *map(str, pure), str(ROOT / 'tests/java/ArcDesktopPolicyTest.java'),
+        run('javac', '-cp', str(window_jar), '-d', str(classes), *map(str, pure), str(ROOT / 'tests/java/ArcDesktopPolicyTest.java'), str(ROOT / 'tests/java/ArcDesktopGeometryTest.java'),
             str(ROOT / 'tests/java/ArchiumAutofillPolicyTest.java'), str(ROOT / 'tests/java/ArchiumWindowClassTest.java'),
             str(ROOT / 'tests/java/ArchiumPasswordCsvTest.java'),
             str(ROOT / 'tests/java/ArcSidebarStateTest.java'), str(ROOT / 'tests/java/ArcSidebarStoreTest.java'), str(ROOT / 'tests/java/ArcTabActionsTest.java'), str(ROOT / 'tests/java/ArcCollectionsControllerTest.java'))
         run('java', '-cp', str(classes), 'ArchiumWindowClassTest')
         run('java', '-cp', str(classes), 'ArcDesktopPolicyTest')
+        run('java', '-cp', str(classes), 'ArcDesktopGeometryTest')
         run('java', '-cp', str(classes), 'ArcSidebarStateTest')
         run('java', '-cp', str(classes), 'ArcSidebarStoreTest')
         run('java', '-cp', str(classes), 'ArcTabActionsTest')
@@ -107,7 +108,7 @@ def main():
             'org.chromium.chrome.browser.bookmarks.BookmarkModel': 'public class BookmarkModel { public void addObserver(BookmarkModelObserver o){} public void removeObserver(BookmarkModelObserver o){} public boolean isBookmarkModelLoaded(){return true;} public boolean finishLoadingBookmarkModel(Runnable r){return false;} public org.chromium.components.bookmarks.BookmarkId getDesktopFolderId(){return null;} public java.util.List<org.chromium.components.bookmarks.BookmarkId> getChildIds(org.chromium.components.bookmarks.BookmarkId id){return null;} public java.util.List<org.chromium.components.bookmarks.BookmarkId> getTopLevelFolderIds(){return null;} public org.chromium.components.bookmarks.BookmarkItem getBookmarkById(org.chromium.components.bookmarks.BookmarkId id){return null;} }',
             'org.chromium.chrome.browser.tabmodel.IncognitoStateProvider': 'public class IncognitoStateProvider { public interface IncognitoStateObserver { void onIncognitoStateChanged(boolean i); } public boolean isIncognitoSelected(){return false;} public void addIncognitoStateObserverAndTrigger(IncognitoStateObserver o){o.onIncognitoStateChanged(false);} public void removeObserver(IncognitoStateObserver o){} }',
             'org.chromium.components.favicon.LargeIconBridge': 'public class LargeIconBridge { public interface LargeIconCallback { void onLargeIconAvailable(android.graphics.Bitmap icon, int color, boolean fallback, int type); } public LargeIconBridge(org.chromium.chrome.browser.profiles.Profile p){} public boolean getLargeIconForUrl(org.chromium.url.GURL url,int size,LargeIconCallback cb){return true;} public void destroy(){} }',
-            'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabRailLayout': 'public class VerticalTabRailLayout extends android.view.View { public VerticalTabRailLayout(android.content.Context c){super(c);} public void setDesktopWindowSpacerHost(android.view.View v){} }',
+            'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabRailLayout': 'public class VerticalTabRailLayout extends android.view.View { public VerticalTabRailLayout(android.content.Context c){super(c);} public void setDesktopWindowSpacerHost(android.view.View v){} public void setArcAvailableTabHeight(int height,boolean active){} }',
             'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabListViewBinder': 'public class VerticalTabListViewBinder { public static void refreshArcAppearance(VerticalTabRailLayout v,boolean i){} }',
             'org.chromium.chrome.browser.toolbar.top.ToolbarTablet': 'public class ToolbarTablet extends android.view.View { public ToolbarTablet(android.content.Context c){super(c);} public void onThemeColorChanged(int color,boolean animate){} }',
             'org.chromium.chrome.browser.lifecycle.ConfigurationChangedObserver': 'public interface ConfigurationChangedObserver { void onConfigurationChanged(android.content.res.Configuration c); }',
@@ -155,9 +156,11 @@ def main():
             'org.chromium.chrome.browser.compositor.CompositorViewHolder': '''public class CompositorViewHolder extends android.widget.FrameLayout {
                 public CompositorViewHolder(android.content.Context c, android.util.AttributeSet attrs){super(c, attrs);}
                 public android.view.View getActiveSurfaceView(){return null;}
+                public org.chromium.chrome.browser.fullscreen.FullscreenManager getFullscreenManager(){return new org.chromium.chrome.browser.fullscreen.FullscreenManager();}
                 public void addTouchEventObserver(org.chromium.components.browser_ui.widget.TouchEventObserver o){}
                 public void removeTouchEventObserver(org.chromium.components.browser_ui.widget.TouchEventObserver o){}
             }''',
+            'org.chromium.chrome.browser.fullscreen.FullscreenManager': 'public class FullscreenManager { public boolean getPersistentFullscreenMode(){return false;} }',
             'org.chromium.components.browser_ui.widget.TouchEventObserver': '''public interface TouchEventObserver {
                 boolean onInterceptTouchEvent(android.view.MotionEvent e);
                 default boolean mayInterceptTouchSequenceInWebContents(){return false;}

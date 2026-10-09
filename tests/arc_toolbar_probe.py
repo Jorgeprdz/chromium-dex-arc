@@ -4,6 +4,7 @@ import re
 
 ROOT = Path(__file__).resolve().parents[1]
 TOOLBAR = 'chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarLayout.java'
+DROPDOWN = 'chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImpl.java'
 TABBED = 'chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java'
 
 
@@ -34,3 +35,9 @@ def transition_bodies():
     preference = method_body(
         text[text.index('mVerticalTabsPreferenceListener ='):], r'\(prefs, key\) ->')
     return active, clear, preference
+
+
+def dropdown_body():
+    path = ROOT / ".source-modified" / DROPDOWN
+    if not path.exists(): path = ROOT / ".source-reference" / DROPDOWN
+    return method_body(path.read_text(), r"void recalculateOmniboxAlignment\(\)").replace("@ControlsPosition ", "")

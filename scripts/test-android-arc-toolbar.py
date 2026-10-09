@@ -13,7 +13,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'tests'))
-from arc_toolbar_probe import TOOLBAR, method_body, toolbar_body
+from arc_toolbar_probe import TOOLBAR, DROPDOWN, method_body, toolbar_body
 
 
 def run(*args):
@@ -28,6 +28,7 @@ def main():
     parser.add_argument('--build-tools-version', required=True)
     parser.add_argument('--aapt2-wrapper', default='', help='Optional host emulator command prefix')
     parser.add_argument('--original', action='store_true', help='Reproduce with pinned pre-fix method')
+    parser.add_argument('--dropdown', action='store_true', help='Exercise production sidebar dropdown during resize/focus')
     args = parser.parse_args()
     work = ROOT / '.test-build/arc-toolbar-runtime'
     work.mkdir(parents=True, exist_ok=True)
@@ -41,9 +42,18 @@ def main():
     if args.original:
         body = method_body((ROOT / '.source-reference' / TOOLBAR).read_text(),
                            r'void getLocationBarContentRect\(Rect outRect\)')
+    template = 'ArcToolbarGeometryTest.java.in'
+    marker = '__TOOLBAR_BODY__'
+    if args.dropdown:
+        path = ROOT / ('.source-reference' if args.original else '.source-modified') / DROPDOWN
+        if not path.exists(): path = ROOT / '.source-reference' / DROPDOWN
+        body = method_body(path.read_text(), r'void recalculateOmniboxAlignment\(\)')
+        body = body.replace('@ControlsPosition ', '')
+        template = 'ArcOmniboxResizeTest.java.in'
+        marker = '__DROPDOWN_BODY__'
     source = work / 'ArcToolbarGeometryTest.java'
-    source.write_text((ROOT / 'tests/android/toolbar/ArcToolbarGeometryTest.java.in').read_text()
-                      .replace('__TOOLBAR_BODY__', body))
+    source.write_text((ROOT / 'tests/android/toolbar' / template).read_text()
+                      .replace(marker, body))
     run('javac', '-source', '17', '-target', '17', '-cp', android, '-d', classes, source)
     jar = work / 'probe.jar'
     run('jar', 'cf', jar, '-C', classes, '.')

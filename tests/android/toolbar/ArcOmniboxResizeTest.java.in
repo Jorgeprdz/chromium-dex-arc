@@ -1,0 +1,122 @@
+package app.archium.toolbarprobe;
+
+import android.app.Activity;
+import android.app.Instrumentation;
+import android.content.Context;
+import android.content.Intent;
+import android.os.Bundle;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
+import java.util.function.Supplier;
+import java.util.function.BooleanSupplier;
+import java.util.concurrent.atomic.AtomicReference;
+
+/** Executes the production dropdown alignment method on attached Android view hierarchies. */
+public class ArcToolbarGeometryTest extends Instrumentation {
+    @Override public void onCreate(Bundle arguments) { super.onCreate(arguments); start(); }
+    @Override public void onStart() {
+        Bundle result = new Bundle(); ProbeActivity activity = null; int status = Activity.RESULT_CANCELED;
+        try {
+            activity = (ProbeActivity) startActivitySync(new Intent(getTargetContext(), ProbeActivity.class)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            waitForIdleSync();
+            ProbeActivity attached = activity; AtomicReference<Throwable> failure = new AtomicReference<>();
+            runOnMainSync(() -> { try { attached.verify(); } catch (Throwable error) { failure.set(error); } });
+            if (failure.get() != null) throw new AssertionError("Resize/focus geometry failed", failure.get());
+            result.putString("stream", "PASS: production dropdown: sidebar, resize loop, phone/tablet, RTL, descendant, detached");
+            status = Activity.RESULT_OK;
+        } catch (Throwable error) {
+            java.io.StringWriter text = new java.io.StringWriter();
+            error.printStackTrace(new java.io.PrintWriter(text)); result.putString("stream", "FAIL: " + text);
+        } finally { if (activity != null) { ProbeActivity closing = activity; runOnMainSync(closing::finish); } }
+        finish(status, result);
+    }
+    static class ControlsPosition { static final int TOP=0, BOTTOM=1; }
+    static class FuseboxState { static final int DISABLED=0; }
+    static class FuseboxLayoutMode { static final int SUGGESTIONS_POPOVER=2; }
+    static class DeviceInfo { static boolean isAutomotive() { return false; } }
+    static class Feature { boolean isEnabled() { return true; } }
+    static class ChromeFeatureList { static final Feature sToolbarProgressBarRefactor=new Feature(); }
+    static class R { static class dimen {
+        static final int omnibox_suggestion_list_toolbar_overlap=android.R.dimen.app_icon_size;
+        static final int omnibox_min_space_above_window_bottom=android.R.dimen.app_icon_size;
+    } }
+    static class Insets { int top,bottom; }
+    static class WindowInsetsCompat {
+        static WindowInsetsCompat toWindowInsetsCompat(android.view.WindowInsets insets) { return new WindowInsetsCompat(); }
+        Insets getInsets(int type) { return new Insets(); }
+        static class Type { static int systemBars(){return 0;} static int navigationBars(){return 0;} }
+    }
+    static class ViewUtils {
+        static void getRelativeLayoutPosition(View root, View child, int[] position) {
+            position[0]=position[1]=0; if(root==null || child==root)return;
+            while(child!=null) {
+                position[0]+=child.getLeft(); position[1]+=child.getTop();
+                if(child.getParent()==root)break;
+                child=(View)child.getParent();
+            }
+        }
+    }
+    static class OmniboxAlignment {
+        static final OmniboxAlignment UNSPECIFIED=new OmniboxAlignment(-1,-1,-1,-1,0,0,0,0);
+        int left,top,width,height;
+        OmniboxAlignment(int left,int top,int width,int height,int a,int b,int c,int d) {
+            this.left=left;this.top=top;this.width=width;this.height=height;
+        }
+    }
+    static class ResourceProvider { int getDropdownSideSpacing(){return 0;} }
+    static class Display { int getDisplayHeight(){return 1000;} }
+    static class WindowAndroid { Display getDisplay(){return new Display();} }
+    static class AlignmentSupplier { OmniboxAlignment value; void set(OmniboxAlignment value){this.value=value;} }
+    static class Dropdown {
+        View mBaseChromeLayout, mAnchorView, mAlignmentView; Context mContext;
+        int[] mPositionArray=new int[2]; int mTopPaddingForEdgeToEdge;
+        Supplier<Integer> mControlsPositionSupplier=()->ControlsPosition.TOP;
+        Supplier<Integer> mFuseboxLayoutModeSupplier=()->0, mFuseboxStateSupplier=()->0;
+        Supplier<Integer> mKeyboardHeightSupplier=()->0, mBottomWindowPaddingSupplier=()->0;
+        Supplier<Integer> mAlignmentViewTargetWidthSupplier=()->mAlignmentView.getMeasuredWidth();
+        Supplier<Integer> mAlignmentViewLeftOffsetSupplier=()->0;
+        BooleanSupplier mIsFullWidthExpansionAllowedSupplier=()->true;
+        ResourceProvider mResourceProvider=new ResourceProvider(); WindowAndroid mWindowAndroid=new WindowAndroid();
+        AlignmentSupplier mOmniboxAlignmentSupplier=new AlignmentSupplier();
+        boolean phone;
+        boolean isPhoneStyleWindow(){return phone;} boolean isWideWindow(){return !phone;}
+        void recalculateOmniboxAlignment() __DROPDOWN_BODY__
+    }
+    public static class ProbeActivity extends Activity {
+        FrameLayout root, toolbar, header; View bar; Dropdown dropdown;
+        @Override public void onCreate(Bundle state) {
+            super.onCreate(state); root=new FrameLayout(this); toolbar=new FrameLayout(this);header=new FrameLayout(this);bar=new View(this);
+            root.addView(toolbar,new FrameLayout.LayoutParams(800,56));root.addView(header,new FrameLayout.LayoutParams(240,400));
+            header.addView(bar,new FrameLayout.LayoutParams(220,42));setContentView(root);
+            dropdown=new Dropdown();dropdown.mBaseChromeLayout=root;dropdown.mAnchorView=toolbar;dropdown.mAlignmentView=bar;dropdown.mContext=this;
+        }
+        void verify() {
+            if(!bar.isAttachedToWindow())throw new AssertionError("Requires actual ViewRootImpl");
+            for(boolean phone:new boolean[]{false,true})for(int direction:new int[]{View.LAYOUT_DIRECTION_LTR,View.LAYOUT_DIRECTION_RTL}) {
+                dropdown.phone=phone;toolbar.setLayoutDirection(direction);
+                for(int i=0;i<30;i++) {
+                    int width=600+i*10;
+                    root.layout(0,0,width,900);toolbar.layout(240,40,width,96);header.layout(0,40,240,900);bar.layout(10,50,230,92);
+                    bar.measure(View.MeasureSpec.makeMeasureSpec(220,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(42,View.MeasureSpec.EXACTLY));
+                    dropdown.recalculateOmniboxAlignment(); OmniboxAlignment a=dropdown.mOmniboxAlignmentSupplier.value;
+                    if(a.left!=10 || a.top!=132 || a.width<220 || a.left+a.width>width || a.height<=0)
+                        throw new AssertionError("Sidebar geometry: "+a.left+","+a.top+","+a.width+","+a.height);
+                }
+            }
+            header.removeView(bar);toolbar.addView(bar,new FrameLayout.LayoutParams(220,42));bar.layout(10,0,230,42);
+            dropdown.phone=false;toolbar.setLayoutDirection(View.LAYOUT_DIRECTION_LTR);dropdown.recalculateOmniboxAlignment();
+            OmniboxAlignment a=dropdown.mOmniboxAlignmentSupplier.value;
+            if(a.left!=10 || a.top!=96 || a.width!=220)throw new AssertionError("Native descendant geometry changed");
+            toolbar.removeView(bar);dropdown.recalculateOmniboxAlignment();
+            OmniboxAlignment empty=dropdown.mOmniboxAlignmentSupplier.value;
+            if(empty.width!=0 || empty.height!=0 || empty.left!=0 || empty.top!=0)
+                throw new AssertionError("Detached geometry must use safe dimensions");
+            header.addView(bar,new FrameLayout.LayoutParams(220,42));bar.layout(10,50,230,92);
+            dropdown.recalculateOmniboxAlignment();
+            if(dropdown.mOmniboxAlignmentSupplier.value.width<=0)
+                throw new AssertionError("Reattached omnibox did not recover");
+        }
+    }
+}

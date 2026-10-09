@@ -65,6 +65,25 @@ public final class ArcDesktopPolicyTest {
                 "zero-radius rectangle retains normal rectangular hit testing");
         check(!ArcDesktopPolicy.containsRoundedRectPoint(0, 0, 0, 0, 2, 2, 99),
                 "oversized radius is clamped instead of exposing a square corner");
+        try {
+            var navigation = ArcDesktopPolicy.class.getMethod("showNavigationControls", int.class, float.class);
+            check((boolean) navigation.invoke(null, 240, 1f), "wide rails retain navigation regardless of height");
+            check(!(boolean) navigation.invoke(null, 52, 1f), "collapsed rails cannot fit four navigation buttons");
+            check((boolean) navigation.invoke(null, 480, 2f), "navigation respects current window density");
+            check(!(boolean) navigation.invoke(null, 240, 0f), "invalid density cannot size navigation");
+        } catch (ReflectiveOperationException error) {
+            throw new AssertionError("Arc navigation availability must not depend on collection height", error);
+        }
+        check(ArcDesktopPolicy.captionReserveHeight(40, 0) == 40,
+                "caption reserves space above 42dp bookmark bar");
+        check(ArcDesktopPolicy.captionReserveHeight(40, 16) == 24,
+                "caption excludes other top-layer height");
+        check(ArcDesktopPolicy.captionReserveHeight(24, 0) == 24,
+                "desktop header geometry updates after resize");
+        check(ArcDesktopPolicy.captionReserveHeight(0, 0) == 0,
+                "fullscreen caption does not reserve obsolete height");
+        check(ArcDesktopPolicy.captionReserveHeight(24, 100) == 0,
+                "caption space never underflows");
         check(ArcDesktopPolicy.showFullControls(240, 700, 1f),
                 "expanded 240dp rail exposes full Arc controls");
         check(!ArcDesktopPolicy.showFullControls(52, 700, 1f),
@@ -75,17 +94,6 @@ public final class ArcDesktopPolicyTest {
                 "expanded contract scales with density rather than physical pixels");
         check(!ArcDesktopPolicy.showFullControls(240, 700, 0f),
                 "invalid density fails compact instead of exposing oversized controls");
-
-        check(ArcDesktopPolicy.ARC_OUTER_PADDING_DP > 0
-                        && ArcDesktopPolicy.ARC_FRAME_GAP_DP > 0
-                        && ArcDesktopPolicy.ARC_CONTENT_RADIUS_DP > 0
-                        && ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP > 0
-                        && ArcDesktopPolicy.ARC_NAV_BUTTON_WIDTH_DP > 0
-                        && ArcDesktopPolicy.ARC_LOCATION_BAR_SIDE_MARGIN_DP >= 0
-                        && ArcDesktopPolicy.ARC_FULL_CONTROLS_MIN_WIDTH_DP
-                                >= ArcDesktopPolicy.ARC_NAV_BUTTON_WIDTH_DP * 4
-                        && ArcDesktopPolicy.ARC_FULL_CONTROLS_MIN_HEIGHT_DP > 0,
-                "Arc frame dimensions remain semantic and fit collapse plus native navigation");
 
         System.out.println("ArcDesktopPolicy: policy, palette and rounded-content contract cases defined");
     }

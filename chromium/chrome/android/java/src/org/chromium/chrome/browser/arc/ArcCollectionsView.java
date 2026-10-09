@@ -18,6 +18,7 @@ import android.widget.ScrollView;
 import android.widget.Toast;
 
 import org.chromium.chrome.R;
+import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy;
 
 import java.util.List;
 import java.util.function.BiConsumer;
@@ -39,6 +40,7 @@ public final class ArcCollectionsView extends LinearLayout {
     private final Supplier<CurrentTab> mCurrentTab;
     private final BiConsumer<ArcSidebarState.Entry, ImageButton> mLoadIcon;
     private final LinearLayout mFavorites;
+    private final HorizontalScrollView mFavoritesScroll;
     private final LinearLayout mEntries;
     private final Button mSpace;
     private final ScrollView mScroll;
@@ -47,6 +49,7 @@ public final class ArcCollectionsView extends LinearLayout {
     private AlertDialog mDialog;
     private PopupMenu mMenu;
     private boolean mDestroyed;
+    private ArcDesktopPolicy.Geometry mGeometry;
 
     public ArcCollectionsView(Activity activity, ArcCollectionsController controller,
             Supplier<CurrentTab> currentTab,
@@ -60,10 +63,10 @@ public final class ArcCollectionsView extends LinearLayout {
         setPadding(dp(8), dp(4), dp(8), dp(4));
         mFavorites = new LinearLayout(activity);
         mFavorites.setContentDescription(activity.getString(R.string.arc_favorites));
-        HorizontalScrollView favoritesScroll = new HorizontalScrollView(activity);
-        favoritesScroll.setHorizontalScrollBarEnabled(false);
-        favoritesScroll.addView(mFavorites);
-        addView(favoritesScroll, new LayoutParams(-1, dp(52)));
+        mFavoritesScroll = new HorizontalScrollView(activity);
+        mFavoritesScroll.setHorizontalScrollBarEnabled(false);
+        mFavoritesScroll.addView(mFavorites);
+        addView(mFavoritesScroll, new LayoutParams(-1, dp(52)));
         mSpace = button("", this::showSpaces);
         mSpace.setTag("arc-current-space");
         mSpace.setContentDescription(activity.getString(R.string.arc_spaces));
@@ -114,6 +117,40 @@ public final class ArcCollectionsView extends LinearLayout {
     public void setCollectionHeight(int height) {
         android.view.ViewGroup.LayoutParams params = mScroll.getLayoutParams();
         if (params.height != height) { params.height = height; mScroll.setLayoutParams(params); }
+    }
+
+    /** Size the existing favorite buttons; retain their bookmark/collection handlers and icons. */
+    public void applyGeometry(ArcDesktopPolicy.Geometry geometry, int availableWidthPx) {
+        mGeometry = geometry;
+        setPadding(0, 0, 0, 0);
+        LayoutParams row = (LayoutParams) mFavoritesScroll.getLayoutParams();
+        if (row.height != geometry.quickAccessHeight) {
+            row.height = geometry.quickAccessHeight;
+            mFavoritesScroll.setLayoutParams(row);
+        }
+        int tilesWidth = Math.max(0, availableWidthPx
+                - geometry.quickAccessGap - geometry.quickAccessSecondGap);
+        for (int i = 0; i < mFavorites.getChildCount(); i++) {
+            View favorite = mFavorites.getChildAt(i);
+            LayoutParams tile = (LayoutParams) favorite.getLayoutParams();
+            int column = i % 3;
+            int width = (column + 1) * tilesWidth / 3 - column * tilesWidth / 3;
+            int gap = i + 1 == mFavorites.getChildCount() ? 0
+                    : column == 1 ? geometry.quickAccessSecondGap : geometry.quickAccessGap;
+            if (tile.width != width || tile.height != geometry.quickAccessHeight
+                    || tile.getMarginEnd() != gap) {
+                tile.width = width;
+                tile.height = geometry.quickAccessHeight;
+                tile.setMarginEnd(gap);
+                favorite.setLayoutParams(tile);
+            }
+        }
+    }
+
+    @Override
+    protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+        super.onLayout(changed, left, top, right, bottom);
+        if (!mDestroyed && mGeometry != null) applyGeometry(mGeometry, getWidth());
     }
 
     private void remember(boolean favorite) {

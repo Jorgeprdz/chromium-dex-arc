@@ -8,6 +8,7 @@ import android.app.AlertDialog;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Outline;
+import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.text.InputType;
@@ -15,11 +16,15 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewOutlineProvider;
 import android.view.ViewGroup;
+import android.view.SurfaceView;
+import android.view.SurfaceHolder;
+import android.view.ViewTreeObserver;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
+import android.widget.ScrollView;
 import android.widget.TextView;
 
 import org.chromium.chrome.R;
@@ -49,8 +54,12 @@ public final class ArcDesktopCoordinator {
     private final Activity mActivity;
     private final ViewGroup mRail;
     private final View mNativeTabs;
+    private final int mOriginalNativeTabsPaddingLeft, mOriginalNativeTabsPaddingTop;
+    private final int mOriginalNativeTabsPaddingRight, mOriginalNativeTabsPaddingBottom;
     private final LinearLayout mColumn;
     private final LinearLayout mHeader;
+    private final ScrollView mHeaderScroll;
+    private final View mCaptionSpacer;
     private final LinearLayout mNavigationRow;
     private final LinearLayout mNavigationControls;
     private final View mMenuButtonWrapper;
@@ -76,6 +85,9 @@ public final class ArcDesktopCoordinator {
     private final CompositorViewHolder mCompositorViewHolder;
     private final View mFrameRoot;
     private final Drawable mOriginalFrameBackground;
+    private final ViewOutlineProvider mOriginalFrameOutlineProvider;
+    private final boolean mOriginalFrameClipToOutline;
+    private final ViewOutlineProvider mArcFrameOutlineProvider;
     private final ViewOutlineProvider mOriginalContentOutlineProvider;
     private final boolean mOriginalContentClipToOutline;
     private final int mOriginalContentMarginLeft;
@@ -95,7 +107,10 @@ public final class ArcDesktopCoordinator {
     private final SharedPreferences mPreferences;
     private final SharedPreferences.OnSharedPreferenceChangeListener mPreferenceListener;
     private final View.OnLayoutChangeListener mLayoutListener;
+    private final View.OnLayoutChangeListener mColumnLayoutListener;
+    private final View.OnLayoutChangeListener mHeaderLayoutListener;
     private final View.OnLayoutChangeListener mContentLayoutListener;
+    private final ViewTreeObserver.OnGlobalLayoutListener mSurfaceLayoutListener;
     private final ViewOutlineProvider mArcContentOutlineProvider;
     private final TouchEventObserver mArcTouchEventObserver;
     private final View.OnAttachStateChangeListener mSurfaceAttachStateListener;
@@ -114,7 +129,23 @@ public final class ArcDesktopCoordinator {
     private View mClippedSurface;
     private ViewOutlineProvider mClippedSurfaceOriginalOutlineProvider;
     private boolean mClippedSurfaceOriginalClipToOutline;
+    private Rect mClippedSurfaceOriginalClipBounds;
+    private ArcDesktopPolicy.Geometry mFrameGeometry;
+    private final Runnable mGeometryUpdate = () -> {
+        if (!mDestroyed && mArcFrameActive && mArcToolbarCompositionActive) applyFrameGeometry();
+    };
+    private final SurfaceHolder.Callback mSurfaceCallback = new SurfaceHolder.Callback() {
+        @Override public void surfaceCreated(SurfaceHolder holder) { mGeometryUpdate.run(); }
+        @Override public void surfaceChanged(SurfaceHolder holder, int format, int width, int height) {
+            mGeometryUpdate.run();
+        }
+        @Override public void surfaceDestroyed(SurfaceHolder holder) {
+            if (!mDestroyed) mCompositorViewHolder.post(mGeometryUpdate);
+        }
+    };
     private AlertDialog mColorDialog;
+    private PopupMenu mNavigationMenu;
+    private int mLastNativeRowHeight = -1;
 
     public ArcDesktopCoordinator(Activity activity, ViewGroup rail,
             Profile profile, Consumer<String> navigate,
@@ -188,6 +219,14 @@ public final class ArcDesktopCoordinator {
 
         mFrameRoot = activity.findViewById(R.id.coordinator);
         mOriginalFrameBackground = mFrameRoot == null ? null : mFrameRoot.getBackground();
+        mOriginalFrameOutlineProvider = mFrameRoot == null ? null : mFrameRoot.getOutlineProvider();
+        mOriginalFrameClipToOutline = mFrameRoot != null && mFrameRoot.getClipToOutline();
+        mArcFrameOutlineProvider = new ViewOutlineProvider() {
+            @Override public void getOutline(View view, Outline outline) {
+                outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(),
+                        currentFrameGeometry().outerRadius);
+            }
+        };
         mOriginalContentOutlineProvider = compositorViewHolder.getOutlineProvider();
         mOriginalContentClipToOutline = compositorViewHolder.getClipToOutline();
         ViewGroup.LayoutParams rawContentLayoutParams = compositorViewHolder.getLayoutParams();
@@ -204,6 +243,10 @@ public final class ArcDesktopCoordinator {
             mOriginalContentMarginBottom = 0;
         }
         mNativeTabs = nativeTabs;
+        mOriginalNativeTabsPaddingLeft = nativeTabs.getPaddingLeft();
+        mOriginalNativeTabsPaddingTop = nativeTabs.getPaddingTop();
+        mOriginalNativeTabsPaddingRight = nativeTabs.getPaddingRight();
+        mOriginalNativeTabsPaddingBottom = nativeTabs.getPaddingBottom();
         mMenuButtonWrapper = menuButtonWrapper;
         mMenuButtonOriginalParent = (ViewGroup) mMenuButtonWrapper.getParent();
         mMenuButtonOriginalIndex = mMenuButtonOriginalParent.indexOfChild(mMenuButtonWrapper);
@@ -232,11 +275,17 @@ public final class ArcDesktopCoordinator {
 
         rail.removeView(mNativeTabs);
         mColumn = column();
-        View captionSpacer = new View(activity);
-        mColumn.addView(captionSpacer, new LinearLayout.LayoutParams(
+        mCaptionSpacer = new View(activity);
+        mColumn.addView(mCaptionSpacer, new LinearLayout.LayoutParams(
                 -1, nativeSpacer.getLayoutParams().height));
-        ((VerticalTabRailLayout) mNativeTabs).setDesktopWindowSpacerHost(captionSpacer);
+        ((VerticalTabRailLayout) mNativeTabs).setDesktopWindowSpacerHost(mCaptionSpacer);
         mHeader = column();
+        mHeaderScroll = new ScrollView(activity);
+        mHeaderScroll.setVerticalScrollBarEnabled(false);
+        mHeaderScroll.addView(mHeader);
+        // Keep native navigation reachable when only the 52dp rail or a narrow allocation fits.
+        mCollapseButton.setTooltipText(activity.getString(R.string.arc_navigation_hint));
+        mCollapseButton.setOnLongClickListener(view -> { showNavigationMenu(view); return true; });
 
         mNavigationRow = new LinearLayout(activity);
         mCollapseButtonOriginalParent.removeView(mCollapseButton);
@@ -283,8 +332,8 @@ public final class ArcDesktopCoordinator {
         mLocationBarOriginalParent.removeView(mLocationBarHost);
         LinearLayout.LayoutParams locationBarParams = new LinearLayout.LayoutParams(
                 -1, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP));
-        locationBarParams.setMarginStart(dp(ArcDesktopPolicy.ARC_LOCATION_BAR_SIDE_MARGIN_DP));
-        locationBarParams.setMarginEnd(dp(ArcDesktopPolicy.ARC_LOCATION_BAR_SIDE_MARGIN_DP));
+        locationBarParams.setMarginStart(currentFrameGeometry().sideInset);
+        locationBarParams.setMarginEnd(currentFrameGeometry().sideInset);
         mHeader.addView(mLocationBarHost, locationBarParams);
 
         mHeaderActions = new LinearLayout(activity);
@@ -300,7 +349,7 @@ public final class ArcDesktopCoordinator {
                             0, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP), 1));
         }
         mHeader.addView(mHeaderActions);
-        mColumn.addView(mHeader);
+        mColumn.addView(mHeaderScroll);
         mColumn.addView(mNativeTabs, new LinearLayout.LayoutParams(-1, 0, 1));
 
         mFooter = new LinearLayout(activity);
@@ -338,13 +387,12 @@ public final class ArcDesktopCoordinator {
                 new ViewOutlineProvider() {
                     @Override
                     public void getOutline(View view, Outline outline) {
-                        int left = arcClipLeftForView(view);
-                        if (view.getWidth() <= left || view.getHeight() <= 0) {
+                        Rect bounds = arcClipBoundsForView(view);
+                        if (bounds.isEmpty()) {
                             outline.setEmpty();
                             return;
                         }
-                        outline.setRoundRect(left, 0, view.getWidth(), view.getHeight(),
-                                dp(ArcDesktopPolicy.ARC_CONTENT_RADIUS_DP));
+                        outline.setRoundRect(bounds, currentFrameGeometry().viewportRadius);
                     }
                 };
         mArcTouchEventObserver =
@@ -384,15 +432,14 @@ public final class ArcDesktopCoordinator {
                     @Override
                     public void onViewAttachedToWindow(View view) {
                         if (!mDestroyed && mArcFrameActive) {
-                            view.post(ArcDesktopCoordinator.this::applyFrameGeometry);
+                            view.post(mGeometryUpdate);
                         }
                     }
 
                     @Override
                     public void onViewDetachedFromWindow(View view) {
                         if (!mDestroyed && mArcFrameActive) {
-                            mCompositorViewHolder.post(
-                                    ArcDesktopCoordinator.this::applyFrameGeometry);
+                            mCompositorViewHolder.post(mGeometryUpdate);
                         }
                     }
                 };
@@ -402,6 +449,12 @@ public final class ArcDesktopCoordinator {
                     if (mArcFrameActive) applyFrameGeometry();
                 };
         mCompositorViewHolder.addOnLayoutChangeListener(mContentLayoutListener);
+        // Global layout catches a same-size replacement of the active compositor SurfaceView.
+        // This is a layout event, not a frame callback or permanent polling loop.
+        mSurfaceLayoutListener = () -> {
+            if (!mDestroyed && mArcFrameActive) applyActiveSurfaceClip();
+        };
+        mCompositorViewHolder.getViewTreeObserver().addOnGlobalLayoutListener(mSurfaceLayoutListener);
 
         // The real LocationBar is already detached into the Arc header. Suppressing the toolbar
         // now removes its layer from TopControlsStacker, so it contributes no height or hitbox.
@@ -430,6 +483,16 @@ public final class ArcDesktopCoordinator {
         mPreferences.registerOnSharedPreferenceChangeListener(mPreferenceListener);
         mLayoutListener = (v, l, t, r, b, ol, ot, or, ob) -> { rebindCollections(); applyAppearance(); };
         rail.addOnLayoutChangeListener(mLayoutListener);
+        // The rail may be laid out before its child. Re-evaluate actual available width.
+        mColumnLayoutListener = (v, l, t, r, b, ol, ot, or, ob) -> {
+            if (r - l != or - ol || b - t != ob - ot) applyAppearance();
+        };
+        mColumn.addOnLayoutChangeListener(mColumnLayoutListener);
+        mHeaderLayoutListener = (v, l, t, r, b, ol, ot, or, ob) -> {
+            if (!mDestroyed && mArcToolbarCompositionActive) applySidebarGeometry();
+        };
+        mHeader.addOnLayoutChangeListener(mHeaderLayoutListener);
+        mCaptionSpacer.addOnLayoutChangeListener(mHeaderLayoutListener);
         mIncognitoStateProvider.addIncognitoStateObserverAndTrigger(mIncognitoObserver);
         applyAppearance();
     }
@@ -525,8 +588,29 @@ public final class ArcDesktopCoordinator {
                         if (!mDestroyed && mTabSession == session && icon != null) button.setImageBitmap(icon);
                     });
         });
-        // Navigation/address stay at the top; collections follow the Arc header actions.
-        mHeader.addView(mCollectionsView);
+        // Real favorites immediately follow the native omnibox; secondary actions come later.
+        mHeader.addView(mCollectionsView, 2);
+    }
+
+    private void showNavigationMenu(View anchor) {
+        if (mDestroyed) return;
+        if (mNavigationMenu != null) mNavigationMenu.dismiss();
+        mNavigationMenu = new PopupMenu(mActivity, anchor);
+        Tab tab = mCurrentTab.get();
+        mNavigationMenu.getMenu().add(0, 0, 0, R.string.accessibility_toolbar_btn_back)
+                .setEnabled(tab != null && tab.canGoBack());
+        mNavigationMenu.getMenu().add(0, 1, 1, R.string.accessibility_toolbar_btn_forward)
+                .setEnabled(tab != null && tab.canGoForward());
+        mNavigationMenu.getMenu().add(0, 2, 2, R.string.accessibility_btn_refresh);
+        mNavigationMenu.setOnMenuItemClickListener(item -> {
+            Tab current = mCurrentTab.get();
+            if (mDestroyed || current == null) return false;
+            if (item.getItemId() == 0 && current.canGoBack()) current.goBack();
+            else if (item.getItemId() == 1 && current.canGoForward()) current.goForward();
+            else if (item.getItemId() == 2) current.reload();
+            return true;
+        });
+        mNavigationMenu.show();
     }
 
     private void showGoogleMenu(View anchor) {
@@ -576,8 +660,8 @@ public final class ArcDesktopCoordinator {
     private LinearLayout.LayoutParams arcLocationBarLayoutParams() {
         LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
                 -1, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP));
-        params.setMarginStart(dp(ArcDesktopPolicy.ARC_LOCATION_BAR_SIDE_MARGIN_DP));
-        params.setMarginEnd(dp(ArcDesktopPolicy.ARC_LOCATION_BAR_SIDE_MARGIN_DP));
+        params.setMarginStart(currentFrameGeometry().sideInset);
+        params.setMarginEnd(currentFrameGeometry().sideInset);
         return params;
     }
 
@@ -617,6 +701,8 @@ public final class ArcDesktopCoordinator {
                             ViewGroup.LayoutParams.WRAP_CONTENT,
                             dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
         }
+        mCollapseButton.setTooltipText(mActivity.getString(R.string.arc_navigation_hint));
+        mCollapseButton.setOnLongClickListener(view -> { showNavigationMenu(view); return true; });
     }
 
     private void setArcToolbarCompositionActive(boolean active) {
@@ -648,7 +734,11 @@ public final class ArcDesktopCoordinator {
                     (VerticalTabRailLayout) mNativeTabs, incognito);
         }
         if (!desktop) {
+            ((VerticalTabRailLayout) mNativeTabs).setArcAvailableTabHeight(0, false);
+            mNativeTabs.setPadding(mOriginalNativeTabsPaddingLeft, mOriginalNativeTabsPaddingTop,
+                    mOriginalNativeTabsPaddingRight, mOriginalNativeTabsPaddingBottom);
             mHeader.setVisibility(View.GONE);
+            mHeaderScroll.setVisibility(View.GONE);
             mFooter.setVisibility(View.GONE);
             if (mCollectionsView != null) mCollectionsView.setVisibility(View.GONE);
             mColumn.setBackgroundColor(Color.TRANSPARENT);
@@ -656,16 +746,21 @@ public final class ArcDesktopCoordinator {
             return;
         }
 
-        boolean expanded =
-                ArcDesktopPolicy.showFullControls(
-                        mRail.getWidth(),
-                        mRail.getHeight(),
-                        mActivity.getResources().getDisplayMetrics().density);
+        // mColumn has the actual allocated width after rail padding and split-window resize.
+        final int availableWidthPx = mColumn.getWidth();
+        final int availableHeightPx = mColumn.getHeight();
+        final float density = mActivity.getResources().getDisplayMetrics().density;
+        ArcDesktopPolicy.Geometry geometry = currentFrameGeometry();
+        boolean navigationVisible = ArcDesktopPolicy.showNavigationControls(
+                availableWidthPx - geometry.sideInset * 2, density);
+        boolean expanded = ArcDesktopPolicy.showFullControls(
+                availableWidthPx, availableHeightPx, density);
         // Keep the real Chromium LocationBar visible even in collapsed mode so keyboard/focus
         // paths never target a GONE omnibox. Secondary Arc controls are restored on expansion.
         mHeader.setVisibility(View.VISIBLE);
+        mHeaderScroll.setVisibility(View.VISIBLE);
         mNavigationRow.setVisibility(View.VISIBLE);
-        mNavigationControls.setVisibility(expanded ? View.VISIBLE : View.GONE);
+        mNavigationControls.setVisibility(navigationVisible ? View.VISIBLE : View.GONE);
         mHeaderActions.setVisibility(expanded ? View.VISIBLE : View.GONE);
         // The native app menu remains reachable while collapsed. Secondary footer actions can
         // disappear so the compact rail does not retain expanded hitboxes.
@@ -680,8 +775,9 @@ public final class ArcDesktopCoordinator {
         applyFrameGeometry();
         if (expanded && mCollectionsView != null) {
             mCollectionsView.setCollectionHeight(
-                    Math.max(dp(80), Math.min(dp(240), mRail.getHeight() / 4)));
+                    Math.max(0, Math.min(dp(112), availableHeightPx / 6)));
         }
+        applySidebarGeometry();
         // Leave native tab selection, incognito and favicon rendering to its binders.
         int surface = ArcDesktopAppearance.surface(mActivity, incognito);
         int foreground = ArcDesktopPolicy.foreground(surface);
@@ -695,29 +791,130 @@ public final class ArcDesktopCoordinator {
         return Math.max(0, width == null ? 0 : width);
     }
 
-    private int arcClipLeftForView(View view) {
-        int reserved = reservedLeftWidth();
-        if (view == mCompositorViewHolder) return Math.min(reserved, view.getWidth());
-        // The active SurfaceView is normally full-holder width. If Chromium supplies a content-only
-        // surface instead, it has already removed the Side UI width and must not be inset twice.
-        int holderWidth = mCompositorViewHolder.getWidth();
-        if (holderWidth > 0 && Math.abs(view.getWidth() - holderWidth) <= dp(2)) {
-            return Math.min(reserved, view.getWidth());
+    private int captionHeight() {
+        if (mCaptionSpacer.getVisibility() != View.VISIBLE) return 0;
+        return Math.max(0, mCaptionSpacer.getLayoutParams().height);
+    }
+
+    private void applySidebarGeometry() {
+        if (mDestroyed || !mArcToolbarCompositionActive) return;
+        ArcDesktopPolicy.Geometry g = currentFrameGeometry();
+        boolean compact = mColumn.getWidth() <= dp(ArcDesktopPolicy.COLLAPSED_WIDTH_DP);
+        int side = compact ? 0 : g.sideInset;
+        if (mNativeTabs.getPaddingLeft() != side || mNativeTabs.getPaddingRight() != side) {
+            mNativeTabs.setPadding(side, mOriginalNativeTabsPaddingTop,
+                    side, mOriginalNativeTabsPaddingBottom);
         }
-        return 0;
+        if (mLastNativeRowHeight != g.omniboxHeight) {
+            mLastNativeRowHeight = g.omniboxHeight;
+            refreshNativeRows(mNativeTabs);
+        }
+        mHeader.setPadding(0, g.headerTopInset, 0, 0);
+        mNavigationRow.setPadding(side, 0, side, 0);
+        LinearLayout.LayoutParams collapse = (LinearLayout.LayoutParams) mCollapseButton.getLayoutParams();
+        if (collapse.width != dp(ArcDesktopPolicy.ARC_NAV_BUTTON_WIDTH_DP)
+                || collapse.height != g.navigationHeight || collapse.getMarginStart() != 0
+                || collapse.bottomMargin != 0) {
+            collapse.width = dp(ArcDesktopPolicy.ARC_NAV_BUTTON_WIDTH_DP);
+            collapse.height = g.navigationHeight;
+            collapse.setMarginStart(0);
+            collapse.bottomMargin = 0;
+            mCollapseButton.setLayoutParams(collapse);
+        }
+        LinearLayout.LayoutParams url = (LinearLayout.LayoutParams) mLocationBarHost.getLayoutParams();
+        if (url.height != g.omniboxHeight || url.getMarginStart() != side
+                || url.getMarginEnd() != side) {
+            url.height = g.omniboxHeight;
+            url.setMarginStart(side);
+            url.setMarginEnd(side);
+            mLocationBarHost.setLayoutParams(url);
+        }
+        if (mCollectionsView != null) {
+            LinearLayout.LayoutParams collections = (LinearLayout.LayoutParams) mCollectionsView.getLayoutParams();
+            int gap = g.omniboxBottomGap;
+            if (collections.getMarginStart() != side || collections.getMarginEnd() != side
+                    || collections.topMargin != gap) {
+                collections.setMarginStart(side);
+                collections.setMarginEnd(side);
+                collections.topMargin = gap;
+                mCollectionsView.setLayoutParams(collections);
+            }
+            mCollectionsView.applyGeometry(g, Math.max(0, mColumn.getWidth() - 2 * side));
+        }
+        mFooter.setPadding(side, 0, side, g.footerBottomInset);
+        int caption = captionHeight();
+        ArcDesktopPolicy.SidebarBudget budget = ArcDesktopPolicy.sidebarBudget(
+                mColumn.getHeight(), caption, mHeader.getMeasuredHeight(),
+                mActivity.getResources().getDisplayMetrics().density, g.footerBottomInset);
+        ((VerticalTabRailLayout) mNativeTabs).setArcAvailableTabHeight(budget.tabHeight, true);
+        LinearLayout.LayoutParams footer = (LinearLayout.LayoutParams) mFooter.getLayoutParams();
+        if (footer.height != budget.footerHeight) {
+            footer.height = budget.footerHeight;
+            mFooter.setLayoutParams(footer);
+        }
+        LinearLayout.LayoutParams header = (LinearLayout.LayoutParams) mHeaderScroll.getLayoutParams();
+        if (header.height != budget.headerHeight) {
+            header.height = budget.headerHeight;
+            mHeaderScroll.setLayoutParams(header);
+        }
+        // Keep the app menu inside the scrolling native header if utilities do not fit.
+        boolean footerVisible = budget.footerHeight > 0;
+        ViewGroup menuParent = footerVisible ? mFooter : mHeader;
+        if (mMenuButtonWrapper.getParent() != menuParent) {
+            ((ViewGroup) mMenuButtonWrapper.getParent()).removeView(mMenuButtonWrapper);
+            menuParent.addView(mMenuButtonWrapper, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT, g.footerHeight));
+        }
+        mFooter.setVisibility(footerVisible ? View.VISIBLE : View.GONE);
+    }
+
+    private int arcClipLeftForView(View view) {
+        return arcClipBoundsForView(view).left;
+    }
+
+    private ArcDesktopPolicy.Geometry currentFrameGeometry() {
+        int width = mFrameRoot == null ? 0 : mFrameRoot.getWidth();
+        int height = mFrameRoot == null ? 0 : mFrameRoot.getHeight();
+        if (width <= 0) width = mCompositorViewHolder.getWidth();
+        if (height <= 0) height = mCompositorViewHolder.getHeight();
+        return ArcDesktopPolicy.geometry(width, height, reservedLeftWidth(),
+                mActivity.getResources().getDisplayMetrics().density, false);
+    }
+
+    private Rect arcClipBoundsForView(View view) {
+        int left = Math.min(reservedLeftWidth(), mCompositorViewHolder.getWidth());
+        Rect bounds = new Rect(left, 0,
+                mCompositorViewHolder.getWidth(), mCompositorViewHolder.getHeight());
+        if (view != mCompositorViewHolder) {
+            int[] holderPosition = new int[2];
+            int[] surfacePosition = new int[2];
+            mCompositorViewHolder.getLocationInWindow(holderPosition);
+            view.getLocationInWindow(surfacePosition);
+            int dx = holderPosition[0] - surfacePosition[0];
+            int dy = holderPosition[1] - surfacePosition[1];
+            bounds.set(Math.max(0, bounds.left + dx), Math.max(0, bounds.top + dy),
+                    Math.min(view.getWidth(), bounds.right + dx),
+                    Math.min(view.getHeight(), bounds.bottom + dy));
+        }
+        return bounds;
     }
 
     private boolean isInsideArcContent(float x, float y) {
         return ArcDesktopPolicy.containsRoundedRectPoint(
                 x, y, reservedLeftWidth(), 0, mCompositorViewHolder.getWidth(),
-                mCompositorViewHolder.getHeight(), dp(ArcDesktopPolicy.ARC_CONTENT_RADIUS_DP));
+                mCompositorViewHolder.getHeight(), currentFrameGeometry().viewportRadius);
     }
 
     private void restoreClippedSurface() {
         if (mClippedSurface == null) return;
+        mClippedSurface.removeCallbacks(mGeometryUpdate);
+        if (mClippedSurface instanceof SurfaceView) {
+            ((SurfaceView) mClippedSurface).getHolder().removeCallback(mSurfaceCallback);
+        }
         mClippedSurface.removeOnAttachStateChangeListener(mSurfaceAttachStateListener);
         mClippedSurface.setOutlineProvider(mClippedSurfaceOriginalOutlineProvider);
         mClippedSurface.setClipToOutline(mClippedSurfaceOriginalClipToOutline);
+        mClippedSurface.setClipBounds(mClippedSurfaceOriginalClipBounds);
         mClippedSurface.invalidateOutline();
         mClippedSurface = null;
         mClippedSurfaceOriginalOutlineProvider = null;
@@ -726,7 +923,13 @@ public final class ArcDesktopCoordinator {
     private void applyActiveSurfaceClip() {
         View activeSurface = mCompositorViewHolder.getActiveSurfaceView();
         if (activeSurface == mClippedSurface) {
-            if (activeSurface != null) activeSurface.invalidateOutline();
+            if (activeSurface != null) {
+                Rect bounds = arcClipBoundsForView(activeSurface);
+                if (!bounds.equals(activeSurface.getClipBounds())) {
+                    activeSurface.setClipBounds(bounds);
+                    activeSurface.invalidateOutline();
+                }
+            }
             return;
         }
         restoreClippedSurface();
@@ -734,39 +937,43 @@ public final class ArcDesktopCoordinator {
         mClippedSurface = activeSurface;
         mClippedSurfaceOriginalOutlineProvider = activeSurface.getOutlineProvider();
         mClippedSurfaceOriginalClipToOutline = activeSurface.getClipToOutline();
+        mClippedSurfaceOriginalClipBounds = activeSurface.getClipBounds();
         activeSurface.addOnAttachStateChangeListener(mSurfaceAttachStateListener);
         activeSurface.setOutlineProvider(mArcContentOutlineProvider);
         activeSurface.setClipToOutline(true);
+        activeSurface.setClipBounds(arcClipBoundsForView(activeSurface));
+        if (activeSurface instanceof SurfaceView) {
+            ((SurfaceView) activeSurface).getHolder().addCallback(mSurfaceCallback);
+        }
         activeSurface.invalidateOutline();
     }
 
     private void applyFrameGeometry() {
-        if (mDestroyed) return;
+        if (mDestroyed || !mArcToolbarCompositionActive) return;
+        if (mCompositorViewHolder.getFullscreenManager().getPersistentFullscreenMode()) {
+            clearFrameGeometry();
+            return;
+        }
         mArcFrameActive = true;
+        mFrameGeometry = currentFrameGeometry();
         mCompositorViewHolder.setOutlineProvider(mArcContentOutlineProvider);
         mCompositorViewHolder.setClipToOutline(true);
-        int outer = dp(ArcDesktopPolicy.ARC_OUTER_PADDING_DP);
-        int gap = dp(ArcDesktopPolicy.ARC_FRAME_GAP_DP);
-        // Preserve the complete Side UI width, especially the 52dp collapsed contract. The frame
-        // gap belongs between Side UI and content, not inside the rail where it would shrink
-        // native tab hit targets. Top/bottom padding remains part of the Arc frame.
+        // The sidebar reaches the frame edges. SideUiCoordinator already owns its full width.
         mRail.setPadding(
-                mOriginalRailPaddingLeft, outer, mOriginalRailPaddingRight, outer);
+                mOriginalRailPaddingLeft, 0, mOriginalRailPaddingRight, 0);
 
         ViewGroup.LayoutParams raw = mCompositorViewHolder.getLayoutParams();
         if (raw instanceof ViewGroup.MarginLayoutParams) {
             ViewGroup.MarginLayoutParams margins = (ViewGroup.MarginLayoutParams) raw;
-            int contentLeftMargin = mOriginalContentMarginLeft + gap;
-            int contentTopMargin = mOriginalContentMarginTop + outer;
-            int contentRightMargin = mOriginalContentMarginRight + outer;
-            int contentBottomMargin = mOriginalContentMarginBottom + outer;
+            int contentLeftMargin = mOriginalContentMarginLeft;
+            int contentTopMargin = mOriginalContentMarginTop + mFrameGeometry.topInset;
+            int contentRightMargin = mOriginalContentMarginRight + mFrameGeometry.endInset;
+            int contentBottomMargin = mOriginalContentMarginBottom + mFrameGeometry.bottomInset;
             if (margins.leftMargin != contentLeftMargin
                     || margins.topMargin != contentTopMargin
                     || margins.rightMargin != contentRightMargin
                     || margins.bottomMargin != contentBottomMargin) {
-                // The holder itself moves right by `gap`; Chromium's existing SideUi content
-                // offset remains `reservedLeftWidth`, so visual bounds and touch coordinates both
-                // begin at reservedLeftWidth + gap without a fake translation.
+                // Native Side UI offsets determine both page position and input coordinates.
                 margins.leftMargin = contentLeftMargin;
                 margins.topMargin = contentTopMargin;
                 margins.rightMargin = contentRightMargin;
@@ -779,12 +986,18 @@ public final class ArcDesktopCoordinator {
 
         boolean incognito = mIncognitoStateProvider.isIncognitoSelected();
         int surface = ArcDesktopAppearance.surface(mActivity, incognito);
-        if (mFrameRoot != null) mFrameRoot.setBackgroundColor(surface);
+        if (mFrameRoot != null) {
+            mFrameRoot.setBackgroundColor(surface);
+            mFrameRoot.setOutlineProvider(mArcFrameOutlineProvider);
+            mFrameRoot.setClipToOutline(true);
+            mFrameRoot.invalidateOutline();
+        }
     }
 
     private void clearFrameGeometry() {
         if (!mArcFrameActive) return;
         mArcFrameActive = false;
+        mCompositorViewHolder.removeCallbacks(mGeometryUpdate);
         mRejectingRoundedCornerGesture = false;
         restoreClippedSurface();
         mCompositorViewHolder.setOutlineProvider(mOriginalContentOutlineProvider);
@@ -802,13 +1015,24 @@ public final class ArcDesktopCoordinator {
         mRail.setPadding(
                 mOriginalRailPaddingLeft, mOriginalRailPaddingTop,
                 mOriginalRailPaddingRight, mOriginalRailPaddingBottom);
-        if (mFrameRoot != null) mFrameRoot.setBackground(mOriginalFrameBackground);
+        if (mFrameRoot != null) {
+            mFrameRoot.setBackground(mOriginalFrameBackground);
+            mFrameRoot.setOutlineProvider(mOriginalFrameOutlineProvider);
+            mFrameRoot.setClipToOutline(mOriginalFrameClipToOutline);
+            mFrameRoot.invalidateOutline();
+        }
     }
 
     private void restoreFrameGeometry() {
         clearFrameGeometry();
+        ((VerticalTabRailLayout) mNativeTabs).setArcAvailableTabHeight(0, false);
+        mNativeTabs.setPadding(mOriginalNativeTabsPaddingLeft, mOriginalNativeTabsPaddingTop,
+                mOriginalNativeTabsPaddingRight, mOriginalNativeTabsPaddingBottom);
         mCompositorViewHolder.removeTouchEventObserver(mArcTouchEventObserver);
         mCompositorViewHolder.removeOnLayoutChangeListener(mContentLayoutListener);
+        if (mCompositorViewHolder.getViewTreeObserver().isAlive()) {
+            mCompositorViewHolder.getViewTreeObserver().removeOnGlobalLayoutListener(mSurfaceLayoutListener);
+        }
     }
 
     private void restoreToolbarUtilityControls() {
@@ -846,6 +1070,8 @@ public final class ArcDesktopCoordinator {
                 mCollapseButtonOriginalParent.getChildCount());
         mCollapseButtonOriginalParent.addView(
                 mCollapseButton, index, mCollapseButtonOriginalLayoutParams);
+        mCollapseButton.setOnLongClickListener(null);
+        mCollapseButton.setTooltipText(null);
     }
 
     private void restoreLocationBar() {
@@ -906,6 +1132,10 @@ public final class ArcDesktopCoordinator {
         clearCollections();
         mPreferences.unregisterOnSharedPreferenceChangeListener(mPreferenceListener);
         mRail.removeOnLayoutChangeListener(mLayoutListener);
+        mColumn.removeOnLayoutChangeListener(mColumnLayoutListener);
+        mHeader.removeOnLayoutChangeListener(mHeaderLayoutListener);
+        mCaptionSpacer.removeOnLayoutChangeListener(mHeaderLayoutListener);
+        if (mNavigationMenu != null) mNavigationMenu.dismiss();
         if (mColorDialog != null) mColorDialog.dismiss();
         restoreFrameGeometry();
         setArcToolbarCompositionActive(false);
@@ -913,5 +1143,10 @@ public final class ArcDesktopCoordinator {
         mColumn.removeView(mNativeTabs);
         mRail.removeView(mColumn);
         mRail.addView(mNativeTabs, new ViewGroup.LayoutParams(-1, -1));
+    }
+
+    /** Native caption/fullscreen events share the existing resize/layout recomposition path. */
+    public void onSystemWindowStateChanged() {
+        if (!mDestroyed) applyAppearance();
     }
 }

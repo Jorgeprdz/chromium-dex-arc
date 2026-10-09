@@ -92,6 +92,13 @@ import org.chromium.chrome.browser.bookmarks.bar.BookmarkBarUtils.BookmarkBarSet
 import org.chromium.chrome.browser.bookmarks.bar.BookmarkBarVisibilityProvider;
 import org.chromium.chrome.browser.bookmarks.bar.BookmarkBarVisibilityProvider.BookmarkBarVisibilityObserver;
 import org.chromium.chrome.browser.browser_controls.BottomOverscrollHandler;
+import org.chromium.chrome.browser.browser_controls.TopControlLayer;
+import org.chromium.chrome.browser.browser_controls.TopControlsStacker.ScrollBehavior;
+import org.chromium.chrome.browser.browser_controls.TopControlsStacker.TopControlType;
+import org.chromium.chrome.browser.browser_controls.TopControlsStacker.TopControlVisibility;
+import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy;
+import org.chromium.components.browser_ui.desktop_windowing.AppHeaderState;
+import org.chromium.components.browser_ui.desktop_windowing.DesktopWindowStateManager;
 import org.chromium.chrome.browser.collaboration.CollaborationControllerDelegateFactory;
 import org.chromium.chrome.browser.collaboration.CollaborationControllerDelegateImpl;
 import org.chromium.chrome.browser.collaboration.CollaborationServiceFactory;
@@ -126,6 +133,7 @@ import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.flags.ChromeSwitches;
 import org.chromium.chrome.browser.fullscreen.BrowserControlsManager;
 import org.chromium.chrome.browser.fullscreen.FullscreenManager;
+import org.chromium.chrome.browser.fullscreen.FullscreenOptions;
 import org.chromium.chrome.browser.gesturenav.BackActionDelegate;
 import org.chromium.chrome.browser.gesturenav.GestureUserEducationIphController;
 import org.chromium.chrome.browser.gesturenav.HistoryNavigationCoordinator;
@@ -402,6 +410,58 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
     private @Nullable ArcDesktopCoordinator mArcDesktopCoordinator;
     private @Nullable ArcDesktopWindowObserver mArcWindowObserver;
     private boolean mArcToolbarSuppressed;
+    // Toolbar is removed in Arc, but the system caption still requires a height-bearing layer
+    // so BookmarkBarCoordinator receives a correct margin and compositor offset.
+    private final TopControlLayer mArcCaptionLayer = new TopControlLayer() {
+        @Override
+        public @TopControlType int getTopControlType() {
+            return TopControlType.TOOLBAR;
+        }
+
+        @Override
+        public int getTopControlHeight() {
+            if (mFullscreenManager != null && mFullscreenManager.getPersistentFullscreenMode()) return 0;
+            DesktopWindowStateManager manager = getDesktopWindowStateManager();
+            AppHeaderState state = manager == null ? null : manager.getAppHeaderState();
+            if (state == null || !state.isInDesktopWindow()) return 0;
+            return ArcDesktopPolicy.captionReserveHeight(
+                    state.getAppHeaderHeight(),
+                    mTopControlsStacker.getHeightFromLayerToTop(TopControlType.TOOLBAR));
+        }
+
+        @Override
+        public @TopControlVisibility int getTopControlVisibility() {
+            return getTopControlHeight() > 0
+                    ? TopControlVisibility.VISIBLE : TopControlVisibility.HIDDEN;
+        }
+
+        @Override
+        public @ScrollBehavior int getScrollBehavior() {
+            return ScrollBehavior.NEVER_SCROLLABLE;
+        }
+    };
+    private final DesktopWindowStateManager.AppHeaderObserver mArcCaptionObserver =
+            new DesktopWindowStateManager.AppHeaderObserver() {
+                @Override
+                public void onAppHeaderStateChanged(AppHeaderState newState) {
+                    updateArcCaptionHeight();
+                }
+
+                @Override
+                public void onDesktopWindowingModeChanged(boolean isInDesktopWindow) {
+                    updateArcCaptionHeight();
+                }
+            };
+    private boolean mArcCaptionObserverRegistered;
+    private boolean mArcFullscreenObserverRegistered;
+    private final FullscreenManager.Observer mArcFullscreenObserver = new FullscreenManager.Observer() {
+        @Override public void onEnterFullscreen(Tab tab, FullscreenOptions options) {
+            updateArcCaptionHeight();
+        }
+        @Override public void onExitFullscreen(Tab tab) {
+            updateArcCaptionHeight();
+        }
+    };
     private int mArcToolbarOriginalVisibility = View.VISIBLE;
     private int mArcToolbarHairlineOriginalVisibility = View.VISIBLE;
     private @Nullable BookmarkBarCoordinator mBookmarkBarCoordinator;
@@ -902,6 +962,8 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
     @Override
     @SuppressWarnings({"NullAway", "UseSharedPreferencesManagerFromChromeCheck"})
     public void onDestroy() {
+        // Release observers before the base class destroys the desktop window manager.
+        unregisterArcCaptionObserver();
         if (mArcWindowObserver != null) {
             mArcWindowObserver.destroy();
             mArcWindowObserver = null;
@@ -1999,6 +2061,36 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
         return mGlicPromoCoordinator != null;
     }
 
+    private void updateArcCaptionHeight() {
+        if (mArcToolbarSuppressed) {
+            mTopControlsStacker.requestLayerUpdateSync(/* requireAnimate= */ false);
+        }
+        if (mArcDesktopCoordinator != null) mArcDesktopCoordinator.onSystemWindowStateChanged();
+    }
+
+    private void registerArcCaptionObserver() {
+        if (!mArcFullscreenObserverRegistered && mFullscreenManager != null) {
+            mFullscreenManager.addObserver(mArcFullscreenObserver);
+            mArcFullscreenObserverRegistered = true;
+        }
+        if (mArcCaptionObserverRegistered) return;
+        DesktopWindowStateManager manager = getDesktopWindowStateManager();
+        if (manager != null) {
+            mArcCaptionObserverRegistered = manager.addObserver(mArcCaptionObserver);
+        }
+    }
+
+    private void unregisterArcCaptionObserver() {
+        if (mArcFullscreenObserverRegistered && mFullscreenManager != null) {
+            mFullscreenManager.removeObserver(mArcFullscreenObserver);
+            mArcFullscreenObserverRegistered = false;
+        }
+        if (!mArcCaptionObserverRegistered) return;
+        DesktopWindowStateManager manager = getDesktopWindowStateManager();
+        if (manager != null) manager.removeObserver(mArcCaptionObserver);
+        mArcCaptionObserverRegistered = false;
+    }
+
     private void setArcToolbarSuppressed(boolean suppressed) {
         if (mToolbarManager == null || mArcToolbarSuppressed == suppressed) return;
         View toolbarView = mActivity.findViewById(R.id.toolbar);
@@ -2018,7 +2110,12 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
             // leave the stacker's layout contract stale. The hairline is a separate View and is
             // hidden explicitly so no residual horizontal Chrome divider survives in ARC.
             mTopControlsStacker.removeControl(toolbarCoordinator);
+            // The toolbar type is reused for the caption-only placeholder.
+            mTopControlsStacker.addControl(mArcCaptionLayer);
+            registerArcCaptionObserver();
         } else {
+            unregisterArcCaptionObserver();
+            mTopControlsStacker.removeControl(mArcCaptionLayer);
             // Restore the stack layer before exposing the View so browser-control geometry is
             // authoritative as soon as the toolbar can receive focus/input again.
             mTopControlsStacker.addControl(toolbarCoordinator);

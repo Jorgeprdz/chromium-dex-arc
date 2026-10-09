@@ -23,4 +23,5 @@
     <string name="arc_spaces">Espacios</string>
     <string name="arc_favorites">Favoritos</string>
     <string name="arc_pinned_tabs">Pestañas fijadas</string>
+    <string name="arc_navigation_hint">Mantén pulsado para atrás, adelante o recargar</string>
 </resources>

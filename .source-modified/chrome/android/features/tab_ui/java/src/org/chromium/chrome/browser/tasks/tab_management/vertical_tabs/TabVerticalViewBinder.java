@@ -614,6 +614,11 @@ class TabVerticalViewBinder {
 
         int width = isRailCollapsed ? getCollapsedTabItemWidth(context) : expandedWidth;
         int height = usesCollapsedPositioning ? getCollapsedTabItemHeight(context) : expandedHeight;
+        if (!usesCollapsedPositioning && ArcDesktopAppearance.isDesktopWindow(context)) {
+            height = ArcDesktopPolicy.geometry(view.getRootView().getWidth(),
+                    view.getRootView().getHeight(), 0,
+                    context.getResources().getDisplayMetrics().density, false).omniboxHeight;
+        }
 
         if (params.width != width || params.height != height) {
             params.width = width;
