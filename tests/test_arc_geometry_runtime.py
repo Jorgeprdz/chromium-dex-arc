@@ -6,7 +6,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import unittest
-from arc_toolbar_probe import ROOT, method_body
+from arc_toolbar_probe import ROOT, method_body, window_core_jar
 
 COORD = ROOT / "chromium/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java"
 JAVA = r"""
@@ -142,7 +142,7 @@ class ArcFrameRuntimeTest(unittest.TestCase):
         cls.tmp=tempfile.TemporaryDirectory(prefix="arc-frame-regression-")
         cls.work=Path(cls.tmp.name)
         test=cls.work/"FrameRegression.java";test.write_text(JAVA.replace("METHODS",methods))
-        jar=ROOT/".sync-audit/androidx-window-core.jar"
+        jar=window_core_jar()
         sources=list((ROOT/"chromium").rglob("ArcDesktopPolicy.java"))+list((ROOT/"chromium").rglob("ArchiumWindowClass.java"))
         result=subprocess.run(["javac","--release","17","-cp",str(jar),"-d",str(cls.work),*map(str,sources),str(test)],capture_output=True,text=True)
         if result.returncode:raise AssertionError(result.stderr)
@@ -193,7 +193,7 @@ class CaptionGeometry {
 """.replace("BODY",body)
         with tempfile.TemporaryDirectory(prefix="arc-caption-geometry-") as tmp:
             p=Path(tmp)/"CaptionGeometry.java";p.write_text(program)
-            jar=ROOT/".sync-audit/androidx-window-core.jar"
+            jar=window_core_jar()
             sources=list((ROOT/"chromium").rglob("ArcDesktopPolicy.java"))+list((ROOT/"chromium").rglob("ArchiumWindowClass.java"))
             compiled=subprocess.run(["javac","--release","17","-cp",str(jar),"-d",tmp,*map(str,sources),str(p)],text=True,capture_output=True)
             self.assertEqual(compiled.returncode,0,compiled.stderr)

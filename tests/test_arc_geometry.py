@@ -1,9 +1,9 @@
 """Execute the real pure Java geometry policy with pinned AndroidX constants."""
 from pathlib import Path
-import importlib.util
 import subprocess
 import tempfile
 import unittest
+from arc_toolbar_probe import window_core_jar
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -53,7 +53,7 @@ class NativeRailGeometry {
         with tempfile.TemporaryDirectory(prefix="archium-native-geometry-") as tmp:
             source=Path(tmp)/"NativeRailGeometry.java"
             source.write_text(program)
-            jar=ROOT/".sync-audit/androidx-window-core.jar"
+            jar=window_core_jar()
             sources=list((ROOT/"chromium").rglob("ArcDesktopPolicy.java"))+list((ROOT/"chromium").rglob("ArchiumWindowClass.java"))
             compiled=subprocess.run(["javac","--release","17","-cp",str(jar),"-d",tmp,*map(str,sources),str(source)],text=True,capture_output=True)
             self.assertEqual(compiled.returncode,0,compiled.stderr)
@@ -91,7 +91,7 @@ class NativeTabBudget {
 """.replace("BODY",body)
         with tempfile.TemporaryDirectory(prefix="arc-native-budget-") as tmp:
             p=Path(tmp)/"NativeTabBudget.java";p.write_text(java)
-            jar=ROOT/".sync-audit/androidx-window-core.jar"
+            jar=window_core_jar()
             sources=list((ROOT/"chromium").rglob("ArcDesktopPolicy.java"))+list((ROOT/"chromium").rglob("ArchiumWindowClass.java"))
             compiled=subprocess.run(["javac","--release","17","-cp",str(jar),"-d",tmp,*map(str,sources),str(p)],text=True,capture_output=True)
             self.assertEqual(compiled.returncode,0,compiled.stderr)
@@ -126,7 +126,7 @@ class FavoritesGeometry {
 """.replace("BODY",body)
         with tempfile.TemporaryDirectory(prefix="arc-favorites-geometry-") as tmp:
             p=Path(tmp)/"FavoritesGeometry.java";p.write_text(java)
-            jar=ROOT/".sync-audit/androidx-window-core.jar"
+            jar=window_core_jar()
             sources=list((ROOT/"chromium").rglob("ArcDesktopPolicy.java"))+list((ROOT/"chromium").rglob("ArchiumWindowClass.java"))
             compiled=subprocess.run(["javac","--release","17","-cp",str(jar),"-d",tmp,*map(str,sources),str(p)],text=True,capture_output=True)
             self.assertEqual(compiled.returncode,0,compiled.stderr)
@@ -161,7 +161,7 @@ class NativeRowGeometry {
 """.replace("BODY",body)
         with tempfile.TemporaryDirectory(prefix="arc-native-row-") as tmp:
             p=Path(tmp)/"NativeRowGeometry.java";p.write_text(java)
-            jar=ROOT/".sync-audit/androidx-window-core.jar"
+            jar=window_core_jar()
             sources=list((ROOT/"chromium").rglob("ArcDesktopPolicy.java"))+list((ROOT/"chromium").rglob("ArchiumWindowClass.java"))
             compiled=subprocess.run(["javac","--release","17","-cp",str(jar),"-d",tmp,*map(str,sources),str(p)],text=True,capture_output=True)
             self.assertEqual(compiled.returncode,0,compiled.stderr)
@@ -169,10 +169,7 @@ class NativeRowGeometry {
             self.assertEqual(result.returncode,0,result.stdout+result.stderr)
 
     def test_reference_and_responsive_geometry(self):
-        spec = importlib.util.spec_from_file_location("geometry_window_core", ROOT / "scripts/fetch-window-core.py")
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        jar = mod.ensure_jar()
+        jar = window_core_jar()
         sources = list((ROOT / "chromium").rglob("ArcDesktopPolicy.java"))
         sources += list((ROOT / "chromium").rglob("ArchiumWindowClass.java"))
         with tempfile.TemporaryDirectory(prefix="archium-geometry-java-") as tmp:

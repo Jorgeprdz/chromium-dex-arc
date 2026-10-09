@@ -1,11 +1,21 @@
 """Extract the shipped Java methods for executable, explicitly bounded crash probes."""
 from pathlib import Path
+import importlib.util
 import re
 
 ROOT = Path(__file__).resolve().parents[1]
 TOOLBAR = 'chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarLayout.java'
 DROPDOWN = 'chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImpl.java'
 TABBED = 'chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java'
+
+
+def window_core_jar():
+    """Resolve the verified pinned dependency before each isolated Java probe."""
+    spec = importlib.util.spec_from_file_location(
+        "arc_probe_window_core", ROOT / "scripts/fetch-window-core.py")
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.ensure_jar()
 
 
 def method_body(text, signature):
