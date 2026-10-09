@@ -844,11 +844,17 @@ public final class ArcDesktopCoordinator {
             return;
         }
 
-        boolean expanded =
-                ArcDesktopPolicy.showFullControls(
-                        mRail.getWidth(),
-                        mRail.getHeight(),
-                        mActivity.getResources().getDisplayMetrics().density);
+        float density = mActivity.getResources().getDisplayMetrics().density;
+        // Caption height is supplied by the native desktop rail. Reserve native-tab space
+        // before showing secondary collection controls; never resize the rail width.
+        View captionSpacer = mColumn.getChildAt(0);
+        int captionHeight = captionSpacer == null || captionSpacer.getLayoutParams() == null
+                ? 0 : Math.max(0, captionSpacer.getLayoutParams().height);
+        int collectionBudget = ArcDesktopPolicy.collectionScrollBudgetPx(
+                mRail.getHeight(), density, captionHeight);
+        boolean expanded = ArcDesktopPolicy.showFullControls(
+                mRail.getWidth(), mRail.getHeight(), density)
+                && collectionBudget >= dp(ArcDesktopPolicy.ARC_MIN_COLLECTION_SCROLL_DP);
         // Keep the real Chromium LocationBar visible even in collapsed mode so keyboard/focus
         // paths never target a GONE omnibox. Secondary Arc controls are restored on expansion.
         mHeader.setVisibility(View.VISIBLE);
@@ -873,8 +879,7 @@ public final class ArcDesktopCoordinator {
         }
         applyFrameGeometry();
         if (expanded && mCollectionsView != null) {
-            mCollectionsView.setCollectionHeight(
-                    Math.max(dp(80), Math.min(dp(240), mRail.getHeight() / 4)));
+            mCollectionsView.setCollectionHeight(collectionBudget);
         }
         // Leave native tab selection, incognito and favicon rendering to its binders.
         int surface = ArcDesktopAppearance.surface(mActivity, incognito);

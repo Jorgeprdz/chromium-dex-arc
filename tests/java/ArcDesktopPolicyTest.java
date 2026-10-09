@@ -83,6 +83,23 @@ public final class ArcDesktopPolicyTest {
                 "expanded contract scales with density rather than physical pixels");
         check(!ArcDesktopPolicy.showFullControls(240, 700, 0f),
                 "invalid density fails compact instead of exposing oversized controls");
+        // Rail height budgets: small windows reserve the native tab list; the collection
+        // scroller only expands when there is actual space after caption and controls.
+        for (int height : new int[] {320, 360, 400, 448}) {
+            check(ArcDesktopPolicy.collectionScrollBudgetPx(height, 1f, 32) == 0,
+                    "short rails cannot starve Chromium native tabs");
+        }
+        check(ArcDesktopPolicy.collectionScrollBudgetPx(600, 1f, 32) == 88,
+                "600dp rail allocates measured collection remainder");
+        check(ArcDesktopPolicy.collectionScrollBudgetPx(700, 1f, 32) == 188,
+                "taller rail expands its scroll section");
+        check(ArcDesktopPolicy.collectionScrollBudgetPx(900, 1f, 32) == 240,
+                "collection scroll caps without changing sidebar width");
+        check(ArcDesktopPolicy.collectionScrollBudgetPx(1200, 2f, 64) == 176,
+                "height budget scales across densities");
+        check(ArcDesktopPolicy.collectionScrollBudgetPx(600, 0f, 32) == 0,
+                "invalid density fails closed");
+
 
         check(ArcDesktopPolicy.ARC_OUTER_PADDING_DP > 0
                         && ArcDesktopPolicy.ARC_FRAME_GAP_DP > 0

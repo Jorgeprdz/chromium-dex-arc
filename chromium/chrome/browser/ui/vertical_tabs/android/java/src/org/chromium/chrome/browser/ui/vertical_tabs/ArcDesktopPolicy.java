@@ -21,6 +21,12 @@ public final class ArcDesktopPolicy {
     public static final int ARC_LOCATION_BAR_SIDE_MARGIN_DP = 4;
     public static final int ARC_FULL_CONTROLS_MIN_WIDTH_DP = ARC_NAV_BUTTON_WIDTH_DP * 4;
     public static final int ARC_FULL_CONTROLS_MIN_HEIGHT_DP = 360;
+    // Budget measured from the rail, not from the screenshot or the current sidebar width.
+    // Nav (3 rows), new tab, footer, fixed collection chrome, rail padding and native tab room.
+    private static final int ARC_COLLECTION_FIXED_CHROME_DP = 144;
+    private static final int ARC_NEW_TAB_HEIGHT_DP = 40;
+    private static final int ARC_MIN_NATIVE_TABS_DP = 112;
+    public static final int ARC_MIN_COLLECTION_SCROLL_DP = 80;
 
     private ArcDesktopPolicy() {}
 
@@ -54,6 +60,20 @@ public final class ArcDesktopPolicy {
         if (!(density > 0f)) return false;
         return railWidthPx >= Math.round(ARC_FULL_CONTROLS_MIN_WIDTH_DP * density)
                 && railHeightPx >= Math.round(ARC_FULL_CONTROLS_MIN_HEIGHT_DP * density);
+    }
+
+    /** Free height for the scrollable collections region while reserving native tabs.
+     * A short rail must use compact controls instead of starving the real tab list.
+     * captionHeightPx is the native desktop caption spacer and may vary by window manager.
+     */
+    public static int collectionScrollBudgetPx(int railHeightPx, float density, int captionHeightPx) {
+        if (!(density > 0f) || railHeightPx <= 0) return 0;
+        int fixedDp = 3 * ARC_NAV_ROW_HEIGHT_DP + ARC_NEW_TAB_HEIGHT_DP
+                + ARC_NAV_ROW_HEIGHT_DP + ARC_COLLECTION_FIXED_CHROME_DP
+                + 2 * ARC_OUTER_PADDING_DP + ARC_MIN_NATIVE_TABS_DP;
+        int remaining = railHeightPx - Math.round(fixedDp * density)
+                - Math.max(0, captionHeightPx);
+        return Math.min(Math.round(240f * density), Math.max(0, remaining));
     }
 
     /** Returns whether a point lies inside a rounded content rect. Pure math for UI + tests. */
