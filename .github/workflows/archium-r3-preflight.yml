@@ -46,9 +46,7 @@ jobs:
             yes | "$SDKMANAGER" --install 'build-tools;36.0.0' > /dev/null || test -x "$AAPT2"
           fi
           test -x "$AAPT2"
-          python3 scripts/check_portal_aapt2_fixture.py \\
-            --android-jar "${ANDROID_HOME}/platforms/android-36/android.jar" \\
-            --aapt2 "$AAPT2"
+          python3 scripts/check_portal_aapt2_fixture.py --android-jar "${ANDROID_HOME}/platforms/android-36/android.jar" --aapt2 "$AAPT2"
       - name: Execute full sparse preparation with pinned Window Core
         run: |
           python3 scripts/check-arc-preparation.py --android-jar "${ANDROID_HOME}/platforms/android-36/android.jar"
