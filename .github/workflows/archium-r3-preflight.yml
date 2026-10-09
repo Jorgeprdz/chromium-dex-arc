@@ -21,9 +21,24 @@ jobs:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - name: Python syntax and host gates
         run: |
-          python3 -m py_compile scripts/integrate-archium-portal.py scripts/verify-archium-portal-apk.py scripts/generate-arc-patch.py
+          python3 -m py_compile scripts/integrate-archium-portal.py scripts/verify-archium-portal-apk.py scripts/generate-arc-patch.py scripts/check-arc-preparation.py
           python3 -m unittest discover -s tests -p 'test_archium_portal_resources.py' -v
           python3 -m unittest discover -s tests -p 'test_arc_visual_static_contract.py' -v
+          python3 -m unittest discover -s tests -p 'test_r3_3_resource_contract.py' -v
+      - name: Install Android 36 SDK for isolated adapter javac
+        shell: bash
+        run: |
+          set -euo pipefail
+          SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          if [[ ! -x "$SDKMANAGER" ]]; then SDKMANAGER="$(command -v sdkmanager)"; fi
+          yes | "$SDKMANAGER" --install 'platforms;android-36' > /dev/null || {
+            test -s "${ANDROID_HOME}/platforms/android-36/android.jar"
+          }
+          test -s "${ANDROID_HOME}/platforms/android-36/android.jar"
+      - name: Execute full sparse preparation with pinned Window Core
+        run: |
+          python3 scripts/check-arc-preparation.py --android-jar "${ANDROID_HOME}/platforms/android-36/android.jar"
+          python3 -m unittest discover -s tests -p 'test_*.py' -v
       - name: Reproduce official Chromium patch and manifest
         run: |
           python3 scripts/generate-arc-patch.py

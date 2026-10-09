@@ -19,6 +19,50 @@ ROOT = Path(__file__).resolve().parents[1]
 ANDROID_JAR = Path('/opt/android-sdk/platforms/android-36/android.jar')
 
 
+# R3.3: This contract is only for the isolated adapter javac gate. It is NOT
+# Chromium's generated R, a native compile, or evidence of APK resource linkage.
+def synthetic_chromium_r(values_xml: Path) -> str:
+    root = ET.parse(values_xml).getroot()
+
+    def names(tags):
+        result = [node.attrib['name'] for node in root if node.tag in tags]
+        if len(set(result)) != len(result):
+            raise ValueError('Duplicate Android resource names in ' + str(values_xml))
+        return result
+
+    string_names = names({'string'}) + [
+        'accessibility_toolbar_btn_back', 'accessibility_toolbar_btn_forward',
+        'accessibility_btn_refresh',
+    ]
+    array_names = names({'array', 'string-array', 'integer-array'})
+    required_arrays = {'arc_frame_palette_names', 'arc_frame_rgb_names'}
+    if not required_arrays.issubset(array_names):
+        raise ValueError('Missing R.array declarations: ' +
+                         ', '.join(sorted(required_arrays.difference(array_names))))
+    # View IDs below are deliberately restricted to the pinned Chromium/Arc
+    # Android views compiled by the isolated adapter gate.
+    id_names = (
+        'toolbar', 'desktop_window_spacer', 'location_bar',
+        'location_bar_holder', 'collapse_button', 'menu_button_wrapper',
+        'extensions_toolbar_container', 'coordinator', 'new_tab_button',
+    )
+
+    def klass(kind, members):
+        if not members:
+            raise ValueError('Empty resource kind ' + kind)
+        return ('public static final class ' + kind +
+                ' { public static final int ' +
+                ', '.join(f'{name}={i}' for i, name in enumerate(members, 1)) +
+                '; } ')
+
+    return ('public final class R { ' +
+            klass('string', string_names) +
+            klass('id', id_names) +
+            klass('array', array_names) +
+            klass('drawable', ['btn_back', 'btn_forward', 'btn_reload_stop']) +
+            '}')
+
+
 def run(*args, **kwargs):
     subprocess.run(args, check=True, **kwargs)
 
@@ -132,22 +176,15 @@ def main():
             'org.chromium.components.signin.AccessTokenData': 'public class AccessTokenData {}',
             'org.chromium.components.signin.AccountManagerDelegate': 'public interface AccountManagerDelegate { public interface AccountsChangeObserver{} public @interface CapabilityResponse{int EXCEPTION=0;} void attachAccountsChangeObserver(AccountsChangeObserver o); android.accounts.Account[] getAccountsSynchronous(); AccessTokenData getAccessToken(android.accounts.Account a,String s); void invalidateAccessToken(String s) throws AuthException; int hasCapability(android.accounts.Account a,String s); void createAddAccountIntent(String email,org.chromium.base.Callback<android.content.Intent> c); void updateCredentials(android.accounts.Account a,android.app.Activity activity,org.chromium.base.Callback<Boolean> c); org.chromium.google_apis.gaia.GaiaId getAccountGaiaId(String e); void confirmCredentials(android.accounts.Account a,android.app.Activity activity,org.chromium.base.Callback<android.os.Bundle> c); }',
         }
-        resources = ET.parse(ROOT / 'chromium/chrome/android/java/res/values/arc_strings.xml')
-        # Chromium cfd94726: toolbar/java/res/layout/toolbar_tablet.xml references
-        # these navigation strings/drawables and the real LocationBar IDs.
-        string_names = [node.attrib['name'] for node in resources.getroot()] + [
-            'accessibility_toolbar_btn_back', 'accessibility_toolbar_btn_forward',
-            'accessibility_btn_refresh',
-        ]
-        string_ids = ', '.join(f'{name}={i}' for i, name in enumerate(string_names, 1))
-        id_names = ('toolbar', 'desktop_window_spacer', 'location_bar',
-                    'location_bar_holder', 'collapse_button', 'menu_button_wrapper',
-                    'extensions_toolbar_container', 'coordinator')
-        view_ids = ', '.join(f'{name}={i}' for i, name in enumerate(id_names, 1))
-        definitions['org.chromium.chrome.R'] = ('public final class R { public static final class string { public static final int '
-                + string_ids + '; } public static final class id { public static final int '
-                + view_ids + '; } public static final class drawable { public static final int '
-                'btn_back=1, btn_forward=2, btn_reload_stop=3; } }')
+        # The pinned VerticalTabRailLayout uses R.id.new_tab_button. Verify
+        # source authority rather than letting an invented stub hide a typo.
+        rail = (ROOT / '.source-reference/chrome/android/features/tab_ui/java/src/'
+                'org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/'
+                'VerticalTabRailLayout.java')
+        if 'findViewById(R.id.new_tab_button)' not in rail.read_text():
+            raise RuntimeError('Pinned Chromium source lacks new_tab_button authority')
+        definitions['org.chromium.chrome.R'] = synthetic_chromium_r(
+            ROOT / 'chromium/chrome/android/java/res/values/arc_strings.xml')
         definitions.update({
             # Minimal type contracts from cfd94726's CompositorViewHolder,
             # TouchEventObserver and NullableObservableSupplier. Stub bodies are
