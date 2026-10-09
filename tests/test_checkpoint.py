@@ -59,6 +59,43 @@ class CheckpointTests(unittest.TestCase):
             self.assertTrue((workspace / 'compiler-link').is_symlink())
             self.assertGreater(len(assets), 2)
 
+    def test_artifact_checkpoint_round_trip_and_corruption_fail_closed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            workspace, folder = root / 'workspace', root / 'bundles'
+            workspace.mkdir()
+            (workspace / '.ninja_log').write_text('progress')
+            os.utime(workspace / '.ninja_log', ns=(1234567890123456789, 1234567890123456789))
+            (workspace / 'compiler').write_text('binary')
+            (workspace / 'compiler').chmod(0o755)
+            (workspace / 'link').symlink_to('compiler')
+            with patch.dict(os.environ, {'GITHUB_SHA': 'r3-commit'}), \\
+                    patch.object(checkpoint, 'CHUNK_BYTES', 80):
+                checkpoint.pack_actions(workspace, 'archium-checkpoint-999-1', folder)
+                self.assertTrue((folder / 'group-00' / 'checkpoint.json').is_file())
+                downloaded = root / 'downloaded'
+                downloaded.mkdir()
+                for group in folder.iterdir():
+                    for part in group.iterdir():
+                        (downloaded / part.name).write_bytes(part.read_bytes())
+                for item in workspace.iterdir():
+                    item.unlink()
+                with self.assertRaisesRegex(ValueError, 'tag'):
+                    checkpoint.restore_actions(workspace, 'bad-tag', downloaded)
+                checkpoint.restore_actions(workspace, 'archium-checkpoint-999-1', downloaded)
+                self.assertEqual('progress', (workspace / '.ninja_log').read_text())
+                self.assertEqual(1234567890123456789, (workspace / '.ninja_log').stat().st_mtime_ns)
+                self.assertTrue((workspace / 'link').is_symlink())
+                for item in workspace.iterdir():
+                    item.unlink()
+                name = next(downloaded.glob('checkpoint-*.part'))
+                bytes_ = bytearray(name.read_bytes())
+                bytes_[0] ^= 1
+                name.write_bytes(bytes_)
+                with self.assertRaisesRegex(ValueError, 'hash mismatch'):
+                    checkpoint.restore_actions(workspace, 'archium-checkpoint-999-1', downloaded)
+                self.assertEqual([], list(workspace.iterdir()))
+
     def test_remote_inventory_rejects_missing_corrupt_or_unfinished_assets(self):
         digest = hashlib.sha256(b'x').hexdigest()
         parts = [{'name': 'checkpoint-0000.tar.gz.part', 'bytes': 1, 'sha256': digest}]
