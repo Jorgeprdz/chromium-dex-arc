@@ -68,7 +68,7 @@ def png_pixels(blob, *, allow_rgb=False):
     Approved source assets must be RGBA8. The packaged version may be
     losslessly crunched to RGB8 by Android aapt2 if fully opaque.
     """
-    if len(blob) < 33 or blob[:8] != b"\\x89PNG\\r\\n\\x1a\\n" or blob[12:16] != b"IHDR":
+    if len(blob) < 33 or blob[:8] != b"\x89PNG\r\n\x1a\n" or blob[12:16] != b"IHDR":
         raise ValueError("Invalid packaged PNG signature")
     width, height = struct.unpack_from(">II", blob, 16)
     if not 16 <= width <= 1024 or height != width:
