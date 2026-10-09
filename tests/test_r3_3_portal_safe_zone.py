@@ -34,7 +34,8 @@ class AdaptiveSafeZoneTest(unittest.TestCase):
             _, source = portal.png_pixels(original)
             _, pixels = portal.png_pixels(flattened)
             self.assertEqual({255}, set(pixels[3::4]))
-            middle = (portal.png_size(flattened) ** 2 // 2) * 4
+            size = portal.png_size(flattened)
+            middle = ((size // 2) * size + size // 2) * 4
             self.assertEqual(source[middle:middle + 3], pixels[middle:middle + 3])
             self.assertNotEqual(original, flattened)
 
