@@ -7,6 +7,8 @@ import re
 import subprocess
 import zipfile
 
+from archium_portal_content_gate import check_content
+
 
 def inspect(apk, aapt2, package):
     apk, aapt2 = Path(apk), Path(aapt2)
@@ -43,7 +45,10 @@ def inspect(apk, aapt2, package):
             raise ValueError("Android manifest icon XML missing from packaged archive")
         if not any(name.startswith("res/") and name.endswith(".png") for name in names):
             raise ValueError("Missing packed PNG resources")
-    return {"status": "PASS", "scope": "APK AAPT2 resource-table and manifest reference",
+    content = check_content(apk, resources, lambda path: subprocess.check_output(
+        [str(aapt2), "dump", "xmltree", str(apk), path],
+        text=True, stderr=subprocess.STDOUT))
+    return {"status": "PASS", "scope": content["scope"], "content": content,
             "package": package, "application": app, "icon_path": icon_name,
             "resources": list(required),
             "limit": "PNG pixels and launcher presentation require real device validation"}
