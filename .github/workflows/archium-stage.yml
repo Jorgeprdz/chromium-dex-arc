@@ -35,7 +35,6 @@ jobs:
       ARCHIUM_PREVIOUS_TAG: ${{ inputs.previous_tag }}
       ARCHIUM_CHECKPOINT_TAG: archium-checkpoint-${{ github.run_id }}-${{ inputs.stage }}
       ARCHIUM_CHECKPOINT_STORAGE: artifact
-      ARCHIUM_CHECKPOINT_DIR: ${{ runner.temp }}/archium-checkpoint
       ARCHIUM_SLICE_MINUTES: '120'
       ARCHIUM_PREPARE_SECONDS: '3600'
       ARCHIUM_WORK_SECONDS: '14400'
@@ -56,9 +55,13 @@ jobs:
           path: ${{ runner.temp }}/archium-checkpoint
       - name: Restore checkpoint and prepare Chromium
         timeout-minutes: 62
+        env:
+          ARCHIUM_CHECKPOINT_DIR: ${{ runner.temp }}/archium-checkpoint
         run: bash scripts/build-archium.sh --prepare
       - name: Compile, run gates and checkpoint
         id: compile
+        env:
+          ARCHIUM_CHECKPOINT_DIR: ${{ runner.temp }}/archium-checkpoint
         run: bash scripts/build-archium.sh --work
       - name: Upload checkpoint artifact group 00
         if: steps.compile.outputs.complete == 'false'
