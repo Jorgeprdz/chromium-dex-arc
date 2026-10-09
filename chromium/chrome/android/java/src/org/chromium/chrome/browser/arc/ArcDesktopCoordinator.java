@@ -352,17 +352,17 @@ public final class ArcDesktopCoordinator {
         mColumn.addView(mHeaderScroll);
         mColumn.addView(mNativeTabs, new LinearLayout.LayoutParams(-1, 0, 1));
 
-        mFooter = new LinearLayout(activity);
-        mPasswordButton = button(localPasswordsEnabled ? "Passwords" : "Autofill",
-                openPasswordSettings);
-        mPasswordButton.setContentDescription(
-                localPasswordsEnabled ? "Local passwords" : "Autofill settings");
         // VerticalTabRailLayout already owns Chromium's real new-tab button and handler. Keep it
         // as the single new-tab action instead of adding a second Arc handler here.
-        mFooter.addView(
-                mPasswordButton,
-                new LinearLayout.LayoutParams(
-                        0, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP), 1));
+        mFooter = new LinearLayout(activity);
+        // arc-media does not expose local passwords. Do not substitute an unrelated Autofill
+        // settings action; Chromium's real menu and extensions remain available below.
+        mPasswordButton = localPasswordsEnabled ? button("Passwords", openPasswordSettings) : null;
+        if (mPasswordButton != null) {
+            mPasswordButton.setContentDescription("Local passwords");
+            mFooter.addView(mPasswordButton, new LinearLayout.LayoutParams(
+                    0, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP), 1));
+        }
         // Preserve Chromium's native app menu and extension actions after ToolbarTablet itself is
         // removed from layout. These Views retain their existing coordinators/listeners; Arc only
         // changes their parent. The extension container is optional when ExtensionUi is disabled.
@@ -481,11 +481,13 @@ public final class ArcDesktopCoordinator {
             }
         };
         mPreferences.registerOnSharedPreferenceChangeListener(mPreferenceListener);
-        mLayoutListener = (v, l, t, r, b, ol, ot, or, ob) -> { rebindCollections(); applyAppearance(); };
+        mLayoutListener = (v, l, t, r, b, ol, ot, or, ob) -> {
+            if (r - l != or - ol || b - t != ob - ot) onSidebarGeometryChanged();
+        };
         rail.addOnLayoutChangeListener(mLayoutListener);
         // The rail may be laid out before its child. Re-evaluate actual available width.
         mColumnLayoutListener = (v, l, t, r, b, ol, ot, or, ob) -> {
-            if (r - l != or - ol || b - t != ob - ot) applyAppearance();
+            if (r - l != or - ol || b - t != ob - ot) onSidebarGeometryChanged();
         };
         mColumn.addOnLayoutChangeListener(mColumnLayoutListener);
         mHeaderLayoutListener = (v, l, t, r, b, ol, ot, or, ob) -> {
@@ -746,6 +748,22 @@ public final class ArcDesktopCoordinator {
             return;
         }
 
+        updateSidebarControls();
+        // Leave native tab selection, incognito and favicon rendering to its binders.
+        int surface = ArcDesktopAppearance.surface(mActivity, incognito);
+        int foreground = ArcDesktopPolicy.foreground(surface);
+        mColumn.setBackgroundColor(surface);
+        tintHeader(mHeader, foreground, ArcDesktopPolicy.selection(surface));
+        tintHeader(mFooter, foreground, ArcDesktopPolicy.selection(surface));
+    }
+
+    /** Keep palette and collection refreshes out of animated width/resize callbacks. */
+    private void onSidebarGeometryChanged() {
+        if (mDestroyed || !mArcToolbarCompositionActive) return;
+        updateSidebarControls();
+    }
+
+    private void updateSidebarControls() {
         // mColumn has the actual allocated width after rail padding and split-window resize.
         final int availableWidthPx = mColumn.getWidth();
         final int availableHeightPx = mColumn.getHeight();
@@ -765,7 +783,9 @@ public final class ArcDesktopCoordinator {
         // The native app menu remains reachable while collapsed. Secondary footer actions can
         // disappear so the compact rail does not retain expanded hitboxes.
         mFooter.setVisibility(View.VISIBLE);
-        mPasswordButton.setVisibility(expanded ? View.VISIBLE : View.GONE);
+        if (mPasswordButton != null) {
+            mPasswordButton.setVisibility(expanded ? View.VISIBLE : View.GONE);
+        }
         if (mExtensionsToolbarHost != null) {
             mExtensionsToolbarHost.setVisibility(expanded ? mExtensionsToolbarOriginalVisibility : View.GONE);
         }
@@ -778,12 +798,6 @@ public final class ArcDesktopCoordinator {
                     Math.max(0, Math.min(dp(112), availableHeightPx / 6)));
         }
         applySidebarGeometry();
-        // Leave native tab selection, incognito and favicon rendering to its binders.
-        int surface = ArcDesktopAppearance.surface(mActivity, incognito);
-        int foreground = ArcDesktopPolicy.foreground(surface);
-        mColumn.setBackgroundColor(surface);
-        tintHeader(mHeader, foreground, ArcDesktopPolicy.selection(surface));
-        tintHeader(mFooter, foreground, ArcDesktopPolicy.selection(surface));
     }
 
     private int reservedLeftWidth() {
@@ -821,14 +835,7 @@ public final class ArcDesktopCoordinator {
             collapse.bottomMargin = 0;
             mCollapseButton.setLayoutParams(collapse);
         }
-        LinearLayout.LayoutParams url = (LinearLayout.LayoutParams) mLocationBarHost.getLayoutParams();
-        if (url.height != g.omniboxHeight || url.getMarginStart() != side
-                || url.getMarginEnd() != side) {
-            url.height = g.omniboxHeight;
-            url.setMarginStart(side);
-            url.setMarginEnd(side);
-            mLocationBarHost.setLayoutParams(url);
-        }
+        updateLocationBarGeometry(g, side);
         if (mCollectionsView != null) {
             LinearLayout.LayoutParams collections = (LinearLayout.LayoutParams) mCollectionsView.getLayoutParams();
             int gap = g.omniboxBottomGap;
@@ -868,6 +875,20 @@ public final class ArcDesktopCoordinator {
         mFooter.setVisibility(footerVisible ? View.VISIBLE : View.GONE);
     }
 
+    private void updateLocationBarGeometry(ArcDesktopPolicy.Geometry g, int side) {
+        LinearLayout.LayoutParams url = (LinearLayout.LayoutParams) mLocationBarHost.getLayoutParams();
+        // Chromium owns this holder while Fusebox expands it. Resetting height/margins from a
+        // header layout fights native focus animation; defer baseline changes until native blur.
+        if (url.height == ViewGroup.LayoutParams.WRAP_CONTENT) return;
+        if (url.height != g.omniboxHeight || url.getMarginStart() != side
+                || url.getMarginEnd() != side) {
+            url.height = g.omniboxHeight;
+            url.setMarginStart(side);
+            url.setMarginEnd(side);
+            mLocationBarHost.setLayoutParams(url);
+        }
+    }
+
     private int arcClipLeftForView(View view) {
         return arcClipBoundsForView(view).left;
     }
@@ -881,9 +902,22 @@ public final class ArcDesktopCoordinator {
                 mActivity.getResources().getDisplayMetrics().density, false);
     }
 
+    private int arcCaptionClipTop() {
+        int caption = captionHeight();
+        if (caption == 0) return 0;
+        int[] captionPosition = new int[2];
+        int[] holderPosition = new int[2];
+        mCaptionSpacer.getLocationInWindow(captionPosition);
+        mCompositorViewHolder.getLocationInWindow(holderPosition);
+        // Native TopControlsStacker already offsets web/bookmarks for this caption. Protect its
+        // window area by clipping, without adding the caption again to compositor layout margins.
+        return Math.min(mCompositorViewHolder.getHeight(),
+                Math.max(0, captionPosition[1] + caption - holderPosition[1]));
+    }
+
     private Rect arcClipBoundsForView(View view) {
         int left = Math.min(reservedLeftWidth(), mCompositorViewHolder.getWidth());
-        Rect bounds = new Rect(left, 0,
+        Rect bounds = new Rect(left, arcCaptionClipTop(),
                 mCompositorViewHolder.getWidth(), mCompositorViewHolder.getHeight());
         if (view != mCompositorViewHolder) {
             int[] holderPosition = new int[2];
@@ -900,9 +934,10 @@ public final class ArcDesktopCoordinator {
     }
 
     private boolean isInsideArcContent(float x, float y) {
+        Rect bounds = arcClipBoundsForView(mCompositorViewHolder);
         return ArcDesktopPolicy.containsRoundedRectPoint(
-                x, y, reservedLeftWidth(), 0, mCompositorViewHolder.getWidth(),
-                mCompositorViewHolder.getHeight(), currentFrameGeometry().viewportRadius);
+                x, y, bounds.left, bounds.top, bounds.right, bounds.bottom,
+                currentFrameGeometry().viewportRadius);
     }
 
     private void restoreClippedSurface() {

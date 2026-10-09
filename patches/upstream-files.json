@@ -31,6 +31,7 @@
     "chrome/browser/prefs/browser_prefs.cc": "d69052094bd0d29d332906ca88d715dab9cfd3a3be299573240e1d69446dd6fb",
     "chrome/browser/sync/BUILD.gn": "d5e0cd499203dc7eeb30f6bcf9cedec75fe3d59b600ae0ef7e28a764f6193792",
     "chrome/browser/sync/sync_service_factory.cc": "2aa8e3c60c9efa1bf66aa61f77462b24c5dca994b9bcc7296158bee5a0531ce8",
+    "chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java": "a16d80976d720b197310296173a6975f6426524e3216dd08c56c2f76bf850df5",
     "chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImpl.java": "3761f53bf6332c0bbb55bb69ee5e8a4e120adc1f1cf63e87ae6c31536eb789a9",
     "chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarLayout.java": "6a711c7fdf457f6dc1218f696f7410b767bf2426ee564063bbfbcaf9d2b114a5",
     "chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java": "b337f4d66b713deb79629d1048f84a795c0fc56b9977f04d20aa5ad6edee5b3f",
@@ -104,7 +105,7 @@
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/NestedLayoutDelegate.java": "d8d533fa1ef88fcf2534bf597b6e367bdee8cd50776686a457636dc9eecc3d87",
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/TabListMediator.java": "2c2ae5c75b649b60c6d327b0957b4dcdbe71f06b55b7b60f13f29a22f63cd2d5",
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinder.java": "c23c82da753cd8ad06b038c84b2134157f22b4559c536d3a9fece7fa41451b9e",
-    "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinator.java": "98d2244962579c9e13df0580133bb735927bf4f24b6c507d66593f1a8beba69b",
+    "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinator.java": "9f0b4e2925daac4c76b2f7eae351a4bcee0afcbe6a70833b0288f7d88967624b",
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinatorUnitTest.java": "082a963fc6f03a7f54aaa0c96b4b69253dd3fdccd9c7f20c00ffe9404dd9fdef",
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListViewBinder.java": "885459c89678f9f24ad2ab853778bd2b273bf377a77f6e562e5d65390049a803",
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabRailLayout.java": "9ee90b6dfaa508ec3994d417a1af8be4c56e0163568e6d255683a9d5f9c80727",
@@ -128,6 +129,7 @@
     "chrome/browser/prefs/browser_prefs.cc": "9201712fe0919f0941e8f5a642bdc411785d0d865462134768c36b0a05567243",
     "chrome/browser/sync/BUILD.gn": "fbdcca57731beaa9b8312b29204cb4db6fdc7f86460469d52d45003ea2d61f92",
     "chrome/browser/sync/sync_service_factory.cc": "0484538f79a8ca52a7649350fe5d2953d6e21b4cc5c94dddd62f5110b8c82d4f",
+    "chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java": "f088f70580bad2e307d59be88d2c5055de860faf636a1e97ba33e839a61ab99d",
     "chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImpl.java": "0a3c2eb92a19b9d840fe3ddb58251e8cd48951fa9ea77f57253407b223a42578",
     "chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarLayout.java": "be715af66bda4ece6b20bd3fc239141453d88912becce9aa7aacd4a5541f9931",
     "chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java": "f3b7aef4e7328b9c1712a7b570abc7e3a89d88d92dd53ba509bd551203927087",
@@ -158,8 +160,8 @@
     "chrome/android/java/res/values/arc_strings.xml": "8a6298fe81ae1b8e3599a9bcab7cb200b30653482fca718c98ab4c630801a298",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAppearanceDialog.java": "466f7bd99df2721b289905b7662268c1f82811bf08fc2a1537661a582641a33a",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsController.java": "c2a9e014f6bd5a0cf9a26003b1498dfcb5d28bfba28062172535b371858f126b",
-    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java": "b0cc9bb3bb1201f695cd52cbce535f151a6c7f4b809a49ecb2e67f26fb39bd8e",
-    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java": "1e3f987346f70124a22d246938d966779faf6446b6b9c432e35aee397c707b6d",
+    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java": "6149881bfec07e3effd360cf6b403bb1ade8d43df05eef1e9773193167defc2b",
+    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java": "fdb604d1306a0699f2b30d53336783d0cb56b03848bd5a2d3a77ffac0ff38f7b",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopWindowObserver.java": "0cdde8640e59b8d5d5349a18ba19556bbc7f10e7c6d3ab32820c03064705258c",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcNativeTabSession.java": "6cb8696d8c1444cdb3a6a99441700c1d91773af9a16cf7bc317a189e11eb9b16",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarProfiles.java": "16ca484649483c7255aac1d31e3e55a391f5c36cce8921509232cf8ac9ffb52c",
@@ -185,7 +187,7 @@
     "chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordManagerBridge.java": "dd3e257ba2793f6f242141396818d89b1906f3fcfb6cb0ca30d010548a6b46f4",
     "chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordSettingsFragment.java": "b529ab8f1a7c53b814397770698d38cde9869115e47c117bb638d009275e9f6e",
     "chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java": "81fce328b46b7c2c84b79eedbb35f7d0ed19f0d6f633967e4166cb0a24c2a073",
-    "chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java": "675f3eae7cb36a015346dca08446388d2e545f57daff88ccdfc994435df8295f",
+    "chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java": "f542309bd2083be41701279a7fc91c132551f1985e3b554205ca3c8b6bd190de",
     "components/password_manager/core/browser/import/archium_password_import_preview.cc": "5ec8255bf6346ac15d04c143d5f70e21708406c024d1f12382fd49a8b25e14bb",
     "components/password_manager/core/browser/import/archium_password_import_preview.h": "415317397105cd6cab059ac00acb1e1e6e2317e4170b711aa8e1293ed8afd9ec",
     "components/password_manager/core/browser/import/archium_password_import_preview_unittest.cc": "7f6c4cb7dfcd816e1f3a8268b01b4c5ae242fc56bc3f8b4cb1a956af1edcc41a",
@@ -194,5 +196,5 @@
     "components/password_manager/core/browser/password_store/password_store_backend.cc": "45764d4ad0e05acc5a216944a5a6763212f6c17e71bf689e9c973f12fb5c87d8",
     "components/password_manager/core/browser/password_store/password_store_interface.cc": "7e9dd5813ce8ece459ec66abdd3306028b7b3d6bbae048664872a34d8d097268"
   },
-  "patch_sha256": "6d8067677a772431b5373cbd5c15f8a6779963330f8a5704ec576a8e57d9e3df"
+  "patch_sha256": "3e04f8fae6ce8d64523d34802ec3cecb65bde94a01d656a3af9703bf76f3d402"
 }

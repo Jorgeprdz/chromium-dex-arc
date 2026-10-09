@@ -109,10 +109,10 @@ class NativeTabBudget {
 import java.util.*;
 import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy;
 class FavoritesGeometry {
-    static class LayoutParams {int width,height,left,right;LayoutParams(){width=52;height=48;}int getMarginStart(){return left;}int getMarginEnd(){return right;}void setMarginStart(int v){left=v;}void setMarginEnd(int v){right=v;}}
-    static class View {LayoutParams params=new LayoutParams();LayoutParams getLayoutParams(){return params;}void setLayoutParams(LayoutParams p){params=p;}void setPadding(int l,int t,int r,int b){}}
+    static class LayoutParams {int width,height,left,right,bottomMargin;LayoutParams(){width=52;height=48;}int getMarginStart(){return left;}int getMarginEnd(){return right;}void setMarginStart(int v){left=v;}void setMarginEnd(int v){right=v;}}
+    static class View {static final int VISIBLE=0,GONE=8;void setVisibility(int n){} LayoutParams params=new LayoutParams();LayoutParams getLayoutParams(){return params;}void setLayoutParams(LayoutParams p){params=p;}void setPadding(int l,int t,int r,int b){}}
     static class LinearLayout extends View {List<View> children=new ArrayList<>();int getChildCount(){return children.size();}View getChildAt(int i){return children.get(i);}}
-    View mFavoritesScroll=new View();LinearLayout mFavorites=new LinearLayout();ArcDesktopPolicy.Geometry mGeometry;
+    View mFavoritesScroll=new View(),mSpace=new View();LinearLayout mFavorites=new LinearLayout();ArcDesktopPolicy.Geometry mGeometry;
     void setPadding(int l,int t,int r,int b){}
     public void applyGeometry(ArcDesktopPolicy.Geometry geometry, int availableWidthPx) BODY
     static void check(boolean b,String m){if(!b)throw new AssertionError(m);}

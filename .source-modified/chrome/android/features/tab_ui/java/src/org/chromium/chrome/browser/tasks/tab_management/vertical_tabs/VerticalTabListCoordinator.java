@@ -226,7 +226,7 @@ public class VerticalTabListCoordinator {
 
         @Override
         public void didMoveTabGroup(Token id, int oldIndex, int newIndex) {
-            refreshTabPresentationIfFiltered();
+            pruneFilteredRowsAfterReorder();
         }
 
         @Override
@@ -853,7 +853,7 @@ public class VerticalTabListCoordinator {
 
                     @Override
                     public void didMoveTab(Tab tab, int newIndex, int curIndex) {
-                        refreshTabPresentationIfFiltered();
+                        pruneFilteredRowsAfterReorder();
                     }
 
                     @Override
@@ -1210,6 +1210,15 @@ public class VerticalTabListCoordinator {
 
     private void refreshTabPresentationIfFiltered() {
         if (mTabVisibilityPredicate != null) refreshTabPresentation();
+    }
+
+    private void pruneFilteredRowsAfterReorder() {
+        if (mTabVisibilityPredicate == null || !mTabModelSelector.isTabStateInitialized()) return;
+        // The native layout delegate has already moved the existing visible rows. A full reset
+        // replaces the dragged group's ViewHolders while ItemTouchHelper still tracks/overlays
+        // them, leaving those copies above newly bound rows. Prune hidden rows synchronously
+        // without replacing the visible models or disturbing the native drag cleanup.
+        pruneFilteredRows(mTabModelSelector.getCurrentModel());
     }
 
     private @Nullable Tab getVisibleRepresentative(TabModel tabModel, Tab tab) {

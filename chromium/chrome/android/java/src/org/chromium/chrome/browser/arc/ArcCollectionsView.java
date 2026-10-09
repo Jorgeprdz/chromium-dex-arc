@@ -123,9 +123,16 @@ public final class ArcCollectionsView extends LinearLayout {
     public void applyGeometry(ArcDesktopPolicy.Geometry geometry, int availableWidthPx) {
         mGeometry = geometry;
         setPadding(0, 0, 0, 0);
+        mFavoritesScroll.setVisibility(mFavorites.getChildCount() == 0 ? View.GONE : View.VISIBLE);
+        LayoutParams space = (LayoutParams) mSpace.getLayoutParams();
+        if (space.bottomMargin != geometry.sectionGap) {
+            space.bottomMargin = geometry.sectionGap;
+            mSpace.setLayoutParams(space);
+        }
         LayoutParams row = (LayoutParams) mFavoritesScroll.getLayoutParams();
-        if (row.height != geometry.quickAccessHeight) {
+        if (row.height != geometry.quickAccessHeight || row.bottomMargin != geometry.sectionGap) {
             row.height = geometry.quickAccessHeight;
+            row.bottomMargin = geometry.sectionGap;
             mFavoritesScroll.setLayoutParams(row);
         }
         int tilesWidth = Math.max(0, availableWidthPx
@@ -170,6 +177,7 @@ public final class ArcCollectionsView extends LinearLayout {
             // Preserve the original bytes for recovery. A metadata read failure
             // must not crash browser startup or silently replace a user's data.
             mFavorites.removeAllViews();
+            mFavoritesScroll.setVisibility(View.GONE);
             mEntries.removeAllViews();
             mSpace.setText(R.string.arc_collection_error);
             findViewWithTag("arc-pin-current").setEnabled(false);
@@ -225,6 +233,7 @@ public final class ArcCollectionsView extends LinearLayout {
             row.setOnLongClickListener(view -> { showEntryMenu(view, entry); return true; });
             mEntries.addView(row, new LayoutParams(-1, dp(36)));
         }
+        mFavoritesScroll.setVisibility(mFavorites.getChildCount() == 0 ? View.GONE : View.VISIBLE);
         mEntries.addView(button(mActivity.getString(R.string.arc_new_folder), () -> {
             String space = state.selectedSpace();
             String parent = mOpenFolder;

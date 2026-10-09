@@ -28,10 +28,12 @@ class FrameRegression {
     static class Resources {Metrics getDisplayMetrics(){return new Metrics();}}
     static class Activity {Resources getResources(){return new Resources();}}
     static class View {
+        static final int VISIBLE=0,GONE=8;int visibility=VISIBLE;
         int width=1382,height=863,x,y,paddingLeft,paddingTop,paddingRight,paddingBottom,layouts,invalidations,listeners;
         ViewGroup.LayoutParams params=new ViewGroup.MarginLayoutParams();
         ViewOutlineProvider outline=new ViewOutlineProvider();boolean clip;Rect clipBounds;
         int getWidth(){return width;}int getHeight(){return height;}
+        int getVisibility(){return visibility;}
         int getPaddingLeft(){return paddingLeft;}int getPaddingTop(){return paddingTop;}
         int getPaddingRight(){return paddingRight;}int getPaddingBottom(){return paddingBottom;}
         float getX(){return x;}float getY(){return y;}
@@ -49,7 +51,7 @@ class FrameRegression {
         void removeCallbacks(Runnable r){}
     }
     static class ViewGroup extends View {
-        static class LayoutParams {}
+        static class LayoutParams {int height;}
         static class MarginLayoutParams extends LayoutParams {int leftMargin,topMargin,rightMargin,bottomMargin;}
     }
     static class FullscreenManager {boolean fullscreen;boolean getPersistentFullscreenMode(){return fullscreen;}}
@@ -62,6 +64,7 @@ class FrameRegression {
     static class ArcDesktopAppearance {static int surface(Activity a,boolean b){return 0;}}
     static class Incognito {boolean isIncognitoSelected(){return false;}}
     final Activity mActivity=new Activity();final View mRail=new View();final View mFrameRoot=new View();
+    final View mCaptionSpacer=new View();
     final CompositorViewHolder mCompositorViewHolder=new CompositorViewHolder();
     final Supplier<Integer> mReservedLeftWidth=()->334;final Incognito mIncognitoStateProvider=new Incognito();
     final ViewOutlineProvider mArcContentOutlineProvider=new ViewOutlineProvider();
@@ -93,6 +96,17 @@ class FrameRegression {
             int layouts=r.mCompositorViewHolder.layouts;r.applyFrameGeometry();
             check(r.mCompositorViewHolder.layouts==layouts,"stable geometry must not request repeated layouts");
             r.clearFrameGeometry();check(!r.mFrameRoot.clip,"MOBILE restores frame outline clipping");check(p.topMargin==0&&p.rightMargin==0&&p.bottomMargin==0,"MOBILE restores all original margins");
+        } else if(scenario.equals("caption")) {
+            r.mCaptionSpacer.params.height=40;r.mCompositorViewHolder.y=16;
+            r.applyFrameGeometry();Rect bounds=r.arcClipBoundsForView(r.mCompositorViewHolder);
+            check(bounds.top==24,"native caption40 requires holder-local clip24 when holder begins16");
+            check(((ViewGroup.MarginLayoutParams)r.mCompositorViewHolder.params).topMargin==12,"caption must not be added again to native compositor margin");
+            check(!r.isInsideArcContent(500,23)&&r.isInsideArcContent(500,30),"hit test must share native-caption clip bounds");
+            check(!r.isInsideArcContent(334,24),"new clipped top-left corner must reject hit testing");
+            SurfaceView surface=new SurfaceView();surface.y=8;r.mCompositorViewHolder.active=surface;r.applyActiveSurfaceClip();
+            check(surface.clipBounds.top==32,"surface uses its own window-local position when mapping caption clip");
+            r.mCaptionSpacer.params.height=52;r.applyActiveSurfaceClip();check(surface.clipBounds.top==44,"caption height change updates live surface bounds");
+            r.mCaptionSpacer.visibility=View.GONE;r.applyActiveSurfaceClip();check(surface.clipBounds.top==8,"hidden caption stops reserving40/52 pixels");
         } else if(scenario.equals("inactive")) {
             r.mArcToolbarCompositionActive=false;r.applyFrameGeometry();
             check(!r.mArcFrameActive&&r.mCompositorViewHolder.layouts==0,"queued geometry must not resurrect Arc after MOBILE");
@@ -135,6 +149,8 @@ class ArcFrameRuntimeTest(unittest.TestCase):
         for name,signature in {
             "currentFrameGeometry":"private ArcDesktopPolicy.Geometry currentFrameGeometry()",
             "arcClipBoundsForView":"private Rect arcClipBoundsForView(View view)",
+            "arcCaptionClipTop":"private int arcCaptionClipTop()",
+            "captionHeight":"private int captionHeight()",
         }.items():
             if name+"(" in source:signatures[name]=signature
         import re
@@ -156,6 +172,7 @@ class ArcFrameRuntimeTest(unittest.TestCase):
         self.assertEqual(result.returncode,0,result.stdout+result.stderr)
 
     def test_reference_frame_and_mobile_restore(self):self.run_case("frame")
+    def test_native_caption_clip_and_input_surface_mapping(self):self.run_case("caption")
     def test_inactive_posted_callback(self):self.run_case("inactive")
     def test_surface_swap_and_cleanup(self):self.run_case("surface")
     def test_destroyed_callback(self):self.run_case("destroyed")

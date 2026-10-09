@@ -312,7 +312,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 +
 +        @Override
 +        public void didMoveTabGroup(Token id, int oldIndex, int newIndex) {
-+            refreshTabPresentationIfFiltered();
++            pruneFilteredRowsAfterReorder();
 +        }
 +
 +        @Override
@@ -369,7 +369,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 +
 +                    @Override
 +                    public void didMoveTab(Tab tab, int newIndex, int curIndex) {
-+                        refreshTabPresentationIfFiltered();
++                        pruneFilteredRowsAfterReorder();
                      }
 
                      @Override
@@ -414,7 +414,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          mVerticalTabsActiveSupplier.removeObserver(mActiveObserver);
          if (mBackPressManager.has(BackPressHandler.Type.CANCEL_TAB_SWITCHER_DRAG)) {
              mBackPressManager.removeHandler(BackPressHandler.Type.CANCEL_TAB_SWITCHER_DRAG);
-@@ -1116,6 +1170,98 @@
+@@ -1116,6 +1170,107 @@
          if (mTabModelSelector.isTabStateInitialized()) {
              resetWithListOfTabs(tabModel);
          }
@@ -458,6 +458,15 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 +
 +    private void refreshTabPresentationIfFiltered() {
 +        if (mTabVisibilityPredicate != null) refreshTabPresentation();
++    }
++
++    private void pruneFilteredRowsAfterReorder() {
++        if (mTabVisibilityPredicate == null || !mTabModelSelector.isTabStateInitialized()) return;
++        // The native layout delegate has already moved the existing visible rows. A full reset
++        // replaces the dragged group's ViewHolders while ItemTouchHelper still tracks/overlays
++        // them, leaving those copies above newly bound rows. Prune hidden rows synchronously
++        // without replacing the visible models or disturbing the native drag cleanup.
++        pruneFilteredRows(mTabModelSelector.getCurrentModel());
 +    }
 +
 +    private @Nullable Tab getVisibleRepresentative(TabModel tabModel, Tab tab) {
@@ -513,7 +522,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
      }
 
      /**
-@@ -1126,9 +1272,10 @@
+@@ -1126,9 +1281,10 @@
          if (tabModel == null) return;
 
          mMediator.resetWithListOfTabs(
@@ -525,7 +534,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          mPinnedTabsMediator.updateTabModel(tabModel);
          boolean isIncognito =
                  !IncognitoUtils.shouldOpenIncognitoAsWindow() && tabModel.isIncognitoBranded();
-@@ -2360,6 +2507,8 @@
+@@ -2360,6 +2516,8 @@
 
      private void updateSpacerVisibility(@Nullable AppHeaderState appHeaderState) {
          boolean isInDesktopWindow = appHeaderState != null && appHeaderState.isInDesktopWindow();
@@ -534,7 +543,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          mContainerView.setDesktopWindowSpacerVisible(isInDesktopWindow);
      }
 
-@@ -2373,9 +2522,21 @@
+@@ -2373,9 +2531,21 @@
                                  mContainerModel.get(VerticalTabListProperties.COLLAPSE_STATE));
 
          TabModel model = mTabModelSelector.getCurrentModel();
@@ -2025,6 +2034,206 @@ diff --git a/chrome/browser/sync/sync_service_factory.cc b/chrome/browser/sync/s
    builder.SetPrefService(profile->GetPrefs());
    builder.SetPrefServiceSyncable(PrefServiceSyncableFromProfile(profile));
    builder.SetTabGroupSyncService(GetTabGroupSyncService(profile));
+diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java
+--- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java
++++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java
+@@ -22,6 +22,7 @@
+ import android.view.ViewOutlineProvider;
+ import android.widget.FrameLayout;
+ import android.widget.LinearLayout;
++import android.widget.ScrollView;
+
+ import androidx.annotation.ColorInt;
+ import androidx.annotation.DrawableRes;
+@@ -103,6 +104,9 @@
+     // toolbar.
+     private View mHolder;
+     private @Nullable View mContainerView;
++    private @Nullable MarginLayoutParams mReparentedHolderParams;
++    private int mReparentedMarginStart;
++    private int mReparentedMarginEnd;
+     private @Nullable BooleanSupplier mIsFullWidthExpansionAllowedSupplier;
+     private @FuseboxLayoutMode int mLayoutMode;
+     private boolean mIsReparentedToPopover;
+@@ -687,6 +691,9 @@
+     }
+
+     private void updateLayoutAndBackground() {
++        // A queued focus/resize update can run between removing and reattaching the holder.
++        if (mHolder == null || !(mHolder.getParent() instanceof View)) return;
++
+         // This may be invoked synchronously while an autocomplete state observer is being
+         // registered during a tab switch (e.g. closing a tab on tablet). At that moment the
+         // LocationBar can be in a transient reparenting / activity-recreation state where it is
+@@ -728,9 +735,21 @@
+                     isPopoverMode ? mPopoverAdditionalWidth : mLocationBarTabletFuseboxPopupInset;
+             // Determine available headroom above toolbar (stored in mPositionArray[1]).
+             int availableTopHeadroomPx = expansionPx;
+-            if (mContainerView != null && mHolder.getParent() instanceof View holderParent) {
+-                ViewUtils.getRelativeLayoutPosition(mContainerView, holderParent, mPositionArray);
+-                availableTopHeadroomPx = Math.max(0, mPositionArray[1]);
++            View containerView = getExpansionContainerView();
++            if (containerView != null && mHolder.getParent() instanceof View holderParent) {
++                if (containerView == mContainerView) {
++                    ViewUtils.getRelativeLayoutPosition(containerView, holderParent, mPositionArray);
++                    availableTopHeadroomPx = Math.max(0, mPositionArray[1]);
++                } else {
++                    getExpansionPosition(containerView, mHolder);
++                    // Undo our previous expansion so repeated focus/scroll updates stay stable.
++                    availableTopHeadroomPx =
++                            Math.max(
++                                    0,
++                                    mPositionArray[1]
++                                            - parentParams.topMargin
++                                            - containerView.getPaddingTop());
++                }
+             }
+             int topMarginExpansion = Math.min(expansionPx, availableTopHeadroomPx);
+             parentParams.topMargin = mIsReparentedToPopover ? 0 : -topMarginExpansion;
+@@ -754,6 +773,7 @@
+             parentParams.leftMargin = 0;
+             parentParams.rightMargin = 0;
+             parentParams.topMargin = 0;
++            restoreReparentedHolderMargins(parentParams);
+             mTargetPopoverWidth = 0;
+             mTargetPopoverLeftOffset = 0;
+             parentParams.height =
+@@ -845,21 +865,91 @@
+         }
+     }
+
++    /** Keep the native container while it is an ancestor; otherwise use the holder's live host. */
++    private @Nullable View getExpansionContainerView() {
++        if (mHolder == null || !(mHolder.getParent() instanceof View holderParent)) return null;
++        if (mContainerView == null) return null;
++        View ancestor = holderParent;
++        while (true) {
++            if (ancestor == mContainerView) return mContainerView;
++            if (!(ancestor.getParent() instanceof View parent)) break;
++            ancestor = parent;
++        }
++        // A header inside a ScrollView can exceed the visible height. Its viewport defines the
++        // available expansion bounds, not the offscreen content or the former toolbar.
++        return holderParent.getParent() instanceof ScrollView viewport ? viewport : holderParent;
++    }
++
++    /** Physical layout coordinates in the reparented viewport, including ancestor scrolling. */
++    private void getExpansionPosition(View containerView, View childView) {
++        mPositionArray[0] = 0;
++        mPositionArray[1] = 0;
++        while (childView != containerView) {
++            mPositionArray[0] += childView.getLeft();
++            mPositionArray[1] += childView.getTop();
++            if (!(childView.getParent() instanceof View parent)) return;
++            mPositionArray[0] -= parent.getScrollX();
++            mPositionArray[1] -= parent.getScrollY();
++            childView = parent;
++        }
++    }
++
++    private void restoreReparentedHolderMargins(MarginLayoutParams layoutParams) {
++        if (layoutParams != mReparentedHolderParams) return;
++        layoutParams.setMarginStart(mReparentedMarginStart);
++        layoutParams.setMarginEnd(mReparentedMarginEnd);
++        boolean isRtl = mHolder.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
++        layoutParams.leftMargin = isRtl ? mReparentedMarginEnd : mReparentedMarginStart;
++        layoutParams.rightMargin = isRtl ? mReparentedMarginStart : mReparentedMarginEnd;
++        mReparentedHolderParams = null;
++    }
++
+     private void setMarginsForAvailableWidth(
+             MarginLayoutParams layoutParams, int minHorizontalExpansionPx, boolean isPopoverMode) {
+         Resources resources = getResources();
+         int screenWidthDp = resources.getConfiguration().screenWidthDp;
+
+-        ViewUtils.getRelativeLayoutPosition(
+-                mContainerView != null ? mContainerView : getRootView(), mHolder, mPositionArray);
++        if (mHolder == null || !(mHolder.getParent() instanceof View)) return;
++        View containerView = getExpansionContainerView();
++        boolean isReparented = containerView != null && containerView != mContainerView;
++        int containerLeft = 0;
++        if (isReparented) {
++            getExpansionPosition(containerView, mHolder);
++            containerLeft = containerView.getPaddingLeft();
++            mPositionArray[0] -= containerLeft;
++            if (mReparentedHolderParams != layoutParams) {
++                mReparentedHolderParams = layoutParams;
++                mReparentedMarginStart = layoutParams.getMarginStart();
++                mReparentedMarginEnd = layoutParams.getMarginEnd();
++            }
++        } else {
++            ViewUtils.getRelativeLayoutPosition(
++                    containerView != null ? containerView : getRootView(), mHolder, mPositionArray);
++            mReparentedHolderParams = null;
++        }
+
+         int availableWidth =
+-                mContainerView != null
+-                        ? mContainerView.getMeasuredWidth()
++                containerView != null
++                        ? containerView.getMeasuredWidth()
+                         : DisplayUtil.dpToPx(mWindowAndroid.getDisplay(), screenWidthDp);
++        if (isReparented) {
++            availableWidth =
++                    Math.max(0, availableWidth - containerLeft - containerView.getPaddingRight());
++        }
++        // Native toolbar margins are expansion deltas from zero. Reparented hosts can provide
++        // their own baseline inset; only undo the expansion delta when recovering base geometry.
++        boolean isRtl = mHolder.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL;
++        int baselineLeft =
++                isReparented ? (isRtl ? mReparentedMarginEnd : mReparentedMarginStart) : 0;
++        int baselineRight =
++                isReparented ? (isRtl ? mReparentedMarginStart : mReparentedMarginEnd) : 0;
+         int unexpandedWidth =
+-                mHolder.getMeasuredWidth() + layoutParams.leftMargin + layoutParams.rightMargin;
+-        int unexpandedLeft = mPositionArray[0] - layoutParams.leftMargin;
++                mHolder.getMeasuredWidth()
++                        + layoutParams.leftMargin
++                        - baselineLeft
++                        + layoutParams.rightMargin
++                        - baselineRight;
++        int unexpandedLeft = mPositionArray[0] - layoutParams.leftMargin + baselineLeft;
+         int unexpandedRight = unexpandedLeft + unexpandedWidth;
+
+         // Step 2: Determine target width
+@@ -911,11 +1001,17 @@
+         if (isPopoverMode) {
+             mTargetPopoverWidth = finalRight - finalLeft;
+             mTargetPopoverLeftOffset = finalLeft - unexpandedLeft;
+-            layoutParams.leftMargin = 0;
+-            layoutParams.rightMargin = 0;
++            layoutParams.leftMargin = baselineLeft;
++            layoutParams.rightMargin = baselineRight;
+         } else {
+-            layoutParams.leftMargin = finalLeft - unexpandedLeft;
+-            layoutParams.rightMargin = -(finalRight - unexpandedRight);
++            layoutParams.leftMargin = baselineLeft + finalLeft - unexpandedLeft;
++            layoutParams.rightMargin = baselineRight - (finalRight - unexpandedRight);
++        }
++        if (isReparented && !isPopoverMode) {
++            // Arc's host supplies relative margins. Keep physical target bounds in both directions
++            // instead of letting resolution overwrite the expansion with the unfocused inset.
++            layoutParams.setMarginStart(isRtl ? layoutParams.rightMargin : layoutParams.leftMargin);
++            layoutParams.setMarginEnd(isRtl ? layoutParams.leftMargin : layoutParams.rightMargin);
+         }
+     }
+
+@@ -996,8 +1092,13 @@
+      * falling back to the window width before the container has been laid out.
+      */
+     private @Px int getAvailableContainerWidth() {
+-        if (mContainerView != null && mContainerView.getWidth() > 0) {
+-            return mContainerView.getWidth();
++        View containerView = getExpansionContainerView();
++        if (containerView != null && containerView.getWidth() > 0) {
++            int width = containerView.getWidth();
++            if (containerView != mContainerView) {
++                width -= containerView.getPaddingLeft() + containerView.getPaddingRight();
++            }
++            return Math.max(0, width);
+         }
+         return getResources().getDisplayMetrics().widthPixels;
+     }
 diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImpl.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImpl.java
 --- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImpl.java
 +++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImpl.java
@@ -3887,7 +4096,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollecti
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java
-@@ -0,0 +1,320 @@
+@@ -0,0 +1,329 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -4013,9 +4222,16 @@ new file mode 100644
 +    public void applyGeometry(ArcDesktopPolicy.Geometry geometry, int availableWidthPx) {
 +        mGeometry = geometry;
 +        setPadding(0, 0, 0, 0);
++        mFavoritesScroll.setVisibility(mFavorites.getChildCount() == 0 ? View.GONE : View.VISIBLE);
++        LayoutParams space = (LayoutParams) mSpace.getLayoutParams();
++        if (space.bottomMargin != geometry.sectionGap) {
++            space.bottomMargin = geometry.sectionGap;
++            mSpace.setLayoutParams(space);
++        }
 +        LayoutParams row = (LayoutParams) mFavoritesScroll.getLayoutParams();
-+        if (row.height != geometry.quickAccessHeight) {
++        if (row.height != geometry.quickAccessHeight || row.bottomMargin != geometry.sectionGap) {
 +            row.height = geometry.quickAccessHeight;
++            row.bottomMargin = geometry.sectionGap;
 +            mFavoritesScroll.setLayoutParams(row);
 +        }
 +        int tilesWidth = Math.max(0, availableWidthPx
@@ -4060,6 +4276,7 @@ new file mode 100644
 +            // Preserve the original bytes for recovery. A metadata read failure
 +            // must not crash browser startup or silently replace a user's data.
 +            mFavorites.removeAllViews();
++            mFavoritesScroll.setVisibility(View.GONE);
 +            mEntries.removeAllViews();
 +            mSpace.setText(R.string.arc_collection_error);
 +            findViewWithTag("arc-pin-current").setEnabled(false);
@@ -4115,6 +4332,7 @@ new file mode 100644
 +            row.setOnLongClickListener(view -> { showEntryMenu(view, entry); return true; });
 +            mEntries.addView(row, new LayoutParams(-1, dp(36)));
 +        }
++        mFavoritesScroll.setVisibility(mFavorites.getChildCount() == 0 ? View.GONE : View.VISIBLE);
 +        mEntries.addView(button(mActivity.getString(R.string.arc_new_folder), () -> {
 +            String space = state.selectedSpace();
 +            String parent = mOpenFolder;
@@ -4212,7 +4430,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopC
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
-@@ -0,0 +1,1152 @@
+@@ -0,0 +1,1187 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -4567,17 +4785,17 @@ new file mode 100644
 +        mColumn.addView(mHeaderScroll);
 +        mColumn.addView(mNativeTabs, new LinearLayout.LayoutParams(-1, 0, 1));
 +
-+        mFooter = new LinearLayout(activity);
-+        mPasswordButton = button(localPasswordsEnabled ? "Passwords" : "Autofill",
-+                openPasswordSettings);
-+        mPasswordButton.setContentDescription(
-+                localPasswordsEnabled ? "Local passwords" : "Autofill settings");
 +        // VerticalTabRailLayout already owns Chromium's real new-tab button and handler. Keep it
 +        // as the single new-tab action instead of adding a second Arc handler here.
-+        mFooter.addView(
-+                mPasswordButton,
-+                new LinearLayout.LayoutParams(
-+                        0, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP), 1));
++        mFooter = new LinearLayout(activity);
++        // arc-media does not expose local passwords. Do not substitute an unrelated Autofill
++        // settings action; Chromium's real menu and extensions remain available below.
++        mPasswordButton = localPasswordsEnabled ? button("Passwords", openPasswordSettings) : null;
++        if (mPasswordButton != null) {
++            mPasswordButton.setContentDescription("Local passwords");
++            mFooter.addView(mPasswordButton, new LinearLayout.LayoutParams(
++                    0, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP), 1));
++        }
 +        // Preserve Chromium's native app menu and extension actions after ToolbarTablet itself is
 +        // removed from layout. These Views retain their existing coordinators/listeners; Arc only
 +        // changes their parent. The extension container is optional when ExtensionUi is disabled.
@@ -4696,11 +4914,13 @@ new file mode 100644
 +            }
 +        };
 +        mPreferences.registerOnSharedPreferenceChangeListener(mPreferenceListener);
-+        mLayoutListener = (v, l, t, r, b, ol, ot, or, ob) -> { rebindCollections(); applyAppearance(); };
++        mLayoutListener = (v, l, t, r, b, ol, ot, or, ob) -> {
++            if (r - l != or - ol || b - t != ob - ot) onSidebarGeometryChanged();
++        };
 +        rail.addOnLayoutChangeListener(mLayoutListener);
 +        // The rail may be laid out before its child. Re-evaluate actual available width.
 +        mColumnLayoutListener = (v, l, t, r, b, ol, ot, or, ob) -> {
-+            if (r - l != or - ol || b - t != ob - ot) applyAppearance();
++            if (r - l != or - ol || b - t != ob - ot) onSidebarGeometryChanged();
 +        };
 +        mColumn.addOnLayoutChangeListener(mColumnLayoutListener);
 +        mHeaderLayoutListener = (v, l, t, r, b, ol, ot, or, ob) -> {
@@ -4961,6 +5181,22 @@ new file mode 100644
 +            return;
 +        }
 +
++        updateSidebarControls();
++        // Leave native tab selection, incognito and favicon rendering to its binders.
++        int surface = ArcDesktopAppearance.surface(mActivity, incognito);
++        int foreground = ArcDesktopPolicy.foreground(surface);
++        mColumn.setBackgroundColor(surface);
++        tintHeader(mHeader, foreground, ArcDesktopPolicy.selection(surface));
++        tintHeader(mFooter, foreground, ArcDesktopPolicy.selection(surface));
++    }
++
++    /** Keep palette and collection refreshes out of animated width/resize callbacks. */
++    private void onSidebarGeometryChanged() {
++        if (mDestroyed || !mArcToolbarCompositionActive) return;
++        updateSidebarControls();
++    }
++
++    private void updateSidebarControls() {
 +        // mColumn has the actual allocated width after rail padding and split-window resize.
 +        final int availableWidthPx = mColumn.getWidth();
 +        final int availableHeightPx = mColumn.getHeight();
@@ -4980,7 +5216,9 @@ new file mode 100644
 +        // The native app menu remains reachable while collapsed. Secondary footer actions can
 +        // disappear so the compact rail does not retain expanded hitboxes.
 +        mFooter.setVisibility(View.VISIBLE);
-+        mPasswordButton.setVisibility(expanded ? View.VISIBLE : View.GONE);
++        if (mPasswordButton != null) {
++            mPasswordButton.setVisibility(expanded ? View.VISIBLE : View.GONE);
++        }
 +        if (mExtensionsToolbarHost != null) {
 +            mExtensionsToolbarHost.setVisibility(expanded ? mExtensionsToolbarOriginalVisibility : View.GONE);
 +        }
@@ -4993,12 +5231,6 @@ new file mode 100644
 +                    Math.max(0, Math.min(dp(112), availableHeightPx / 6)));
 +        }
 +        applySidebarGeometry();
-+        // Leave native tab selection, incognito and favicon rendering to its binders.
-+        int surface = ArcDesktopAppearance.surface(mActivity, incognito);
-+        int foreground = ArcDesktopPolicy.foreground(surface);
-+        mColumn.setBackgroundColor(surface);
-+        tintHeader(mHeader, foreground, ArcDesktopPolicy.selection(surface));
-+        tintHeader(mFooter, foreground, ArcDesktopPolicy.selection(surface));
 +    }
 +
 +    private int reservedLeftWidth() {
@@ -5036,14 +5268,7 @@ new file mode 100644
 +            collapse.bottomMargin = 0;
 +            mCollapseButton.setLayoutParams(collapse);
 +        }
-+        LinearLayout.LayoutParams url = (LinearLayout.LayoutParams) mLocationBarHost.getLayoutParams();
-+        if (url.height != g.omniboxHeight || url.getMarginStart() != side
-+                || url.getMarginEnd() != side) {
-+            url.height = g.omniboxHeight;
-+            url.setMarginStart(side);
-+            url.setMarginEnd(side);
-+            mLocationBarHost.setLayoutParams(url);
-+        }
++        updateLocationBarGeometry(g, side);
 +        if (mCollectionsView != null) {
 +            LinearLayout.LayoutParams collections = (LinearLayout.LayoutParams) mCollectionsView.getLayoutParams();
 +            int gap = g.omniboxBottomGap;
@@ -5083,6 +5308,20 @@ new file mode 100644
 +        mFooter.setVisibility(footerVisible ? View.VISIBLE : View.GONE);
 +    }
 +
++    private void updateLocationBarGeometry(ArcDesktopPolicy.Geometry g, int side) {
++        LinearLayout.LayoutParams url = (LinearLayout.LayoutParams) mLocationBarHost.getLayoutParams();
++        // Chromium owns this holder while Fusebox expands it. Resetting height/margins from a
++        // header layout fights native focus animation; defer baseline changes until native blur.
++        if (url.height == ViewGroup.LayoutParams.WRAP_CONTENT) return;
++        if (url.height != g.omniboxHeight || url.getMarginStart() != side
++                || url.getMarginEnd() != side) {
++            url.height = g.omniboxHeight;
++            url.setMarginStart(side);
++            url.setMarginEnd(side);
++            mLocationBarHost.setLayoutParams(url);
++        }
++    }
++
 +    private int arcClipLeftForView(View view) {
 +        return arcClipBoundsForView(view).left;
 +    }
@@ -5096,9 +5335,22 @@ new file mode 100644
 +                mActivity.getResources().getDisplayMetrics().density, false);
 +    }
 +
++    private int arcCaptionClipTop() {
++        int caption = captionHeight();
++        if (caption == 0) return 0;
++        int[] captionPosition = new int[2];
++        int[] holderPosition = new int[2];
++        mCaptionSpacer.getLocationInWindow(captionPosition);
++        mCompositorViewHolder.getLocationInWindow(holderPosition);
++        // Native TopControlsStacker already offsets web/bookmarks for this caption. Protect its
++        // window area by clipping, without adding the caption again to compositor layout margins.
++        return Math.min(mCompositorViewHolder.getHeight(),
++                Math.max(0, captionPosition[1] + caption - holderPosition[1]));
++    }
++
 +    private Rect arcClipBoundsForView(View view) {
 +        int left = Math.min(reservedLeftWidth(), mCompositorViewHolder.getWidth());
-+        Rect bounds = new Rect(left, 0,
++        Rect bounds = new Rect(left, arcCaptionClipTop(),
 +                mCompositorViewHolder.getWidth(), mCompositorViewHolder.getHeight());
 +        if (view != mCompositorViewHolder) {
 +            int[] holderPosition = new int[2];
@@ -5115,9 +5367,10 @@ new file mode 100644
 +    }
 +
 +    private boolean isInsideArcContent(float x, float y) {
++        Rect bounds = arcClipBoundsForView(mCompositorViewHolder);
 +        return ArcDesktopPolicy.containsRoundedRectPoint(
-+                x, y, reservedLeftWidth(), 0, mCompositorViewHolder.getWidth(),
-+                mCompositorViewHolder.getHeight(), currentFrameGeometry().viewportRadius);
++                x, y, bounds.left, bounds.top, bounds.right, bounds.bottom,
++                currentFrameGeometry().viewportRadius);
 +    }
 +
 +    private void restoreClippedSurface() {
@@ -10476,7 +10729,7 @@ diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrom
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java
-@@ -0,0 +1,222 @@
+@@ -0,0 +1,223 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -10529,7 +10782,7 @@ new file mode 100644
 +        public final int topInset, endInset, bottomInset, outerRadius, viewportRadius;
 +        public final int sideInset, headerTopInset, omniboxHeight, navigationHeight;
 +        public final int quickAccessHeight, quickAccessGap, quickAccessSecondGap, omniboxBottomGap;
-+        public final int footerHeight, footerBottomInset;
++        public final int footerHeight, footerBottomInset, sectionGap;
 +
 +        private Geometry(int width, int height, int sidebar, float density, boolean sidebarOnRight) {
 +            float scale = referenceScale(width, density);
@@ -10546,6 +10799,7 @@ new file mode 100644
 +            quickAccessGap = Math.round(9 * scale);
 +            quickAccessSecondGap = Math.round(8 * scale);
 +            omniboxBottomGap = Math.round(10 * scale);
++            sectionGap = Math.round(8 * density);
 +            footerHeight = navigationHeight;
 +            footerBottomInset = Math.round(6 * scale);
 +            int allocatedSidebar = Math.max(0, Math.min(width, sidebar));

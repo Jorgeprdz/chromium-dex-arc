@@ -50,7 +50,7 @@ public final class ArcDesktopPolicy {
         public final int topInset, endInset, bottomInset, outerRadius, viewportRadius;
         public final int sideInset, headerTopInset, omniboxHeight, navigationHeight;
         public final int quickAccessHeight, quickAccessGap, quickAccessSecondGap, omniboxBottomGap;
-        public final int footerHeight, footerBottomInset;
+        public final int footerHeight, footerBottomInset, sectionGap;
 
         private Geometry(int width, int height, int sidebar, float density, boolean sidebarOnRight) {
             float scale = referenceScale(width, density);
@@ -67,6 +67,7 @@ public final class ArcDesktopPolicy {
             quickAccessGap = Math.round(9 * scale);
             quickAccessSecondGap = Math.round(8 * scale);
             omniboxBottomGap = Math.round(10 * scale);
+            sectionGap = Math.round(8 * density);
             footerHeight = navigationHeight;
             footerBottomInset = Math.round(6 * scale);
             int allocatedSidebar = Math.max(0, Math.min(width, sidebar));
