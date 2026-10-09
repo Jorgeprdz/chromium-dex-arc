@@ -91,12 +91,14 @@ def make_themed_vector(svg):
     if len(paths) != 1 or not paths[0].strip().startswith("M 177 760"):
         raise ValueError("Approved Archium monochrome outline was not found")
     path = re.sub(r"\s+", " ", paths[0]).strip()
-    return ("""<?xml version="1.0" encoding="utf-8"?>
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp" android:height="108dp"
-    android:viewportWidth="1024" android:viewportHeight="1024">
-    <path android:fillColor="#000000" android:pathData=""""
-            + '"' + path + '"/>\n</vector>\n').encode("utf-8")
+    return (
+        '<?xml version="1.0" encoding="utf-8"?>\n'
+        '<vector xmlns:android="http://schemas.android.com/apk/res/android"\n'
+        '    android:width="108dp" android:height="108dp"\n'
+        '    android:viewportWidth="1024" android:viewportHeight="1024">\n'
+        f'    <path android:fillColor="#000000" android:pathData="{path}"/>\n'
+        '</vector>\n'
+    ).encode("utf-8")
 
 
 def expected_resources():
@@ -130,10 +132,10 @@ def overlay(checkout, *, check=False, verify=False):
     checkout = Path(checkout).resolve()
     def git(*args):
         return subprocess.check_output(["git", "-C", str(checkout), *args],
-                                       stderr=subprocess.STDOUT).strip()
-    if Path(os.fsdecode(git("rev-parse", "--show-toplevel"))).resolve() != checkout:
+                                       stderr=subprocess.STDOUT)
+    if Path(os.fsdecode(git("rev-parse", "--show-toplevel")).strip()).resolve() != checkout:
         raise ValueError("Not a Chromium checkout root")
-    if git("rev-parse", "HEAD").decode() != REVISION:
+    if git("rev-parse", "HEAD").decode().strip() != REVISION:
         raise ValueError("Launcher overlay requires pinned Chromium revision")
     resources = expected_resources()
     previous = {}
