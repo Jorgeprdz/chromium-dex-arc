@@ -25,6 +25,18 @@ public final class ArcDesktopPolicyTest {
             check(ArcDesktopPolicy.isDesktopWindow(width) == (width >= 600),
                     "Appearance preference must not affect desktop navigation eligibility");
         }
+        for (int width : new int[] {320, 600, 700, 900, 1400}) {
+            check(!ArcDesktopPolicy.isArcWindow(0, width, false),
+                    "AUTO never promotes a handset merely for landscape width");
+            check(ArcDesktopPolicy.isArcWindow(1, width, false),
+                    "manual Arc override remains allowed for a phone");
+            check(!ArcDesktopPolicy.isArcWindow(2, width, true),
+                    "manual MOBILE remains effective on desktop or tablet");
+        }
+        check(ArcDesktopPolicy.isArcWindow(0, 840, true),
+                "tablet or desktop detection plus ample width enables AUTO");
+        check(!ArcDesktopPolicy.isArcWindow(0, 520, true),
+                "small desktop windows keep compact MOBILE in AUTO");
         check(!ArcDesktopPolicy.isDesktopWindow(580), "phone-sized window stays mobile");
         check(!ArcDesktopPolicy.isDesktopWindow(520), "narrow split/freeform stays mobile");
         check(ArcDesktopPolicy.isDesktopWindow(600), "tablet boundary enables Arc");

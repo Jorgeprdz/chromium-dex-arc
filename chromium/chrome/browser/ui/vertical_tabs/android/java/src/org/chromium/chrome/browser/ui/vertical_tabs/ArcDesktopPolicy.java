@@ -32,9 +32,15 @@ public final class ArcDesktopPolicy {
 
     /** UI preference only. Native desktop navigation always uses the actual window class. */
     public static boolean isArcWindow(int preference, int currentWidthDp) {
+        return isArcWindow(preference, currentWidthDp, true);
+    }
+
+    /** AUTO requires an actual tablet/desktop context, not merely a wide phone landscape. */
+    public static boolean isArcWindow(
+            int preference, int currentWidthDp, boolean tabletOrDesktop) {
         if (preference == MODE_ARC) return true;
         if (preference == MODE_MOBILE) return false;
-        return isDesktopWindow(currentWidthDp);
+        return tabletOrDesktop && isDesktopWindow(currentWidthDp);
     }
 
     public static boolean isDesktopWindow(int currentWidthDp) {
