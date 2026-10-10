@@ -1,9 +1,12 @@
-Archium R3.3 incremental resume — verified disk fix dispatch
+Archium R3.3 — strictly guarded progressive native resume
+fix_commit=5889cac66e254b7725507ce6997fb469211a71e8
+strict_host_preflight_run=38060766525 PASS
+strict_media_gn=Chromium pin 3fef1f00031be0d3505e5338ca671ea3752e6fd8 verified
 source_checkpoint=archium-checkpoint-38018166249-1
 source_run_id=38018166249
 source_commit=507f28e1265fb98551d3bc1a66f4739fb48d2625
-fix_commit=8b183b2e9534672dba9b5b4a0684909ee7cf838c
-full_preflight_run=38027962156 PASS
-disk_policy=resume when >=75GB free after artifact download; require >=30GB after restored and cleanup
-archive_policy=hash verify; tar extract; delete 24GB downloaded compressed parts ONLY on success
-strategy=incremental-native-build; two stages max; no clean checkout fallback
+checkpoint_metadata=3 unexpired groups checked 2026-10-10
+native_start_gate=baseline r3-final-gates AND reusable r3-pre-native-gates (same SHA)
+disk_gate=verified before download using artifact sizes and runner filesystem
+budget=max 2 slices x 75min; restore checkpoint once per stage; no clean fallback
+stop_on_first_failure=true
