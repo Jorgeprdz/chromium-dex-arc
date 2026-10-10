@@ -230,6 +230,14 @@ def restore_actions(workspace, tag, folder, *, source_commit=None):
         if untar.poll() is None:
             untar.kill()
             untar.wait()
+    # Only discard downloaded archives AFTER all hashes and the complete tar
+    # extraction passed. A later pack must start with an empty staging folder.
+    # Otherwise 24 GiB of compressed source remains and pack_actions refuses
+    # to save the next incremental checkpoint.
+    for part in receipt['parts']:
+        (folder / part['name']).unlink()
+    manifest_path.unlink()
+    print('ACTIONS_CHECKPOINT_INPUT_CLEANUP=PASS', flush=True)
     print('ACTIONS_CHECKPOINT_RESTORE=PASS', flush=True)
 
 

@@ -115,8 +115,23 @@ if [[ "$build_phase" != --work ]]; then
 printf 'PREPARE: restoring/setting up this job (60 minute total limit).\n'
 run_prepare sudo rm -rf /usr/share/dotnet /usr/local/lib/android /opt/hostedtoolcache
 available_bytes=$(df -B1 --output=avail "$RUNNER_TEMP" | tail -n 1 | tr -d ' ')
-if (( available_bytes < 100000000000 )); then
-    printf 'Insufficient disk space after cleanup: %s bytes\n' "$available_bytes" >&2
+required_bytes=100000000000
+# A verified Actions checkpoint has already consumed ~24 GiB as downloaded
+# compressed input. During a resume, 75 GB free is sufficient for the proven
+# ~56 GiB extraction peak plus reserve; the 100 GB rule is for clean checkout.
+# Validate the archive hash before unpacking, then delete downloaded chunks
+# only AFTER tar succeeds, reclaiming their disk for the incremental build.
+if [[ "${ARCHIUM_CHECKPOINT_STORAGE:-}" == artifact \
+      && ( -n "${ARCHIUM_PREVIOUS_TAG:-}" || -n "$source_tag" ) \
+      && -f "${ARCHIUM_CHECKPOINT_DIR:-}/checkpoint.json" ]]; then
+    required_bytes=75000000000
+    printf 'CHECKPOINT_DISK_POLICY=RESUME verified-manifest-present (downloaded archive occupies disk)\n'
+else
+    printf 'CHECKPOINT_DISK_POLICY=CLEAN (100GB minimum)\n'
+fi
+printf 'DISK_PREFLIGHT available=%s required=%s\n' "$available_bytes" "$required_bytes"
+if (( available_bytes < required_bytes )); then
+    printf 'Insufficient disk space after cleanup: %s bytes; required %s\n' "$available_bytes" "$required_bytes" >&2
     exit 3
 fi
 df -h "$RUNNER_TEMP"
@@ -128,6 +143,15 @@ if [[ -n "$source_tag" || -n "${ARCHIUM_PREVIOUS_TAG:-}" ]]; then
         run_prepare python3 "$GITHUB_WORKSPACE/scripts/archium-checkpoint.py" restore \
             "$build_workspace" "$ARCHIUM_PREVIOUS_TAG"
     fi
+    # Restoration deleted the downloaded archive only after checksum and tar
+    # verification. Ensure the extracted checkout still has build headroom.
+    available_bytes=$(df -B1 --output=avail "$RUNNER_TEMP" | tail -n 1 | tr -d ' ')
+    printf 'DISK_POST_RESTORE available=%s bytes\n' "$available_bytes"
+    if (( available_bytes < 30000000000 )); then
+        printf 'Insufficient disk headroom after verified checkpoint restore: %s bytes\n' "$available_bytes" >&2
+        exit 3
+    fi
+    df -h "$RUNNER_TEMP"
     export PATH="$build_workspace/depot_tools:$PATH"
     export DEPOT_TOOLS_UPDATE=0
     run_prepare bash "$build_workspace/depot_tools/ensure_bootstrap"
