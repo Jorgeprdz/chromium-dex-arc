@@ -114,7 +114,7 @@
     "chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/AutofillClientProviderUtils.java": "b14949cce15c8cf64a2cf31a202455309419c22b12539a594952ac3eed34e56a",
     "chrome/browser/browser_process_impl.cc": "94e33383b5380231041c03a8d8986435679d888a48abf6a69a0cafa8a643764e",
     "chrome/browser/password_manager/BUILD.gn": "055bef9e584f6c9372cfe7fecbc40ab392a89c1085a8293d07fd3248e7f37cc0",
-    "chrome/browser/password_manager/android/BUILD.gn": "3946299f1c549376da09128982150ae9da434790d5fe890842b9595d9c9a0d1a",
+    "chrome/browser/password_manager/android/BUILD.gn": "bef129510951eee6a246a2d4f4e41ea7cbcefba67635e4f861a93231a4d0a6fc",
     "chrome/browser/password_manager/android/password_manager_android_util.cc": "ffb74f088ba8e4147f92f946fe3f8909efc57513f43264251b4775e3dae211ca",
     "chrome/browser/password_manager/android/password_manager_android_util.h": "ca6ccc9c45b1b3ddaad787e6d32773f31eba975e5fc304f9acfedd74d8e87ffb",
     "chrome/browser/password_manager/chrome_password_manager_client.cc": "6636cf6eb0d8b9425347a7a9743012245d69de925d7c513434b688da4fa5f34c",
@@ -190,5 +190,5 @@
     "components/password_manager/core/browser/password_store/password_store_backend.cc": "45764d4ad0e05acc5a216944a5a6763212f6c17e71bf689e9c973f12fb5c87d8",
     "components/password_manager/core/browser/password_store/password_store_interface.cc": "7e9dd5813ce8ece459ec66abdd3306028b7b3d6bbae048664872a34d8d097268"
   },
-  "patch_sha256": "4801da08afea971a0b9ae60fa04771243cdab6cf43ebc743ff4f186455de1030"
+  "patch_sha256": "e34167bfbb0a41589a28669832ce704a6804b1bfb9ed3836af8d9d6d943c62bd"
 }

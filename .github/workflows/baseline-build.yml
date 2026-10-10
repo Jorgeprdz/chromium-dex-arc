@@ -21,6 +21,7 @@ on:
       - .archium-r3-3-incremental-dispatch
 permissions:
   contents: write
+  actions: read
 concurrency:
   group: archium-build-staged
   cancel-in-progress: false
@@ -45,25 +46,28 @@ jobs:
           test "${{ inputs.source_commit }}" = ''
           test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/37987348539" --jq '.status')" = 'completed'
           test "$GITHUB_REF_NAME" = 'assistant/archium-r3-visual-fixes'
-      - name: Confirm reusable historical checkpoint exists before compilation
-        env:
-          SOURCE_TAG: archium-checkpoint-37807259506-1
-          SOURCE_COMMIT: 33db26aa6fad2e8a9ac9ccf26774605edb9db771
+      - name: Confirm R3.3 Actions checkpoint is complete before large download
         shell: bash
+        env:
+          SOURCE_RUN_ID: '38018166249'
+          SOURCE_COMMIT: 507f28e1265fb98551d3bc1a66f4739fb48d2625
         run: |
           set -euo pipefail
+          test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}" --jq '.head_sha')" = "$SOURCE_COMMIT"
           mkdir -p "$RUNNER_TEMP/archium-source-probe"
-          gh release download "$SOURCE_TAG" --repo "$GITHUB_REPOSITORY" --pattern checkpoint.json --dir "$RUNNER_TEMP/archium-source-probe"
-          python3 - "$RUNNER_TEMP/archium-source-probe/checkpoint.json" "$SOURCE_COMMIT" <<'PY'
-          import json, re, sys
+          gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/artifacts?per_page=100" > "$RUNNER_TEMP/archium-source-probe/artifacts.json"
+          python3 - "$RUNNER_TEMP/archium-source-probe/artifacts.json" "$SOURCE_RUN_ID" "$SOURCE_COMMIT" <<'PY'
+          import json, sys
           from pathlib import Path
-          data=json.loads(Path(sys.argv[1]).read_text())
-          assert data.get("commit") == sys.argv[2]
-          assert data.get("revision") == "cfd94726b7b5fb48aedcc32662f2f3fbdbadec35"
-          parts=data.get("parts", [])
-          assert 1 <= len(parts) <= 64
-          assert all(0 < p.get("bytes", 0) <= 1024**3 and re.fullmatch("[0-9a-f]{64}", p.get("sha256", "")) for p in parts)
-          print("REUSABLE_SOURCE_MANIFEST=PASS:", len(parts), "parts; full restore still checked later")
+          artifacts = json.loads(Path(sys.argv[1]).read_text())['artifacts']
+          prefix = 'archium-checkpoint-' + sys.argv[2] + '-1-'
+          selected = [a for a in artifacts if a['name'].startswith(prefix)]
+          expected = {prefix + suffix for suffix in ('00', '01', '02')}
+          assert {a['name'] for a in selected} == expected, 'Missing/extra checkpoint group'
+          assert all(not a['expired'] and 0 < a['size_in_bytes'] < 10 * 1024**3
+                     and a['workflow_run']['head_sha'] == sys.argv[3]
+                     for a in selected), 'Invalid checkpoint group'
+          print('R3_CHECKPOINT_METADATA=PASS groups=3; byte/hash verification follows on restore')
           PY
       - name: Verify source preservation and exact Portal identities
         run: |
@@ -80,8 +84,9 @@ jobs:
     uses: ./.github/workflows/archium-stage.yml
     with:
       stage: 1
-      source_tag: ${{ github.event_name == 'push' && github.ref_name == 'assistant/archium-r3-visual-fixes' && 'archium-checkpoint-37807259506-1' || (github.event_name == 'push' && github.ref_name == 'feat/arc-desktop' && 'archium-checkpoint-37255997027-7' || inputs.source_checkpoint) }}
-      source_commit: ${{ github.event_name == 'push' && github.ref_name == 'assistant/archium-r3-visual-fixes' && '33db26aa6fad2e8a9ac9ccf26774605edb9db771' || (github.event_name == 'push' && github.ref_name == 'feat/arc-desktop' && 'c8ffd13ee7fe1c6baab4913da6a01e8009febe18' || inputs.source_commit) }}
+      source_tag: ${{ github.event_name == 'push' && github.ref_name == 'assistant/archium-r3-visual-fixes' && 'archium-checkpoint-38018166249-1' || (github.event_name == 'push' && github.ref_name == 'feat/arc-desktop' && 'archium-checkpoint-37255997027-7' || inputs.source_checkpoint) }}
+      source_commit: ${{ github.event_name == 'push' && github.ref_name == 'assistant/archium-r3-visual-fixes' && '507f28e1265fb98551d3bc1a66f4739fb48d2625' || (github.event_name == 'push' && github.ref_name == 'feat/arc-desktop' && 'c8ffd13ee7fe1c6baab4913da6a01e8009febe18' || inputs.source_commit) }}
+      source_run_id: ${{ github.event_name == 'push' && github.ref_name == 'assistant/archium-r3-visual-fixes' && '38018166249' || '' }}
   stage2:
     needs: stage1
     if: needs.stage1.outputs.complete != 'true'

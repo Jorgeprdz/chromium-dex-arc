@@ -193,14 +193,14 @@ def pack_actions(workspace, tag, folder):
     print(f'ACTIONS_CHECKPOINT_STAGED=PASS parts={len(receipt["parts"])}', flush=True)
 
 
-def restore_actions(workspace, tag, folder):
+def restore_actions(workspace, tag, folder, *, source_commit=None):
     if workspace.exists() and any(workspace.iterdir()):
         raise ValueError('Checkpoint restore target is not empty')
     manifest_path = folder / 'checkpoint.json'
     if not manifest_path.is_file() or manifest_path.is_symlink():
         raise ValueError('Checkpoint completion manifest absent')
     receipt = json.loads(manifest_path.read_text())
-    validate_manifest(receipt, {**identity(workspace), 'tag': tag})
+    validate_manifest(receipt, {**identity(workspace, source_commit=source_commit), 'tag': tag})
     wanted = {'checkpoint.json'} | {part['name'] for part in receipt['parts']}
     present = {item.name for item in folder.iterdir() if item.is_file()}
     if wanted != present:
@@ -265,7 +265,9 @@ if __name__ == '__main__':
             pack_actions(args.workspace, args.tag, Path(os.environ['ARCHIUM_CHECKPOINT_DIR']))
         else:
             pack(args.workspace, args.tag, args.repo)
-    elif os.environ.get('ARCHIUM_CHECKPOINT_STORAGE') == 'artifact' and not args.source_commit:
-        restore_actions(args.workspace, args.tag, Path(os.environ['ARCHIUM_CHECKPOINT_DIR']))
+    elif os.environ.get('ARCHIUM_CHECKPOINT_STORAGE') == 'artifact' and (
+            not args.source_commit or os.environ.get('ARCHIUM_SOURCE_RUN_ID')):
+        restore_actions(args.workspace, args.tag, Path(os.environ['ARCHIUM_CHECKPOINT_DIR']),
+                        source_commit=args.source_commit)
     else:
         restore(args.workspace, args.tag, args.repo, source_commit=args.source_commit)

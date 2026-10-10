@@ -17,11 +17,16 @@ on:
         required: false
         default: ''
         type: string
+      source_run_id:
+        required: false
+        default: ''
+        type: string
     outputs:
       complete:
         value: ${{ jobs.build.outputs.complete }}
 permissions:
   contents: write
+  actions: read
 jobs:
   build:
     runs-on: ubuntu-24.04
@@ -30,6 +35,7 @@ jobs:
       GH_TOKEN: ${{ github.token }}
       ARCHIUM_SOURCE_TAG: ${{ inputs.source_tag }}
       ARCHIUM_SOURCE_COMMIT: ${{ inputs.source_commit }}
+      ARCHIUM_SOURCE_RUN_ID: ${{ inputs.source_run_id }}
       ARCHIUM_COMPILE_GATE_TARGETS: 'archium_key_provider_tests archium_key_java archium_login_database_tests archium_password_import_tests archium_password_manager_tests archium_password_csv_java chrome_junit_tests'
       ARCHIUM_RUN_HOST_GATES: 'true'
       ARCHIUM_PREVIOUS_TAG: ${{ inputs.previous_tag }}
@@ -48,10 +54,12 @@ jobs:
         with:
           persist-credentials: false
       - name: Download complete checkpoint artifact groups
-        if: inputs.previous_tag != ''
+        if: inputs.previous_tag != '' || inputs.source_run_id != ''
         uses: actions/download-artifact@v4
         with:
-          pattern: ${{ inputs.previous_tag }}-*
+          pattern: ${{ inputs.source_run_id != '' && format('{0}-*', inputs.source_tag) || format('{0}-*', inputs.previous_tag) }}
+          run-id: ${{ inputs.source_run_id != '' && fromJSON(inputs.source_run_id) || github.run_id }}
+          github-token: ${{ github.token }}
           merge-multiple: true
           path: ${{ runner.temp }}/archium-checkpoint
       - name: Restore checkpoint and prepare Chromium

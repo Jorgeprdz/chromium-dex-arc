@@ -238,6 +238,15 @@ fi
 compile_slice "${java_targets[@]}"
 # Check accessible native owners, including the bridge's generated JNI includes.
 run_work TERM "$work_seconds" 0 gn check out/Archium //chrome/browser/password_manager/android:archium_password_manager_tests
+# Verify the exact owner of WebPaymentsObserver / payment JNI is in the linker graph.
+gn desc out/Archium //chrome/browser/password_manager/android:archium_password_manager_tests deps --all \
+    | grep -Fq '//chrome/browser/payments:impl' || {
+    printf 'Required payments implementation missing from native test link graph.\n' >&2
+    exit 2
+}
+# Complete JNI-heavy link before compiling unrelated tests.
+printf 'NATIVE_LINK_PROBE: archium_password_manager_tests first.\n'
+compile_slice archium_password_manager_tests
 
 compile_gate_targets="${ARCHIUM_COMPILE_GATE_TARGETS:-${ARCHIUM_VALIDATE_TARGETS:-}}"
 if [[ -n "${ARCHIUM_VALIDATE_TARGETS:-}" && -z "${ARCHIUM_COMPILE_GATE_TARGETS:-}" ]]; then

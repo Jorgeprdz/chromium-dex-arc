@@ -797,6 +797,7 @@ if (enable_archium_local_passwords) {
       "//base/test:test_support",
       "//chrome/browser/password_manager",
       "//chrome/browser/password_manager:impl",
+      "//chrome/browser/payments:impl",
       "//chrome/test/base:testing_profile_impl",
       "//components/affiliations/core/browser:test_support",
       "//components/device_reauth:test_support",

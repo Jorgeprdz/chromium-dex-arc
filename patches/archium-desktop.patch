@@ -1390,7 +1390,7 @@ diff --git a/chrome/browser/password_manager/android/BUILD.gn b/chrome/browser/p
    # TODO(crbug.com/40031409): Fix code that adds exit-time destructors and
    # enable the diagnostic by removing this line.
    configs += [ "//build/config/compiler:no_exit_time_destructors" ]
-@@ -699,3 +718,104 @@
+@@ -699,3 +718,105 @@
      "//testing/gtest",
    ]
  }
@@ -1473,6 +1473,7 @@ diff --git a/chrome/browser/password_manager/android/BUILD.gn b/chrome/browser/p
 +      "//base/test:test_support",
 +      "//chrome/browser/password_manager",
 +      "//chrome/browser/password_manager:impl",
++      "//chrome/browser/payments:impl",
 +      "//chrome/test/base:testing_profile_impl",
 +      "//components/affiliations/core/browser:test_support",
 +      "//components/device_reauth:test_support",

@@ -44,5 +44,25 @@ class NativeLinkAndCheckpointTest(unittest.TestCase):
             data = (ROOT / ".source-modified" / path).read_bytes()
             self.assertEqual(manifest["modified"][path], hashlib.sha256(data).hexdigest())
 
+    def test_payments_link_owner_and_early_native_probe(self):
+        source = (ROOT / ".source-modified/chrome/browser/password_manager/android/BUILD.gn").read_text()
+        section = source.split('test("archium_password_manager_tests") {', 1)[1].split('\n  }', 1)[0]
+        self.assertIn('"//chrome/browser/payments:impl"', section)
+        build = (ROOT / "scripts/build-archium.sh").read_text()
+        self.assertIn("NATIVE_LINK_PROBE: archium_password_manager_tests first", build)
+        self.assertLess(build.index("compile_slice archium_password_manager_tests"),
+                        build.index('compile_slice "${validation_targets[@]}"'))
+
+    def test_resume_uses_cross_run_actions_artifacts(self):
+        workflow = (ROOT / ".github/workflows/baseline-build.yml").read_text()
+        stage = (ROOT / ".github/workflows/archium-stage.yml").read_text()
+        checkpoint = (ROOT / "scripts/archium-checkpoint.py").read_text()
+        self.assertIn("archium-checkpoint-38018166249-1", workflow)
+        self.assertIn("source_run_id:", workflow)
+        self.assertIn("github-token: ${{ github.token }}", stage)
+        self.assertIn("fromJSON(inputs.source_run_id)", stage)
+        self.assertIn("source_commit=args.source_commit", checkpoint)
+        self.assertIn("ARCHIUM_SOURCE_RUN_ID", checkpoint)
+
 if __name__ == "__main__":
     unittest.main()
