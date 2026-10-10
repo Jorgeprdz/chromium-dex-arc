@@ -1,0 +1,7 @@
+Archium R3.3 incremental one-shot build dispatch
+source_checkpoint=archium-checkpoint-37807259506-1
+source_commit=33db26aa6fad2e8a9ac9ccf26774605edb9db771
+transport_smoke_run=38012803922 PASS
+host_preflight_run=38012993288 PASS
+limit=two stages, each 75min compile slice and 180min hard job timeout
+policy=never use clean Chromium checkout for this dispatch
