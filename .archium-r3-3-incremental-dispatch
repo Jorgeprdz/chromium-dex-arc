@@ -1,10 +1,9 @@
-Archium R3.3 — verified payments JNI link correction and cross-run checkpoint continuation
+Archium R3.3 incremental resume — verified disk fix dispatch
 source_checkpoint=archium-checkpoint-38018166249-1
 source_run_id=38018166249
 source_commit=507f28e1265fb98551d3bc1a66f4739fb48d2625
-implementation_commit=ee38e5ad434196aa4888734649a6040080d4f5b6
-verified_preflight=38024136125
-native_strategy=restore verified Actions artifacts, patch transition, GN graph gate, link archium_password_manager_tests first
-native_budget=2 incremental stages, 75 minutes compilation maximum each
-error_policy=fail closed; preserve quiescent incremental checkpoint on native link failures
-no_clean_fallback=true
+fix_commit=8b183b2e9534672dba9b5b4a0684909ee7cf838c
+full_preflight_run=38027962156 PASS
+disk_policy=resume when >=75GB free after artifact download; require >=30GB after restored and cleanup
+archive_policy=hash verify; tar extract; delete 24GB downloaded compressed parts ONLY on success
+strategy=incremental-native-build; two stages max; no clean checkout fallback
