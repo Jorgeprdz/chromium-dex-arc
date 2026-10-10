@@ -25,7 +25,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 360
+    timeout-minutes: 180
     env:
       GH_TOKEN: ${{ github.token }}
       ARCHIUM_SOURCE_TAG: ${{ inputs.source_tag }}
@@ -40,7 +40,7 @@ jobs:
       ARCHIUM_PREPARE_SECONDS: '3600'
       ARCHIUM_WORK_SECONDS: '7200'
       ARCHIUM_HOST_SECONDS: '1800'
-      ARCHIUM_CHECKPOINT_SECONDS: '5400'
+      ARCHIUM_CHECKPOINT_SECONDS: '3600'
     outputs:
       complete: ${{ steps.compile.outputs.complete }}
     steps:
