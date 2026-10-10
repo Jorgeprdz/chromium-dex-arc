@@ -31,7 +31,10 @@ jobs:
           git -C "$RUNNER_TEMP/gn-src" fetch origin "$GN_REV"
           git -C "$RUNNER_TEMP/gn-src" checkout --detach FETCH_HEAD
           test "$(git -C "$RUNNER_TEMP/gn-src" rev-parse HEAD)" = "$GN_REV"
-          (cd "$RUNNER_TEMP/gn-src" && python3 build/gen.py --out-path "$RUNNER_TEMP/gn-out")
+          printf '#include <expected>\nint main() { std::expected<int, int> value(0); return value.value(); }\n' |
+            g++ -std=c++23 -x c++ - -o "$RUNNER_TEMP/gn-expected-smoke"
+          "$RUNNER_TEMP/gn-expected-smoke"
+          (cd "$RUNNER_TEMP/gn-src" && CXX=g++ CC=gcc python3 build/gen.py --out-path "$RUNNER_TEMP/gn-out")
           ninja -C "$RUNNER_TEMP/gn-out" gn -j 4
           GN="$RUNNER_TEMP/gn-out/gn"
           test -x "$GN"
