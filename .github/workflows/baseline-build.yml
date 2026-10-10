@@ -78,15 +78,21 @@ jobs:
           python3 scripts/generate-arc-patch.py
           git diff --exit-code -- patches/archium-desktop.patch patches/upstream-files.json
           python3 -m compileall -q scripts/archium_portal_content_gate.py scripts/verify-archium-portal-apk.py
-  stage1:
+  r3-pre-native-gates:
     needs: r3-final-gates
-    if: always() && (needs.r3-final-gates.result == 'success' || github.ref_name != 'assistant/archium-r3-visual-fixes')
+    if: github.ref_name == 'assistant/archium-r3-visual-fixes' && needs.r3-final-gates.result == 'success'
+    uses: ./.github/workflows/archium-r3-preflight.yml
+    permissions:
+      contents: read
+  stage1:
+    needs: [r3-final-gates, r3-pre-native-gates]
+    if: always() && (github.ref_name != 'assistant/archium-r3-visual-fixes' || (needs.r3-final-gates.result == 'success' && needs.r3-pre-native-gates.result == 'success'))
     uses: ./.github/workflows/archium-stage.yml
     with:
       stage: 1
-      source_tag: ${{ github.event_name == 'push' && github.ref_name == 'assistant/archium-r3-visual-fixes' && 'archium-checkpoint-38018166249-1' || (github.event_name == 'push' && github.ref_name == 'feat/arc-desktop' && 'archium-checkpoint-37255997027-7' || inputs.source_checkpoint) }}
-      source_commit: ${{ github.event_name == 'push' && github.ref_name == 'assistant/archium-r3-visual-fixes' && '507f28e1265fb98551d3bc1a66f4739fb48d2625' || (github.event_name == 'push' && github.ref_name == 'feat/arc-desktop' && 'c8ffd13ee7fe1c6baab4913da6a01e8009febe18' || inputs.source_commit) }}
-      source_run_id: ${{ github.event_name == 'push' && github.ref_name == 'assistant/archium-r3-visual-fixes' && '38018166249' || '' }}
+      source_tag: ${{ github.ref_name == 'assistant/archium-r3-visual-fixes' && 'archium-checkpoint-38018166249-1' || (github.event_name == 'push' && github.ref_name == 'feat/arc-desktop' && 'archium-checkpoint-37255997027-7' || inputs.source_checkpoint) }}
+      source_commit: ${{ github.ref_name == 'assistant/archium-r3-visual-fixes' && '507f28e1265fb98551d3bc1a66f4739fb48d2625' || (github.event_name == 'push' && github.ref_name == 'feat/arc-desktop' && 'c8ffd13ee7fe1c6baab4913da6a01e8009febe18' || inputs.source_commit) }}
+      source_run_id: ${{ github.ref_name == 'assistant/archium-r3-visual-fixes' && '38018166249' || '' }}
   stage2:
     needs: stage1
     if: needs.stage1.outputs.complete != 'true'

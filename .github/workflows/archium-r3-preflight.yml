@@ -1,5 +1,6 @@
 name: Archium R3.3 guarded host preflight
 on:
+  workflow_call:
   push:
     branches:
       - assistant/archium-r3-visual-fixes

@@ -80,6 +80,15 @@ def resolve_pinned_android_sdk(out_dir: Path) -> tuple[Path, str, str, Path]:
 def host_gate(android_jar: Path, out_dir: Path) -> None:
     """Execute every Archium gate that is runnable on the Linux CI host."""
     require_file(android_jar, 'Android platform jar')
+    out_dir = out_dir.resolve()
+    pinned_gn = out_dir.parent.parent / 'buildtools' / 'linux64' / 'gn'
+    require_file(pinned_gn, 'Pinned Chromium GN')
+    if not os.access(pinned_gn, os.X_OK):
+        raise SystemExit(f'Pinned Chromium GN is not executable: {pinned_gn}')
+    # Never use depot_tools/gn wrapper from the temporary fixture directory:
+    # its lookup may differ from GN checked out at the exact Chromium DEPS pin.
+    os.environ['ARCHIUM_TEST_GN'] = str(pinned_gn)
+    run([str(pinned_gn), '--version'], cwd=ROOT)
     run([
         sys.executable,
         str(ROOT / 'scripts/check-arc-preparation.py'),
