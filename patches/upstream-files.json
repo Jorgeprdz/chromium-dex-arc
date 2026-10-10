@@ -114,7 +114,7 @@
     "chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/AutofillClientProviderUtils.java": "b14949cce15c8cf64a2cf31a202455309419c22b12539a594952ac3eed34e56a",
     "chrome/browser/browser_process_impl.cc": "94e33383b5380231041c03a8d8986435679d888a48abf6a69a0cafa8a643764e",
     "chrome/browser/password_manager/BUILD.gn": "055bef9e584f6c9372cfe7fecbc40ab392a89c1085a8293d07fd3248e7f37cc0",
-    "chrome/browser/password_manager/android/BUILD.gn": "a573a0b22167fb3138bdbf4876dc07ccba0eebd52b9c16dcaf40c0357663a5c2",
+    "chrome/browser/password_manager/android/BUILD.gn": "3946299f1c549376da09128982150ae9da434790d5fe890842b9595d9c9a0d1a",
     "chrome/browser/password_manager/android/password_manager_android_util.cc": "ffb74f088ba8e4147f92f946fe3f8909efc57513f43264251b4775e3dae211ca",
     "chrome/browser/password_manager/android/password_manager_android_util.h": "ca6ccc9c45b1b3ddaad787e6d32773f31eba975e5fc304f9acfedd74d8e87ffb",
     "chrome/browser/password_manager/chrome_password_manager_client.cc": "6636cf6eb0d8b9425347a7a9743012245d69de925d7c513434b688da4fa5f34c",
@@ -134,7 +134,7 @@
     "components/password_manager/core/browser/import/BUILD.gn": "57cbc210bef55a9487a6f78cc025fac761aae884562d20003e3f70bd5ed4f014",
     "components/password_manager/core/browser/password_manager_constants.cc": "fc0a0f51454da44694d0266a053268b8976983ac46f029d7ade72dc8c471c896",
     "components/password_manager/core/browser/password_manager_constants.h": "70a7626067c54f6343c1cae06abd46b4900d0f85e42ec4a55a174bafbd4b0f2d",
-    "components/password_manager/core/browser/password_store/BUILD.gn": "9e61463404eb5a4963cc3181f1d2337d3fa49e1d72e8b089ec889fd7b021a98d",
+    "components/password_manager/core/browser/password_store/BUILD.gn": "a2a03bc2750ac4aeea93c8dd9b38625a017569a1a3cdbeb1ba47c4d4ea422f98",
     "components/password_manager/core/browser/password_store/login_database.cc": "0a507d729c8ba1f38cbb23d96bd8906f5b555962a7b2e31c7f8babc3ec0f8f2e",
     "components/password_manager/core/browser/password_store/login_database.h": "cfb5c82caab10870970cc0d46472957f2217906be09a0685cbfd1cd8fcf201d6",
     "components/password_manager/core/browser/password_store/login_database_async_helper.cc": "820fab31b2ac6d5bc43f53d56fcf3e34a50e6cb93678666f8f7b820592a1e2a7",
@@ -190,5 +190,5 @@
     "components/password_manager/core/browser/password_store/password_store_backend.cc": "45764d4ad0e05acc5a216944a5a6763212f6c17e71bf689e9c973f12fb5c87d8",
     "components/password_manager/core/browser/password_store/password_store_interface.cc": "7e9dd5813ce8ece459ec66abdd3306028b7b3d6bbae048664872a34d8d097268"
   },
-  "patch_sha256": "1da62190aa0b1a0c223fcbbf2ebf688698daa864f1e2df32bc836bb099b0a9ad"
+  "patch_sha256": "4801da08afea971a0b9ae60fa04771243cdab6cf43ebc743ff4f186455de1030"
 }

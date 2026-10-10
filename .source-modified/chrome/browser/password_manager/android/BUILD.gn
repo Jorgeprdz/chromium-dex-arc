@@ -786,7 +786,7 @@ if (enable_archium_local_passwords) {
     ]
   }
   test("archium_password_manager_tests") {
-    use_raw_android_executable = true
+    use_raw_android_executable = false
     sources = [
       "archium_local_password_manager_unittest.cc",
       "archium_password_manager_bridge_unittest.cc",

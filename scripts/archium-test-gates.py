@@ -21,8 +21,9 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# These GN targets are intentionally Android raw executables (use_raw_android_executable=true).
-# They are compile-gated on the host runner but EXECUTED only on an explicit Android device.
+# These GN targets produce Chromium-supported Android test runners. JNI-heavy suites
+# use Android test APKs to generate their final JNI registration; smaller native
+# suites use raw executables. Execution still requires an explicit Android device.
 ANDROID_NATIVE_TEST_TARGETS = (
     '//chrome/browser/password_manager/android:archium_key_provider_tests',
     '//components/password_manager/core/browser/password_store:archium_login_database_tests',

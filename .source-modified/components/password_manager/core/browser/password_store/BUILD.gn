@@ -216,7 +216,7 @@ source_set("unit_tests") {
 
 if (is_android && enable_archium_local_passwords) {
   test("archium_login_database_tests") {
-    use_raw_android_executable = true
+    use_raw_android_executable = false
     sources = [
       "archium_login_database_unittest.cc",
       "//base/test/run_all_unittests.cc",
