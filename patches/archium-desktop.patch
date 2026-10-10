@@ -204,7 +204,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
      /**
 @@ -3040,7 +3052,9 @@
      }
- 
+
      void setThumbnailSpinnerVisibility(Tab tab, boolean isVisible) {
 -        assert mLayoutType == TabListLayoutType.FLAT;
 +        if (mLayoutType != TabListLayoutType.FLAT) {
@@ -212,7 +212,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 +        }
          int index = getIndexFromTabId(tab.getId());
          if (index == TabModel.INVALID_TAB_INDEX) return;
- 
+
 diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinder.java b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinder.java
 --- a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinder.java
 +++ b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinder.java
