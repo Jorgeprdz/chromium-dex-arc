@@ -15,6 +15,10 @@ class HostGateCoverageTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             checkout=Path(tmp);out=checkout/'out/Archium';(out/'bin').mkdir(parents=True)
             jar=checkout/'android.jar';jar.write_bytes(b'synthetic SDK presence fixture')
+            gn=checkout/'buildtools/linux64/gn'
+            gn.parent.mkdir(parents=True,exist_ok=True)
+            gn.write_text('#!/bin/sh\\necho synthetic-fixture-gn\\n')
+            gn.chmod(0o755)
             runner=out/'bin/run_chrome_junit_tests';runner.write_text('synthetic runner boundary')
             calls=[]
             with patch.object(gates,'run',side_effect=lambda args,**kw:calls.append(args)):
