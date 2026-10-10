@@ -18,6 +18,7 @@ on:
       - .archium-final-dispatch
       # Only a dedicated, explicitly committed marker triggers the R3.3 run.
       - .archium-r3-3-final-dispatch
+      - .archium-r3-3-incremental-dispatch
 permissions:
   contents: write
 concurrency:
@@ -29,7 +30,9 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
-      contents: read
+      # Reading historical *draft* checkpoint releases needs contents: write.
+      # The job only downloads a signed manifest and never mutates releases.
+      contents: write
       actions: read
     env:
       GH_TOKEN: ${{ github.token }}
@@ -42,6 +45,26 @@ jobs:
           test "${{ inputs.source_commit }}" = ''
           test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/37987348539" --jq '.status')" = 'completed'
           test "$GITHUB_REF_NAME" = 'assistant/archium-r3-visual-fixes'
+      - name: Confirm reusable historical checkpoint exists before compilation
+        env:
+          SOURCE_TAG: archium-checkpoint-37807259506-1
+          SOURCE_COMMIT: 33db26aa6fad2e8a9ac9ccf26774605edb9db771
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/archium-source-probe"
+          gh release download "$SOURCE_TAG" --repo "$GITHUB_REPOSITORY" --pattern checkpoint.json --dir "$RUNNER_TEMP/archium-source-probe"
+          python3 - "$RUNNER_TEMP/archium-source-probe/checkpoint.json" "$SOURCE_COMMIT" <<'PY'
+          import json, re, sys
+          from pathlib import Path
+          data=json.loads(Path(sys.argv[1]).read_text())
+          assert data.get("commit") == sys.argv[2]
+          assert data.get("revision") == "cfd94726b7b5fb48aedcc32662f2f3fbdbadec35"
+          parts=data.get("parts", [])
+          assert 1 <= len(parts) <= 64
+          assert all(0 < p.get("bytes", 0) <= 1024**3 and re.fullmatch("[0-9a-f]{64}", p.get("sha256", "")) for p in parts)
+          print("REUSABLE_SOURCE_MANIFEST=PASS:", len(parts), "parts; full restore still checked later")
+          PY
       - name: Verify source preservation and exact Portal identities
         run: |
           set -euo pipefail
@@ -57,8 +80,8 @@ jobs:
     uses: ./.github/workflows/archium-stage.yml
     with:
       stage: 1
-      source_tag: ${{ github.event_name == 'push' && github.ref_name == 'feat/arc-desktop' && 'archium-checkpoint-37255997027-7' || inputs.source_checkpoint }}
-      source_commit: ${{ github.event_name == 'push' && github.ref_name == 'feat/arc-desktop' && 'c8ffd13ee7fe1c6baab4913da6a01e8009febe18' || inputs.source_commit }}
+      source_tag: ${{ github.event_name == 'push' && github.ref_name == 'assistant/archium-r3-visual-fixes' && 'archium-checkpoint-37807259506-1' || (github.event_name == 'push' && github.ref_name == 'feat/arc-desktop' && 'archium-checkpoint-37255997027-7' || inputs.source_checkpoint) }}
+      source_commit: ${{ github.event_name == 'push' && github.ref_name == 'assistant/archium-r3-visual-fixes' && '33db26aa6fad2e8a9ac9ccf26774605edb9db771' || (github.event_name == 'push' && github.ref_name == 'feat/arc-desktop' && 'c8ffd13ee7fe1c6baab4913da6a01e8009febe18' || inputs.source_commit) }}
   stage2:
     needs: stage1
     if: needs.stage1.outputs.complete != 'true'
@@ -68,7 +91,8 @@ jobs:
       previous_tag: archium-checkpoint-${{ github.run_id }}-1
   stage3:
     needs: stage2
-    if: needs.stage2.outputs.complete != 'true'
+    # R3.3 deliberately stops after two bounded slices instead of 12*2h.
+    if: github.ref_name != 'assistant/archium-r3-visual-fixes' && needs.stage2.outputs.complete != 'true'
     uses: ./.github/workflows/archium-stage.yml
     with:
       stage: 3
@@ -136,6 +160,15 @@ jobs:
     with:
       stage: 12
       previous_tag: archium-checkpoint-${{ github.run_id }}-11
+  r3-incomplete-budget:
+    needs: stage2
+    if: github.ref_name == 'assistant/archium-r3-visual-fixes' && needs.stage2.outputs.complete == 'false'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Fail visibly after two bounded slices; preserve verified checkpoint artifacts
+        run: |
+          echo 'R3.3 stopped at configured incremental build budget; no APK. Resume only from verified checkpoint artifacts.' >&2
+          exit 1
   result:
     needs: stage12
     if: needs.stage12.outputs.complete == 'false'

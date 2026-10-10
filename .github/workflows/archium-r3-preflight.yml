@@ -27,6 +27,7 @@ jobs:
           python3 -m unittest discover -s tests -p 'test_archium_portal_resources.py' -v
           python3 -m unittest discover -s tests -p 'test_arc_visual_static_contract.py' -v
           python3 -m unittest discover -s tests -p 'test_r3_3_resource_contract.py' -v
+          python3 -m unittest discover -s tests -p 'test_r3_3_incremental_boundaries.py' -v
       - name: Install Android 36 SDK for isolated adapter javac
         shell: bash
         run: |
