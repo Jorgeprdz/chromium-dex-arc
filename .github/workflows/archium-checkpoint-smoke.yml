@@ -1,0 +1,64 @@
+name: Archium checkpoint transport smoke (no Chromium compile)
+on:
+  push:
+    branches:
+      - assistant/archium-r3-visual-fixes
+    paths:
+      - '.github/workflows/archium-checkpoint-smoke.yml'
+permissions:
+  contents: read
+  actions: read
+jobs:
+  checkpoint-read-and-upload:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_TAG: archium-checkpoint-37807259506-1
+      SOURCE_COMMIT: 33db26aa6fad2e8a9ac9ccf26774605edb9db771
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Read legacy complete checkpoint manifest only (no 23GiB download)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/archium-manifest" "$RUNNER_TEMP/artifact-smoke"
+          gh release download "$SOURCE_TAG" --repo "$GITHUB_REPOSITORY" --pattern checkpoint.json --dir "$RUNNER_TEMP/archium-manifest"
+          python3 - "$RUNNER_TEMP/archium-manifest/checkpoint.json" "$SOURCE_COMMIT" <<'PY'
+          import json, sys, re
+          from pathlib import Path
+          z=json.loads(Path(sys.argv[1]).read_text())
+          assert z.get("commit")==sys.argv[2], "Wrong checkpoint source SHA"
+          assert z.get("revision")=="cfd94726b7b5fb48aedcc32662f2f3fbdbadec35", "Wrong Chromium revision"
+          parts=z.get("parts",[])
+          assert len(parts)>=1 and all(0<p.get("bytes",0)<=1024**3 and re.fullmatch("[a-f0-9]{64}",p.get("sha256","")) for p in parts)
+          assert len({p["name"] for p in parts})==len(parts)
+          print("LEGACY_MANIFEST_READ=PASS parts=",len(parts))
+          PY
+          printf '%s\n' "$SOURCE_TAG" "$SOURCE_COMMIT" > "$RUNNER_TEMP/artifact-smoke/check.txt"
+          sha256sum "$RUNNER_TEMP/artifact-smoke/check.txt" > "$RUNNER_TEMP/artifact-smoke/check.sha256"
+      - name: Upload tiny synthetic checkpoint probe
+        uses: actions/upload-artifact@v4
+        with:
+          name: archium-r3-checkpoint-smoke
+          path: ${{ runner.temp }}/artifact-smoke/
+          if-no-files-found: error
+          retention-days: 1
+          compression-level: 0
+  verify-download:
+    needs: checkpoint-read-and-upload
+    runs-on: ubuntu-24.04
+    timeout-minutes: 4
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: archium-r3-checkpoint-smoke
+          path: ${{ runner.temp }}/artifact-smoke-received
+      - name: Verify independent runner can retrieve artifact with original bytes
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/artifact-smoke-received"
+          sha256sum --status -c check.sha256
+          grep -Fqx 'archium-checkpoint-37807259506-1' check.txt
+          grep -Fqx '33db26aa6fad2e8a9ac9ccf26774605edb9db771' check.txt
+          echo "ACTIONS_ARTIFACT_ROUNDTRIP=PASS"
