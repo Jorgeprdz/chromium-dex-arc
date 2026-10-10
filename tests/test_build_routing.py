@@ -79,6 +79,10 @@ elif name=='timeout':
  while args[i].startswith('--'):i+=1
  os.execvp(args[i+1],args[i+1:])
 elif name=='autoninja':
+ if 'chrome_junit_tests' in args:
+  launcher=pathlib.Path.cwd()/'out/Archium/bin/run_chrome_junit_tests'
+  launcher.parent.mkdir(parents=True,exist_ok=True)
+  if not launcher.exists():launcher.symlink_to(pathlib.Path(sys.argv[0]).resolve())
  if os.environ.get('MOCK_NINJA_WAIT')=='true':
   def stopped(signum,frame):
    (pathlib.Path.cwd()/'out/Archium/.ninja_log').write_text('flushed after SIGINT')
@@ -87,6 +91,8 @@ elif name=='autoninja':
   time.sleep(10)
  is_java='obj/archium-fixture.javac.jar' in args
  sys.exit(int(os.environ.get('MOCK_JAVA_NINJA_RESULT' if is_java else 'MOCK_NINJA_RESULT','0')))
+elif name=='run_chrome_junit_tests':
+ sys.exit(int(os.environ.get('MOCK_ROBOLECTRIC_RESULT','0')))
 elif name=='gn' and args and args[0]=='desc' and args[-2:]==['deps','--all']:
  if os.environ.get('MOCK_MISSING_NATIVE_LINK_OWNER')=='true':sys.exit(0)
  print('//chrome/browser/payments:impl')
@@ -125,10 +131,25 @@ elif name=='sudo' and args and args[0]=='timeout':
         ninjas=[(i,c) for i,c in enumerate(calls) if c[0]=='autoninja']
         self.assertIn('obj/archium-fixture.javac.jar',ninjas[0][1])
         self.assertLess(resolution,ninjas[0][0])
-        self.assertIn('archium_password_manager_tests',ninjas[1][1])
+        self.assertIn('chrome_junit_tests',ninjas[1][1])
         self.assertIn('archium_password_manager_tests',ninjas[2][1])
-        self.assertIn('chrome/browser/password_manager:unit_tests',ninjas[2][1])
-        self.assertIn('chrome_public_apk',ninjas[3][1])
+        self.assertIn('archium_password_manager_tests',ninjas[2][1])
+        self.assertIn('chrome/browser/password_manager:unit_tests',ninjas[3][1])
+        self.assertIn('chrome_public_apk',ninjas[4][1])
+
+    def test_early_robolectric_failure_blocks_native_link_and_apk(self):
+        result = self.run_build(
+            ARCHIUM_PREVIOUS_TAG=CURRENT_TAG, MOCK_ROBOLECTRIC_RESULT='7')
+        self.assertEqual(result.returncode, 7, result.stderr)
+        calls = self.calls()
+        ninjas = [c for c in calls if c[0] == 'autoninja']
+        self.assertTrue(any('chrome_junit_tests' in c for c in ninjas))
+        self.assertFalse(any('archium_password_manager_tests' in c for c in ninjas))
+        self.assertFalse(any('chrome_public_apk' in c for c in ninjas))
+        self.assertTrue(any(c[0] == 'run_chrome_junit_tests' and
+                            'testIncognitoButtonVisibility_TabletUnder10Inches' in ' '.join(c)
+                            for c in calls))
+        self.assertEqual(self.output.read_text(), 'complete=false\n')
 
     def test_missing_payments_owner_blocks_broad_native_link(self):
         result=self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
@@ -136,8 +157,9 @@ elif name=='sudo' and args and args[0]=='timeout':
         self.assertEqual(result.returncode,2,result.stderr)
         self.assertIn('Required payments implementation missing',result.stderr)
         ninjas=[c for c in self.calls() if c[0]=='autoninja']
-        self.assertEqual(len(ninjas),1)
+        self.assertEqual(len(ninjas),2)
         self.assertIn('obj/archium-fixture.javac.jar',ninjas[0])
+        self.assertIn('chrome_junit_tests',ninjas[1])
         self.assertNotIn('complete=true',self.output.read_text())
 
     def test_dependency_timeout_stops_before_gn_or_compilation(self):
@@ -308,7 +330,7 @@ elif name=='sudo' and args and args[0]=='timeout':
         self.assertEqual(result.returncode,1,result.stderr)
         ninja=[c for c in self.calls() if c[0]=='autoninja' and 'obj/archium-fixture.javac.jar' not in c]
         self.assertEqual(len(ninja),1)
-        self.assertIn('archium_password_manager_tests',ninja[0])
+        self.assertIn('chrome_junit_tests',ninja[0])
         self.assertNotIn('chrome_public_apk',ninja[0])
         self.assertEqual(self.output.read_text(),'complete=false\n')
         calls=self.calls()
@@ -335,14 +357,15 @@ elif name=='sudo' and args and args[0]=='timeout':
         self.assertEqual(result.returncode,0,result.stderr)
         calls=self.calls()
         ninja_indices=[i for i,c in enumerate(calls) if c[0]=='autoninja' and 'obj/archium-fixture.javac.jar' not in c]
-        self.assertEqual(len(ninja_indices),3,calls)
+        self.assertEqual(len(ninja_indices),4,calls)
         host_index=next(i for i,c in enumerate(calls)
                         if c[0]=='python3' and c[1].endswith('archium-test-gates.py') and c[2]=='host')
         self.assertLess(ninja_indices[0],host_index)
-        self.assertLess(host_index,ninja_indices[2])
-        self.assertIn('archium_password_manager_tests',calls[ninja_indices[0]])
-        self.assertIn('archium_key_provider_tests',calls[ninja_indices[1]])
-        self.assertIn('chrome_public_apk',calls[ninja_indices[2]])
+        self.assertLess(host_index,ninja_indices[3])
+        self.assertIn('chrome_junit_tests',calls[ninja_indices[0]])
+        self.assertIn('archium_password_manager_tests',calls[ninja_indices[1]])
+        self.assertIn('archium_key_provider_tests',calls[ninja_indices[2]])
+        self.assertIn('chrome_public_apk',calls[ninja_indices[3]])
 
     def test_host_execution_gate_failure_blocks_apk(self):
         result=self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
@@ -352,9 +375,10 @@ elif name=='sudo' and args and args[0]=='timeout':
         self.assertEqual(result.returncode,7,result.stderr)
         calls=self.calls()
         ninja=[c for c in calls if c[0]=='autoninja' and 'obj/archium-fixture.javac.jar' not in c]
-        self.assertEqual(len(ninja),2,calls)
-        self.assertIn('archium_password_manager_tests',ninja[0])
-        self.assertIn('archium_key_provider_tests',ninja[1])
+        self.assertEqual(len(ninja),3,calls)
+        self.assertIn('chrome_junit_tests',ninja[0])
+        self.assertIn('archium_password_manager_tests',ninja[1])
+        self.assertIn('archium_key_provider_tests',ninja[2])
         self.assertFalse(any('chrome_public_apk' in cmd for cmd in ninja))
         self.assertEqual(self.output.read_text(),'')
 
@@ -364,9 +388,10 @@ elif name=='sudo' and args and args[0]=='timeout':
                               ARCHIUM_RUN_HOST_GATES='false')
         self.assertEqual(result.returncode,2,result.stderr)
         ninja=[c for c in self.calls() if c[0]=='autoninja' and 'obj/archium-fixture.javac.jar' not in c]
-        self.assertEqual(len(ninja),2,self.calls())
-        self.assertIn('archium_password_manager_tests',ninja[0])
-        self.assertIn('archium_key_provider_tests',ninja[1])
+        self.assertEqual(len(ninja),3,self.calls())
+        self.assertIn('chrome_junit_tests',ninja[0])
+        self.assertIn('archium_password_manager_tests',ninja[1])
+        self.assertIn('archium_key_provider_tests',ninja[2])
         self.assertFalse(any('chrome_public_apk' in cmd for cmd in ninja))
         self.assertEqual(self.output.read_text(),'')
 

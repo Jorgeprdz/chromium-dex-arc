@@ -59,7 +59,12 @@ public class Display {
 'android/view/View.java': """package android.view;
 public class View {
  public Display display;
- public Display getDisplay(){return display;}
+ public boolean attached;
+ public boolean isAttachedToWindow(){return attached;}
+ public Display getDisplay(){
+  if(!attached)throw new UnsupportedOperationException("detached view display");
+  return display;
+ }
 }""",
 'android/view/Window.java': """package android.view;
 public class Window {
@@ -113,17 +118,20 @@ public class ArchiumDesktopContextProbe {
   detached.res.config.screenWidthDp=1100;detached.res.config.smallestScreenWidthDp=700;
   check(ArcDesktopAppearance.isDesktopWindow(detached),true,"Robolectric detached tablet");
   Activity external=new Activity();
-  external.res.config.screenWidthDp=1100;external.window.decor.display=new Display(4);
+  external.res.config.screenWidthDp=1100;external.window.decor.display=new Display(4);external.window.decor.attached=true;
   check(ArcDesktopAppearance.isDesktopWindow(external),true,"external display");
+  Activity unbound=new Activity();
+  unbound.res.config.screenWidthDp=1100;unbound.window.decor.display=new Display(6);
+  check(ArcDesktopAppearance.isDesktopWindow(unbound),false,"display is not attached");
   Activity multi=new Activity();
   multi.res.config.screenWidthDp=1100;multi.multiWindow=true;
   check(ArcDesktopAppearance.isDesktopWindow(multi),true,"desktop multiwindow");
   Activity mobile=new Activity();
-  mobile.res.config.screenWidthDp=420;mobile.window.decor.display=new Display(0);
+  mobile.res.config.screenWidthDp=420;mobile.window.decor.display=new Display(0);mobile.window.decor.attached=true;
   check(ArcDesktopAppearance.isDesktopWindow(mobile),false,"mobile window");
   Activity tablet=new Activity();
   tablet.res.config.screenWidthDp=1100;tablet.res.config.smallestScreenWidthDp=700;
-  tablet.window.decor.display=new Display(0);
+  tablet.window.decor.display=new Display(0);tablet.window.decor.attached=true;
   check(ArcDesktopAppearance.isDesktopWindow(tablet),true,"tablet");
   Activity noWindow=new Activity();
   noWindow.window=null;noWindow.res.config.screenWidthDp=420;
@@ -153,5 +161,5 @@ class ContextGuardTest(unittest.TestCase):
    subprocess.run(['javac','-d',str(classes),*files],check=True,timeout=90,capture_output=True,text=True)
    proc=subprocess.run(['java','-cp',str(classes),'ArchiumDesktopContextProbe'],
      check=True,timeout=45,capture_output=True,text=True)
-   self.assertIn('ARCHIUM_DISPLAY_CONTEXT_SCENARIOS=PASS 10',proc.stdout)
+   self.assertIn('ARCHIUM_DISPLAY_CONTEXT_SCENARIOS=PASS 11',proc.stdout)
 if __name__=='__main__':unittest.main()

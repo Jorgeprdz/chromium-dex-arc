@@ -9,6 +9,7 @@ import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.content.pm.PackageManager;
 import android.view.Display;
+import android.view.View;
 import android.view.Window;
 
 import org.chromium.chrome.browser.desktop_policy.ArchiumWindowMetrics;
@@ -37,12 +38,14 @@ public final class ArcDesktopAppearance {
         boolean pc = context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_PC);
         // Read the visual window, not Activity.getDisplay(): a not-yet-attached Activity
         // can have a nonvisual Context (including during Robolectric view inflation).
-        // A decor View has a nullable display until attached; this also preserves external
+        // Only attached decor Views represent a real display; this preserves external
         // display and multi-window detection in real Android Desktop environments.
         boolean desktopActivity = false;
         if (context instanceof Activity activity) {
             Window window = activity.getWindow();
-            Display display = window != null ? window.getDecorView().getDisplay() : null;
+            View decor = window != null ? window.getDecorView() : null;
+            Display display = decor != null && decor.isAttachedToWindow()
+                    ? decor.getDisplay() : null;
             desktopActivity = activity.isInMultiWindowMode()
                     || (display != null && display.getDisplayId() != Display.DEFAULT_DISPLAY);
         }

@@ -260,17 +260,16 @@ if (( ${#java_targets[@]} == 0 )); then
     exit 2
 fi
 compile_slice "${java_targets[@]}"
-# Gate B/C: the original Robolectric regression and related tab-rail suites must
-# pass before any expensive native password-manager linking or APK compilation.
-# The generated Chrome junit runner is built from actual patched Chromium sources.
-printf 'PHASE A1.5: proving Robolectric display-context repair before native work.\n'
+# Gate B/C: reproduce the exact failing Robolectric case before expensive native linking.
+# Compile the real patched Chromium Java/JUnit owners; do not rely on synthetic probes.
+printf 'PHASE A1.5: running Robolectric regression before native link.\n'
 compile_slice chrome_junit_tests
 robolectric_runner="$PWD/out/Archium/bin/run_chrome_junit_tests"
 test -x "$robolectric_runner" || {
-    printf 'Chrome Robolectric runner missing after compilation.\n' >&2
+    printf 'Missing compiled Chromium Robolectric runner.\n' >&2
     exit 2
 }
-# Unlike the previous run, save a quiescent checkpoint even on a JUnit failure.
+# Save a quiescent checkpoint if the command finishes with a test failure.
 run_work TERM "$host_seconds" 124 --checkpoint-on-failure "$robolectric_runner" -f \
     'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabListCoordinatorUnitTest.testIncognitoButtonVisibility_TabletUnder10Inches'
 for suite in \
