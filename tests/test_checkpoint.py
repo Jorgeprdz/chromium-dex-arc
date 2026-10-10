@@ -86,8 +86,15 @@ class CheckpointTests(unittest.TestCase):
                 self.assertEqual('progress', (workspace / '.ninja_log').read_text())
                 self.assertEqual(1234567890123456789, (workspace / '.ninja_log').stat().st_mtime_ns)
                 self.assertTrue((workspace / 'link').is_symlink())
+                self.assertEqual([], list(downloaded.iterdir()),
+                                 'Verified restore must reclaim staged archive bytes')
                 for item in workspace.iterdir():
                     item.unlink()
+                # Re-download the same synthetic archive: corruption should be
+                # detected before extraction, and failed restores keep evidence.
+                for group in folder.iterdir():
+                    for part in group.iterdir():
+                        (downloaded / part.name).write_bytes(part.read_bytes())
                 name = next(downloaded.glob('checkpoint-*.part'))
                 bytes_ = bytearray(name.read_bytes())
                 bytes_[0] ^= 1
