@@ -1,13 +1,14 @@
-Archium R4 — thumbnail spinner assertion guarded recovery
-fix_commit=44df40167209d9ffca5b4648f1d2a70d6c044302
-host_preflight_run=38075464560 (also gated within native workflow)
+Archium R4 — verified reproducible spinner invariant recovery
+fix_commit=c1c6bb799844bd2a62a43439f7d5d11e723e3eff
+preflight_run=38076014449 PASS (GN, Java, AAPT2, full unit tests, actionlint, patch regenerated twice byte-for-byte)
+patch_sha256=fae1b7ea978160c30449b3eb2193ae92079d45c105f63b515c0e30c457a89072
 source_run_id=38018166249
-source_tag=archium-checkpoint-38018166249-1
+source_checkpoint=archium-checkpoint-38018166249-1
 source_commit=507f28e1265fb98551d3bc1a66f4739fb48d2625
-previous_build_failure=38070564185 TabListMediatorUnitTest expected AssertionError
-repair=explicit non-FLAT AssertionError independent of Java -ea
-mandatory_gate=all Robolectric suites, no skipped tests
-native_gate=r3-final-gates+same-SHA r3-pre-native-gates
-checkpoint_policy=verified three original groups, no clean fallback
-abort_if_gates_fail=true
-build_policy=incremental, bounded, single workflow
+verified_source_artifacts=3 unexpired groups; byte-check-on-restore
+first_failure_guard=fail-closed at r3-final-gates and same-sha r3-pre-native-gates
+host_robolectric_required=VerticalTabListCoordinatorUnitTest and TabListMediatorUnitTest
+native_start=only after all host gates PASS
+no_clean_fallback=true
+no_parallel_builds=true
+no_success_without_verified_apk=true
