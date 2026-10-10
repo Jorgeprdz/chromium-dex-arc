@@ -1,13 +1,13 @@
-Archium R4 — guarded incremental recovery after real preflight PASS
-fix_commit=63fc724aab34b9328c0b627c1dec3a2b1af2eb6c
-strict_host_preflight_run=38070317295 PASS
-strict_media_gn=Chromium pin 3fef1f00031be0d3505e5338ca671ea3752e6fd8 verified
-source_checkpoint=archium-checkpoint-38018166249-1
+Archium R4 — thumbnail spinner assertion guarded recovery
+fix_commit=44df40167209d9ffca5b4648f1d2a70d6c044302
+host_preflight_run=38075464560 (also gated within native workflow)
 source_run_id=38018166249
+source_tag=archium-checkpoint-38018166249-1
 source_commit=507f28e1265fb98551d3bc1a66f4739fb48d2625
-checkpoint_policy=metadata+sha256+restore integrity; reject unsafe compatibility
-native_start_gate=baseline r3-final-gates AND matching-SHA pre-native-gates
-gate_b=run real target testIncognitoButtonVisibility_TabletUnder10Inches before native link
-stop_on_first_failure=true
-budget=max 2 bounded 75min slices, save quiescent checkpoints, no clean fallback
-apk_delivery=only verified GitHub Actions Artifact and actual sha256
+previous_build_failure=38070564185 TabListMediatorUnitTest expected AssertionError
+repair=explicit non-FLAT AssertionError independent of Java -ea
+mandatory_gate=all Robolectric suites, no skipped tests
+native_gate=r3-final-gates+same-SHA r3-pre-native-gates
+checkpoint_policy=verified three original groups, no clean fallback
+abort_if_gates_fail=true
+build_policy=incremental, bounded, single workflow
