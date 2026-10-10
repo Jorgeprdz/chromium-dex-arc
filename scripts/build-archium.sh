@@ -260,6 +260,26 @@ if (( ${#java_targets[@]} == 0 )); then
     exit 2
 fi
 compile_slice "${java_targets[@]}"
+# Gate B/C: the original Robolectric regression and related tab-rail suites must
+# pass before any expensive native password-manager linking or APK compilation.
+# The generated Chrome junit runner is built from actual patched Chromium sources.
+printf 'PHASE A1.5: proving Robolectric display-context repair before native work.\n'
+compile_slice chrome_junit_tests
+robolectric_runner="$PWD/out/Archium/bin/run_chrome_junit_tests"
+test -x "$robolectric_runner" || {
+    printf 'Chrome Robolectric runner missing after compilation.\n' >&2
+    exit 2
+}
+# Unlike the previous run, save a quiescent checkpoint even on a JUnit failure.
+run_work TERM "$host_seconds" 124 --checkpoint-on-failure "$robolectric_runner" -f \
+    'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabListCoordinatorUnitTest.testIncognitoButtonVisibility_TabletUnder10Inches'
+for suite in \
+    'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabListCoordinatorUnitTest.*' \
+    'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.TabVerticalViewBinderUnitTest.*' \
+    'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabRailLayoutUnitTest.*'; do
+    run_work TERM "$host_seconds" 124 --checkpoint-on-failure "$robolectric_runner" -f "$suite"
+done
+printf 'ARCHIUM_EARLY_ROBOLECTRIC_GATE=PASS\n'
 # Check accessible native owners, including the bridge's generated JNI includes.
 run_work TERM "$work_seconds" 0 gn check out/Archium //chrome/browser/password_manager/android:archium_password_manager_tests
 # Verify the exact owner of WebPaymentsObserver / payment JNI is in the linker graph.

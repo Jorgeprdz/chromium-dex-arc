@@ -9,6 +9,7 @@ import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.content.pm.PackageManager;
 import android.view.Display;
+import android.view.Window;
 
 import org.chromium.chrome.browser.desktop_policy.ArchiumWindowMetrics;
 
@@ -34,11 +35,14 @@ public final class ArcDesktopAppearance {
         boolean desktopUi = (configuration.uiMode & Configuration.UI_MODE_TYPE_MASK)
                 == Configuration.UI_MODE_TYPE_DESK;
         boolean pc = context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_PC);
-        // External freeform displays include DeX and other Android Desktop environments. Using
-        // public Activity APIs avoids manufacturer properties and handset landscape false positives.
+        // Read the visual window, not Activity.getDisplay(): a not-yet-attached Activity
+        // can have a nonvisual Context (including during Robolectric view inflation).
+        // A decor View has a nullable display until attached; this also preserves external
+        // display and multi-window detection in real Android Desktop environments.
         boolean desktopActivity = false;
         if (context instanceof Activity activity) {
-            Display display = activity.getDisplay();
+            Window window = activity.getWindow();
+            Display display = window != null ? window.getDecorView().getDisplay() : null;
             desktopActivity = activity.isInMultiWindowMode()
                     || (display != null && display.getDisplayId() != Display.DEFAULT_DISPLAY);
         }
