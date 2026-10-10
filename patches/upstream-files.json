@@ -100,7 +100,7 @@
     "chrome/android/chrome_java_sources.gni": "8b6cd56aa932240bd553a64799531f173a917c1a12de3d61b03ab84d7badff43",
     "chrome/android/features/tab_ui/java/res/values/dimens.xml": "28df17073fd1a88fb4a658d918a8ac92d654e67d2f239d7428b50cff6b4e4670",
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/NestedLayoutDelegate.java": "d8d533fa1ef88fcf2534bf597b6e367bdee8cd50776686a457636dc9eecc3d87",
-    "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/TabListMediator.java": "2c2ae5c75b649b60c6d327b0957b4dcdbe71f06b55b7b60f13f29a22f63cd2d5",
+    "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/TabListMediator.java": "cba87f4e2d9daf032d0c5f46712ba8ce5f9308df54878132d6b5dfd6ab7287c8",
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinder.java": "bb51879e1770f1e7b7e46a86ba8af92430a4ff4aeb9bbc5d413682be4dc23cd0",
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinator.java": "fa2d5e20512cfbaa5d85c9ad901e29f1f8b6ff7a85ebccf974c2d661df037db3",
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinatorUnitTest.java": "082a963fc6f03a7f54aaa0c96b4b69253dd3fdccd9c7f20c00ffe9404dd9fdef",
@@ -190,5 +190,5 @@
     "components/password_manager/core/browser/password_store/password_store_backend.cc": "45764d4ad0e05acc5a216944a5a6763212f6c17e71bf689e9c973f12fb5c87d8",
     "components/password_manager/core/browser/password_store/password_store_interface.cc": "7e9dd5813ce8ece459ec66abdd3306028b7b3d6bbae048664872a34d8d097268"
   },
-  "patch_sha256": "da702ed3127969bda5d1da644e3d356d6536efe0ff6cc99b70644331efb0f26f"
+  "patch_sha256": "fa8ec0777e2e0fdc89ce6bcc8983d8b0f5705284acebe81d8d9498c7bbaddde2"
 }
