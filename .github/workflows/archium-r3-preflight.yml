@@ -21,6 +21,34 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+      - name: Media GN with pinned depot_tools and error reporting
+        shell: bash
+        env:
+          DEPOT_TOOLS_REV: 8a5434051036b32412a2ecb10c213a72e3f3ccb9
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-checkout https://chromium.googlesource.com/chromium/tools/depot_tools.git "$RUNNER_TEMP/depot_tools"
+          git -C "$RUNNER_TEMP/depot_tools" fetch --depth=1 origin "$DEPOT_TOOLS_REV"
+          git -C "$RUNNER_TEMP/depot_tools" checkout --detach FETCH_HEAD
+          test "$(git -C "$RUNNER_TEMP/depot_tools" rev-parse HEAD)" = "$DEPOT_TOOLS_REV"
+          "$RUNNER_TEMP/depot_tools/ensure_bootstrap"
+          GN="$RUNNER_TEMP/depot_tools/gn"
+          test -x "$GN"
+          echo "ARCHIUM_TEST_GN=$GN" >> "$GITHUB_ENV"
+          echo "$RUNNER_TEMP/depot_tools" >> "$GITHUB_PATH"
+          mkdir -p "$RUNNER_TEMP/archium-gn-diagnostics"
+          echo "ARCHIUM_GN_DIAGNOSTICS_DIR=$RUNNER_TEMP/archium-gn-diagnostics" >> "$GITHUB_ENV"
+          "$GN" --version
+          ARCHIUM_TEST_GN="$GN" ARCHIUM_GN_DIAGNOSTICS_DIR="$RUNNER_TEMP/archium-gn-diagnostics" \
+            python3 -m unittest discover -s tests -p 'test_media_config.py' -v
+      - name: Retain GN fixture on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: archium-media-gn-diagnostics
+          path: ${{ runner.temp }}/archium-gn-diagnostics/
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Python syntax and host gates
         run: |
           python3 -m py_compile scripts/integrate-archium-portal.py scripts/verify-archium-portal-apk.py scripts/archium_portal_content_gate.py scripts/archium-checkpoint.py scripts/check_portal_aapt2_fixture.py scripts/generate-arc-patch.py scripts/check-arc-preparation.py
