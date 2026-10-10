@@ -28,7 +28,7 @@ jobs:
         run: |
           set -euo pipefail
           git clone --filter=blob:none --no-checkout https://gn.googlesource.com/gn "$RUNNER_TEMP/gn-src"
-          git -C "$RUNNER_TEMP/gn-src" fetch --depth=1 origin "$GN_REV"
+          git -C "$RUNNER_TEMP/gn-src" fetch origin "$GN_REV"
           git -C "$RUNNER_TEMP/gn-src" checkout --detach FETCH_HEAD
           test "$(git -C "$RUNNER_TEMP/gn-src" rev-parse HEAD)" = "$GN_REV"
           (cd "$RUNNER_TEMP/gn-src" && python3 build/gen.py --out-path "$RUNNER_TEMP/gn-out")
