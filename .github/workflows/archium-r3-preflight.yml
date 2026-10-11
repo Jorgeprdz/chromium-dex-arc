@@ -79,9 +79,10 @@ jobs:
           set -euo pipefail
           SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
           if [[ ! -x "$SDKMANAGER" ]]; then SDKMANAGER="$(command -v sdkmanager)"; fi
-          AAPT2="${ANDROID_HOME}/build-tools/36.0.0/aapt2"
+          # Match public_android_sdk_build_tools_version at the Chromium pin.
+          AAPT2="${ANDROID_HOME}/build-tools/37.0.0/aapt2"
           if [[ ! -x "$AAPT2" ]]; then
-            yes | "$SDKMANAGER" --install 'build-tools;36.0.0' > /dev/null || test -x "$AAPT2"
+            yes | "$SDKMANAGER" --install 'build-tools;37.0.0' > /dev/null || test -x "$AAPT2"
           fi
           test -x "$AAPT2"
           echo "ARCHIUM_TEST_AAPT2=$AAPT2" >> "$GITHUB_ENV"

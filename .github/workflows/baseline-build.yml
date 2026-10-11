@@ -10,17 +10,17 @@ on:
         description: 'Verified incremental checkpoint; clean builds are forbidden'
         required: true
         type: string
-        default: archium-checkpoint-38147216573-1
+        default: archium-checkpoint-38158297048-1
       source_commit:
         description: 'Exact commit that produced the checkpoint'
         required: true
         type: string
-        default: 5895d4a80510114ef12a89927c19667d4defeb27
+        default: e386986c2831b2778bc11afdbd8020750ee77a88
       source_run_id:
         description: 'Actions run containing the verified checkpoint groups'
         required: true
         type: string
-        default: '38147216573'
+        default: '38158297048'
 permissions:
   contents: write
   actions: read
@@ -91,6 +91,7 @@ jobs:
           python3 -m unittest discover -s tests -p 'test_archium_portal_resources.py'
           python3 -m unittest discover -s tests -p 'test_r3_3_portal_safe_zone.py'
           python3 -m unittest discover -s tests -p 'test_r3_3_portal_apk_content.py'
+          python3 -m unittest discover -s tests -p 'test_portal_namespace_stripping.py'
           python3 scripts/generate-arc-patch.py
           git diff --exit-code -- patches/archium-desktop.patch patches/upstream-files.json
           python3 -m compileall -q scripts/archium_portal_content_gate.py scripts/verify-archium-portal-apk.py
