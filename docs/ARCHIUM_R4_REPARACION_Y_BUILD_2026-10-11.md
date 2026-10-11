@@ -1,5 +1,40 @@
 # Archium R4 — reparación y build, 2026-10-11
 
+## Dispatch observado (2026-10-11 21:42 UTC)
+
+RUN=[38177451098](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38177451098), sourceSHA=`0514027dd41ddb568d033152c8faec76a388ba84`, branchassistant/archium-r4-recovery, workflowID374835814 baseline-build.yml. Comando real `gh workflow run 374835814 --repo Jorgeprdz/chromium-dex-arc --ref assistant/archium-r4-recovery -f expected_sha=0514027dd41ddb568d033152c8faec76a388ba84 -f source_checkpoint=archium-checkpoint-38165289963-1 -f source_commit=dcbd868ea42ffd0991c01c2872adce01316a9768 -f source_run_id=38165289963` exit0. API confirma mismoSHA/statusin_progress. Job114582731650authorize SUCCESS (SHA y concurrencia). Job114582753899preflight/preflight en curso. S0; todavía sin restore/native/APK. No segundo dispatch. La actualización de este informe es solo documentación, posterior alSHA fuente fijado y no altera el checkout delrun.
+
+```text
+REPO=Jorgeprdz/chromium-dex-arc
+BRANCH=assistant/archium-r4-recovery
+ORIGINAL_WORK_BRANCH=assistant/archium-r3-visual-fixes PRESERVED
+PROTECTED_BRANCH=feat/arc-desktop UNTOUCHED
+HEAD_START=51e5ed429661727156ab2534caac99a82ee9264b
+HEAD_FINAL_SOURCE=0514027dd41ddb568d033152c8faec76a388ba84
+CHROMIUM_PIN=cfd94726b7b5fb48aedcc32662f2f3fbdbadec35
+P0_DEX_DISPLAY=PASS (isolated real Robolectric)
+P0_JAVA_ASSERT=PASS (real JVM sparse fixture)
+AAPT2_REAL_RESOURCES=PENDING (new run actual merge; SDK37 bounded fixture PASS)
+GN_MEDIA_3_CASES=PASS (genuine GN,pinned GNI,synthetic platform)
+PATCH_REPRODUCIBILITY=PASS
+CHECKPOINT_SOURCE=archium-checkpoint-38165289963-1
+CHECKPOINT_INTEGRITY=BLOCKED_LOCAL_PENDING_S1_ALL_BYTES
+DISK_PREFLIGHT=FAIL_LOCAL_CI_PENDING_S0
+HOST_TESTS=PASS (215passed/0failed/0skipped,208suite+7final)
+ROBOLECTRIC=NOT_EXECUTED_CHROMIUM (isolated39/39PASS)
+JNI_LINK=NOT_EXECUTED_NEW_RUN
+COMMITS=5fe80ea,37e15c0,c87e295,87be1ed,fad1703,0514027
+PUSH=PASS
+WORKFLOW_RUN=38177451098 https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38177451098
+BUILD_STAGE=S0
+BUILD=INCOMPLETE (RUN_IN_PROGRESS)
+APK_PACKAGE=NONE
+APK_SHA256=NONE
+APK_ARTIFACT=NONE
+ANDROID_RUNTIME=NOT_EXECUTED
+BLOCKERS=native/realmerge/ChromeJUnit/all-byte integrity pending blocking CI; local disk insufficient
+```
+
 ## Estado actual: recuperación desde el respaldo protegido
 
 La orden posterior del usuario autoriza reescribir los cambios en una rama nueva y lanzar UNA corrida manual después de los gates. Rama activa `assistant/archium-r4-recovery`, base `51e5ed429661727156ab2534caac99a82ee9264b`; la rama antigua queda como evidencia. `feat/arc-desktop` y `main` no se han modificado. Los apartados históricos inferiores describen ejecuciones previas y NO acreditan el build nuevo.
