@@ -56,6 +56,8 @@ public class Display {
  public Display(int id){this.id=id;}
  public int getDisplayId(){return id;}
 }""",
+'android/os/Build.java': '''package android.os; public class Build { public static class VERSION { public static int SDK_INT=36; } public static class VERSION_CODES { public static final int R=30; } }''',
+'android/view/WindowManager.java': '''package android.view; public class WindowManager { public Display display; public Display getDefaultDisplay(){return display;} }''',
 'android/view/View.java': """package android.view;
 public class View {
  public Display display;
@@ -76,9 +78,13 @@ import android.content.Context;import android.view.Window;
 public class Activity extends Context {
  public Window window=new Window();
  public boolean multiWindow;
+ public android.view.Display display;
+ public android.view.WindowManager manager=new android.view.WindowManager();
+ public boolean unsupported;
+ public android.view.WindowManager getWindowManager(){return manager;}
  public Window getWindow(){return window;}
  public boolean isInMultiWindowMode(){return multiWindow;}
- public android.view.Display getDisplay(){throw new UnsupportedOperationException("detached context");}
+ public android.view.Display getDisplay(){if(unsupported)throw new UnsupportedOperationException("detached context");return display;}
 }""",
 'org/chromium/chrome/browser/desktop_policy/ArchiumWindowMetrics.java': """package org.chromium.chrome.browser.desktop_policy;
 import android.content.Context;import android.app.Activity;
@@ -118,11 +124,16 @@ public class ArchiumDesktopContextProbe {
   detached.res.config.screenWidthDp=1100;detached.res.config.smallestScreenWidthDp=700;
   check(ArcDesktopAppearance.isDesktopWindow(detached),true,"Robolectric detached tablet");
   Activity external=new Activity();
-  external.res.config.screenWidthDp=1100;external.window.decor.display=new Display(4);external.window.decor.attached=true;
+  external.res.config.screenWidthDp=1100;external.display=new Display(2);external.window.decor.display=external.display;external.window.decor.attached=true;
   check(ArcDesktopAppearance.isDesktopWindow(external),true,"external display");
   Activity unbound=new Activity();
-  unbound.res.config.screenWidthDp=1100;unbound.window.decor.display=new Display(6);
-  check(ArcDesktopAppearance.isDesktopWindow(unbound),false,"display is not attached");
+  unbound.res.config.screenWidthDp=1100;unbound.display=new Display(2);unbound.window.decor.display=unbound.display;
+  check(ArcDesktopAppearance.isDesktopWindow(unbound),true,"external display before attach");
+  Activity fallback=new Activity();fallback.res.config.screenWidthDp=1100;fallback.unsupported=true;fallback.manager.display=new Display(2);
+  check(ArcDesktopAppearance.isDesktopWindow(fallback),true,"nonvisual activity fallback");
+  fallback.manager=null;check(ArcDesktopAppearance.isDesktopWindow(fallback),false,"null manager");
+  android.os.Build.VERSION.SDK_INT=29;fallback.manager=new android.view.WindowManager();fallback.manager.display=new Display(2);
+  check(ArcDesktopAppearance.isDesktopWindow(fallback),true,"API29 fallback");android.os.Build.VERSION.SDK_INT=36;
   Activity multi=new Activity();
   multi.res.config.screenWidthDp=1100;multi.multiWindow=true;
   check(ArcDesktopAppearance.isDesktopWindow(multi),true,"desktop multiwindow");
@@ -160,6 +171,7 @@ class ContextGuardTest(unittest.TestCase):
    classes=root/'classes';classes.mkdir()
    subprocess.run(['javac','-d',str(classes),*files],check=True,timeout=90,capture_output=True,text=True)
    proc=subprocess.run(['java','-cp',str(classes),'ArchiumDesktopContextProbe'],
-     check=True,timeout=45,capture_output=True,text=True)
-   self.assertIn('ARCHIUM_DISPLAY_CONTEXT_SCENARIOS=PASS 11',proc.stdout)
+     check=False,timeout=45,capture_output=True,text=True)
+   self.assertEqual(proc.returncode,0,proc.stdout+'\n'+proc.stderr)
+   self.assertIn('ARCHIUM_DISPLAY_CONTEXT_SCENARIOS=PASS 14',proc.stdout)
 if __name__=='__main__':unittest.main()

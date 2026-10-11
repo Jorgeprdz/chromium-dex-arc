@@ -1171,6 +1171,17 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
                          && mVerticalTabsSideUiCoordinator.canActivateTabLayoutToggleMenu()
                          && !VerticalTabUtils.isTabLayoutSwitchingInProgress();
      }
+diff --git a/chrome/android/junit/BUILD.gn b/chrome/android/junit/BUILD.gn
+--- a/chrome/android/junit/BUILD.gn
++++ b/chrome/android/junit/BUILD.gn
+@@ -1410,6 +1410,7 @@
+     resources_package = "org.chromium.chrome.browser.tasks.tab_management"
+
+     sources = [
++      "src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearanceTest.java",
+       "//chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/CloseAllTabsHelperUnitTest.java",
+       "//chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/CollaborationActivityMessageCardViewModelUnitTest.java",
+       "//chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/FlatLayoutDelegateUnitTest.java",
 diff --git a/chrome/browser/BUILD.gn b/chrome/browser/BUILD.gn
 --- a/chrome/browser/BUILD.gn
 +++ b/chrome/browser/BUILD.gn
@@ -5866,6 +5877,128 @@ new file mode 100644
 +        mUncommittedTabs.clear();
 +    }
 +}
+diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearanceTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearanceTest.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/junit/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearanceTest.java
+@@ -0,0 +1,117 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.ui.vertical_tabs;
++
++import static org.junit.Assert.*;
++import static org.mockito.Mockito.*;
++import static org.robolectric.Shadows.shadowOf;
++
++import android.app.Activity;
++import android.hardware.display.DisplayManager;
++import android.os.Build;
++import android.view.Display;
++import android.view.WindowManager;
++
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.robolectric.Robolectric;
++import org.robolectric.RobolectricTestRunner;
++import org.robolectric.RuntimeEnvironment;
++import org.robolectric.android.controller.ActivityController;
++import org.robolectric.annotation.Config;
++import org.robolectric.annotation.GraphicsMode;
++import org.robolectric.annotation.SQLiteMode;
++import org.robolectric.shadows.ShadowDisplay;
++import org.robolectric.shadows.ShadowDisplayManager;
++
++/** Real Android shadows; registered in chrome_junit_tests, not a host stub fixture. */
++@RunWith(RobolectricTestRunner.class)
++@Config(manifest = Config.NONE, sdk = {30, 36}, qualifiers = "sw411dp-w1100dp-h700dp-mdpi")
++@GraphicsMode(GraphicsMode.Mode.LEGACY)
++@SQLiteMode(SQLiteMode.Mode.LEGACY)
++public class ArcDesktopAppearanceTest {
++    private Activity windowActivity(Activity activity) {
++        Activity window = spy(activity);
++        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
++            // Bare Robolectric Activity wraps Application context. Model the
++            // real window-scoped Chrome Activity for width eligibility.
++            doReturn(true).when(window).isUiContext();
++        }
++        return window;
++    }
++    private Display externalDisplay() {
++        ShadowDisplayManager.addDisplay("w1100dp-h700dp-mdpi");
++        int id = ShadowDisplayManager.addDisplay("w1100dp-h700dp-mdpi");
++        DisplayManager manager = RuntimeEnvironment.getApplication().getSystemService(DisplayManager.class);
++        Display display = manager.getDisplay(id);
++        ShadowDisplay shadow = shadowOf(display);
++        shadow.setWidth(1100);
++        assertNotEquals(Display.DEFAULT_DISPLAY, display.getDisplayId());
++        return display;
++    }
++
++    @Test
++    public void externalDisplayBeforeAndAfterAttach() {
++        ActivityController<Activity> controller = Robolectric.buildActivity(Activity.class).create();
++        Activity activity = windowActivity(controller.get());
++        Display external = externalDisplay();
++        doReturn(external).when(activity).getDisplay();
++        assertFalse(activity.getWindow().getDecorView().isAttachedToWindow());
++        assertSame(external, ArcDesktopAppearance.activityDisplay(activity));
++        assertTrue(ArcDesktopAppearance.isDesktopWindow(activity));
++        controller.start().resume().visible();
++        assertTrue(activity.getWindow().getDecorView().isAttachedToWindow());
++        assertSame(external, ArcDesktopAppearance.activityDisplay(activity));
++        assertTrue(ArcDesktopAppearance.isDesktopWindow(activity));
++        controller.pause().stop().destroy();
++    }
++
++    @Test
++    public void defaultDisplayBeforeAndAfterAttachIsMobile() {
++        ActivityController<Activity> controller = Robolectric.buildActivity(Activity.class).create();
++        Activity activity = windowActivity(controller.get());
++        Display display = ShadowDisplay.getDefaultDisplay();
++        doReturn(display).when(activity).getDisplay();
++        assertEquals(0, ArcDesktopAppearance.activityDisplay(activity).getDisplayId());
++        assertFalse(ArcDesktopAppearance.isDesktopWindow(activity));
++        controller.start().resume().visible();
++        assertFalse(ArcDesktopAppearance.isDesktopWindow(activity));
++        controller.pause().stop().destroy();
++    }
++
++    @Test
++    public void unsupportedDisplayUsesActivityWindowManager() {
++        Activity activity = windowActivity(Robolectric.buildActivity(Activity.class).create().get());
++        WindowManager manager = mock(WindowManager.class);
++        Display display = externalDisplay();
++        doThrow(new UnsupportedOperationException("nonvisual context")).when(activity).getDisplay();
++        doReturn(manager).when(activity).getWindowManager();
++        when(manager.getDefaultDisplay()).thenReturn(display);
++        assertSame(display, ArcDesktopAppearance.activityDisplay(activity));
++        assertTrue(ArcDesktopAppearance.isDesktopWindow(activity));
++    }
++
++    @Test
++    public void nullDisplayAndManagerAreSafeAndMultiwindowStillWorks() {
++        Activity activity = windowActivity(Robolectric.buildActivity(Activity.class).create().get());
++        doReturn(null).when(activity).getDisplay();
++        doReturn(null).when(activity).getWindowManager();
++        assertNull(ArcDesktopAppearance.activityDisplay(activity));
++        assertFalse(ArcDesktopAppearance.isDesktopWindow(activity));
++        doReturn(true).when(activity).isInMultiWindowMode();
++        assertTrue(ArcDesktopAppearance.isDesktopWindow(activity));
++        ArcDesktopAppearance.setUiMode(activity, ArcDesktopPolicy.MODE_MOBILE);
++        assertFalse(ArcDesktopAppearance.isDesktopWindow(activity));
++    }
++
++    @Test
++    @Config(sdk = 29)
++    public void api29UsesWindowManagerWithoutCallingGetDisplay() {
++        Activity activity = spy(Robolectric.buildActivity(Activity.class).create().get());
++        WindowManager manager = mock(WindowManager.class);
++        doReturn(manager).when(activity).getWindowManager();
++        when(manager.getDefaultDisplay()).thenReturn(externalDisplay());
++        assertNotEquals(0, ArcDesktopAppearance.activityDisplay(activity).getDisplayId());
++    }
++}
 diff --git a/chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/ArchiumAutofillPolicy.java b/chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/ArchiumAutofillPolicy.java
 new file mode 100644
 --- /dev/null
@@ -9955,7 +10088,7 @@ diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrom
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java
-@@ -0,0 +1,93 @@
+@@ -0,0 +1,101 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -9966,9 +10099,9 @@ new file mode 100644
 +import android.content.SharedPreferences;
 +import android.content.res.Configuration;
 +import android.content.pm.PackageManager;
++import android.os.Build;
 +import android.view.Display;
-+import android.view.View;
-+import android.view.Window;
++import android.view.WindowManager;
 +
 +import org.chromium.chrome.browser.desktop_policy.ArchiumWindowMetrics;
 +
@@ -9994,22 +10127,30 @@ new file mode 100644
 +        boolean desktopUi = (configuration.uiMode & Configuration.UI_MODE_TYPE_MASK)
 +                == Configuration.UI_MODE_TYPE_DESK;
 +        boolean pc = context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_PC);
-+        // Read the visual window, not Activity.getDisplay(): a not-yet-attached Activity
-+        // can have a nonvisual Context (including during Robolectric view inflation).
-+        // Only attached decor Views represent a real display; this preserves external
-+        // display and multi-window detection in real Android Desktop environments.
 +        boolean desktopActivity = false;
 +        if (context instanceof Activity activity) {
-+            Window window = activity.getWindow();
-+            View decor = window != null ? window.getDecorView() : null;
-+            Display display = decor != null && decor.isAttachedToWindow()
-+                    ? decor.getDisplay() : null;
++            Display display = activityDisplay(activity);
 +            desktopActivity = activity.isInMultiWindowMode()
 +                    || (display != null && display.getDisplayId() != Display.DEFAULT_DISPLAY);
 +        }
 +        return ArcDesktopPolicy.isArcWindow(
 +                preference, ArchiumWindowMetrics.currentWidthDp(context),
 +                tablet || desktopUi || pc || desktopActivity);
++    }
++
++    @SuppressWarnings("deprecation")
++    static Display activityDisplay(Activity activity) {
++        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
++            try {
++                Display display = activity.getDisplay();
++                if (display != null) return display;
++            } catch (UnsupportedOperationException exception) {
++                // A bare Robolectric Activity may wrap a nonvisual Context.
++                // Its window manager remains the activity-scoped fallback.
++            }
++        }
++        WindowManager manager = activity.getWindowManager();
++        return manager != null ? manager.getDefaultDisplay() : null;
 +    }
 +
 +    public static int getUiMode(Context context) {

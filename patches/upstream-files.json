@@ -14,6 +14,7 @@
     "chrome/android/java/res_chromium_base/values/channel_constants.xml": "bfbe36ebd7f5a4737cf059abd48c0a4df0b84b4dd277350fb55e4b925561beb6",
     "chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java": "b0875738519be1f5f9e301f6e676919aa027738174087d353c901525ff352348",
     "chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java": "df443b67fcd9ef61433f21dc19b1147478f3312c822d881a5b5a486bea6bea2d",
+    "chrome/android/junit/BUILD.gn": "23046180f6133aaec2758147881f9b9008aab03eb12cb86f1ffdd17722758c83",
     "chrome/browser/BUILD.gn": "4d06881a2c2a111fef61e304b367b7131e6fea6d0936e0c50bb010287a348e61",
     "chrome/browser/autofill/android/BUILD.gn": "185f8cc78ff078b3cbf64118f95f5aa5279db9e6a379c937e7b51174fdd6db31",
     "chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/AutofillClientProviderUtils.java": "d529bafece94a1ee9cebf8cdffb6390ecc71193f072e19c14ed2bd76bdc54dce",
@@ -67,6 +68,7 @@
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarState.java": null,
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarStore.java": null,
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcTabActions.java": null,
+    "chrome/android/junit/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearanceTest.java": null,
     "chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/ArchiumAutofillPolicy.java": null,
     "chrome/browser/desktop_policy/android/BUILD.gn": null,
     "chrome/browser/desktop_policy/android/java/src/org/chromium/chrome/browser/desktop_policy/ArchiumWindowClass.java": null,
@@ -109,6 +111,7 @@
     "chrome/android/java/res_chromium_base/values/channel_constants.xml": "e4909d3f5731496c09e1fb02be7f16c348a522d00c620346f95967df2ca68a83",
     "chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java": "a34ae234ba90c0a31a7e9076d2c02a76c919536d8589b4aa51bf33a8cea16045",
     "chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java": "897294a965029f5d392d20cd8abb5b7858faca3271f349bfbabf7286fff8ad40",
+    "chrome/android/junit/BUILD.gn": "c3b21426ea520039b0a670e8dbbe25b08f35dae58c511352b375d45892ce91b1",
     "chrome/browser/BUILD.gn": "48b9c964ed8ac56546d3d32248cde6638c00a182def11d9a7d5531e428599c2c",
     "chrome/browser/autofill/android/BUILD.gn": "00e2d69719b56d99054d6f62e59fd139ac396af4248cd4aa8d9a4ee813749125",
     "chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/AutofillClientProviderUtils.java": "b14949cce15c8cf64a2cf31a202455309419c22b12539a594952ac3eed34e56a",
@@ -162,6 +165,7 @@
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarState.java": "e1411e337358c45293f8a110b9a291a37fa2cf003f5d97aa5d8f6f3e7412b16e",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarStore.java": "4e8f9f565079d87cdf8b5dccb4a780664618f7e3c77993edbaaf23d161b23a1b",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcTabActions.java": "33d3ffcb067dbabae3cb992b394426253483efe4a3ae9286fe5f66d10a17eee3",
+    "chrome/android/junit/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearanceTest.java": "0113c0e9ffeb130e942ad4b7de88a2e69e014ad1b147590c855c59dca3337d2c",
     "chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/ArchiumAutofillPolicy.java": "8d8c47803c49da5133a19cf94f113a33081d438ac51543122476635f4100b7ef",
     "chrome/browser/desktop_policy/android/BUILD.gn": "0fb70c913943466d344c3c2726a409c66409c58fc33f75976f12968f92a55db5",
     "chrome/browser/desktop_policy/android/java/src/org/chromium/chrome/browser/desktop_policy/ArchiumWindowClass.java": "93a7e3ed1ae260b7470c8fff667a6364577bd3ef880257285a739d926873b14e",
@@ -180,7 +184,7 @@
     "chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordKeyBridge.java": "8022f9c4b78bfd2a3a39b469d947ab7ebe99513813b4605bd18d410230bc0142",
     "chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordManagerBridge.java": "dd3e257ba2793f6f242141396818d89b1906f3fcfb6cb0ca30d010548a6b46f4",
     "chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordSettingsFragment.java": "b529ab8f1a7c53b814397770698d38cde9869115e47c117bb638d009275e9f6e",
-    "chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java": "dab3c357ea48b7bc253ac41181ed9dedd5e73d76f8bb476d4f5a1662f3590dbd",
+    "chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java": "70c1968e37915c0e479da0a200cfab653e84e999e1b361382e7e721a0594ec01",
     "chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java": "e8feac6c717438537fb8a085e64d727d3d7fac1a3886ebfa35c465a6e71e7a8a",
     "components/password_manager/core/browser/import/archium_password_import_preview.cc": "5ec8255bf6346ac15d04c143d5f70e21708406c024d1f12382fd49a8b25e14bb",
     "components/password_manager/core/browser/import/archium_password_import_preview.h": "415317397105cd6cab059ac00acb1e1e6e2317e4170b711aa8e1293ed8afd9ec",
@@ -190,5 +194,5 @@
     "components/password_manager/core/browser/password_store/password_store_backend.cc": "45764d4ad0e05acc5a216944a5a6763212f6c17e71bf689e9c973f12fb5c87d8",
     "components/password_manager/core/browser/password_store/password_store_interface.cc": "7e9dd5813ce8ece459ec66abdd3306028b7b3d6bbae048664872a34d8d097268"
   },
-  "patch_sha256": "da702ed3127969bda5d1da644e3d356d6536efe0ff6cc99b70644331efb0f26f"
+  "patch_sha256": "93813d3fa8831e1bcc5283f124bdbb7157ab8483f6ff4de5bfc6d9337a9bbc10"
 }

@@ -8,9 +8,9 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 import android.content.pm.PackageManager;
+import android.os.Build;
 import android.view.Display;
-import android.view.View;
-import android.view.Window;
+import android.view.WindowManager;
 
 import org.chromium.chrome.browser.desktop_policy.ArchiumWindowMetrics;
 
@@ -36,22 +36,30 @@ public final class ArcDesktopAppearance {
         boolean desktopUi = (configuration.uiMode & Configuration.UI_MODE_TYPE_MASK)
                 == Configuration.UI_MODE_TYPE_DESK;
         boolean pc = context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_PC);
-        // Read the visual window, not Activity.getDisplay(): a not-yet-attached Activity
-        // can have a nonvisual Context (including during Robolectric view inflation).
-        // Only attached decor Views represent a real display; this preserves external
-        // display and multi-window detection in real Android Desktop environments.
         boolean desktopActivity = false;
         if (context instanceof Activity activity) {
-            Window window = activity.getWindow();
-            View decor = window != null ? window.getDecorView() : null;
-            Display display = decor != null && decor.isAttachedToWindow()
-                    ? decor.getDisplay() : null;
+            Display display = activityDisplay(activity);
             desktopActivity = activity.isInMultiWindowMode()
                     || (display != null && display.getDisplayId() != Display.DEFAULT_DISPLAY);
         }
         return ArcDesktopPolicy.isArcWindow(
                 preference, ArchiumWindowMetrics.currentWidthDp(context),
                 tablet || desktopUi || pc || desktopActivity);
+    }
+
+    @SuppressWarnings("deprecation")
+    static Display activityDisplay(Activity activity) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                Display display = activity.getDisplay();
+                if (display != null) return display;
+            } catch (UnsupportedOperationException exception) {
+                // A bare Robolectric Activity may wrap a nonvisual Context.
+                // Its window manager remains the activity-scoped fallback.
+            }
+        }
+        WindowManager manager = activity.getWindowManager();
+        return manager != null ? manager.getDefaultDisplay() : null;
     }
 
     public static int getUiMode(Context context) {

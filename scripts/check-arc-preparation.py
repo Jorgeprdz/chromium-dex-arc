@@ -248,7 +248,9 @@ def main():
             file = stubs / (name.replace('.', '/') + '.java')
             file.parent.mkdir(parents=True, exist_ok=True)
             file.write_text('package ' + name.rsplit('.', 1)[0] + ';\n' + body + '\n')
-        new_java = list((ROOT / 'chromium').rglob('*.java'))
+        # JUnit sources require Chromium's real test dependencies and belong to
+        # the post-restore Robolectric gate, not isolated adapter javac.
+        new_java = [p for p in (ROOT / 'chromium').rglob('*.java') if 'junit' not in p.parts]
         account_path = 'components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java'
         account = (ROOT / '.source-reference' if args.test_original_account_delegate else checkout) / account_path
         run('javac', '-cp', str(args.android_jar) + ':' + str(window_jar), '-d', str(classes),
