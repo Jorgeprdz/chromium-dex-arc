@@ -234,3 +234,56 @@ CHECKPOINT_INTEGRITY=BLOCKED aquí significa acreditación completa pendiente de
 Hashes del monitor entregado:
 /workspace/macdesk-maintenance/archium-r4-monitor.py: 6ccc6ce4541cb05995d4eb2f56226d653505818f358430a21ec36ccd423d3daa
 /workspace/archium-r4-monitor-termux.sh: 959d0a143184384d453d8cb5996238ae0dab23ca65baba185b9beec5d6d94ea0
+
+## 15:14–16:48 UTC — único run FAILED, diagnóstico y barrido pedido
+
+El estado anterior era una captura EN CURSO, no la conclusión del run. La API ahora confirma [38147216573](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38147216573) COMPLETED/FAILURE, source SHA 5895d4a80510114ef12a89927c19667d4defeb27. Stage1/build job 114493740808; step compile comenzó 14:54:28 y falló 15:14:17. Se descargó el log completo auténtico, no solo resumen: `/workspace/archium-r4-evidence/run-38147216573-stage-final.log`, 6267 líneas, SHA256 `0e3445c1ebb564973941bd7fd86566c39bd908baa96b608554d64d1714597eab`.
+
+| Evidencia del log | Estado observado |
+|---|---|
+| :201/:204 | Pretransfer: 18.975.585 inodos libres, 115.667.193.856 bytes disponibles, exigidos 100.154.627.252; PASS antes de descarga |
+| :288 | Posdescarga: 90.512.273.408 bytes >= reserva 75.000.000.000 |
+| :292 | ACTIONS_CHECKPOINT_RESTORE=PASS: 24 fragmentos SHA256, tar e identidad validados |
+| :293/:296 | Posrestore: 54.858.973.184 bytes; pin Chromium conservado y depot_tools 8a5434051036b32412a2ecb10c213a72e3f3ccb9 |
+| :2884/:2906/:2907 | Media GN real PASS; entrada S2; GN header check OK |
+| :2951 | Compilación/link de recursos Chromium reales: Build Succeeded, 8 steps |
+| :2952–2963 | Primer traceback auténtico: `ValueError: Wrong Portal pixels under mipmap/app_icon: res/mipmap-hdpi-v4/app_icon` |
+| :2964–2966 | Work exit1; checkpoint quiescente; STAGED=PASS, 24 fragments. Run mantiene FAILED |
+
+CAUSA_CONFIRMADA: el gate de contenido rechazó el recurso empaquetado; no falló AAPT2 compile/link ni ocurrió un enlace JNI posterior. Ningún gate de recursos completo PASS, Robolectric Chromium, JNI o APK se acredita con esta ejecución. Los warnings Node20/Node24 y punycode/urlparse están conservados; no son el primer fallo. La APK no existe como entrega verificada de este run.
+
+Reproducción dirigida: leído `build/android/gyp/compile_resources.py` de **exactamente** cfd94726b7b5fb48aedcc32662f2f3fbdbadec35 (copia de evidencia SHA256 `5e472cd0a584aeed1f08a86b4429b6d06945fa0b048dd781405ab7fde9e63aee`). `_ConvertToWebPSingle` invoca `cwebp -m 6 -q 100 -lossless`, sin `-exact`, y elimina la extensión. Ejecutadas las funciones reales extraídas por AST con cwebp 1.2.4 y los cinco PNG aprobados: cambiaron 62/32/567/567/1545 píxeles respectivamente, **todos con alpha cero**; diferencias de RGB visible/alpha: cero. La fixture anterior usaba `exact=True` y ocultaba esa diferencia. No se extrajo el `.ap_` fallido del runner: la atribución de sus bytes concretos a esta conversión sigue HIPÓTESIS hasta revalidación del árbol real; el defecto del verificador sí está reproducido con el convertidor fijado.
+
+Fix mínimo: canonicalizar únicamente RGB cuando alpha == 0. Mantener comparación exacta de dimensiones, cada alpha y RGB con alpha > 0; sin modificar iconos aprobados. Negativos conservan rechazos de colores visibles, semitransparencia y alpha cambiado de cero a uno. `portal-transparent-red.log`: exit1, 12 tests/1 error antes del fix; `portal-transparent-green.log`: exit0, 12/12. La fixture usa ahora cwebp genuino con los flags exactos de Chromium, no `-exact` ni un encoder simulado. `portal-cwebp-aapt2-green.log`: compile/link/optimize reales PNG/WebP y manifest ajeno rechazado, exit0.
+
+### Barrido de código y tres hallazgos adicionales reproducibles
+
+Inventario inicial mediante `git ls-files`, incluyendo `.source-reference` y `.source-modified`: 435 archivos versionados, 311 de código/configuración; 116 Java, 47 C++, 25 headers, 26 GN, 12 GNI, 11 XML, 60 Python, 7 Bash y 7 workflows. Revisores independientes read-only de CI/recursos, Java y nativo; ningún escritor concurrente. No se afirma revisión/compilación completa de los millones de líneas upstream ausentes del workspace.
+
+* **Validación monocromática incompleta (confirmado):** tres búsquedas de cadenas admitían `M 177 760 L 0 0 Z` y escalas incorrectas. Test negativo `vector-identity-red.log`: exit1, 1 failure. Fix compara toda la jerarquía, atributos, pathData completo, fill, viewport, dimensiones y transformaciones contra XML aprobado; normaliza números al float32 compilado. `vector-identity-green.log`: exit0, 18/18. `sweep-real-vector-aapt2.log`: exit0, AAPT2 SDK37 compila/enlaza los seis mutantes (path, scale, translation, viewport, fill, elemento extra) y el gate rechaza todos; el vector aprobado real pasa. Esto prueba fixture AAPT2 real, no sustituye recursos Chromium postrestore ni inspección final APK.
+* **Presupuesto inseguro (confirmado por límites):** job180m permitía trabajo7200s + pack3600s sin descontar transferencia, startup ni uploads. Tests negativos `job-deadline-red.log`: exit1, 2 failures. Fix inicia deadline absoluto antes de descarga, reserva startup300s/upload1200s/pack3600s; preparación, slices y pack respetan tiempo restante. No aumenta timeout ni reduce reservas de disco; conserva máximo dos slices y 75m por slice. `job-deadline-green.log`: exit0, 2/2; agotamiento impide autoninja/prepare y conserva source remoto. Pruebas de routing son mocks y NO acreditan compilación/checkpoint de 25GB real.
+* **Test de defaults obsoleto (confirmado):** esperaba tag 38018166249 tras seleccionar checkpoint nuevo. `post-failure-host-full.log`: exit1, 181 tests, 180 passed/1 failed/0 skipped. Se actualizan expectativas para tag/run/source SHA como unidad; suite focal 5/5 exit0. No se convierte fallo en skip.
+
+Ruta heredada `dispatch-archium-r3-1-build.sh` retirada explícitamente (exit2, sin llamadas gh): usaba push puente e inputs incompletos, y ya fallaba cerrada. No fue causa del run 38147216573. Negativo con gh de fixture: RED exit1 antes, GREEN exit0 después. Único dispatcher válido continúa siendo baseline-build.yml/workflow_dispatch con expected_sha obligatorio y rama autorizada; push no dispara build pesado.
+
+Barrido Java: archivos entregados/manifest coinciden, API30 getDisplay guardado y fallback null-safe, registro del test Chromium y dependencias WindowCore existentes; 28 strings/arrays y referencias de toolbar/drawables cotejadas con fuentes fijadas. Barrido nativo: pin y 95 fuentes/patch coinciden, owners de KeyProvider/PasswordString/StoredCredential/DeviceAuthenticator y pagos/JNI cotejados; tests APK conservan use_raw_android_executable=false. No nuevos Critical/Important confirmados en Java/C++. `gn desc` completo, javac/ErrorProne/NullAway/recursos generados, ninja query/símbolos actuales y enlace real permanecen UNVERIFIED/NOT_EXECUTED. No se toca payments ni política desktop sin evidencia.
+
+### Checkpoint más reciente preservado, sin descarga local costosa
+
+Source seleccionado: `archium-checkpoint-38147216573-1`, run 38147216573, SHA 5895d4a80510114ef12a89927c19667d4defeb27. Pack quiescente STAGED=PASS con 24 hashes completos en CI; uploads de los tres grupos completados. Grupos 03–07 no requeridos no se cuentan como pruebas ni artifacts existentes.
+
+| Grupo | Artifact ID | Bytes ZIP | Digest remoto | Expira UTC |
+|---|---|---|---|---|
+| 00 | 11706169112 | 8589940404 | sha256:c36b173b5f1ab4b3e029462b456ccea86a0384a21502835348bc1cdae6c9f8cb | 2026-10-25T15:14:17Z |
+| 01 | 11706452374 | 8589935970 | sha256:d1140ab37de91f2b1b56d187cccd51566727db3e6f21a8ddc0d78a2fb14e59ca | 2026-10-25T15:15:38Z |
+| 02 | 11706437557 | 7964015208 | sha256:62b46a6967aa930106d8ce0096640d4221fddcfed119f6c68de821205ce8902f | 2026-10-25T15:16:57Z |
+
+Total ZIP 25.143.891.582 bytes, expired=false. Lectura remota autenticada por rangos HTTP206 estrictos: 5213 bytes para manifest, no descarga repetida de25GB ni tokens/URL firmadas en informe. Manifest `new-checkpoint-38147216573.json`, SHA256 `5ef4e0623496a467c49be46b81ea7aabc08b9e5ec77900bbe87659dfa862d981`: pin/source/tag/workspace correctos, 24 fragmentos, compressed25143883014. Integridad nueva acredita hashes al empaquetar en CI y metadata/manifiesto remoto; **restore remoto completo de este checkpoint nuevo aún NO EJECUTADO**. El checkpoint anterior también sigue recuperable, sin borrado.
+
+Disco local medido nuevamente: 81.153.990.656 bytes y 11.654.856 inodos libres, inferior al requisito aproximado100.143.891.582 bytes: FAIL local; no se descarga ni restaura aquí. DISK_PREFLIGHT=PASS de la ejecución refiere únicamente mediciones CI registradas antes de transferencia. Ningún umbral bajado ni output válido borrado.
+
+Monitor corregido fuera del repo: al detectar job FAILED muestra **primer error real** del log, no últimas líneas de limpieza. Su SHA256 actualizado es `5f4a40ea6f34dd99c8068f8dbc697dd92ff05643c166f0f172936bf1fe844340`. Run fallido bloquea automáticamente descarga/instalación. No se instala una APK inexistente ni se fabrica ETA.
+
+Verificaciones estáticas congeladas: git diff --check, bash -n de los7 scripts, compileall scripts/tests, ShellCheck0.9.0 de scripts/*.sh y actionlint1.7.7 de los7 workflows: exit0. Generador oficial dos veces + cmp + diff --exit-code: exit0; patchSHA256 `93813d3fa8831e1bcc5283f124bdbb7157ab8483f6ff4de5bfc6d9337a9bbc10`, manifestSHA256 `6cce6232029b0ec2f355b1ae31dd869dd509fd79750176b53df1f3479543a0e5`, 95 archivos. No cambios Java/C++/assets/GN en esta reparación posterior al fallo. La suite integral final se registra debajo cuando termine; ninguna corrida pesada adicional lanzada.
+
+16:47 UTC, suite final estable: `ARCHIUM_TEST_GN=/usr/bin/gn ARCHIUM_TEST_AAPT2=/opt/android-sdk/build-tools/37.0.0/aapt2 ARCHIUM_TEST_ANDROID_JAR=/opt/android-sdk/platforms/android-36/android.jar ARCHIUM_TEST_CWEBP=/usr/bin/cwebp python3 -m unittest discover -s tests -p 'test_*.py' -v`: **exit0, 190 passed, 0 failed, 0 skipped**, 537.863s; evidencia `sweep-host-final.log`. Incluye tres perfiles GN genuinos, AAPT2 genuino PNG/WebP con seis vectores alterados rechazados, JVM -ea/-da, integridad/ENOSPC/restore/delta de fixtures pequeñas, y negativos de presupuesto/dispatcher. No acredita compilación JNI, Chrome Robolectric ni APK nueva. La suite anterior181/1failure permanece registrada y no se presenta como PASS.
