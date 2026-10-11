@@ -55,7 +55,7 @@ jobs:
           retention-days: 7
       - name: Python syntax and host gates
         run: |
-          sudo apt-get install -y python3-pil
+          sudo apt-get install -y python3-pil webp
           python3 -c 'from PIL import features; assert features.check("webp"), "Lossless WebP decoder required"'
           python3 -m py_compile scripts/integrate-archium-portal.py scripts/verify-archium-portal-apk.py scripts/archium_portal_content_gate.py scripts/archium-checkpoint.py scripts/check_portal_aapt2_fixture.py scripts/generate-arc-patch.py scripts/check-arc-preparation.py
           python3 -m unittest discover -s tests -p 'test_archium_portal_resources.py' -v

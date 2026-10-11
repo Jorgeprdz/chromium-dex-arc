@@ -10,7 +10,9 @@ from pathlib import Path
 import subprocess
 import tempfile
 import zipfile
-import io
+import os
+import shutil
+import re
 
 
 def load(portal_path):
@@ -36,12 +38,22 @@ def run_aapt2_fixture(android_jar, aapt2, *, optimize=False, verify_negative=Fal
                 raise ValueError("Unexpected resource path: " + original)
             target = res / path
             if chromium_images and target.suffix == '.png':
-                from PIL import Image
-                converted = io.BytesIO()
-                Image.open(io.BytesIO(data)).save(converted, format='WEBP', lossless=True, exact=True)
-                data = converted.getvalue()
-                # Match pinned compile_resources.py: image paths have no suffix.
-                target = target.with_suffix('')
+                # Match _ConvertToWebPSingle at the exact Chromium pin.
+                # Do not add -exact: it conceals discarded transparent RGB.
+                cwebp = os.environ.get('ARCHIUM_TEST_CWEBP') or shutil.which('cwebp')
+                if not cwebp:
+                    raise FileNotFoundError('Genuine cwebp required for Chromium image fixture')
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(data)
+                converted = target.with_suffix('')
+                result = subprocess.run([cwebp, str(target), '-o', str(converted),
+                                         '-quiet', '-m', '6', '-q', '100', '-lossless'],
+                                        capture_output=True, text=True, timeout=120)
+                if result.returncode:
+                    raise RuntimeError('cwebp failed: ' + result.stdout + result.stderr)
+                data = converted.read_bytes()
+                target.unlink()
+                target = converted
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(data)
         manifest = root / "AndroidManifest.xml"
@@ -89,6 +101,40 @@ def run_aapt2_fixture(android_jar, aapt2, *, optimize=False, verify_negative=Fal
                     raise
             else:
                 raise AssertionError('Foreign manifest icon must be rejected')
+            if not chromium_images:
+                # The vector is identical in PNG/WebP runs; exercise real AAPT2
+                # negative manifests once, without duplicating these six links.
+                manifest.write_text(manifest.read_text().replace(
+                    'android:icon="@mipmap/app_icon"', 'android:icon="@drawable/ic_launcher"'))
+                vector = res / 'drawable/themed_app_icon.xml'
+                approved = vector.read_text()
+                mutations = {
+                    'path': re.sub(r'android:pathData="[^"]*"',
+                                   'android:pathData="M 177 760 L 0 0 Z"', approved),
+                    'scale': approved.replace('android:scaleX="0.65"', 'android:scaleX="1"'),
+                    'translation': approved.replace('android:translateX="179.2"', 'android:translateX="0"'),
+                    'viewport': approved.replace('android:viewportWidth="1024"', 'android:viewportWidth="512"'),
+                    'fill': approved.replace('#000000', '#00FF00'),
+                    'extra': approved.replace('</group>', '<path android:fillColor="#000000" '
+                                              'android:pathData="M 177 760 L 0 0 Z"/></group>'),
+                }
+                for name, changed in mutations.items():
+                    if changed == approved:
+                        raise AssertionError('Vector negative mutation did not apply: ' + name)
+                    vector.write_text(changed)
+                    poisoned_resources = root / f'vector-{name}.zip'
+                    run(str(aapt2), 'compile', '--dir', str(res), '-o', str(poisoned_resources))
+                    poisoned_apk = root / f'vector-{name}.apk'
+                    run(str(aapt2), 'link', '-o', str(poisoned_apk), '-I', str(android_jar),
+                        '--manifest', str(manifest), '--auto-add-overlay', str(poisoned_resources))
+                    try:
+                        verifier.inspect(poisoned_apk, aapt2, 'app.archium.android')
+                    except ValueError as error:
+                        if 'Themed glyph' not in str(error):
+                            raise
+                    else:
+                        raise AssertionError('Altered compiled themed vector accepted: ' + name)
+                vector.write_text(approved)
         print("ARCHIUM_PORTAL_AAPT2_FIXTURE=PASS"
               " compiled_resources=" + str(len(entries))
               + " scope=isolated-real-aapt2-not-Chromium")
