@@ -7,7 +7,7 @@ import re
 import subprocess
 import zipfile
 
-from archium_portal_content_gate import check_content
+from archium_portal_content_gate import check_content, packed_paths, resource_entry
 
 
 def inspect(apk, aapt2, package):
@@ -28,8 +28,22 @@ def inspect(apk, aapt2, package):
     if not icon_line:
         raise ValueError("APK application icon is missing")
     icon_name = icon_line.group(1)
-    if not icon_name.endswith(".xml") or "ic_launcher" not in icon_name:
-        raise ValueError("APK launcher does not use the native adaptive icon alias")
+    # Chromium shortens packaged paths (e.g. res/r21.xml). Resource IDs and
+    # compiled content establish identity; ZIP filenames cannot establish it.
+    manifest = subprocess.check_output(
+        [str(aapt2), "dump", "xmltree", str(apk), "--file", "AndroidManifest.xml"],
+        text=True, stderr=subprocess.STDOUT)
+    application = re.search(r"(?ms)^\s*E:\s*application\b(.*?)(?=^\s*E:|\Z)", manifest)
+    if application is None:
+        raise ValueError("APK application manifest is missing")
+    for attribute, alias in (("icon", "drawable/ic_launcher"),
+                             ("roundIcon", "drawable/ic_launcher_round")):
+        id_, entry = resource_entry(resources, alias)
+        if not re.search(r"android:" + attribute + r"\([^)]*\)=@0x0*"
+                         + format(id_, "x") + r"\b", application.group(1), re.I):
+            raise ValueError("APK launcher does not use the native adaptive icon alias: " + attribute)
+        if attribute == "icon" and icon_name not in packed_paths(entry, "xml"):
+            raise ValueError("APK badging icon differs from compiled launcher alias")
     required = ("drawable/ic_launcher", "drawable/ic_launcher_round",
                 "drawable/themed_app_icon", "mipmap/app_icon",
                 "mipmap/layered_app_icon", "mipmap/layered_app_icon_background")

@@ -9,6 +9,7 @@ import importlib.util
 from pathlib import Path
 import subprocess
 import tempfile
+import zipfile
 
 
 def load(portal_path):
@@ -18,7 +19,7 @@ def load(portal_path):
     return module
 
 
-def run_aapt2_fixture(android_jar, aapt2):
+def run_aapt2_fixture(android_jar, aapt2, *, optimize=False, verify_negative=False):
     here = Path(__file__).resolve().parent
     portal = load(here / "integrate-archium-portal.py")
     source = portal.expected_resources()
@@ -43,8 +44,7 @@ def run_aapt2_fixture(android_jar, aapt2):
                android:roundIcon="@drawable/ic_launcher_round"/>
 </manifest>
 """, encoding="utf-8")
-        output = root / "compiled"
-        output.mkdir()
+        output = root / "compiled.zip"
         def run(*args):
             p = subprocess.run(args, cwd=root, text=True, capture_output=True)
             if p.returncode:
@@ -52,17 +52,35 @@ def run_aapt2_fixture(android_jar, aapt2):
                                    + p.stdout[-4000:] + p.stderr[-4000:])
             return p.stdout
         run(str(aapt2), "compile", "--dir", str(res), "-o", str(output))
-        entries = sorted(output.glob("*.flat"))
+        with zipfile.ZipFile(output) as compiled:
+            entries = compiled.namelist()
         if len(entries) != len(source):
             raise ValueError(f"aapt2 compiled {len(entries)} vs {len(source)} Portal assets")
         apk = root / "fixture.apk"
         run(str(aapt2), "link", "-o", str(apk), "-I", str(android_jar),
             "--manifest", str(manifest), "--auto-add-overlay",
-            *[str(p) for p in entries])
+            str(output))
+        if optimize:
+            optimized = root / "optimized.apk"
+            run(str(aapt2), "optimize", "--shorten-resource-paths", "-o", str(optimized), str(apk))
+            apk = optimized
         verifier = load(here / "verify-archium-portal-apk.py")
         result = verifier.inspect(apk, aapt2, "app.archium.android")
         if result["status"] != "PASS":
             raise AssertionError("AAPT2 fixture verification did not PASS")
+        if verify_negative:
+            manifest.write_text(manifest.read_text().replace(
+                'android:icon="@drawable/ic_launcher"', 'android:icon="@mipmap/app_icon"'))
+            poisoned = root / 'poisoned.apk'
+            run(str(aapt2), "link", "-o", str(poisoned), "-I", str(android_jar),
+                "--manifest", str(manifest), "--auto-add-overlay", str(output))
+            try:
+                verifier.inspect(poisoned, aapt2, "app.archium.android")
+            except ValueError as error:
+                if 'native adaptive icon alias' not in str(error):
+                    raise
+            else:
+                raise AssertionError('Foreign manifest icon must be rejected')
         print("ARCHIUM_PORTAL_AAPT2_FIXTURE=PASS"
               " compiled_resources=" + str(len(entries))
               + " scope=isolated-real-aapt2-not-Chromium")
