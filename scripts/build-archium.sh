@@ -32,6 +32,12 @@ host_seconds=$(budget_value "${ARCHIUM_HOST_SECONDS:-1800}" 1800)
 checkpoint_seconds=$(budget_value "${ARCHIUM_CHECKPOINT_SECONDS:-5400}" 5400)
 slice_minutes=$(budget_value "${ARCHIUM_SLICE_MINUTES:-120}" 120)
 max_slices=$(budget_value "${ARCHIUM_MAX_SLICES:-1}" 2)
+upload_reserve_seconds=$(budget_value "${ARCHIUM_UPLOAD_RESERVE_SECONDS:-1200}" 1800)
+job_deadline_epoch="${ARCHIUM_JOB_DEADLINE_EPOCH:-}"
+if [[ -n "$job_deadline_epoch" && ! "$job_deadline_epoch" =~ ^[1-9][0-9]{9,10}$ ]]; then
+    printf 'Invalid absolute CI job deadline.\n' >&2
+    exit 2
+fi
 slice_count=1
 script_started=$SECONDS
 job_started=$(date +%s)
@@ -40,8 +46,22 @@ prepared_marker="$RUNNER_TEMP/archium-prepared-${GITHUB_RUN_ID:-local}"
 
 job_elapsed() { printf '%s' "$((initial_elapsed + SECONDS - script_started))"; }
 
+work_remaining() {
+    local remaining=$((work_seconds - $(job_elapsed))) absolute_remaining
+    if [[ -n "$job_deadline_epoch" ]]; then
+        absolute_remaining=$((job_deadline_epoch - $(date +%s) - checkpoint_seconds - upload_reserve_seconds))
+        if (( absolute_remaining < remaining )); then remaining=$absolute_remaining; fi
+    fi
+    printf '%s' "$remaining"
+}
+
 run_prepare() {
     local remaining=$((prepare_seconds - $(job_elapsed))) result=0
+    local safe_remaining
+    if [[ -n "$job_deadline_epoch" ]]; then
+        safe_remaining=$(work_remaining)
+        if (( safe_remaining < remaining )); then remaining=$safe_remaining; fi
+    fi
     if (( remaining <= 0 )); then
         printf 'Preparation budget exhausted; retaining the previous checkpoint.\n' >&2
         return 124
@@ -54,9 +74,17 @@ run_prepare() {
 }
 
 save_checkpoint() {
-    local final_status="${1:-0}" result=0
+    local final_status="${1:-0}" result=0 limit="$checkpoint_seconds" remaining
+    if [[ -n "$job_deadline_epoch" ]]; then
+        remaining=$((job_deadline_epoch - $(date +%s) - upload_reserve_seconds))
+        if (( remaining <= 0 )); then
+            printf 'No safe checkpoint/upload budget remains; remote source checkpoint retained.\n' >&2
+            exit 124
+        fi
+        if (( remaining < limit )); then limit=$remaining; fi
+    fi
     printf 'CHECKPOINT: saving quiescent workspace; execution gates remain pending.\n'
-    timeout --signal=TERM --kill-after=30s "${checkpoint_seconds}s" \
+    timeout --signal=TERM --kill-after=30s "${limit}s" \
         python3 "$GITHUB_WORKSPACE/scripts/archium-checkpoint.py" pack \
         "$build_workspace" "$ARCHIUM_CHECKPOINT_TAG" || result=$?
     if (( result != 0 )); then
@@ -75,13 +103,14 @@ run_work() {
         checkpoint_on_failure=true
         shift
     fi
-    local remaining=$((work_seconds - $(job_elapsed))) result=0
+    local remaining result=0
+    remaining=$(work_remaining)
     if (( remaining <= 0 )); then save_checkpoint "$timeout_status"; fi
     if (( limit > remaining )); then limit=$remaining; fi
     timeout --signal="$signal" --kill-after=90s "${limit}s" "$@" || result=$?
     if (( result == 124 )); then
         if [[ "$signal" == INT ]] && (( slice_count < max_slices )) \
-            && (( $(job_elapsed) < work_seconds )); then
+            && (( $(work_remaining) > 0 )); then
             # timeout waited for the backend to quiesce. Reuse this same
             # checkout/output once, without another restore or workflow.
             slice_count=$((slice_count + 1))
@@ -110,7 +139,7 @@ install_build_deps() {
     run_prepare sudo timeout --signal=TERM --kill-after=30s 30m \
         ./build/install-build-deps.sh --no-prompt --android
     if [[ "${ARCHIUM_REAL_RESOURCE_GATE:-false}" == true ]]; then
-        run_prepare sudo apt-get install -y python3-pil
+        run_prepare sudo apt-get install -y python3-pil webp
         run_prepare "$host_python" -c 'from PIL import features; assert features.check("webp"), "Lossless WebP decoder required"'
     fi
     printf 'PREPARE: dependencies installed.\n'

@@ -6,6 +6,7 @@ from pathlib import Path
 import shutil
 import subprocess
 import tempfile
+import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -135,6 +136,24 @@ elif name=='sudo' and args and args[0]=='timeout':
         self.assertEqual(result.returncode, 2, result.stderr)
         self.assertIn('clean fallback is disabled', result.stderr)
         self.assertEqual(self.calls(), [])
+
+    def test_job_deadline_reserves_pack_and_upload_before_any_compilation(self):
+        prepared = self.run_build('--prepare', ARCHIUM_PREVIOUS_TAG=CURRENT_TAG)
+        self.assertEqual(prepared.returncode, 0, prepared.stderr)
+        self.trace.unlink()
+        result = self.run_build('--work', ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
+                                ARCHIUM_JOB_DEADLINE_EPOCH=str(int(time.time()) + 3600 + 1200 - 1),
+                                ARCHIUM_UPLOAD_RESERVE_SECONDS='1200')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(any(c[0] == 'autoninja' for c in self.calls()), result.stdout)
+        self.assertTrue(any(c[0] == 'python3' and 'pack' in c for c in self.calls()))
+        self.assertEqual(self.output.read_text(), 'complete=false\n')
+
+    def test_expired_job_deadline_stops_preparation_without_rebuilding(self):
+        result = self.run_build('--prepare', ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
+                                ARCHIUM_JOB_DEADLINE_EPOCH=str(int(time.time()) - 1))
+        self.assertEqual(result.returncode, 124, result.stderr)
+        self.assertFalse(any(c[0] == 'autoninja' or 'pack' in c for c in self.calls()))
 
     def test_two_slices_reuse_one_restore_and_keep_budget_incomplete(self):
         result = self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG, ARCHIUM_MAX_SLICES='2',

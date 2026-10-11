@@ -10,17 +10,17 @@ on:
         description: 'Verified incremental checkpoint; clean builds are forbidden'
         required: true
         type: string
-        default: archium-checkpoint-38018166249-1
+        default: archium-checkpoint-38147216573-1
       source_commit:
         description: 'Exact commit that produced the checkpoint'
         required: true
         type: string
-        default: 507f28e1265fb98551d3bc1a66f4739fb48d2625
+        default: 5895d4a80510114ef12a89927c19667d4defeb27
       source_run_id:
         description: 'Actions run containing the verified checkpoint groups'
         required: true
         type: string
-        default: '38018166249'
+        default: '38147216573'
 permissions:
   contents: write
   actions: read
@@ -86,7 +86,7 @@ jobs:
       - name: Verify source preservation and exact Portal identities
         run: |
           set -euo pipefail
-          sudo apt-get install -y python3-pil
+          sudo apt-get install -y python3-pil webp
           python3 -c 'from PIL import features; assert features.check("webp"), "Lossless WebP decoder required"'
           python3 -m unittest discover -s tests -p 'test_archium_portal_resources.py'
           python3 -m unittest discover -s tests -p 'test_r3_3_portal_safe_zone.py'
