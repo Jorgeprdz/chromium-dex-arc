@@ -5,6 +5,8 @@ import importlib.util
 import tempfile
 import unittest
 import zipfile
+import io
+from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -28,14 +30,14 @@ IDS = {
 }
 
 
-def fixture(tamper=None, remove=None):
+def fixture(tamper=None, remove=None, webp=False):
     expected = portal.expected_resources()
     inputs = {}
     rows = []
     for name, id_ in IDS.items():
         leaf = name.split("/")[1]
         ext = ".png" if name.startswith("mipmap/") else ".xml"
-        packed = "res/verify/" + leaf + ext
+        packed = "res/verify/" + leaf + ("" if webp and ext == ".png" else ext)
         if ext == ".png":
             source = f"{portal.BASE}/mipmap-mdpi/{leaf}.png"
         elif leaf == "themed_app_icon":
@@ -48,6 +50,10 @@ def fixture(tamper=None, remove=None):
                 data = (expected[f"{portal.BASE}/mipmap-mdpi/app_icon.png"]
                         if leaf != "app_icon"
                         else expected[f"{portal.BASE}/mipmap-mdpi/layered_app_icon.png"])
+            if webp and ext == '.png':
+                output = io.BytesIO()
+                Image.open(io.BytesIO(data)).save(output, format='WEBP', lossless=True, exact=True)
+                data = output.getvalue()
             inputs[packed] = data
             rows.append(f"resource 0x{id_:08x} app.archium.android:{name}\n"
                         f"  (mdpi) (file) {packed}\n")
@@ -63,8 +69,8 @@ def xmltree(path):
 
 
 class ApkPixelGateTest(unittest.TestCase):
-    def run_gate(self, tamper=None, remove=None, broken_xml=False):
-        files, table = fixture(tamper=tamper, remove=remove)
+    def run_gate(self, tamper=None, remove=None, broken_xml=False, webp=False):
+        files, table = fixture(tamper=tamper, remove=remove, webp=webp)
         with tempfile.TemporaryDirectory() as tmp:
             apk = Path(tmp) / "fake.apk"
             with zipfile.ZipFile(apk, "w") as z:
@@ -75,6 +81,13 @@ class ApkPixelGateTest(unittest.TestCase):
 
     def test_approved_content_all_links_pass(self):
         self.assertEqual("PASS", self.run_gate()["status"])
+
+    def test_chromium_extensionless_lossless_webp_preserves_pixels(self):
+        self.assertEqual('PASS', self.run_gate(webp=True)['status'])
+
+    def test_foreign_pixels_in_extensionless_webp_are_rejected(self):
+        with self.assertRaisesRegex(ValueError, 'Wrong Portal pixels'):
+            self.run_gate(tamper='mipmap/layered_app_icon', webp=True)
 
     def test_foreign_foreground_under_correct_alias_is_rejected(self):
         with self.assertRaisesRegex(ValueError, "Wrong Portal pixels"):

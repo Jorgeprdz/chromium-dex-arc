@@ -10,6 +10,7 @@ from pathlib import Path
 import subprocess
 import tempfile
 import zipfile
+import io
 
 
 def load(portal_path):
@@ -19,7 +20,7 @@ def load(portal_path):
     return module
 
 
-def run_aapt2_fixture(android_jar, aapt2, *, optimize=False, verify_negative=False):
+def run_aapt2_fixture(android_jar, aapt2, *, optimize=False, verify_negative=False, chromium_images=False):
     here = Path(__file__).resolve().parent
     portal = load(here / "integrate-archium-portal.py")
     source = portal.expected_resources()
@@ -34,6 +35,13 @@ def run_aapt2_fixture(android_jar, aapt2, *, optimize=False, verify_negative=Fal
             else:
                 raise ValueError("Unexpected resource path: " + original)
             target = res / path
+            if chromium_images and target.suffix == '.png':
+                from PIL import Image
+                converted = io.BytesIO()
+                Image.open(io.BytesIO(data)).save(converted, format='WEBP', lossless=True, exact=True)
+                data = converted.getvalue()
+                # Match pinned compile_resources.py: image paths have no suffix.
+                target = target.with_suffix('')
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_bytes(data)
         manifest = root / "AndroidManifest.xml"

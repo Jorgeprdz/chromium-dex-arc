@@ -23,3 +23,5 @@ class OptimizedAliasTest(unittest.TestCase):
         spec = importlib.util.spec_from_file_location('fixture', ROOT / 'scripts/check_portal_aapt2_fixture.py')
         fixture = importlib.util.module_from_spec(spec); spec.loader.exec_module(fixture)
         fixture.run_aapt2_fixture(Path(android), Path(aapt2), optimize=True, verify_negative=True)
+        fixture.run_aapt2_fixture(Path(android), Path(aapt2), optimize=True,
+                                 verify_negative=True, chromium_images=True)

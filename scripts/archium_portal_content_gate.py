@@ -9,6 +9,7 @@ import importlib.util
 from pathlib import Path
 import re
 import zipfile
+import io
 
 
 def portal_module():
@@ -43,12 +44,27 @@ def resource_entry(dump, name):
     return next(iter(ids)), "\n".join(s for _, s in entries)
 
 
-def packed_paths(entry, extension):
+def packed_paths(entry, extension=None):
     # Resources may be flattened/renamed by aapt2; never infer a ZIP entry
     # from the original source filename.
-    paths = re.findall(r"res/[a-zA-Z0-9_./-]+\." + re.escape(extension)
-                       + r"\b", entry)
+    paths = re.findall(r"res/[a-zA-Z0-9_./+-]+", entry)
+    if extension is not None:
+        paths = [p for p in paths if p.endswith('.' + extension)]
     return sorted(set(paths))
+
+
+def packaged_pixels(portal, blob):
+    if blob[:4] == b'RIFF' and blob[8:12] == b'WEBP':
+        # Official Chromium losslessly converts launcher PNGs to WebP and
+        # strips image extensions. Decode actual bytes, never infer format.
+        from PIL import Image
+        with Image.open(io.BytesIO(blob)) as source:
+            width, height = source.size
+            if source.format != 'WEBP' or getattr(source, 'n_frames', 1) != 1 \
+                    or height != width or not 16 <= width <= 1024:
+                raise ValueError('Invalid packaged Portal WebP')
+            return width, source.convert('RGBA').tobytes()
+    return portal.png_pixels(blob, allow_rgb=True)
 
 
 def check_content(apk, aapt_dump, xmltree):
@@ -75,7 +91,7 @@ def check_content(apk, aapt_dump, xmltree):
         for alias in ICON_ENTRIES + XML_ENTRIES:
             id_, entry = resource_entry(aapt_dump, alias)
             ids[alias] = id_
-            extensions = ["png"] if alias in ICON_ENTRIES else ["xml"]
+            extensions = [None] if alias in ICON_ENTRIES else ["xml"]
             found = [p for ext in extensions for p in packed_paths(entry, ext)]
             if not found:
                 raise ValueError("Resource table has no packaged path for " + alias)
@@ -84,9 +100,9 @@ def check_content(apk, aapt_dump, xmltree):
                     raise ValueError("Compiled resource points to missing ZIP entry: " + path)
                 if alias in ICON_ENTRIES:
                     try:
-                        pixels = portal.png_pixels(archive.read(path), allow_rgb=True)
+                        pixels = packaged_pixels(portal, archive.read(path))
                     except Exception as exc:
-                        raise ValueError("Invalid compiled Portal PNG: " + path) from exc
+                        raise ValueError("Invalid compiled Portal image: " + path) from exc
                     if pixels not in expected[alias]:
                         raise ValueError("Wrong Portal pixels under " + alias + ": " + path)
             if alias in XML_ENTRIES:

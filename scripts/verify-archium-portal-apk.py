@@ -57,8 +57,6 @@ def inspect(apk, aapt2, package):
             raise ValueError("Invalid Android APK resource archive")
         if icon_name not in names:
             raise ValueError("Android manifest icon XML missing from packaged archive")
-        if not any(name.startswith("res/") and name.endswith(".png") for name in names):
-            raise ValueError("Missing packed PNG resources")
     content = check_content(apk, resources, lambda path: subprocess.check_output(
         [str(aapt2), "dump", "xmltree", str(apk), "--file", path],
         text=True, stderr=subprocess.STDOUT))
