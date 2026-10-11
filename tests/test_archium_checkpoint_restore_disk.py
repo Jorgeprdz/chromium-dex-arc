@@ -8,6 +8,8 @@ import subprocess
 import tarfile
 import tempfile
 import unittest
+import errno
+from unittest.mock import patch
 
 ROOT = Path(__file__).resolve().parents[1]
 SPEC = importlib.util.spec_from_file_location("archium_checkpoint", ROOT / "scripts/archium-checkpoint.py")
@@ -17,6 +19,29 @@ SOURCE_COMMIT = "507f28e1265fb98551d3bc1a66f4739fb48d2625"
 TAG = "archium-checkpoint-38018166249-1"
 
 class CheckpointDiskRecoveryTests(unittest.TestCase):
+    def test_enospc_restore_preserves_all_downloaded_parts(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace, stage = self.make_artifact(Path(tmp))
+            before = {p.name: p.read_bytes() for p in stage.iterdir()}
+            with patch.object(checkpoint.subprocess, 'Popen', side_effect=OSError(errno.ENOSPC, 'disk full')):
+                with self.assertRaises(OSError) as error:
+                    checkpoint.restore_actions(workspace, TAG, stage, source_commit=SOURCE_COMMIT)
+            self.assertEqual(error.exception.errno, errno.ENOSPC)
+            self.assertEqual(before, {p.name: p.read_bytes() for p in stage.iterdir()})
+
+    def test_failed_tar_keeps_downloaded_checkpoint_and_no_restore_pass(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            workspace, stage = self.make_artifact(Path(tmp))
+            receipt = json.loads((stage / 'checkpoint.json').read_text())
+            for part in receipt['parts']:
+                data = b'invalid tar payload'
+                (stage / part['name']).write_bytes(data)
+                part.update(bytes=len(data), sha256=hashlib.sha256(data).hexdigest())
+            (stage / 'checkpoint.json').write_text(json.dumps(receipt))
+            before = {p.name: p.read_bytes() for p in stage.iterdir()}
+            with self.assertRaises((RuntimeError, BrokenPipeError)):
+                checkpoint.restore_actions(workspace, TAG, stage, source_commit=SOURCE_COMMIT)
+            self.assertEqual(before, {p.name: p.read_bytes() for p in stage.iterdir()})
     def make_artifact(self, parent, *, tamper=False):
         source = parent / "source"
         source.mkdir()

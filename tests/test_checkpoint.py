@@ -14,6 +14,13 @@ spec.loader.exec_module(checkpoint)
 
 
 class CheckpointTests(unittest.TestCase):
+    def test_manifest_rejects_nonhex_digest_and_boolean_size(self):
+        expected = {'schema': 1, 'workspace': '/same', 'commit': 'abc', 'revision': 'rev'}
+        for size, sha in [(1, 'z' * 64), (True, '0' * 64)]:
+            manifest = {**expected, 'parts': [{'name': 'checkpoint-0000.tar.gz.part',
+                        'bytes': size, 'sha256': sha}]}
+            with self.assertRaisesRegex(ValueError, 'Invalid checkpoint part'):
+                checkpoint.validate_manifest(manifest, expected)
     def test_round_trip_preserves_ninja_state_modes_symlinks_and_timestamps(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -65,6 +72,7 @@ class CheckpointTests(unittest.TestCase):
             workspace, folder = root / 'workspace', root / 'bundles'
             workspace.mkdir()
             (workspace / '.ninja_log').write_text('progress')
+            (workspace / '.ninja_deps').write_bytes(b'preserved dependency state')
             os.utime(workspace / '.ninja_log', ns=(1234567890123456789, 1234567890123456789))
             (workspace / 'compiler').write_text('binary')
             (workspace / 'compiler').chmod(0o755)
@@ -86,6 +94,7 @@ class CheckpointTests(unittest.TestCase):
                 self.assertEqual('progress', (workspace / '.ninja_log').read_text())
                 self.assertEqual(1234567890123456789, (workspace / '.ninja_log').stat().st_mtime_ns)
                 self.assertTrue((workspace / 'link').is_symlink())
+                self.assertEqual(b'preserved dependency state', (workspace / '.ninja_deps').read_bytes())
                 self.assertEqual([], list(downloaded.iterdir()),
                                  'Verified restore must reclaim staged archive bytes')
                 for item in workspace.iterdir():

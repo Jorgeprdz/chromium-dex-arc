@@ -131,3 +131,21 @@ Fixture Actions restore real tiny: roundtrip mantiene .ninja_log nanosegundos, s
 Causa ARC-F006 adicional reproducida: validate_manifest aceptaba SHA no hexadecimal y bool como tamaño; RED 8 tests/1failure, GREEN 8/8 con regex SHA y tipo int exacto. Restore fuente legacy compatible preservado. Workflow obliga checkpoint; sin clean fallback. En restore CI quedan bloqueantes checkout pin/depot pin/build.ninja/args de origen antes de transición y fingerprint GN/clang. No outputs/caches válidos borrados.
 
 Generación oficial reproducida dos veces por cada reparación Java, cmp SHA256 exit0; 95 archivos actuales manifest. Patch se aplica realmente en check-arc-preparation (exit0), valida originals y bytes modificados. Pin cfd94726b7b5fb48aedcc32662f2f3fbdbadec35.
+
+## ARC-F004/F005 — evidencia y dispatch
+
+Preflight distingue STATIC_PASS, PYTHON_HOST_PASS, GN_REAL_PASS con scope media_fixture; Robolectric/JNI quedan PENDING_POST_RESTORE y APK PENDING. GN ausente y javac ausente ahora FALLAN; no skips críticos. Host con outputs reales ejecuta Robolectric antes de marcar ROBOLECTRIC_PASS. Test coverage routing captura marcadores de mocks para no publicarlos como evidencia de Chromium.
+
+baseline-build.yml: solo workflow_dispatch, expected_sha obligatorio igual GITHUB_SHA, rama exclusiva autorizada, concurrency global archium-build-staged cancel=false, chequeo de otras corridas activas. Source inputs explícitos con defaults checkpoint compatible vigente; sin markers ni push pesado. Se eliminan stages nuevos con restore repetido: stage1 permite máximo dos slices sobre MISMO checkout/output, respetando límites históricos 75m/slice, 7200s presupuesto global y 180m job (no se extiende presupuesto). Terminal BUILD_INCOMPLETE visible si tiempo agotado. Mock ejecutable confirma un restore/dos intentos y bloqueo de APK; NO prueba compile nativo. Checkpoint obligatorio en workflow, clean fallback deshabilitado.
+
+Metadata de releases remotos también inventariada (gh api paginate exit0): el más reciente release checkpoint es archium-checkpoint-37905612954-1, 2026-10-09T08:56:22Z, más antiguo que Actions source elegido 2026-10-10. No releases/checkpoints borrados.
+
+## Revisión independiente y corrección de empaquetado
+
+Habilidad requesting-code-review: revisión read-only de diff completo, sin subdelegación. Un Important encontrado, ningún Critical/Minor material: Chromium elimina extensiones de imágenes y convierte lossless WebP; verificador solo PNG rechazaría recursos reales. Se verifica contra código exacto del pin compile_resources.py y APK histórica real: mipmap/app_icon -> res/80 (RIFF WEBPVP8L), layered foreground/background extensionless.
+
+Nueva prueba negativa: gate viejo RED (8 tests; 1 failure, 1 error) sobre WebP lossless sin extensión y pixels ajenos. Fix lee rutas reales de tabla y decodifica WebP genuino mediante Pillow/libwebp, compara RGBA/dimensiones contra assets aprobados. GREEN 8/8, exit0. No se cambian assets ni optimización Chromium. Se instala decoder python3-pil para VALIDACIÓN host explícita; prueba features.check(webp) bloqueante, no dependencia nueva del browser. Fixtures AAPT2 van a representar conversión/strip además del shorten.
+
+Revisor declinó acreditar: restore/integridad real, GN completo/recursos Chromium, Robolectric Chromium, JNI, APK R4 firmada y Android dispositivo. Se conservan pendientes hasta evidencia; fixtures no los acreditan.
+
+Suite host primera ejecución tras cambios: 175 tests, 1 failure y 2 errors, exit1. Causas reproducidas en fixtures: symlinks herramientas no idempotentes, test que esperaba stage2 eliminado al conservar output, SDK resolver mocked incompleto. Se corrigen fixtures conservando restricciones y añadiendo firma/ABI negativas; no dispatch con gate fallido. Detalles host-final.log.

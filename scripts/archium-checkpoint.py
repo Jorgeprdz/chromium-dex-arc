@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 from pathlib import Path
 import subprocess
 import tempfile
@@ -250,9 +251,9 @@ def validate_manifest(manifest, expected):
         raise ValueError('Checkpoint has no complete parts')
     for number, part in enumerate(parts):
         if part.get('name') != f'checkpoint-{number:04d}.tar.gz.part' \
-                or not isinstance(part.get('bytes'), int) \
+                or type(part.get('bytes')) is not int \
                 or not 0 < part['bytes'] <= CHUNK_BYTES \
-                or len(part.get('sha256', '')) != 64:
+                or re.fullmatch('[0-9a-f]{64}', str(part.get('sha256'))) is None:
             raise ValueError('Invalid checkpoint part')
 
 
