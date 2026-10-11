@@ -6,7 +6,6 @@ import tempfile
 import unittest
 import zipfile
 import io
-import xml.etree.ElementTree as ET
 from PIL import Image
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -76,19 +75,9 @@ def fixture(tamper=None, remove=None, webp=False, exact=True, pixel_mutation=Non
 
 def xmltree(path):
     if "themed_app_icon" in path:
-        source = portal.expected_resources()[f'{portal.BASE}/drawable/themed_app_icon.xml']
-        vector = ET.fromstring(source)
-        group = vector.find('group'); outline = group.find('path')
-        android = '{http://schemas.android.com/apk/res/android}'
-        rows = ['E: vector']
-        for name in ('width', 'height', 'viewportWidth', 'viewportHeight'):
-            rows.append(f'  A: android:{name}(0x1)={vector.get(android+name)}')
-        rows.append('  E: group')
-        for name in ('scaleX', 'scaleY', 'translateX', 'translateY'):
-            rows.append(f'    A: android:{name}(0x1)={group.get(android+name)}')
-        rows += ['    E: path', '      A: android:fillColor(0x1)=#ff000000',
-                 f'      A: android:pathData(0x1)="{outline.get(android+"pathData")}"']
-        return '\n'.join(rows)
+        # Actual SDK37 output: retain genuine framework IDs in this adapter.
+        compiled = (ROOT / 'tests/fixtures/portal/themed-vector-sdk37-no-namespaces.xmltree.txt').read_text()
+        return compiled.replace('A: ', 'A: android:')
     return ("E: adaptive-icon\nE: foreground android:drawable=@0x7f010002"
             "\nE: background android:drawable=@0x7f010003"
             "\nE: monochrome android:drawable=@0x7f020003")
@@ -132,22 +121,22 @@ class ApkPixelGateTest(unittest.TestCase):
             self.run_gate(webp=True, exact=False, pixel_mutation='transparent_alpha')
 
     def test_replaced_monochrome_path_is_rejected(self):
-        self.reject_vector(lambda x: x.split('android:pathData')[0] + 'android:pathData(0x1)="M 177 760 L 0 0 Z"')
+        self.reject_vector(lambda x: x.split('android:pathData')[0] + 'android:pathData(0x01010405)="M 177 760 L 0 0 Z"')
 
     def test_changed_monochrome_scale_is_rejected(self):
-        self.reject_vector(lambda x: x.replace('scaleX(0x1)=0.65', 'scaleX(0x1)=1.0'))
+        self.reject_vector(lambda x: x.replace('scaleX(0x01010324)=0.65', 'scaleX(0x01010324)=1.0'))
 
     def test_changed_monochrome_translation_is_rejected(self):
-        self.reject_vector(lambda x: x.replace('translateX(0x1)=179.2', 'translateX(0x1)=0'))
+        self.reject_vector(lambda x: x.replace('translateX(0x0101045a)=179.2', 'translateX(0x0101045a)=0'))
 
     def test_changed_monochrome_viewport_is_rejected(self):
-        self.reject_vector(lambda x: x.replace('viewportWidth(0x1)=1024', 'viewportWidth(0x1)=512'))
+        self.reject_vector(lambda x: x.replace('viewportWidth(0x01010402)=1024', 'viewportWidth(0x01010402)=512'))
 
     def test_changed_monochrome_fill_is_rejected(self):
         self.reject_vector(lambda x: x.replace('#ff000000', '#ff00ff00'))
 
     def test_extra_monochrome_element_is_rejected(self):
-        self.reject_vector(lambda x: x + '\n    E: path\n      A: android:pathData(0x1)="M 177 760 L 0 0 Z"')
+        self.reject_vector(lambda x: x + '\n    E: path\n      A: android:pathData(0x01010405)="M 177 760 L 0 0 Z"')
 
     def reject_vector(self, mutation):
         files, table = fixture()

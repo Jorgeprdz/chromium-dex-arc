@@ -77,8 +77,11 @@ def run_aapt2_fixture(android_jar, aapt2, *, optimize=False, verify_negative=Fal
         if len(entries) != len(source):
             raise ValueError(f"aapt2 compiled {len(entries)} vs {len(source)} Portal assets")
         apk = root / "fixture.apk"
+        # Exact link flags from compile_resources.py at the Chromium pin.
+        # Resource XML loses namespaces; Android attribute IDs remain intact.
+        chromium_link_flags = ('--no-version-vectors', '--no-xml-namespaces')
         run(str(aapt2), "link", "-o", str(apk), "-I", str(android_jar),
-            "--manifest", str(manifest), "--auto-add-overlay",
+            "--manifest", str(manifest), "--auto-add-overlay", *chromium_link_flags,
             str(output))
         if optimize:
             optimized = root / "optimized.apk"
@@ -93,7 +96,7 @@ def run_aapt2_fixture(android_jar, aapt2, *, optimize=False, verify_negative=Fal
                 'android:icon="@drawable/ic_launcher"', 'android:icon="@mipmap/app_icon"'))
             poisoned = root / 'poisoned.apk'
             run(str(aapt2), "link", "-o", str(poisoned), "-I", str(android_jar),
-                "--manifest", str(manifest), "--auto-add-overlay", str(output))
+                "--manifest", str(manifest), "--auto-add-overlay", *chromium_link_flags, str(output))
             try:
                 verifier.inspect(poisoned, aapt2, "app.archium.android")
             except ValueError as error:
@@ -126,7 +129,8 @@ def run_aapt2_fixture(android_jar, aapt2, *, optimize=False, verify_negative=Fal
                     run(str(aapt2), 'compile', '--dir', str(res), '-o', str(poisoned_resources))
                     poisoned_apk = root / f'vector-{name}.apk'
                     run(str(aapt2), 'link', '-o', str(poisoned_apk), '-I', str(android_jar),
-                        '--manifest', str(manifest), '--auto-add-overlay', str(poisoned_resources))
+                        '--manifest', str(manifest), '--auto-add-overlay', *chromium_link_flags,
+                        str(poisoned_resources))
                     try:
                         verifier.inspect(poisoned_apk, aapt2, 'app.archium.android')
                     except ValueError as error:

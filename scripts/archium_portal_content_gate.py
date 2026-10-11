@@ -87,6 +87,15 @@ def visible_pixels(pixels):
 def verify_themed_vector(compiled, source):
     """Match the complete compiled vector and transform to the approved XML."""
     android = '{http://schemas.android.com/apk/res/android}'
+    # Stable Android framework IDs, confirmed by genuine SDK37 AAPT2 output.
+    # Chromium strips XML namespaces; names alone cannot establish ownership.
+    framework_ids = {
+        'height': 0x01010155, 'width': 0x01010159,
+        'viewportWidth': 0x01010402, 'viewportHeight': 0x01010403,
+        'scaleX': 0x01010324, 'scaleY': 0x01010325,
+        'translateX': 0x0101045a, 'translateY': 0x0101045b,
+        'fillColor': 0x01010404, 'pathData': 0x01010405,
+    }
     expected = []
     def visit(node, parent=None):
         expected.append((node.tag, parent, {
@@ -105,12 +114,18 @@ def verify_themed_vector(compiled, source):
             actual.append((tag, stack[-1][1] if stack else None, attrs))
             stack.append((depth, tag, attrs))
             continue
-        attribute = re.match(r'^\s*A:\s*(\S+)\([^)]*\)=(.*)$', line)
-        if attribute:
-            name, value = attribute.groups()
-            if not stack or not name.startswith(('android:', 'http://schemas.android.com/apk/res/android:')):
-                raise ValueError('Themed glyph has an unexpected attribute')
-            name = name.rsplit(':', 1)[1]
+        if re.match(r'^\s*A:', line):
+            attribute = re.match(r'^\s*A:\s*(\S+)\(0x([0-9a-fA-F]{1,8})\)=(.*)$', line)
+            if attribute is None:
+                raise ValueError('Themed glyph has an unexpected attribute format: ' + line.strip()[:160])
+            name, id_hex, value = attribute.groups()
+            if not stack or (':' in name and not name.startswith((
+                    'android:', 'http://schemas.android.com/apk/res/android:'))):
+                raise ValueError('Themed glyph has an unexpected attribute: ' + name)
+            name = name.rsplit(':', 1)[-1]
+            if framework_ids.get(name) != int(id_hex, 16):
+                raise ValueError('Themed glyph has an unexpected Android attribute ID: '
+                                 + name + '(0x' + id_hex + ')')
             if name in stack[-1][2]:
                 raise ValueError('Themed glyph has a duplicate attribute')
             stack[-1][2][name] = value.strip()
@@ -202,8 +217,11 @@ def check_content(apk, aapt_dump, xmltree):
                                     block.group(1), flags=re.I):
                                 raise ValueError("Wrong adaptive icon layer for " + label)
                     else:
-                        verify_themed_vector(compiled, desired[
-                            f'{portal.BASE}/drawable/themed_app_icon.xml'])
+                        try:
+                            verify_themed_vector(compiled, desired[
+                                f'{portal.BASE}/drawable/themed_app_icon.xml'])
+                        except ValueError as error:
+                            raise ValueError(str(error) + ' in compiled resource ' + path) from error
     return {
         "status": "PASS",
         "scope": "aapt2 compiled alias chain + exact alpha/visible RGB PNG-WebP content + vector identity",
