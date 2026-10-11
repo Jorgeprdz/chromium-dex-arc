@@ -43,6 +43,11 @@ jobs:
       ARCHIUM_CHECKPOINT_STORAGE: artifact
       # Stop compilation after 75m per stage; never run a 20-hour chain on R3.3.
       ARCHIUM_SLICE_MINUTES: '75'
+      ARCHIUM_MAX_SLICES: '2'
+      ARCHIUM_REQUIRE_CHECKPOINT: 'true'
+      ARCHIUM_REAL_RESOURCE_GATE: 'true'
+      # Host-only image decoding uses apt's interpreter; native build keeps pinned Python.
+      ARCHIUM_HOST_PYTHON: /usr/bin/python3
       ARCHIUM_PREPARE_SECONDS: '3600'
       ARCHIUM_WORK_SECONDS: '7200'
       ARCHIUM_HOST_SECONDS: '1800'

@@ -28,7 +28,7 @@ class BuildRoutingTests(unittest.TestCase):
         self.output.touch()
         driver = self.bin / 'driver'
         driver.write_text('''#!/usr/bin/python3
-import json,os,pathlib,sys,time,signal
+import json,os,pathlib,sys,time,signal,zipfile
 name=pathlib.Path(sys.argv[0]).name
 args=sys.argv[1:]
 with open(os.environ['MOCK_TRACE'],'a') as f:f.write(json.dumps([name]+args)+'\\n')
@@ -38,7 +38,8 @@ elif name=='python3' and args[0].endswith('archium-checkpoint.py') and args[1]==
  w=pathlib.Path(args[2]);s=w/'checkout/src';s.mkdir(parents=True,exist_ok=True)
  (s/'out/Archium/apks').mkdir(parents=True,exist_ok=True)
  (s/'out/Archium/args.gn').write_text(os.environ.get('MOCK_RESTORED_ARGS','restored old args\\n'))
- (s/'out/Archium/apks/ChromePublic.apk').write_bytes(b'synthetic APK fixture')
+ with zipfile.ZipFile(s/'out/Archium/apks/ChromePublic.apk','w') as z:
+  z.writestr('MOCK_ONLY_NOT_A_REAL_APK',b'routing fixture')
  for relative in os.environ.get('MOCK_NATIVE_TEST_PATHS','').split(':'):
   if relative:
    binary=s/relative;binary.parent.mkdir(parents=True,exist_ok=True);binary.write_bytes(b'synthetic native test artifact')
@@ -48,6 +49,9 @@ elif name=='python3' and args[0].endswith('archium-checkpoint.py') and args[1]==
  (s/'build/config/android/config.gni').write_text('  public_android_sdk_platform_version = \"37.0\"\\n  public_android_sdk_build_tools_version = \"37.0.0\"\\n')
  android_jar=s/'third_party/android_sdk/public/platforms/android-37.0/android.jar'
  android_jar.parent.mkdir(parents=True,exist_ok=True);android_jar.write_bytes(b'synthetic android jar fixture')
+ tools=s/'third_party/android_sdk/public/build-tools/37.0.0';tools.mkdir(parents=True,exist_ok=True)
+ for tool in ('aapt2','apksigner'):
+  if not (tools/tool).exists():(tools/tool).symlink_to(pathlib.Path(sys.argv[0]).resolve())
  (w/'depot_tools').mkdir(exist_ok=True);(w/'depot_tools/ensure_bootstrap').write_text('exit 0\\n')
  (w/'depot_tools/python-bin').mkdir(exist_ok=True)
  python_link=w/'depot_tools/python-bin/python3'
@@ -55,6 +59,7 @@ elif name=='python3' and args[0].endswith('archium-checkpoint.py') and args[1]==
 elif name=='python3' and args and args[0].endswith('archium-autoninja.py'):
  os.execvp('autoninja',['autoninja']+args[2:])
 elif name=='python3' and args and args[0].endswith('archium-media-preflight.py'):
+ if '--report' in args:pathlib.Path(args[args.index('--report')+1]).write_text('{"scope":"MOCK_ONLY"}')
  sys.exit(int(os.environ.get('MOCK_MEDIA_GATE_RESULT','0')))
 elif name=='python3' and args and args[0].endswith('archium-java-preflight.py'):
  time.sleep(float(os.environ.get('MOCK_PREFLIGHT_SLEEP','0')))
@@ -93,6 +98,10 @@ elif name=='autoninja':
  sys.exit(int(os.environ.get('MOCK_JAVA_NINJA_RESULT' if is_java else 'MOCK_NINJA_RESULT','0')))
 elif name=='run_chrome_junit_tests':
  sys.exit(int(os.environ.get('MOCK_ROBOLECTRIC_RESULT','0')))
+elif name=='apksigner':
+ sys.exit(int(os.environ.get('MOCK_APKSIGNER_RESULT','0')))
+elif name=='aapt2':
+ print("native-code: '"+os.environ.get('MOCK_ABI','arm64-v8a')+"'")
 elif name=='gn' and args and args[0]=='desc' and args[-2:]==['deps','--all']:
  if os.environ.get('MOCK_MISSING_NATIVE_LINK_OWNER')=='true':sys.exit(0)
  print('//chrome/browser/payments:impl')
@@ -120,6 +129,32 @@ elif name=='sudo' and args and args[0]=='timeout':
 
     def calls(self):
         return [json.loads(line) for line in self.trace.read_text().splitlines()] if self.trace.exists() else []
+
+    def test_required_checkpoint_never_falls_back_to_clean(self):
+        result = self.run_build(ARCHIUM_REQUIRE_CHECKPOINT='true')
+        self.assertEqual(result.returncode, 2, result.stderr)
+        self.assertIn('clean fallback is disabled', result.stderr)
+        self.assertEqual(self.calls(), [])
+
+    def test_two_slices_reuse_one_restore_and_keep_budget_incomplete(self):
+        result = self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG, ARCHIUM_MAX_SLICES='2',
+                                MOCK_NINJA_RESULT='124')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        calls = self.calls()
+        self.assertEqual(1, sum(c[0] == 'python3' and 'restore' in c for c in calls))
+        self.assertEqual(2, sum(c[0] == 'autoninja' and 'chrome_junit_tests' in c for c in calls))
+        self.assertFalse(any(c[0] == 'autoninja' and 'chrome_public_apk' in c for c in calls))
+        self.assertEqual('complete=false\n', self.output.read_text())
+
+    def test_signature_failure_never_publishes_completion(self):
+        result = self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG, MOCK_APKSIGNER_RESULT='7')
+        self.assertEqual(result.returncode, 7, result.stderr)
+        self.assertNotIn('complete=true', self.output.read_text())
+
+    def test_wrong_abi_never_publishes_completion(self):
+        result = self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG, MOCK_ABI='x86_64')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertNotIn('complete=true', self.output.read_text())
 
     def test_real_java_preflight_precedes_native_and_apk_compilation(self):
         result=self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
@@ -520,10 +555,11 @@ elif name=='sudo' and args and args[0]=='timeout':
 
     def test_workflow_exposes_source_identity_only_to_first_stage(self):
         workflow=(ROOT / '.github/workflows/baseline-build.yml').read_text()
-        first=workflow[workflow.index('  stage1:'):workflow.index('  stage2:')]
+        first=workflow[workflow.index('  stage1:'):workflow.index('  r3-incomplete-budget:')]
         self.assertIn('inputs.source_checkpoint',first)
         self.assertIn('inputs.source_commit',first)
-        continuation=workflow[workflow.index('  stage2:'):]
+        self.assertNotIn('  stage2:', workflow, 'Both slices must retain the same restored output')
+        continuation=workflow[workflow.index('  r3-incomplete-budget:'):]
         self.assertNotIn('inputs.source_commit',continuation)
         stage=(ROOT / '.github/workflows/archium-stage.yml').read_text()
         self.assertIn('ARCHIUM_SOURCE_COMMIT:',stage)

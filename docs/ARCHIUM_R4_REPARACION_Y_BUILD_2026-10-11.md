@@ -5,12 +5,12 @@
 Especificación: prompt ARCHIUM R4 del usuario. Ejecución autónoma, commits temáticos y push autorizados exclusivamente a assistant/archium-r3-visual-fixes; una corrida pesada condicionada a gates. Sin build limpio, borrado de outputs ni migración upstream. Se preserva Portal/DeX y feat/arc-desktop.
 
 - [x] Reconocer local/remoto, pin, PRs, 30 commits, workflows, ocho logs y artifacts.
-- [ ] ARC-F002: JVM -ea/-da, negativas y restore assert; runner Chromium con assertions.
-- [ ] ARC-F001: display independiente de attach, API 30/fallback, JVM y Robolectric.
+- [x] ARC-F002: JVM -ea/-da, negativas y restore assert; runner Chromium con assertions programadas.
+- [x] ARC-F001: display independiente de attach, API 30/fallback, JVM y Robolectric aislado.
 - [ ] ARC-F003: gate sobre recursos/manifests reales y APK optimizada; conservar assets.
-- [ ] ARC-F004/F005: evidencia separada, dispatch explícito SHA, sin push pesado ni clean fallback.
-- [ ] ARC-F006/F007: fixtures integridad/ENOSPC/mtimes/symlinks/transición/delta.
-- [ ] ARC-F008: doble regeneración oficial, hashes y aplicación.
+- [x] ARC-F004/F005: evidencia separada, dispatch explícito SHA, sin push pesado ni clean fallback.
+- [x] ARC-F006/F007: fixtures integridad/ENOSPC/mtimes/symlinks/transición/delta.
+- [x] ARC-F008: doble regeneración oficial, hashes y aplicación.
 - [ ] Gates baratos y commits/push; una corrida S0–S5 solo si autorizada por evidencia.
 
 ## Reconocimiento
@@ -149,3 +149,32 @@ Nueva prueba negativa: gate viejo RED (8 tests; 1 failure, 1 error) sobre WebP l
 Revisor declinó acreditar: restore/integridad real, GN completo/recursos Chromium, Robolectric Chromium, JNI, APK R4 firmada y Android dispositivo. Se conservan pendientes hasta evidencia; fixtures no los acreditan.
 
 Suite host primera ejecución tras cambios: 175 tests, 1 failure y 2 errors, exit1. Causas reproducidas en fixtures: symlinks herramientas no idempotentes, test que esperaba stage2 eliminado al conservar output, SDK resolver mocked incompleto. Se corrigen fixtures conservando restricciones y añadiendo firma/ABI negativas; no dispatch con gate fallido. Detalles host-final.log.
+
+## 2026-10-11 14:20 UTC — gates antes de publicación
+
+Segunda suite completa host-complete.log: 177 tests, 1 failure/1 error, exit1. Una edición concurrente propia del script invalidó un proceso que ya lo estaba leyendo (syntax error temporal; Bash final y caso aislado pasan); no se acepta esa ejecución. Error independiente: test_host_gate_coverage dejó ARCHIUM_TEST_AAPT2 apuntando a su SDK temporal eliminado. Se corrige aislamiento mediante patch.dict(os.environ), sin mockear AAPT2 de la prueba real posterior.
+
+Ejecución estable: `ARCHIUM_TEST_GN=/usr/bin/gn ARCHIUM_TEST_AAPT2=/opt/android-sdk/build-tools/37.0.0/aapt2 ARCHIUM_TEST_ANDROID_JAR=/opt/android-sdk/platforms/android-36/android.jar python3 -m unittest discover -s tests -p 'test_*.py' -v`: exit0, **177 passed, 0 failed, 0 skipped**, 220.375s, host-stable.log. Incluye GN genuino tres perfiles, JVM -ea/-da, dos AAPT2 compile/link/optimize reales (PNG y WebP sin extensión), negativos de manifest/pixels, restore/corrupción/ENOSPC/mtimes/symlinks/delta y control de etapas con mocks explícitos. No acredita enlace Chromium ni runner Chromium.
+
+Verificación 14:20 UTC: git diff --check, bash -n (build-archium/build-baseline/dispatch), python3 -m compileall -q scripts tests y actionlint 1.7.7 sobre TODOS los workflows: exit0. Ajuste final dependencia de verificación: baseline S0 instala python3-pil antes de importar suite Portal, igual que preflight/host. actionlint y guardrails dispatch 2/2 repetidos exit0; no invalida lógica de la suite estable. Generator oficial doble + cmp + git diff --exit-code: exit0.
+
+Hashes finales: patch 93813d3fa8831e1bcc5283f124bdbb7157ab8483f6ff4de5bfc6d9337a9bbc10; manifest 6cce6232029b0ec2f355b1ae31dd869dd509fd79750176b53df1f3479543a0e5. Preparación sparse real anterior: exit0 y aplicación correcta; 95 archivos, pin conservado.
+
+Commits temáticos locales verificados: fc9f0b2741de07ac6b96ea72af1f373dcbca626f (assert), 3274d78060d213f30d7bc4040ca9c4e97ea3d754 (display), 0fb329ee4f4c10e53d9603d4af9b39de91d42403 (aliases AAPT2), 92a092158f348ea6c99d38a4ed8bbb01d21114db (checkpoint), 2e411ec1a776b8caf098405bbb864adff58ee07d (WebP). Riesgos pendientes: compilación GN completa, fusión recursos Chromium, assertions Robolectric Chromium, JNI real, margen CI real y APK actual. No cambios payments/branding/pin.
+
+| Gate antes de push | Estado | Alcance |
+|---|---|---|
+| STATIC_PASS | PASS | diff/Bash/compileall/actionlint reales |
+| PYTHON_HOST_PASS | PASS | 177/177, cero skips |
+| GN_REAL_PASS | PASS | arm64/baseline/x64, imports media fijados en fixture plataforma; GN Chromium pendiente |
+| P0_JAVA_ASSERT | PASS | método JVM real extraído -ea/-da + mutantes; original Robolectric bloqueante CI |
+| P0_DEX_DISPLAY | PASS | producción Robolectric aislado 9/9 + mutante; Chromium bloqueante CI |
+| AAPT2_REAL_RESOURCES | PENDING | fixtures AAPT2 PASS; árbol/manifest reales bloqueantes tras restore |
+| PATCH_REPRODUCIBILITY | PASS | doble generación y aplicación sparse |
+| CHECKPOINT_METADATA/READ | PASS | tres grupos no expirados, manifest remoto leído por rangos |
+| CHECKPOINT_INTEGRITY | UNVERIFIED | 24 hashes completos y tar bloqueantes S1 |
+| DISK_PREFLIGHT local | FAIL | 81.454.604.288 bytes; no descarga local |
+| DISK_PREFLIGHT CI | PENDING | bytes/inodos reales antes de transferencia; STOP sin descarga si insuficiente |
+| ROBOLECTRIC/JNI/APK Chromium | PENDING_POST_RESTORE | gates bloqueantes del único run; no PASS por mocks |
+
+Destino del restore es runner CI descartable, no disco local insuficiente. El gate S0 del mismo flujo debe demostrar margen **antes** de transferir 25GB; no se presume espacio por runner histórico ni se reduce reserva. Si preflight remoto falla, no se despacha compilación. La ruta seleccionada conserva checkout/out, dos slices como máximo, y checkpoints de fallos quiescentes con run FAILED.

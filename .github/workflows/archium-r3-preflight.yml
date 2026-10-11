@@ -55,6 +55,8 @@ jobs:
           retention-days: 7
       - name: Python syntax and host gates
         run: |
+          sudo apt-get install -y python3-pil
+          python3 -c 'from PIL import features; assert features.check("webp"), "Lossless WebP decoder required"'
           python3 -m py_compile scripts/integrate-archium-portal.py scripts/verify-archium-portal-apk.py scripts/archium_portal_content_gate.py scripts/archium-checkpoint.py scripts/check_portal_aapt2_fixture.py scripts/generate-arc-patch.py scripts/check-arc-preparation.py
           python3 -m unittest discover -s tests -p 'test_archium_portal_resources.py' -v
           python3 -m unittest discover -s tests -p 'test_arc_visual_static_contract.py' -v
@@ -82,6 +84,8 @@ jobs:
             yes | "$SDKMANAGER" --install 'build-tools;36.0.0' > /dev/null || test -x "$AAPT2"
           fi
           test -x "$AAPT2"
+          echo "ARCHIUM_TEST_AAPT2=$AAPT2" >> "$GITHUB_ENV"
+          echo "ARCHIUM_TEST_ANDROID_JAR=${ANDROID_HOME}/platforms/android-36/android.jar" >> "$GITHUB_ENV"
           python3 scripts/check_portal_aapt2_fixture.py --android-jar "${ANDROID_HOME}/platforms/android-36/android.jar" --aapt2 "$AAPT2"
       - name: Execute full sparse preparation with pinned Window Core
         run: |
@@ -110,4 +114,5 @@ jobs:
           bash -n scripts/dispatch-archium-r3-1-build.sh
           test "$GITHUB_REF_NAME" = "assistant/archium-r3-visual-fixes"
           test "$(grep -c 'scripts/integrate-archium-portal.py' scripts/build-archium.sh)" -eq 3
-          echo "R3.3 host preflight only; no automated native build dispatch; APK and DeX pending."
+          echo "STATIC_PASS=PASS PYTHON_HOST_PASS=PASS GN_REAL_PASS=PASS scope=media_fixture"
+          echo "ROBOLECTRIC_PASS=PENDING_POST_RESTORE JNI_LINK_PASS=PENDING_POST_RESTORE APK_VERIFIED=PENDING"

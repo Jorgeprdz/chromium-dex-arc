@@ -21,7 +21,7 @@ def load():
 class SyntheticRContractTests(unittest.TestCase):
     def test_compiles_real_picker_array_and_new_tab_references(self):
         if not shutil.which('javac') or not shutil.which('java'):
-            self.skipTest('javac/java unavailable')
+            self.fail('javac/java required for resource host gate')
         body = load().synthetic_chromium_r(XML)
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

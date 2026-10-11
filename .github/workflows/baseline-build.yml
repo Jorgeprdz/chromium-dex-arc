@@ -2,23 +2,25 @@ name: Archium for Android build in resumable stages
 on:
   workflow_dispatch:
     inputs:
+      expected_sha:
+        description: 'Exact authorized implementation SHA; must equal the dispatched ref'
+        required: true
+        type: string
       source_checkpoint:
-        description: 'Explicit checkpoint tag from the previous implementation; empty for clean build'
+        description: 'Verified incremental checkpoint; clean builds are forbidden'
+        required: true
         type: string
-        default: ''
+        default: archium-checkpoint-38018166249-1
       source_commit:
-        description: 'Exact 40-character commit that produced source_checkpoint'
+        description: 'Exact commit that produced the checkpoint'
+        required: true
         type: string
-        default: ''
-  push:
-    branches:
-      - feat/arc-desktop
-      - assistant/archium-r3-visual-fixes
-    paths:
-      - .archium-final-dispatch
-      # Only a dedicated, explicitly committed marker triggers the R3.3 run.
-      - .archium-r3-3-final-dispatch
-      - .archium-r3-3-incremental-dispatch
+        default: 507f28e1265fb98551d3bc1a66f4739fb48d2625
+      source_run_id:
+        description: 'Actions run containing the verified checkpoint groups'
+        required: true
+        type: string
+        default: '38018166249'
 permissions:
   contents: write
   actions: read
@@ -40,19 +42,31 @@ jobs:
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
       - name: Block overlapping native build and unapproved checkpoint reuse
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
         run: |
           set -euo pipefail
-          test "${{ github.event_name }}" = 'push' || test "${{ inputs.source_checkpoint }}" = ''
-          test "${{ inputs.source_commit }}" = ''
-          test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/37987348539" --jq '.status')" = 'completed'
+          test "$GITHUB_EVENT_NAME" = workflow_dispatch
           test "$GITHUB_REF_NAME" = 'assistant/archium-r3-visual-fixes'
+          test "$GITHUB_SHA" = "$EXPECTED_SHA"
+          python3 - <<'PYRUN'
+          import json, os, re, subprocess
+          assert re.fullmatch('[0-9a-f]{40}', os.environ['EXPECTED_SHA'])
+          repo = os.environ['GITHUB_REPOSITORY']
+          runs = json.loads(subprocess.check_output(['gh', 'api', f'repos/{repo}/actions/runs?per_page=100']))['workflow_runs']
+          active = [r for r in runs if r['id'] != int(os.environ['GITHUB_RUN_ID'])
+                    and r['status'] != 'completed' and r['name'] == 'Archium for Android build in resumable stages']
+          assert not active, 'Another native build exists; do not overlap'
+          PYRUN
       - name: Confirm R3.3 Actions checkpoint is complete before large download
         shell: bash
         env:
-          SOURCE_RUN_ID: '38018166249'
-          SOURCE_COMMIT: 507f28e1265fb98551d3bc1a66f4739fb48d2625
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+          SOURCE_TAG: ${{ inputs.source_checkpoint }}
         run: |
           set -euo pipefail
+          test "$SOURCE_TAG" = "archium-checkpoint-${SOURCE_RUN_ID}-1"
           test "$(gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}" --jq '.head_sha')" = "$SOURCE_COMMIT"
           mkdir -p "$RUNNER_TEMP/archium-source-probe"
           gh api "repos/${GITHUB_REPOSITORY}/actions/runs/${SOURCE_RUN_ID}/artifacts?per_page=100" > "$RUNNER_TEMP/archium-source-probe/artifacts.json"
@@ -72,6 +86,8 @@ jobs:
       - name: Verify source preservation and exact Portal identities
         run: |
           set -euo pipefail
+          sudo apt-get install -y python3-pil
+          python3 -c 'from PIL import features; assert features.check("webp"), "Lossless WebP decoder required"'
           python3 -m unittest discover -s tests -p 'test_archium_portal_resources.py'
           python3 -m unittest discover -s tests -p 'test_r3_3_portal_safe_zone.py'
           python3 -m unittest discover -s tests -p 'test_r3_3_portal_apk_content.py'
@@ -86,106 +102,19 @@ jobs:
       contents: read
   stage1:
     needs: [r3-final-gates, r3-pre-native-gates]
-    if: always() && (github.ref_name != 'assistant/archium-r3-visual-fixes' || (needs.r3-final-gates.result == 'success' && needs.r3-pre-native-gates.result == 'success'))
+    if: github.ref_name == 'assistant/archium-r3-visual-fixes' && needs.r3-final-gates.result == 'success' && needs.r3-pre-native-gates.result == 'success'
     uses: ./.github/workflows/archium-stage.yml
     with:
       stage: 1
-      source_tag: ${{ github.ref_name == 'assistant/archium-r3-visual-fixes' && 'archium-checkpoint-38018166249-1' || (github.event_name == 'push' && github.ref_name == 'feat/arc-desktop' && 'archium-checkpoint-37255997027-7' || inputs.source_checkpoint) }}
-      source_commit: ${{ github.ref_name == 'assistant/archium-r3-visual-fixes' && '507f28e1265fb98551d3bc1a66f4739fb48d2625' || (github.event_name == 'push' && github.ref_name == 'feat/arc-desktop' && 'c8ffd13ee7fe1c6baab4913da6a01e8009febe18' || inputs.source_commit) }}
-      source_run_id: ${{ github.ref_name == 'assistant/archium-r3-visual-fixes' && '38018166249' || '' }}
-  stage2:
-    needs: stage1
-    if: needs.stage1.outputs.complete != 'true'
-    uses: ./.github/workflows/archium-stage.yml
-    with:
-      stage: 2
-      previous_tag: archium-checkpoint-${{ github.run_id }}-1
-  stage3:
-    needs: stage2
-    # R3.3 deliberately stops after two bounded slices instead of 12*2h.
-    if: github.ref_name != 'assistant/archium-r3-visual-fixes' && needs.stage2.outputs.complete != 'true'
-    uses: ./.github/workflows/archium-stage.yml
-    with:
-      stage: 3
-      previous_tag: archium-checkpoint-${{ github.run_id }}-2
-  stage4:
-    needs: stage3
-    if: needs.stage3.outputs.complete != 'true'
-    uses: ./.github/workflows/archium-stage.yml
-    with:
-      stage: 4
-      previous_tag: archium-checkpoint-${{ github.run_id }}-3
-  stage5:
-    needs: stage4
-    if: needs.stage4.outputs.complete != 'true'
-    uses: ./.github/workflows/archium-stage.yml
-    with:
-      stage: 5
-      previous_tag: archium-checkpoint-${{ github.run_id }}-4
-  stage6:
-    needs: stage5
-    if: needs.stage5.outputs.complete != 'true'
-    uses: ./.github/workflows/archium-stage.yml
-    with:
-      stage: 6
-      previous_tag: archium-checkpoint-${{ github.run_id }}-5
-  stage7:
-    needs: stage6
-    if: needs.stage6.outputs.complete != 'true'
-    uses: ./.github/workflows/archium-stage.yml
-    with:
-      stage: 7
-      previous_tag: archium-checkpoint-${{ github.run_id }}-6
-  stage8:
-    needs: stage7
-    if: needs.stage7.outputs.complete != 'true'
-    uses: ./.github/workflows/archium-stage.yml
-    with:
-      stage: 8
-      previous_tag: archium-checkpoint-${{ github.run_id }}-7
-  stage9:
-    needs: stage8
-    if: needs.stage8.outputs.complete != 'true'
-    uses: ./.github/workflows/archium-stage.yml
-    with:
-      stage: 9
-      previous_tag: archium-checkpoint-${{ github.run_id }}-8
-  stage10:
-    needs: stage9
-    if: needs.stage9.outputs.complete != 'true'
-    uses: ./.github/workflows/archium-stage.yml
-    with:
-      stage: 10
-      previous_tag: archium-checkpoint-${{ github.run_id }}-9
-  stage11:
-    needs: stage10
-    if: needs.stage10.outputs.complete != 'true'
-    uses: ./.github/workflows/archium-stage.yml
-    with:
-      stage: 11
-      previous_tag: archium-checkpoint-${{ github.run_id }}-10
-  stage12:
-    needs: stage11
-    if: needs.stage11.outputs.complete != 'true'
-    uses: ./.github/workflows/archium-stage.yml
-    with:
-      stage: 12
-      previous_tag: archium-checkpoint-${{ github.run_id }}-11
+      source_tag: ${{ inputs.source_checkpoint }}
+      source_commit: ${{ inputs.source_commit }}
+      source_run_id: ${{ inputs.source_run_id }}
   r3-incomplete-budget:
-    needs: stage2
-    if: github.ref_name == 'assistant/archium-r3-visual-fixes' && needs.stage2.outputs.complete == 'false'
+    needs: stage1
+    if: needs.stage1.result == 'success' && needs.stage1.outputs.complete == 'false'
     runs-on: ubuntu-24.04
     steps:
-      - name: Fail visibly after two bounded slices; preserve verified checkpoint artifacts
+      - name: Report BUILD_INCOMPLETE with preserved checkpoint
         run: |
-          echo 'R3.3 stopped at configured incremental build budget; no APK. Resume only from verified checkpoint artifacts.' >&2
-          exit 1
-  result:
-    needs: stage12
-    if: needs.stage12.outputs.complete == 'false'
-    runs-on: ubuntu-24.04
-    steps:
-      - name: Report resumable unfinished build
-        run: |
-          echo 'All 12 compilation slices consumed. Latest checkpoint remains available for continuation.' >&2
+          echo 'BUILD_INCOMPLETE: bounded slices consumed; no verified APK. Checkpoint retained.' >&2
           exit 1

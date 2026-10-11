@@ -19,7 +19,6 @@ def module():
     return m
 
 
-@unittest.skipUnless(GN, 'Set ARCHIUM_TEST_GN to run the pinned real-GN characterization')
 class PinnedMediaConfigurationTests(unittest.TestCase):
     def test_arm64_enables_native_media_and_preserves_open_codecs(self):
         values = module().parse_args(evaluate((ROOT / 'config/archium-args.gn').read_text()))

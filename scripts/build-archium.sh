@@ -10,6 +10,7 @@ fi
 readonly chromium_revision=cfd94726b7b5fb48aedcc32662f2f3fbdbadec35
 readonly depot_revision=8a5434051036b32412a2ecb10c213a72e3f3ccb9
 readonly build_workspace="$RUNNER_TEMP/chromium-archium"
+readonly host_python="${ARCHIUM_HOST_PYTHON:-python3}"
 
 build_phase="${1:---all}"
 if (( $# > 1 )) || [[ ! "$build_phase" =~ ^--(all|prepare|work)$ ]]; then
@@ -30,6 +31,8 @@ work_seconds=$(budget_value "${ARCHIUM_WORK_SECONDS:-14400}" 14400)
 host_seconds=$(budget_value "${ARCHIUM_HOST_SECONDS:-1800}" 1800)
 checkpoint_seconds=$(budget_value "${ARCHIUM_CHECKPOINT_SECONDS:-5400}" 5400)
 slice_minutes=$(budget_value "${ARCHIUM_SLICE_MINUTES:-120}" 120)
+max_slices=$(budget_value "${ARCHIUM_MAX_SLICES:-1}" 2)
+slice_count=1
 script_started=$SECONDS
 job_started=$(date +%s)
 initial_elapsed=0
@@ -77,6 +80,15 @@ run_work() {
     if (( limit > remaining )); then limit=$remaining; fi
     timeout --signal="$signal" --kill-after=90s "${limit}s" "$@" || result=$?
     if (( result == 124 )); then
+        if [[ "$signal" == INT ]] && (( slice_count < max_slices )) \
+            && (( $(job_elapsed) < work_seconds )); then
+            # timeout waited for the backend to quiesce. Reuse this same
+            # checkout/output once, without another restore or workflow.
+            slice_count=$((slice_count + 1))
+            slice_started=$SECONDS
+            printf 'INCREMENTAL_SLICE=%s/%s same checkout/output\n' "$slice_count" "$max_slices"
+            return 124
+        fi
         save_checkpoint "$timeout_status"
     elif (( result != 0 )); then
         printf 'Work failed (exit %s); mandatory gates did not pass.\n' "$result" >&2
@@ -97,11 +109,20 @@ install_build_deps() {
     printf 'PREPARE: installing pinned Chromium dependencies (30 minute limit).\n'
     run_prepare sudo timeout --signal=TERM --kill-after=30s 30m \
         ./build/install-build-deps.sh --no-prompt --android
+    if [[ "${ARCHIUM_REAL_RESOURCE_GATE:-false}" == true ]]; then
+        run_prepare sudo apt-get install -y python3-pil
+        run_prepare "$host_python" -c 'from PIL import features; assert features.check("webp"), "Lossless WebP decoder required"'
+    fi
     printf 'PREPARE: dependencies installed.\n'
 }
 
 source_tag="${ARCHIUM_SOURCE_TAG:-}"
 source_commit="${ARCHIUM_SOURCE_COMMIT:-}"
+if [[ "${ARCHIUM_REQUIRE_CHECKPOINT:-false}" == true \
+      && -z "$source_tag" && -z "${ARCHIUM_PREVIOUS_TAG:-}" ]]; then
+    printf 'Incremental checkpoint required; clean fallback is disabled.\n' >&2
+    exit 2
+fi
 if [[ -n "$source_tag" || -n "$source_commit" ]]; then
     if [[ ! "$source_tag" =~ ^archium-checkpoint-[0-9]+-[0-9]+$ \
         || ! "$source_commit" =~ ^[0-9a-f]{40}$ \
@@ -156,9 +177,25 @@ if [[ -n "$source_tag" || -n "${ARCHIUM_PREVIOUS_TAG:-}" ]]; then
     export DEPOT_TOOLS_UPDATE=0
     run_prepare bash "$build_workspace/depot_tools/ensure_bootstrap"
     cd "$build_workspace/checkout/src"
+    if [[ "${ARCHIUM_REQUIRE_CHECKPOINT:-false}" == true ]]; then
+        restored_revision=$(git rev-parse HEAD)
+        restored_depot=$(git -C "$build_workspace/depot_tools" rev-parse HEAD)
+        printf 'RESTORED_IDENTITY chromium=%s depot_tools=%s\n' "$restored_revision" "$restored_depot"
+        test "$restored_revision" = "$chromium_revision"
+        test "$restored_depot" = "$depot_revision"
+        test -s out/Archium/build.ninja
+        test -s out/Archium/args.gn
+        sha256sum buildtools/linux64/gn third_party/llvm-build/Release+Asserts/bin/clang \
+            > "$RUNNER_TEMP/archium-restored-toolchain.sha256"
+    fi
     install_build_deps
     if [[ -n "$source_tag" ]]; then
         run_prepare git -C "$GITHUB_WORKSPACE" fetch --depth 1 origin "$source_commit"
+        if [[ "${ARCHIUM_REQUIRE_CHECKPOINT:-false}" == true ]]; then
+            git -C "$GITHUB_WORKSPACE" show "$source_commit:config/archium-args.gn" \
+                > "$RUNNER_TEMP/archium-source-args.gn"
+            cmp out/Archium/args.gn "$RUNNER_TEMP/archium-source-args.gn"
+        fi
         run_prepare python3 "$GITHUB_WORKSPACE/scripts/transition-archium-patches.py" "$PWD" \
             --source-commit "$source_commit" --implementation-commit "$GITHUB_SHA"
         # Re-apply the audited binary launcher resource overlay on checkpoint transitions.
@@ -237,19 +274,40 @@ python3 "$GITHUB_WORKSPACE/scripts/archium-media-preflight.py" \
 slice_started=$SECONDS
 slice_seconds=$((slice_minutes * 60))
 compile_slice() {
+    while true; do
     local remaining=$((slice_seconds - (SECONDS - slice_started)))
     if (( remaining <= 0 )); then
+        if (( slice_count < max_slices )); then
+            slice_count=$((slice_count + 1)); slice_started=$SECONDS
+            continue
+        fi
         save_checkpoint
     fi
     # Use the interpreter from the pinned autoninja shell entrypoint. The thin
     # loader defers Python SIGINT so subprocess.call cannot SIGKILL its backend.
+    local result=0
     run_work INT "$remaining" 0 --checkpoint-on-failure \
         "$build_workspace/depot_tools/python-bin/python3" \
         "$GITHUB_WORKSPACE/scripts/archium-autoninja.py" \
-        "$build_workspace/depot_tools/autoninja.py" -C out/Archium "$@" -j 4
+        "$build_workspace/depot_tools/autoninja.py" -C out/Archium "$@" -j 4 || result=$?
+    if (( result == 124 )); then continue; fi
+    return "$result"
+    done
 }
 # Resolve real compiler actions for every Java delivery after GN generation. This
 # includes modified upstream tests, unlike the isolated preparation contracts.
+if [[ "${ARCHIUM_REAL_RESOURCE_GATE:-false}" == true ]]; then
+    printf 'S2: real GN graph and Chromium manifest/resource link before native fanout.\n'
+    run_work TERM "$work_seconds" 124 gn check out/Archium //chrome/browser/password_manager/android:archium_password_manager_tests
+    gn desc out/Archium //chrome/browser/password_manager/android:archium_password_manager_tests deps --all \
+        > "$RUNNER_TEMP/archium-password-link-deps.txt"
+    grep -Fq '//chrome/browser/payments:impl' "$RUNNER_TEMP/archium-password-link-deps.txt"
+    compile_slice chrome_public_apk__compile_resources
+    tools_version="$(sed -n 's/^[[:space:]]*public_android_sdk_build_tools_version = "\([^"]*\)"/\1/p' build/config/android/config.gni | head -n1)"
+    run_work TERM "$host_seconds" 124 --checkpoint-on-failure "$host_python" "$GITHUB_WORKSPACE/scripts/check-portal-chromium-resources.py" \
+        --out "$PWD/out/Archium" --aapt2 "$PWD/third_party/android_sdk/public/build-tools/$tools_version/aapt2" \
+        --report "$PWD/out/Archium/archium-real-resources.json"
+fi
 printf 'PHASE A1: compiling real Java/JNI owners before native work.\n'
 java_targets_file="$PWD/out/Archium/archium-java-targets.txt"
 run_work TERM "$work_seconds" 0 python3 "$GITHUB_WORKSPACE/scripts/archium-java-preflight.py" \
@@ -274,6 +332,8 @@ export JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:-} -ea"
 run_work TERM "$host_seconds" 124 --checkpoint-on-failure "$robolectric_runner" -f \
     'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabListCoordinatorUnitTest.testIncognitoButtonVisibility_TabletUnder10Inches'
 for suite in \
+    'org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearanceTest.*' \
+    'org.chromium.chrome.browser.tasks.tab_management.TabListMediatorUnitTest.testSetThumbnailSpinnerVisibility_NotFlatLayout_Asserts*' \
     'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabListCoordinatorUnitTest.*' \
     'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.TabVerticalViewBinderUnitTest.*' \
     'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabRailLayoutUnitTest.*'; do
@@ -291,6 +351,23 @@ grep -Fq '//chrome/browser/payments:impl' "$RUNNER_TEMP/archium-password-link-de
 # Complete JNI-heavy link before compiling unrelated tests.
 printf 'NATIVE_LINK_PROBE: archium_password_manager_tests first.\n'
 compile_slice archium_password_manager_tests
+if [[ "${ARCHIUM_REAL_RESOURCE_GATE:-false}" == true ]]; then
+    compile_slice archium_login_database_tests
+    ninja -C out/Archium -t query archium_password_manager_tests > "$RUNNER_TEMP/archium-native-query.txt"
+    llvm_nm="$PWD/third_party/llvm-build/Release+Asserts/bin/llvm-nm"
+    test -x "$llvm_nm"
+    "$llvm_nm" -C out/Archium/lib.unstripped/libarchium_password_manager_tests__library.so \
+        > "$RUNNER_TEMP/archium-native-symbols.txt"
+    test -s out/Archium/lib.unstripped/libarchium_password_manager_tests__library.so
+    # ThinLTO may inline/remove definitions. Reject unresolved payments symbols,
+    # while retaining the actual complete symbol inventory for diagnosis.
+    if grep -E '(^|[[:space:]])U[[:space:]].*(WebPaymentsObserver|ServiceWorkerPaymentAppBridge)' \
+        "$RUNNER_TEMP/archium-native-symbols.txt"; then
+        printf 'Unresolved payments symbols in actual native output.\n' >&2
+        exit 2
+    fi
+    printf 'JNI_LINK_PASS=PASS scope=real_ld.lld_outputs_and_payments_symbols\n'
+fi
 
 compile_gate_targets="${ARCHIUM_COMPILE_GATE_TARGETS:-${ARCHIUM_VALIDATE_TARGETS:-}}"
 if [[ -n "${ARCHIUM_VALIDATE_TARGETS:-}" && -z "${ARCHIUM_COMPILE_GATE_TARGETS:-}" ]]; then
@@ -333,7 +410,7 @@ if [[ ! -s "$android_jar" ]]; then
     printf 'Pinned Chromium Android platform jar is missing: %s\n' "$android_jar" >&2
     exit 2
 fi
-run_work TERM "$host_seconds" 124 python3 "$GITHUB_WORKSPACE/scripts/archium-test-gates.py" host \
+run_work TERM "$host_seconds" 124 "$host_python" "$GITHUB_WORKSPACE/scripts/archium-test-gates.py" host \
     --android-jar "$android_jar" --out "$PWD/out/Archium"
 
 printf 'PHASE C: host gates passed; APK target is now allowed.\n'
@@ -346,12 +423,37 @@ if [[ -z "$android_tools_version" ]]; then
     exit 2
 fi
 mkdir -p "$GITHUB_WORKSPACE/archium-output"
-run_work TERM "$host_seconds" 0 python3 "$GITHUB_WORKSPACE/scripts/verify-archium-portal-apk.py" \
+run_work TERM "$host_seconds" 124 --checkpoint-on-failure "$host_python" "$GITHUB_WORKSPACE/scripts/verify-archium-portal-apk.py" \
     --apk "$PWD/out/Archium/apks/ChromePublic.apk" \
     --aapt2 "$PWD/third_party/android_sdk/public/build-tools/$android_tools_version/aapt2" \
     --report "$GITHUB_WORKSPACE/archium-output/portal-branding-verified.json"
 cp out/Archium/apks/ChromePublic.apk "$GITHUB_WORKSPACE/archium-output/Archium-for-Android-arm64.apk"
 cp LICENSE "$GITHUB_WORKSPACE/archium-output/LICENSE.chromium"
-sha256sum "$GITHUB_WORKSPACE/archium-output/Archium-for-Android-arm64.apk" > "$GITHUB_WORKSPACE/archium-output/SHA256SUMS"
+run_work TERM "$host_seconds" 124 --checkpoint-on-failure "$PWD/third_party/android_sdk/public/build-tools/$android_tools_version/apksigner" \
+    verify --verbose "$GITHUB_WORKSPACE/archium-output/Archium-for-Android-arm64.apk"
+"$PWD/third_party/android_sdk/public/build-tools/$android_tools_version/aapt2" dump badging \
+    "$GITHUB_WORKSPACE/archium-output/Archium-for-Android-arm64.apk" > "$GITHUB_WORKSPACE/archium-output/APK_BADGING.txt" || save_checkpoint 1
+grep -Eq "^native-code: 'arm64-v8a'$" "$GITHUB_WORKSPACE/archium-output/APK_BADGING.txt" || save_checkpoint 1
+zipinfo -1 "$GITHUB_WORKSPACE/archium-output/Archium-for-Android-arm64.apk" > "$GITHUB_WORKSPACE/archium-output/APK_ENTRIES.txt" || save_checkpoint 1
+(cd "$GITHUB_WORKSPACE/archium-output" && sha256sum Archium-for-Android-arm64.apk > SHA256SUMS)
+cp out/Archium/archium-media-config.json "$GITHUB_WORKSPACE/archium-output/"
+if [[ "${ARCHIUM_REAL_RESOURCE_GATE:-false}" == true ]]; then
+    cp out/Archium/archium-real-resources.json "$GITHUB_WORKSPACE/archium-output/"
+    cp "$RUNNER_TEMP/archium-restored-toolchain.sha256" "$GITHUB_WORKSPACE/archium-output/"
+    cp "$RUNNER_TEMP/archium-native-query.txt" "$RUNNER_TEMP/archium-native-symbols.txt" "$GITHUB_WORKSPACE/archium-output/"
+fi
+python3 - "$GITHUB_WORKSPACE/archium-output/BUILD_REPORT.json" <<'PY'
+import json, os, sys
+from pathlib import Path
+Path(sys.argv[1]).write_text(json.dumps({
+    'source_sha': os.environ['GITHUB_SHA'],
+    'chromium_pin': 'cfd94726b7b5fb48aedcc32662f2f3fbdbadec35',
+    'source_checkpoint': os.environ.get('ARCHIUM_SOURCE_TAG'),
+    'run_url': 'https://github.com/' + os.environ['GITHUB_REPOSITORY'] + '/actions/runs/' + os.environ['GITHUB_RUN_ID'],
+    'APK_VERIFIED': 'PASS', 'ANDROID_RUNTIME': 'NOT_EXECUTED',
+    'scope': 'signed arm64 APK; source, resource, host and native build gates completed; device execution pending',
+}, indent=2) + '\n')
+PY
+printf 'APK_VERIFIED=PASS package=app.archium.android ABI=arm64-v8a\n'
 
 printf 'complete=true\n' >> "$GITHUB_OUTPUT"

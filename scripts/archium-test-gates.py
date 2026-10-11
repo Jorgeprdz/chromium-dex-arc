@@ -88,6 +88,9 @@ def host_gate(android_jar: Path, out_dir: Path) -> None:
     # Never use depot_tools/gn wrapper from the temporary fixture directory:
     # its lookup may differ from GN checked out at the exact Chromium DEPS pin.
     os.environ['ARCHIUM_TEST_GN'] = str(pinned_gn)
+    sdk_root, _, tools_version, _ = resolve_pinned_android_sdk(out_dir)
+    os.environ['ARCHIUM_TEST_AAPT2'] = str(sdk_root / 'build-tools' / tools_version / 'aapt2')
+    os.environ['ARCHIUM_TEST_ANDROID_JAR'] = str(android_jar)
     run([str(pinned_gn), '--version'], cwd=ROOT)
     run([
         sys.executable,
@@ -98,6 +101,7 @@ def host_gate(android_jar: Path, out_dir: Path) -> None:
         sys.executable, '-m', 'unittest', 'discover',
         '-s', str(ROOT / 'tests'), '-p', 'test_*.py',
     ], cwd=ROOT)
+    print('PYTHON_HOST_PASS=PASS scope=host; ROBOLECTRIC_PASS=PENDING_POST_RESTORE JNI_LINK_PASS=UNVERIFIED', flush=True)
 
     out_dir = out_dir.resolve()
     robolectric_runner = (
@@ -120,6 +124,9 @@ def host_gate(android_jar: Path, out_dir: Path) -> None:
             'org.chromium.chrome.browser.tasks.tab_management.TabListMediatorUnitTest.*',
             'org.chromium.chrome.browser.toolbar.top.ToolbarTabletUnitTest.*'):
         run([str(robolectric_runner), '-f', test_filter], cwd=out_dir.parent.parent)
+    run([str(robolectric_runner), '-f',
+         'org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearanceTest.*'], cwd=out_dir.parent.parent)
+    print('ROBOLECTRIC_PASS=PASS scope=Chromium_runner', flush=True)
     print('ARCHIUM_HOST_EXECUTION_GATE=PASS', flush=True)
 
 

@@ -3,6 +3,9 @@ import importlib.util
 from pathlib import Path
 import tempfile
 import unittest
+import contextlib
+import io
+import os
 from unittest.mock import patch
 
 ROOT=Path(__file__).resolve().parents[1]
@@ -21,7 +24,10 @@ class HostGateCoverageTests(unittest.TestCase):
             gn.chmod(0o755)
             runner=out/'bin/run_chrome_junit_tests';runner.write_text('synthetic runner boundary')
             calls=[]
-            with patch.object(gates,'run',side_effect=lambda args,**kw:calls.append(args)):
+            with patch.object(gates,'run',side_effect=lambda args,**kw:calls.append(args)), \
+                    patch.object(gates,'resolve_pinned_android_sdk',return_value=(checkout, '36', '36.0.0', jar)), \
+                    patch.dict(os.environ), \
+                    contextlib.redirect_stdout(io.StringIO()):
                 gates.host_gate(jar,out)
         filters=[args[args.index('-f')+1] for args in calls if args[0]==str(runner)]
         self.assertEqual(set(filters),{
@@ -31,4 +37,5 @@ class HostGateCoverageTests(unittest.TestCase):
             'org.chromium.chrome.browser.tasks.tab_management.NestedLayoutDelegateUnitTest.*',
             'org.chromium.chrome.browser.tasks.tab_management.TabListMediatorUnitTest.*',
             'org.chromium.chrome.browser.toolbar.top.ToolbarTabletUnitTest.*',
+            'org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearanceTest.*',
         })
