@@ -1,0 +1,271 @@
+{
+  "source": "95e33b6bbf24a0afbbd1e8a6f3225e8abd2edc7e",
+  "files": [
+    "scripts/archium-checkpoint.py",
+    "scripts/archium_portal_content_gate.py",
+    "scripts/check-portal-chromium-resources.py",
+    "scripts/check_portal_aapt2_fixture.py",
+    "scripts/integrate-archium-portal.py",
+    "scripts/verify-archium-portal-apk.py",
+    "tests/test_archium_checkpoint_restore_disk.py",
+    "tests/test_checkpoint.py",
+    "tests/test_patch_transition.py"
+  ],
+  "selected_verified_inputs": [
+    {
+      "path": "scripts/export-archium-icons.py",
+      "source": "95e33b6",
+      "sha256": "ab0b64d786f1f53fb068b569c96c2b5e8e06d4ab4d914b741d5d914bcf58b473"
+    },
+    {
+      "path": "scripts/check-arc-preparation.py",
+      "source": "95e33b6",
+      "sha256": "d5d30752d2bf1b2452d4e8a4a8cdc6e574b3f393f29fd8221f311c81710d8abc"
+    },
+    {
+      "path": "tests/media_gn_probe.py",
+      "source": "95e33b6",
+      "sha256": "f6fd2cc70bf10024214923fbbbda7a4e069e3a687a356ee9723e9763147cde4b"
+    },
+    {
+      "path": "tests/test_media_config.py",
+      "source": "95e33b6",
+      "sha256": "ca23946df1e47978c255b2db54b8534a02eae4ba498ecbb65ec3d01ab0245100"
+    },
+    {
+      "path": "tests/test_media_gn_probe_diagnostics.py",
+      "source": "95e33b6",
+      "sha256": "645be2f926283029fa7df7d2718dbdd5898d9919f3e2fa18f934a684910df76e"
+    },
+    {
+      "path": "tests/test_archium_portal_resources.py",
+      "source": "95e33b6",
+      "sha256": "71e645e08c8d3aaa0a937b93597beec2ebaf535ba605a5a080dd8e8d02531c1b"
+    },
+    {
+      "path": "tests/test_portal_namespace_stripping.py",
+      "source": "95e33b6",
+      "sha256": "e8b6b0b3966e30e7513f6a748046fdac220001b1a4013de006da2959a3b05046"
+    },
+    {
+      "path": "tests/test_portal_optimized_alias.py",
+      "source": "95e33b6",
+      "sha256": "08784abbc92dd7469f7e30c61c640c9a3b838b81711096dcd43e1845971bc1a0"
+    },
+    {
+      "path": "tests/test_r3_3_portal_apk_content.py",
+      "source": "95e33b6",
+      "sha256": "797ceba5af95f3560b4287f82a5618c31cd7bc4ad54d989c1efafcfa764e0d0d"
+    },
+    {
+      "path": "tests/test_r3_3_portal_safe_zone.py",
+      "source": "95e33b6",
+      "sha256": "36bc95f48fb435a87ca9b3ab7e52a03ef1c919a80139089460c68cd7b05242c8"
+    },
+    {
+      "path": "tests/test_r3_3_resource_contract.py",
+      "source": "95e33b6",
+      "sha256": "0148e3b3340f42a3670c627bf6297cbb6c53e06e8b9537886c7c60fe150f1736"
+    },
+    {
+      "path": "tests/test_tab_list_layout_guard.py",
+      "source": "95e33b6",
+      "sha256": "0be844dd9a2b4a8acf97b424214ff63d9a883282e2dfe041e69b2c4c8122eca9"
+    },
+    {
+      "path": "assets/branding/archium/README.md",
+      "source": "95e33b6",
+      "sha256": "779a5e80051b5dfe3406a792b2e1b71524387f71d25281244b360e6c251c1dd3"
+    },
+    {
+      "path": "assets/branding/archium/archium-adaptive-background-432.png",
+      "source": "95e33b6",
+      "sha256": "5020a598cc8e4481e306ed9238c900e926373e79ca34eb0c6b847f1db6afa365"
+    },
+    {
+      "path": "assets/branding/archium/archium-adaptive-background-512.png",
+      "source": "95e33b6",
+      "sha256": "a432c4059c345709ca12f393a2d384f6cf8345c4c2fa33b97f165e3de968cb19"
+    },
+    {
+      "path": "assets/branding/archium/archium-adaptive-background.svg",
+      "source": "95e33b6",
+      "sha256": "d5d450fd0418c44c7a016e51929e19bf7b46b7d5cbbf1fc7d7cf2bd1d00ceed7"
+    },
+    {
+      "path": "assets/branding/archium/archium-adaptive-foreground-1024.png",
+      "source": "95e33b6",
+      "sha256": "834eb271ecbf65bd62de2796ec2309d5d61a5b97d19c3afd9c99f91c933d34de"
+    },
+    {
+      "path": "assets/branding/archium/archium-adaptive-foreground-432.png",
+      "source": "95e33b6",
+      "sha256": "cebe93324318cdad3489a7ed4623db76b76311d8840e36a3110f8f83cda0a3df"
+    },
+    {
+      "path": "assets/branding/archium/archium-adaptive-foreground-512.png",
+      "source": "95e33b6",
+      "sha256": "735eb4af0772d1bfc9dca69138633ca6346d0eb6a3edfddf4cd04f6efd5fec6a"
+    },
+    {
+      "path": "assets/branding/archium/archium-adaptive-foreground.svg",
+      "source": "95e33b6",
+      "sha256": "9cd67e4a044b3e203b09b49eedc628d338cacd7396b26861ac8afca4750c9ba9"
+    },
+    {
+      "path": "assets/branding/archium/archium-dark-1024.png",
+      "source": "95e33b6",
+      "sha256": "7e62e25895129cf254a39d1e4ffa9d944cc895658e1b6c1e94a761422f7b744c"
+    },
+    {
+      "path": "assets/branding/archium/archium-dark-128.png",
+      "source": "95e33b6",
+      "sha256": "64ebf86c23aacc5fa7e1128c8629d5b4103e197c00b1d5700cdd8bd67ec2f2e7"
+    },
+    {
+      "path": "assets/branding/archium/archium-dark-16.png",
+      "source": "95e33b6",
+      "sha256": "b6aaec7b4a76808c47510c2f39936f11d28e2f816f1e1fe95dad23c926f6d42d"
+    },
+    {
+      "path": "assets/branding/archium/archium-dark-192.png",
+      "source": "95e33b6",
+      "sha256": "304276fdbb801a9c06033934b943f5dc65f7d5bd80f615b8fa27eaf35a667cad"
+    },
+    {
+      "path": "assets/branding/archium/archium-dark-256.png",
+      "source": "95e33b6",
+      "sha256": "9e9c7122c3e3e15c3ecdfc2aebd32857e54efeaebae6f3d37085677bfa9ac55d"
+    },
+    {
+      "path": "assets/branding/archium/archium-dark-32.png",
+      "source": "95e33b6",
+      "sha256": "f2a0371f1c0691ad155839bc0eb2439b9124904f99401e91176945e650eef15e"
+    },
+    {
+      "path": "assets/branding/archium/archium-dark-48.png",
+      "source": "95e33b6",
+      "sha256": "2a71d901e06d837ee0028b6562035844777eed541b485d66f9a25255dd2921a1"
+    },
+    {
+      "path": "assets/branding/archium/archium-dark-512.png",
+      "source": "95e33b6",
+      "sha256": "791c41e6709eac3341ad6272cd73af6976624f74d410f3239261bf50bc6c278d"
+    },
+    {
+      "path": "assets/branding/archium/archium-dark-64.png",
+      "source": "95e33b6",
+      "sha256": "12dfe5b582dd9cc345c303de87c6a45586f432c83d1ed055ff429c4a6186a32b"
+    },
+    {
+      "path": "assets/branding/archium/archium-dark.svg",
+      "source": "95e33b6",
+      "sha256": "c1dde6508a9ed89f5b63609b309e69b236258f7b7271b1af186002ed9a187231"
+    },
+    {
+      "path": "assets/branding/archium/archium-light-1024.png",
+      "source": "95e33b6",
+      "sha256": "f3af6cd3f6ad97731e4b37303a22adbd847667799b51facbaaba3a7f0a28202c"
+    },
+    {
+      "path": "assets/branding/archium/archium-light-128.png",
+      "source": "95e33b6",
+      "sha256": "30fe3ad157029a82c15466ec66a9a4afce7628684a833bd7dea96c3c6ef500a3"
+    },
+    {
+      "path": "assets/branding/archium/archium-light-256.png",
+      "source": "95e33b6",
+      "sha256": "0af05c981a35e9ea9b315acbd113a68702f734a9458f41d575cf2c98c900ac1f"
+    },
+    {
+      "path": "assets/branding/archium/archium-light-512.png",
+      "source": "95e33b6",
+      "sha256": "3da0f835d62d794efdcc342faa2ad178de020fbd1453b98874637533d7cdfd02"
+    },
+    {
+      "path": "assets/branding/archium/archium-light.svg",
+      "source": "95e33b6",
+      "sha256": "d8f1a8fe022ee2a2382de87247922ae5f01689a78e7a2f110dc5fb8d03d0f2c8"
+    },
+    {
+      "path": "assets/branding/archium/archium-monochrome-dark-256.png",
+      "source": "95e33b6",
+      "sha256": "1bd79f853079a220d412e5bcb9115f0b2c29d37e81057fec2e7be405b14e34c6"
+    },
+    {
+      "path": "assets/branding/archium/archium-monochrome-dark-32.png",
+      "source": "95e33b6",
+      "sha256": "97031e2e550b8a7600059a30eadac4dc0f526c97d10e68a7222a5ac1519ee796"
+    },
+    {
+      "path": "assets/branding/archium/archium-monochrome-dark-512.png",
+      "source": "95e33b6",
+      "sha256": "32ab91a41fe5f62f190abe6308cf607f6929d843f33772267a14ce608482085e"
+    },
+    {
+      "path": "assets/branding/archium/archium-monochrome-dark-64.png",
+      "source": "95e33b6",
+      "sha256": "b563ae857346e38c3458278d2ae0ecba4b76417615c70894e8821fbb8d460568"
+    },
+    {
+      "path": "assets/branding/archium/archium-monochrome-dark.svg",
+      "source": "95e33b6",
+      "sha256": "789dd621ec8954088828b56ded33bffb52e067ec1a22bddb34c8316cdff73e58"
+    },
+    {
+      "path": "assets/branding/archium/archium-monochrome-light-256.png",
+      "source": "95e33b6",
+      "sha256": "343b29d7403b33cd4a3bfa2d77f5fed479be7431b1224b7838d245341011e4c7"
+    },
+    {
+      "path": "assets/branding/archium/archium-monochrome-light-32.png",
+      "source": "95e33b6",
+      "sha256": "84e25295f1290c1f86bb9a5211b6aeed1be81ce777db51e978aa461b7f110c34"
+    },
+    {
+      "path": "assets/branding/archium/archium-monochrome-light-512.png",
+      "source": "95e33b6",
+      "sha256": "62f4a1785f6aa1d15d8a9f030e435df164fea3d6909796bd4b0504d889e526fe"
+    },
+    {
+      "path": "assets/branding/archium/archium-monochrome-light-64.png",
+      "source": "95e33b6",
+      "sha256": "1565042fabfa706b4074601ab1eda9f0c5ba787718f2fec27230ee1ebafea32d"
+    },
+    {
+      "path": "assets/branding/archium/archium-monochrome-light.svg",
+      "source": "95e33b6",
+      "sha256": "2e5ce09c55a4ae9dad6841cd79096efd13a2d92fc63b7171cedcf98b5a721a7a"
+    },
+    {
+      "path": "assets/branding/archium/archium-symbol-1024.png",
+      "source": "95e33b6",
+      "sha256": "198cd37a05509544fd12f92fc8b776b41ac9a54f2b0aa390def0924ada882cbc"
+    },
+    {
+      "path": "assets/branding/archium/archium-symbol-256.png",
+      "source": "95e33b6",
+      "sha256": "8c0e96d74533f6f45346e61528327076d713a89a34bc5a55417c7e5233390dc8"
+    },
+    {
+      "path": "assets/branding/archium/archium-symbol-512.png",
+      "source": "95e33b6",
+      "sha256": "fa0e0e040fb90452604c66f2fc6e6145b9cd49dc8691d308b0262c27de12dd5d"
+    },
+    {
+      "path": "assets/branding/archium/archium-symbol.svg",
+      "source": "95e33b6",
+      "sha256": "2ea3e7503b5cdb081d3acab1aee8046649a7f8e01d5cb29b61e12e3276563cd3"
+    },
+    {
+      "path": "tests/fixtures/portal/README.md",
+      "source": "95e33b6",
+      "sha256": "d742d99346341aac09caacb423c55f07d94c7f2114d969d2aecb525ca8446ab2"
+    },
+    {
+      "path": "tests/fixtures/portal/themed-vector-sdk37-no-namespaces.xmltree.txt",
+      "source": "95e33b6",
+      "sha256": "77bdc93b207f04b7b9fdb5c3c29bbd25784ad251c40b63dcd956877c45679d39"
+    }
+  ]
+}

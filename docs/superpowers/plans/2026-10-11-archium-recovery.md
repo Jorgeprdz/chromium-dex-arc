@@ -45,5 +45,5 @@ Expected: JVM y GN reales PASS; JNI real PENDING hasta restore/link.
 - [ ] Suite host completa con SDK/GN reales; bash/compileall/actionlint/diff-check.
 - [ ] Revisión independiente del diff nuevo; reparar hallazgos críticos con regresión.
 - [ ] Publicar commits nuevos sin force, confirmar ramas protegidas.
-- [ ] Registrar FAILED histórico y nueva implementación no compilada; detener CI pesado.
+- [ ] Registrar FAILED histórico; después de gates y publicación lanzar UNA corrida manual sobre SHA final y abrir monitor.
 Expected: resultados observados, riesgos pendientes y checkpoints preservados.
