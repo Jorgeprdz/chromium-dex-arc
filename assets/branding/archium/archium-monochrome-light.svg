@@ -1,0 +1,55 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+<defs>
+ <linearGradient id="tile" x1=".05" x2=".90" y1="0" y2="1">
+  <stop offset="0" stop-color="#322743"/>
+  <stop offset=".50" stop-color="#171523"/>
+  <stop offset="1" stop-color="#0E0E18"/>
+ </linearGradient>
+ <radialGradient id="glow" cx=".28" cy=".06" r="1">
+  <stop stop-color="#AA75CD" stop-opacity=".32"/>
+  <stop offset=".75" stop-color="#211629" stop-opacity="0"/>
+ </radialGradient>
+ <linearGradient id="arch" x1=".02" y1=".80" x2=".90" y2=".18">
+  <stop offset="0" stop-color="#A883FF"/>
+  <stop offset=".38" stop-color="#CBABFF"/>
+  <stop offset=".64" stop-color="#E2C6F5"/>
+  <stop offset="1" stop-color="#FFDBBF"/>
+ </linearGradient>
+ <linearGradient id="facet" x1=".03" y1="1" x2=".75" y2=".05">
+  <stop offset="0" stop-color="#9B78FC"/>
+  <stop offset=".48" stop-color="#6B51EA"/>
+  <stop offset="1" stop-color="#3B3099"/>
+ </linearGradient>
+ <linearGradient id="mono" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#FFFFFF"/><stop offset="1" stop-color="#DADBE5"/></linearGradient>
+ <linearGradient id="shadow" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#B5A0FF" stop-opacity=".8"/><stop offset="1" stop-color="#6C58D5" stop-opacity=".15"/></linearGradient>
+ <clipPath id="archClip"><path d="M 177 760
+ C 213 643, 302 387, 392 285
+ C 450 219, 500 214, 539 226
+ C 632 254, 703 445, 788 670
+ L 829 772
+ Q 838 804, 800 805
+ L 696 805
+ Q 669 805, 658 775
+ L 606 616
+ C 579 530, 548 465, 499 461
+ C 430 456, 388 589, 355 754
+ Q 343 805, 306 805
+ L 205 805
+ Q 165 805, 177 760 Z"/></clipPath>
+</defs>
+
+<path d="M 177 760
+ C 213 643, 302 387, 392 285
+ C 450 219, 500 214, 539 226
+ C 632 254, 703 445, 788 670
+ L 829 772
+ Q 838 804, 800 805
+ L 696 805
+ Q 669 805, 658 775
+ L 606 616
+ C 579 530, 548 465, 499 461
+ C 430 456, 388 589, 355 754
+ Q 343 805, 306 805
+ L 205 805
+ Q 165 805, 177 760 Z" fill="#FFFFFF"/>
+</svg>
