@@ -270,6 +270,7 @@ test -x "$robolectric_runner" || {
     exit 2
 }
 # Save a quiescent checkpoint if the command finishes with a test failure.
+export JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:-} -ea"
 run_work TERM "$host_seconds" 124 --checkpoint-on-failure "$robolectric_runner" -f \
     'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabListCoordinatorUnitTest.testIncognitoButtonVisibility_TabletUnder10Inches'
 for suite in \

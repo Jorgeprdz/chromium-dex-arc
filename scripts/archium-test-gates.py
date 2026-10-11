@@ -104,6 +104,9 @@ def host_gate(android_jar: Path, out_dir: Path) -> None:
         out_dir / 'bin' / 'run_chrome_junit_tests'
     )
     require_file(robolectric_runner, 'Chromium Robolectric runner')
+    # The pinned Chromium JUnit launcher does not supply -ea. Keep assertions
+    # a test-runtime setting rather than changing release Java behavior.
+    os.environ['JAVA_TOOL_OPTIONS'] = os.environ.get('JAVA_TOOL_OPTIONS', '') + ' -ea'
     # Class names and registrations verified in the exact pinned junit/BUILD.gn
     # and toolbar:junit. Each suite executes separately, keeping missing classes visible.
     for test_filter in (
