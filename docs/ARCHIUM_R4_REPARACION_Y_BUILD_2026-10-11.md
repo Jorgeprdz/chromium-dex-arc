@@ -178,3 +178,59 @@ Commits temáticos locales verificados: fc9f0b2741de07ac6b96ea72af1f373dcbca626f
 | ROBOLECTRIC/JNI/APK Chromium | PENDING_POST_RESTORE | gates bloqueantes del único run; no PASS por mocks |
 
 Destino del restore es runner CI descartable, no disco local insuficiente. El gate S0 del mismo flujo debe demostrar margen **antes** de transferir 25GB; no se presume espacio por runner histórico ni se reduce reserva. Si preflight remoto falla, no se despacha compilación. La ruta seleccionada conserva checkout/out, dos slices como máximo, y checkpoints de fallos quiescentes con run FAILED.
+
+## 14:21–14:26 UTC — push, preflight remoto y único dispatch
+
+Push sin force, branch exclusiva: exit0, 4ed6a99 -> 5895d4a80510114ef12a89927c19667d4defeb27. SHA protegida permanece 51e5ed429661727156ab2534caac99a82ee9264b, checkout protegido local limpio f71df252ccdac629dd721e215e8e84cdd6cf44bc. Recomparación remota antes/después exit0. Push inicia únicamente [preflight 38146842592](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38146842592), SUCCESS. Logs ZIP auténticos descargados, 0_preflight.txt:486 GN 10 tests; :947 full177 tests/93.214s; :1007 STATIC/PYTHON_HOST/GN_REAL_PASS; :1008 Robolectric/JNI pendientes. GN exacto del DEPS construido, fixture media tres perfiles PASS. Local actionlint repetido con ShellCheck0.9.0 ahora disponible: exit0.
+
+Antes de dispatch: remoto SHA esperado exacto, no builds nativos activos (API100runs lista vacía), metadata checkpoint actual expira Oct24, concurrency workflow global. Comando `gh workflow run baseline-build.yml --repo Jorgeprdz/chromium-dex-arc --ref assistant/archium-r3-visual-fixes -f expected_sha=5895d4a80510114ef12a89927c19667d4defeb27 -f source_checkpoint=archium-checkpoint-38018166249-1 -f source_commit=507f28e1265fb98551d3bc1a66f4739fb48d2625 -f source_run_id=38018166249`: exit0, **UNA sola ejecución** [38147216573](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38147216573), event workflow_dispatch, SHA exacto confirmado por API. Ningún segundo dispatch autorizado/intentado. BUILD_SOURCE_SHA=5895d4a80510114ef12a89927c19667d4defeb27; commits posteriores de informe no alteran código ejecutado.
+
+## 14:30 UTC — S0 del único run PASS
+
+Jobs r3-final-gates 114492995182 y r3-pre-native-gates/preflight 114493095601 SUCCESS. Logs reales descargados por endpoint jobs/logs: run-38147216573-s0-final-gates.log :151 metadata3grupos PASS; run-38147216573-s0-preflight.log :493 GN10tests, :953 host177tests/68.456s, :1013 PASS static/host/GN fixture, :1014 Robolectric/JNI pendientes. Ningún skip crítico. Stage1/build 114493740808 comienza verificación de disco/identidad **antes de transferencia**. Intento único de leer log del job aún activo devuelve HTTP404 (exit1); no hay evidencia de bytes CI todavía, no se imputa causa de build a ese 404 de observabilidad.
+
+## 14:49 UTC — S1 y entrega a monitoreo manual solicitado
+
+Usuario solicita nueva sesión Termux, refresco 600s, elapsed/ETA/%/tres líneas de log y descarga+instalación solamente tras éxito; después pide detener el agente y seguir monitoreo manual. Esta instrucción cambia el cierre de sesión: se entrega monitor independiente, no se afirma terminación del build. Run 38147216573 sigue IN_PROGRESS, stage1/build Restore checkpoint and prepare Chromium. Gate disco/metadata pretransfer y descarga SUCCESS por API; hashes/tar/identidad todavía no acreditados hasta fin de restore/log. Source remoto archium-checkpoint-38018166249-1 conservado.
+
+Monitor adaptado fuera del repo Chromium (sin cambios a código del SHA ejecutado): /workspace/macdesk-maintenance/archium-r4-monitor.py; lanzador nativo /workspace/archium-r4-monitor-termux.sh. Nueva sesión Termux #2 confirmada por captura termux-monitor-final-compact.png, PID4878 independiente de Codex. Primer intento RunCommandService exit255 requiere permiso; se usa UI/atajo Termux para crear #2, sin nuevos permisos. Un comando de relanzamiento entró al chat #1; se corrige seleccionando y verificando #2 antes de ejecutar. Panel final inspeccionado: ASCII, líneas continuas cyan/violet/blue/green, negrita/cursiva, bloques cortos y últimas3 líneas recortadas. r+Enter refresca, q+Enter detiene monitor; intervalo automático600s. Wake-lock solicitado en lanzador.
+
+Elapsed usa timestamps reales. % = fases acreditadas /6, no porcentaje de objetos Ninja ni estimación por tiempo. S0PASS/S1pendiente:16.7%. ETA=N/D porque API no publica contadores vivos del job; no estimaciones históricas ficticias. Si log activo devuelve404, panel etiqueta EVENTOS API y muestra últimos3 eventos reales, sin disfrazarlos de stderr. Cuando log real disponible muestra últimas3 líneas y conserva archivo completo. En S0 existe warning Node20 de checkout forzado a Node24; log completo conservado, no acreditado como ausencia de warnings.
+
+Autoentrega configurada (NO EJECUTADA aún): exige mismo run/SHA final exitoso, artifact vigente y único, BUILD_REPORT source_sha/pin/APK_VERIFIED, SHA256SUMS, aapt2 ABIarm64, Portal real de APK descargada y apksigner real. Reutiliza updater existente para package app.archium.android, Samsung, instalación adb -r sin desinstalar, versionCode y hash del base.apk instalado. Copia APK a /sdcard/Download/Archium-R4-38147216573-arm64.apk y verifica hash remoto. Si build FAILED/INCOMPLETE no descarga ni instala; nunca inicia otro workflow. Errores de verificación bloquean instalación y quedan registrados. Marker instalado solo después de prueba auténtica. Pruebas negativas del monitor5/5 exit0: SHA/pin/APK_VERIFIED incorrectos rechazados; slice incompleto no100%. py_compile/Bashsyntax exit0. Instalación/Android runtime todavía NOT_EXECUTED; no APK R4 disponible al cerrar este turno.
+
+Estado al traspaso:
+```text
+REPO=Jorgeprdz/chromium-dex-arc
+BRANCH=assistant/archium-r3-visual-fixes
+PROTECTED_BRANCH=feat/arc-desktop UNTOUCHED
+HEAD_START=4ed6a99abc32bcde52076fecfab5c5c90aa3ab14
+BUILD_SOURCE_SHA=5895d4a80510114ef12a89927c19667d4defeb27
+CHROMIUM_PIN=cfd94726b7b5fb48aedcc32662f2f3fbdbadec35
+P0_DEX_DISPLAY=PASS
+P0_JAVA_ASSERT=PASS
+AAPT2_REAL_RESOURCES=PENDING
+GN_MEDIA_3_CASES=PASS
+PATCH_REPRODUCIBILITY=PASS
+CHECKPOINT_SOURCE=archium-checkpoint-38018166249-1
+CHECKPOINT_INTEGRITY=BLOCKED
+DISK_PREFLIGHT=PASS
+HOST_TESTS=PASS
+ROBOLECTRIC=NOT_EXECUTED
+JNI_LINK=NOT_EXECUTED
+PUSH=PASS
+WORKFLOW_RUN=38147216573 https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38147216573
+BUILD_STAGE=S1
+BUILD=INCOMPLETE
+APK_PACKAGE=NONE
+APK_SHA256=NONE
+APK_ARTIFACT=NONE
+ANDROID_RUNTIME=NOT_EXECUTED
+BLOCKERS=Evidencia S1 pendiente mientras run sigue activo; no fallo observado. Monitoreo del agente detenido por solicitud del usuario.
+```
+
+CHECKPOINT_INTEGRITY=BLOCKED aquí significa acreditación completa pendiente del restore activo, no fragmentos corruptos observados. DISK_PREFLIGHT=PASS refiere runner CI/gate pretransfer; local permaneceFAIL y nunca descargó25GB. P0PASS corresponde a pruebas reales aisladas descritas arriba; ROBOLECTRIC=NOT_EXECUTED refiere runner completo Chromium. BUILD=INCOMPLETE es estado actual EN CURSO, no éxito ni falla. HEAD_FINAL se obtiene del commit documental posterior a esta captura y se comunica en entrega; el run mantiene BUILD_SOURCE_SHA exacto anterior. Ninguna corrida pesada adicional.
+
+Hashes del monitor entregado:
+/workspace/macdesk-maintenance/archium-r4-monitor.py: 6ccc6ce4541cb05995d4eb2f56226d653505818f358430a21ec36ccd423d3daa
+/workspace/archium-r4-monitor-termux.sh: 959d0a143184384d453d8cb5996238ae0dab23ca65baba185b9beec5d6d94ea0
