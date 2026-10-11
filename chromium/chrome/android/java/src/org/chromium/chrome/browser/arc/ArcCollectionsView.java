@@ -67,7 +67,7 @@ public final class ArcCollectionsView extends LinearLayout {
         mSpace = button("", this::showSpaces);
         mSpace.setTag("arc-current-space");
         mSpace.setContentDescription(activity.getString(R.string.arc_spaces));
-        addView(mSpace, new LayoutParams(-1, dp(36)));
+        addView(mSpace, new LayoutParams(-1, dp(44)));
         mEntries = new LinearLayout(activity);
         mEntries.setOrientation(VERTICAL);
         mEntries.setContentDescription(activity.getString(R.string.arc_pinned_tabs));
@@ -79,8 +79,8 @@ public final class ArcCollectionsView extends LinearLayout {
         pin.setTag("arc-pin-current");
         Button favorite = button(activity.getString(R.string.arc_favorite_current), () -> remember(true));
         favorite.setTag("arc-favorite-current");
-        controls.addView(pin, new LayoutParams(0, dp(36), 1));
-        controls.addView(favorite, new LayoutParams(0, dp(36), 1));
+        controls.addView(pin, new LayoutParams(0, dp(44), 1));
+        controls.addView(favorite, new LayoutParams(0, dp(44), 1));
         addView(controls);
         refresh();
     }
@@ -145,6 +145,8 @@ public final class ArcCollectionsView extends LinearLayout {
             mOpenFolder = null;
             mRenderedSpace = state.selectedSpace();
         }
+        String favoriteFocus = focusedTag(mFavorites);
+        String entryFocus = focusedTag(mEntries);
         mFavorites.removeAllViews();
         for (ArcSidebarState.Entry entry : state.favorites()) {
             ImageButton favorite = new ImageButton(mActivity);
@@ -172,23 +174,25 @@ public final class ArcCollectionsView extends LinearLayout {
             if (current == null) mOpenFolder = null;
             else {
                 String parent = current.parentId;
-                mEntries.addView(button("‹  " + current.name, () -> mOpenFolder = parent),
-                        new LayoutParams(-1, dp(36)));
+                Button back = button("‹  " + current.name, () -> mOpenFolder = parent);
+                back.setTag("arc-folder-back:" + current.id);
+                mEntries.addView(back, new LayoutParams(-1, dp(44)));
             }
         }
         for (ArcSidebarState.Folder folder : folders) {
             if (!java.util.Objects.equals(folder.parentId, mOpenFolder)) continue;
-            mEntries.addView(button("▸  " + folder.name, () -> mOpenFolder = folder.id),
-                    new LayoutParams(-1, dp(36)));
+            Button folderRow = button("▸  " + folder.name, () -> mOpenFolder = folder.id);
+            folderRow.setTag("arc-folder:" + folder.id);
+            mEntries.addView(folderRow, new LayoutParams(-1, dp(44)));
         }
         for (ArcSidebarState.Entry entry : state.entries(state.selectedSpace())) {
             if (!java.util.Objects.equals(entry.folderId, mOpenFolder)) continue;
             Button row = button(entry.title, () -> open(entry.id));
             row.setTag("arc-entry:" + entry.id);
             row.setOnLongClickListener(view -> { showEntryMenu(view, entry); return true; });
-            mEntries.addView(row, new LayoutParams(-1, dp(36)));
+            mEntries.addView(row, new LayoutParams(-1, dp(44)));
         }
-        mEntries.addView(button(mActivity.getString(R.string.arc_new_folder), () -> {
+        Button newFolder = button(mActivity.getString(R.string.arc_new_folder), () -> {
             String space = state.selectedSpace();
             String parent = mOpenFolder;
             requestName(R.string.arc_new_folder, name -> {
@@ -197,7 +201,23 @@ public final class ArcCollectionsView extends LinearLayout {
                 }
                 mController.createFolder(parent, name);
             });
-        }), new LayoutParams(-1, dp(36)));
+        });
+        newFolder.setTag("arc-new-folder:" + state.selectedSpace());
+        mEntries.addView(newFolder, new LayoutParams(-1, dp(44)));
+        restoreFocus(mFavorites, favoriteFocus);
+        restoreFocus(mEntries, entryFocus);
+    }
+
+    private static String focusedTag(LinearLayout group) {
+        View focused = group.findFocus();
+        return focused != null && focused.getTag() instanceof String
+                ? (String) focused.getTag() : null;
+    }
+
+    private static void restoreFocus(LinearLayout group, String tag) {
+        if (tag == null) return;
+        View replacement = group.findViewWithTag(tag);
+        if (replacement != null) replacement.requestFocus();
     }
 
     private void open(String id) {

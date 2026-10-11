@@ -3,7 +3,12 @@
 // found in the LICENSE file.
 package org.chromium.chrome.browser.ui.vertical_tabs;
 
+import android.app.Activity;
 import android.content.Context;
+import android.content.pm.PackageManager;
+import android.os.Build;
+import android.view.Display;
+import android.view.WindowManager;
 import android.content.SharedPreferences;
 import android.content.res.Configuration;
 
@@ -18,8 +23,34 @@ public final class ArcDesktopAppearance {
     private ArcDesktopAppearance() {}
 
     public static boolean isDesktopWindow(Context context) {
-        return ArcDesktopPolicy.isArcWindow(getUiMode(context),
+        int mode = getUiMode(context);
+        if (mode == ArcDesktopPolicy.MODE_ARC) return true;
+        if (mode == ArcDesktopPolicy.MODE_MOBILE) return false;
+        Configuration config = context.getResources().getConfiguration();
+        boolean desktop = config.smallestScreenWidthDp >= 600
+                || (config.uiMode & Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_DESK
+                || context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_PC);
+        if (context instanceof Activity activity) {
+            Display display = activityDisplay(activity);
+            desktop |= activity.isInMultiWindowMode()
+                    || (display != null && display.getDisplayId() != Display.DEFAULT_DISPLAY);
+        }
+        return desktop && ArcDesktopPolicy.isArcWindow(mode,
                 ArchiumWindowMetrics.currentWidthDp(context));
+    }
+
+    @SuppressWarnings("deprecation")
+    static Display activityDisplay(Activity activity) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+            try {
+                Display display = activity.getDisplay();
+                if (display != null) return display;
+            } catch (UnsupportedOperationException unavailableVisualContext) {
+                // The Activity's WindowManager is the API 29/nonvisual fallback.
+            }
+        }
+        WindowManager manager = activity.getWindowManager();
+        return manager == null ? null : manager.getDefaultDisplay();
     }
 
     public static int getUiMode(Context context) {

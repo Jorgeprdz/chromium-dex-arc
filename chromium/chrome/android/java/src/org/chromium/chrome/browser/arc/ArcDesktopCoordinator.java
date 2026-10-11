@@ -6,17 +6,21 @@ package org.chromium.chrome.browser.arc;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.SharedPreferences;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.Outline;
+import android.graphics.Path;
+import android.os.Build;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
-import android.text.InputType;
+import android.graphics.drawable.StateListDrawable;
+import android.content.res.ColorStateList;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.Gravity;
 import android.view.ViewOutlineProvider;
 import android.view.ViewGroup;
 import android.widget.Button;
-import android.widget.EditText;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
@@ -30,7 +34,6 @@ import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy;
 import org.chromium.components.browser_ui.widget.TouchEventObserver;
 import org.chromium.components.favicon.LargeIconBridge;
 
-import java.util.Locale;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import org.chromium.chrome.browser.tab.Tab;
@@ -49,6 +52,11 @@ public final class ArcDesktopCoordinator {
     private final Activity mActivity;
     private final ViewGroup mRail;
     private final View mNativeTabs;
+    private final View mNativeNewTabButton;
+    private final int mNativeNewTabVisibility;
+    private final TextView mNewTabRow;
+    private final View mCaptionSpacer;
+    private final ArcNavigationControls mNavigationState;
     private final LinearLayout mColumn;
     private final LinearLayout mHeader;
     private final LinearLayout mNavigationRow;
@@ -115,6 +123,8 @@ public final class ArcDesktopCoordinator {
     private ViewOutlineProvider mClippedSurfaceOriginalOutlineProvider;
     private boolean mClippedSurfaceOriginalClipToOutline;
     private AlertDialog mColorDialog;
+    private Integer mPreviewFrameColor;
+    private final ArcFrameDispatch mFrameDispatch;
 
     public ArcDesktopCoordinator(Activity activity, ViewGroup rail,
             Profile profile, Consumer<String> navigate,
@@ -125,6 +135,8 @@ public final class ArcDesktopCoordinator {
             Consumer<Boolean> setToolbarSuppressed, Supplier<TabModel> currentModel,
             Supplier<TabCreator> currentCreator, Supplier<Tab> currentTab) {
         mActivity = activity;
+        mFrameDispatch = new ArcFrameDispatch(
+                () -> !mDestroyed && ArcDesktopAppearance.isDesktopWindow(mActivity));
         mRail = rail;
         mNavigate = navigate;
         mIncognitoStateProvider = incognitoStateProvider;
@@ -204,6 +216,11 @@ public final class ArcDesktopCoordinator {
             mOriginalContentMarginBottom = 0;
         }
         mNativeTabs = nativeTabs;
+        mNativeNewTabButton = nativeTabs.findViewById(R.id.new_tab_button);
+        if (mNativeNewTabButton == null) {
+            throw new IllegalStateException("Arc requires the native new-tab action");
+        }
+        mNativeNewTabVisibility = mNativeNewTabButton.getVisibility();
         mMenuButtonWrapper = menuButtonWrapper;
         mMenuButtonOriginalParent = (ViewGroup) mMenuButtonWrapper.getParent();
         mMenuButtonOriginalIndex = mMenuButtonOriginalParent.indexOfChild(mMenuButtonWrapper);
@@ -233,6 +250,7 @@ public final class ArcDesktopCoordinator {
         rail.removeView(mNativeTabs);
         mColumn = column();
         View captionSpacer = new View(activity);
+        mCaptionSpacer = captionSpacer;
         mColumn.addView(captionSpacer, new LinearLayout.LayoutParams(
                 -1, nativeSpacer.getLayoutParams().height));
         ((VerticalTabRailLayout) mNativeTabs).setDesktopWindowSpacerHost(captionSpacer);
@@ -249,25 +267,18 @@ public final class ArcDesktopCoordinator {
         // ToolbarPhone does not expose forward/reload Views in Chromium 157, while ARC can be
         // explicitly forced in a narrow window. Keep navigation real by dispatching directly to
         // the currently selected Chromium Tab instead of depending on a ToolbarTablet hierarchy.
-        mNavigationControls.addView(
-                navigationButton(
-                        R.drawable.btn_back,
-                        R.string.accessibility_toolbar_btn_back,
-                        tab -> {
-                            if (tab.canGoBack()) tab.goBack();
-                        }));
-        mNavigationControls.addView(
-                navigationButton(
-                        R.drawable.btn_forward,
-                        R.string.accessibility_toolbar_btn_forward,
-                        tab -> {
-                            if (tab.canGoForward()) tab.goForward();
-                        }));
-        mNavigationControls.addView(
-                navigationButton(
-                        R.drawable.btn_reload_stop,
-                        R.string.accessibility_btn_refresh,
-                        Tab::reload));
+        ImageButton back = navigationButton(R.drawable.btn_back,
+                R.string.accessibility_toolbar_btn_back,
+                tab -> { if (tab.canGoBack()) tab.goBack(); });
+        ImageButton forward = navigationButton(R.drawable.btn_forward,
+                R.string.accessibility_toolbar_btn_forward,
+                tab -> { if (tab.canGoForward()) tab.goForward(); });
+        ImageButton reload = navigationButton(R.drawable.btn_reload_stop,
+                R.string.accessibility_btn_refresh, Tab::reload);
+        mNavigationControls.addView(back);
+        mNavigationControls.addView(forward);
+        mNavigationControls.addView(reload);
+        mNavigationState = new ArcNavigationControls(currentTab, back, forward, reload);
         mNavigationRow.addView(
                 mNavigationControls,
                 new LinearLayout.LayoutParams(
@@ -301,6 +312,19 @@ public final class ArcDesktopCoordinator {
         }
         mHeader.addView(mHeaderActions);
         mColumn.addView(mHeader);
+        mNewTabRow = new TextView(activity);
+        mNewTabRow.setText("+  " + activity.getString(R.string.arc_new_tab));
+        mNewTabRow.setContentDescription(activity.getString(R.string.arc_new_tab));
+        mNewTabRow.setGravity(Gravity.CENTER_VERTICAL);
+        mNewTabRow.setFocusable(true);
+        mNewTabRow.setClickable(true);
+        mNewTabRow.setPadding(dp(12), 0, dp(12), 0);
+        mNewTabRow.setOnClickListener(v -> {
+            if (!mDestroyed && mNativeNewTabButton.isEnabled()) {
+                mNativeNewTabButton.performClick();
+            }
+        });
+        mColumn.addView(mNewTabRow, new LinearLayout.LayoutParams(-1, dp(44)));
         mColumn.addView(mNativeTabs, new LinearLayout.LayoutParams(-1, 0, 1));
 
         mFooter = new LinearLayout(activity);
@@ -343,8 +367,17 @@ public final class ArcDesktopCoordinator {
                             outline.setEmpty();
                             return;
                         }
-                        outline.setRoundRect(left, 0, view.getWidth(), view.getHeight(),
-                                dp(ArcDesktopPolicy.ARC_CONTENT_RADIUS_DP));
+                        float radius = Math.min(dp(ArcDesktopPolicy.ARC_CONTENT_RADIUS_DP),
+                                Math.min((view.getWidth() - left) / 2f, view.getHeight() / 2f));
+                        if (Build.VERSION.SDK_INT >= 33) {
+                            Path content = new Path();
+                            content.addRoundRect(left, 0, view.getWidth(), view.getHeight(),
+                                    new float[] {radius, radius, radius, radius, radius, radius, 0, 0},
+                                    Path.Direction.CW);
+                            outline.setPath(content);
+                        } else {
+                            outline.setRoundRect(left, 0, view.getWidth(), view.getHeight(), radius);
+                        }
                     }
                 };
         mArcTouchEventObserver =
@@ -384,15 +417,15 @@ public final class ArcDesktopCoordinator {
                     @Override
                     public void onViewAttachedToWindow(View view) {
                         if (!mDestroyed && mArcFrameActive) {
-                            view.post(ArcDesktopCoordinator.this::applyFrameGeometry);
+                            mFrameDispatch.schedule(view, ArcDesktopCoordinator.this::applyFrameGeometry);
                         }
                     }
 
                     @Override
                     public void onViewDetachedFromWindow(View view) {
                         if (!mDestroyed && mArcFrameActive) {
-                            mCompositorViewHolder.post(
-                                    ArcDesktopCoordinator.this::applyFrameGeometry);
+                            mFrameDispatch.schedule(
+                                    mCompositorViewHolder, ArcDesktopCoordinator.this::applyFrameGeometry);
                         }
                     }
                 };
@@ -467,7 +500,7 @@ public final class ArcDesktopCoordinator {
         button.setOnClickListener(
                 v -> {
                     Tab tab = mCurrentTab.get();
-                    if (tab != null) action.accept(tab);
+                    if (!mDestroyed && tab != null && !tab.isDestroyed()) action.accept(tab);
                 });
         button.setLayoutParams(
                 new LinearLayout.LayoutParams(
@@ -545,32 +578,22 @@ public final class ArcDesktopCoordinator {
     }
 
     private void showColorPicker() {
-        if (mDestroyed) return;
-        EditText input = new EditText(mActivity);
-        input.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS);
-        input.setSingleLine(true);
-        input.setText(String.format(Locale.ROOT, "#%06X",
-                mPreferences.getInt(ArcDesktopAppearance.COLOR_KEY,
-                        ArcDesktopAppearance.DEFAULT_COLOR) & 0xffffff));
-        input.setSelectAllOnFocus(true);
-        mColorDialog = new AlertDialog.Builder(mActivity)
-                .setTitle(R.string.arc_frame_color).setView(input)
-                .setPositiveButton(android.R.string.ok, null)
-                .setNegativeButton(android.R.string.cancel, null)
-                .setNeutralButton(R.string.arc_reset_color, (dialog, which) ->
-                        mPreferences.edit().remove(ArcDesktopAppearance.COLOR_KEY).apply()).create();
-        mColorDialog.setOnShowListener(dialog -> mColorDialog.getButton(AlertDialog.BUTTON_POSITIVE)
-                .setOnClickListener(v -> {
-                    String value = input.getText().toString().trim();
-                    if (!value.matches("#[0-9a-fA-F]{6}")) {
-                        input.setError(mActivity.getString(R.string.arc_color_format));
-                        return;
-                    }
-                    mPreferences.edit().putInt(ArcDesktopAppearance.COLOR_KEY,
-                            Color.parseColor(value)).apply();
-                    mColorDialog.dismiss();
-                }));
-        mColorDialog.show();
+        if (mDestroyed || (mColorDialog != null && mColorDialog.isShowing())) return;
+        mColorDialog = new ArcColorPicker(mActivity, mPreferences,
+                mActivity.getResources().getStringArray(R.array.arc_frame_palette_names),
+                mActivity.getResources().getStringArray(R.array.arc_frame_rgb_names), preview -> {
+                    mPreviewFrameColor = preview;
+                    if (!mDestroyed) applyAppearance();
+                }).show();
+    }
+
+    private int frameSurface(boolean incognito) {
+        if (mPreviewFrameColor == null) {
+            return ArcDesktopAppearance.surface(mActivity, incognito);
+        }
+        boolean dark = incognito || (mActivity.getResources().getConfiguration().uiMode
+                & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
+        return ArcDesktopPolicy.surface(mPreviewFrameColor, dark);
     }
 
     private LinearLayout.LayoutParams arcLocationBarLayoutParams() {
@@ -639,6 +662,7 @@ public final class ArcDesktopCoordinator {
 
     private void applyAppearance() {
         if (mDestroyed) return;
+        mNavigationState.refresh();
         boolean desktop = ArcDesktopAppearance.isDesktopWindow(mActivity);
         boolean incognito = mIncognitoStateProvider.isIncognitoSelected();
         setArcToolbarCompositionActive(desktop);
@@ -648,6 +672,8 @@ public final class ArcDesktopCoordinator {
                     (VerticalTabRailLayout) mNativeTabs, incognito);
         }
         if (!desktop) {
+            mNewTabRow.setVisibility(View.GONE);
+            mNativeNewTabButton.setVisibility(mNativeNewTabVisibility);
             mHeader.setVisibility(View.GONE);
             mFooter.setVisibility(View.GONE);
             if (mCollectionsView != null) mCollectionsView.setVisibility(View.GONE);
@@ -656,17 +682,28 @@ public final class ArcDesktopCoordinator {
             return;
         }
 
+        float density = mActivity.getResources().getDisplayMetrics().density;
+        int captionHeight = Math.max(mCaptionSpacer.getHeight(),
+                Math.max(0, mCaptionSpacer.getLayoutParams().height));
+        int collectionBudget = ArcDesktopPolicy.collectionScrollBudgetPx(
+                mRail.getHeight(), density, captionHeight);
         boolean expanded =
                 ArcDesktopPolicy.showFullControls(
                         mRail.getWidth(),
                         mRail.getHeight(),
-                        mActivity.getResources().getDisplayMetrics().density);
+                        density) && collectionBudget >= dp(80);
         // Keep the real Chromium LocationBar visible even in collapsed mode so keyboard/focus
         // paths never target a GONE omnibox. Secondary Arc controls are restored on expansion.
         mHeader.setVisibility(View.VISIBLE);
         mNavigationRow.setVisibility(View.VISIBLE);
         mNavigationControls.setVisibility(expanded ? View.VISIBLE : View.GONE);
         mHeaderActions.setVisibility(expanded ? View.VISIBLE : View.GONE);
+        mNewTabRow.setVisibility(View.VISIBLE);
+        mNewTabRow.setText(expanded ? "+  " + mActivity.getString(R.string.arc_new_tab) : "+");
+        mNewTabRow.setGravity(Gravity.CENTER_VERTICAL
+                | (expanded ? Gravity.START : Gravity.CENTER_HORIZONTAL));
+        mNewTabRow.setEnabled(mNativeNewTabButton.isEnabled());
+        mNativeNewTabButton.setVisibility(View.GONE);
         // The native app menu remains reachable while collapsed. Secondary footer actions can
         // disappear so the compact rail does not retain expanded hitboxes.
         mFooter.setVisibility(View.VISIBLE);
@@ -679,13 +716,22 @@ public final class ArcDesktopCoordinator {
         }
         applyFrameGeometry();
         if (expanded && mCollectionsView != null) {
-            mCollectionsView.setCollectionHeight(
-                    Math.max(dp(80), Math.min(dp(240), mRail.getHeight() / 4)));
+            mCollectionsView.setCollectionHeight(collectionBudget);
         }
         // Leave native tab selection, incognito and favicon rendering to its binders.
-        int surface = ArcDesktopAppearance.surface(mActivity, incognito);
+        int surface = frameSurface(incognito);
         int foreground = ArcDesktopPolicy.foreground(surface);
         mColumn.setBackgroundColor(surface);
+        styleInteraction(mNewTabRow, foreground, ArcDesktopPolicy.selection(surface));
+        for (int i = 0; i < mNavigationControls.getChildCount(); i++) {
+            View button = mNavigationControls.getChildAt(i);
+            styleInteraction(button, foreground, ArcDesktopPolicy.selection(surface));
+            if (button instanceof ImageButton) {
+                ((ImageButton) button).setImageTintList(new ColorStateList(
+                        new int[][] {new int[] {-android.R.attr.state_enabled}, new int[] {}},
+                        new int[] {(foreground & 0xffffff) | 0x66000000, foreground}));
+            }
+        }
         tintHeader(mHeader, foreground, ArcDesktopPolicy.selection(surface));
         tintHeader(mFooter, foreground, ArcDesktopPolicy.selection(surface));
     }
@@ -708,6 +754,11 @@ public final class ArcDesktopCoordinator {
     }
 
     private boolean isInsideArcContent(float x, float y) {
+        if (Build.VERSION.SDK_INT >= 33) {
+            return ArcDesktopPolicy.containsArcContentPoint(
+                    x, y, reservedLeftWidth(), 0, mCompositorViewHolder.getWidth(),
+                    mCompositorViewHolder.getHeight(), dp(ArcDesktopPolicy.ARC_CONTENT_RADIUS_DP));
+        }
         return ArcDesktopPolicy.containsRoundedRectPoint(
                 x, y, reservedLeftWidth(), 0, mCompositorViewHolder.getWidth(),
                 mCompositorViewHolder.getHeight(), dp(ArcDesktopPolicy.ARC_CONTENT_RADIUS_DP));
@@ -741,7 +792,7 @@ public final class ArcDesktopCoordinator {
     }
 
     private void applyFrameGeometry() {
-        if (mDestroyed) return;
+        if (mDestroyed || !ArcDesktopAppearance.isDesktopWindow(mActivity)) return;
         mArcFrameActive = true;
         mCompositorViewHolder.setOutlineProvider(mArcContentOutlineProvider);
         mCompositorViewHolder.setClipToOutline(true);
@@ -778,11 +829,12 @@ public final class ArcDesktopCoordinator {
         applyActiveSurfaceClip();
 
         boolean incognito = mIncognitoStateProvider.isIncognitoSelected();
-        int surface = ArcDesktopAppearance.surface(mActivity, incognito);
+        int surface = frameSurface(incognito);
         if (mFrameRoot != null) mFrameRoot.setBackgroundColor(surface);
     }
 
     private void clearFrameGeometry() {
+        mFrameDispatch.cancel();
         if (!mArcFrameActive) return;
         mArcFrameActive = false;
         mRejectingRoundedCornerGesture = false;
@@ -870,10 +922,7 @@ public final class ArcDesktopCoordinator {
         }
         if (view instanceof TextView) ((TextView) view).setTextColor(foreground);
         if (view instanceof Button || view instanceof ImageButton) {
-            GradientDrawable background = new GradientDrawable();
-            background.setColor(selection);
-            background.setCornerRadius(dp(8));
-            view.setBackground(background);
+            styleInteraction(view, foreground, selection);
             if (view instanceof ImageButton) {
                 ((ImageButton) view).setColorFilter(foreground);
             }
@@ -885,6 +934,23 @@ public final class ArcDesktopCoordinator {
                 tintHeader(group.getChildAt(i), foreground, selection);
             }
         }
+    }
+
+    private void styleInteraction(View view, int foreground, int selection) {
+        StateListDrawable states = new StateListDrawable();
+        for (int state : new int[] {android.R.attr.state_pressed,
+                android.R.attr.state_focused, android.R.attr.state_hovered}) {
+            GradientDrawable active = new GradientDrawable();
+            active.setColor(selection);
+            active.setCornerRadius(dp(8));
+            states.addState(new int[] {state}, active);
+        }
+        GradientDrawable idle = new GradientDrawable();
+        idle.setColor(Color.TRANSPARENT);
+        idle.setCornerRadius(dp(8));
+        states.addState(new int[] {}, idle);
+        view.setBackground(states);
+        if (view instanceof TextView) ((TextView) view).setTextColor(foreground);
     }
 
     private void refreshNativeRows(View view) {
@@ -901,6 +967,9 @@ public final class ArcDesktopCoordinator {
     public void destroy() {
         if (mDestroyed) return;
         mDestroyed = true;
+        mFrameDispatch.destroy();
+        mNavigationState.destroy();
+        mNativeNewTabButton.setVisibility(mNativeNewTabVisibility);
         mIncognitoStateProvider.removeObserver(mIncognitoObserver);
         ((VerticalTabRailLayout) mNativeTabs).setDesktopWindowSpacerHost(null);
         clearCollections();
