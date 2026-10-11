@@ -14,6 +14,13 @@ spec.loader.exec_module(checkpoint)
 
 
 class CheckpointTests(unittest.TestCase):
+    def test_manifest_rejects_nonhex_digest_and_boolean_size(self):
+        expected = {'schema': 1, 'workspace': '/same', 'commit': 'abc', 'revision': 'rev'}
+        for size, sha in [(1, 'z' * 64), (True, '0' * 64)]:
+            manifest = {**expected, 'parts': [{'name': 'checkpoint-0000.tar.gz.part',
+                        'bytes': size, 'sha256': sha}]}
+            with self.assertRaisesRegex(ValueError, 'Invalid checkpoint part'):
+                checkpoint.validate_manifest(manifest, expected)
     def test_round_trip_preserves_ninja_state_modes_symlinks_and_timestamps(self):
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -58,6 +65,52 @@ class CheckpointTests(unittest.TestCase):
             self.assertEqual(executable.stat().st_mode & 0o777, 0o755)
             self.assertTrue((workspace / 'compiler-link').is_symlink())
             self.assertGreater(len(assets), 2)
+
+    def test_artifact_checkpoint_round_trip_and_corruption_fail_closed(self):
+        with tempfile.TemporaryDirectory() as temp:
+            root = Path(temp)
+            workspace, folder = root / 'workspace', root / 'bundles'
+            workspace.mkdir()
+            (workspace / '.ninja_log').write_text('progress')
+            (workspace / '.ninja_deps').write_bytes(b'preserved dependency state')
+            os.utime(workspace / '.ninja_log', ns=(1234567890123456789, 1234567890123456789))
+            (workspace / 'compiler').write_text('binary')
+            (workspace / 'compiler').chmod(0o755)
+            (workspace / 'link').symlink_to('compiler')
+            with patch.dict(os.environ, {'GITHUB_SHA': 'r3-commit'}), \
+                    patch.object(checkpoint, 'CHUNK_BYTES', 80):
+                checkpoint.pack_actions(workspace, 'archium-checkpoint-999-1', folder)
+                self.assertTrue((folder / 'group-00' / 'checkpoint.json').is_file())
+                downloaded = root / 'downloaded'
+                downloaded.mkdir()
+                for group in folder.iterdir():
+                    for part in group.iterdir():
+                        (downloaded / part.name).write_bytes(part.read_bytes())
+                for item in workspace.iterdir():
+                    item.unlink()
+                with self.assertRaisesRegex(ValueError, 'tag'):
+                    checkpoint.restore_actions(workspace, 'bad-tag', downloaded)
+                checkpoint.restore_actions(workspace, 'archium-checkpoint-999-1', downloaded)
+                self.assertEqual('progress', (workspace / '.ninja_log').read_text())
+                self.assertEqual(1234567890123456789, (workspace / '.ninja_log').stat().st_mtime_ns)
+                self.assertTrue((workspace / 'link').is_symlink())
+                self.assertEqual(b'preserved dependency state', (workspace / '.ninja_deps').read_bytes())
+                self.assertEqual([], list(downloaded.iterdir()),
+                                 'Verified restore must reclaim staged archive bytes')
+                for item in workspace.iterdir():
+                    item.unlink()
+                # Re-download the same synthetic archive: corruption should be
+                # detected before extraction, and failed restores keep evidence.
+                for group in folder.iterdir():
+                    for part in group.iterdir():
+                        (downloaded / part.name).write_bytes(part.read_bytes())
+                name = next(downloaded.glob('checkpoint-*.part'))
+                bytes_ = bytearray(name.read_bytes())
+                bytes_[0] ^= 1
+                name.write_bytes(bytes_)
+                with self.assertRaisesRegex(ValueError, 'hash mismatch'):
+                    checkpoint.restore_actions(workspace, 'archium-checkpoint-999-1', downloaded)
+                self.assertEqual([], list(workspace.iterdir()))
 
     def test_remote_inventory_rejects_missing_corrupt_or_unfinished_assets(self):
         digest = hashlib.sha256(b'x').hexdigest()

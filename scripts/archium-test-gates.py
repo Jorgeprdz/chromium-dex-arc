@@ -21,7 +21,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 
-# These GN targets are intentionally Android raw executables (use_raw_android_executable=true).
+# Android test targets use their generated Chromium launchers, including APK tests.
 # They are compile-gated on the host runner but EXECUTED only on an explicit Android device.
 ANDROID_NATIVE_TEST_TARGETS = (
     '//chrome/browser/password_manager/android:archium_key_provider_tests',
@@ -31,11 +31,11 @@ ANDROID_NATIVE_TEST_TARGETS = (
 )
 
 
-def run(argv: list[str], *, cwd: Path | None = None, capture: bool = False) -> subprocess.CompletedProcess[str]:
+def run(argv: list[str], *, cwd: Path | None = None, capture: bool = False, env: dict | None = None) -> subprocess.CompletedProcess[str]:
     print('+ ' + ' '.join(shlex.quote(str(x)) for x in argv), flush=True)
     return subprocess.run(
         [str(x) for x in argv], cwd=cwd, check=True,
-        text=True, capture_output=capture,
+        text=True, capture_output=capture, env=env,
     )
 
 
@@ -79,24 +79,43 @@ def resolve_pinned_android_sdk(out_dir: Path) -> tuple[Path, str, str, Path]:
 def host_gate(android_jar: Path, out_dir: Path) -> None:
     """Execute every Archium gate that is runnable on the Linux CI host."""
     require_file(android_jar, 'Android platform jar')
+    out_dir = out_dir.resolve()
+    pinned_gn = out_dir.parent.parent / 'buildtools/linux64/gn'
+    require_file(pinned_gn, 'Pinned Chromium GN')
+    if not os.access(pinned_gn, os.X_OK):
+        raise SystemExit('Pinned Chromium GN is not executable')
+    sdk_root, _, tools_version, _ = resolve_pinned_android_sdk(out_dir)
+    host_env = dict(os.environ)
+    host_env.update(ARCHIUM_TEST_GN=str(pinned_gn),
+                    ARCHIUM_TEST_AAPT2=str(sdk_root / 'build-tools' / tools_version / 'aapt2'),
+                    ARCHIUM_TEST_ANDROID_JAR=str(android_jar))
+    run([str(pinned_gn), '--version'], cwd=ROOT, env=host_env)
     run([
         sys.executable,
         str(ROOT / 'scripts/check-arc-preparation.py'),
         '--android-jar', str(android_jar),
-    ], cwd=ROOT)
+    ], cwd=ROOT, env=host_env)
     run([
         sys.executable, '-m', 'unittest', 'discover',
         '-s', str(ROOT / 'tests'), '-p', 'test_*.py',
-    ], cwd=ROOT)
+    ], cwd=ROOT, env=host_env)
 
-    out_dir = out_dir.resolve()
+    print('PYTHON_HOST_PASS=PASS GN_REAL_PASS=PASS ROBOLECTRIC_PASS=PENDING_POST_RESTORE JNI_LINK_PASS=UNVERIFIED', flush=True)
     robolectric_runner = (
         out_dir / 'bin' / 'run_chrome_junit_tests'
     )
     require_file(robolectric_runner, 'Chromium Robolectric runner')
     # Class names and registrations verified in the exact pinned junit/BUILD.gn
     # and toolbar:junit. Each suite executes separately, keeping missing classes visible.
+    jvm_env = dict(host_env)
+    jvm_env["JAVA_TOOL_OPTIONS"] = jvm_env.get("JAVA_TOOL_OPTIONS", "") + " -ea"
     for test_filter in (
+            "org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearanceTest.*",
+            "org.chromium.chrome.browser.arc.ArcColorPickerTest.*",
+            "org.chromium.chrome.browser.arc.ArcFrameDispatchTest.*",
+            "org.chromium.chrome.browser.arc.ArcNavigationControlsTest.*",
+            "org.chromium.chrome.browser.arc.ArcCollectionsFocusTest.*",
+
             'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.'
             'VerticalTabListCoordinatorUnitTest.*',
             'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.'
@@ -106,8 +125,8 @@ def host_gate(android_jar: Path, out_dir: Path) -> None:
             'org.chromium.chrome.browser.tasks.tab_management.NestedLayoutDelegateUnitTest.*',
             'org.chromium.chrome.browser.tasks.tab_management.TabListMediatorUnitTest.*',
             'org.chromium.chrome.browser.toolbar.top.ToolbarTabletUnitTest.*'):
-        run([str(robolectric_runner), '-f', test_filter], cwd=out_dir.parent.parent)
-    print('ARCHIUM_HOST_EXECUTION_GATE=PASS', flush=True)
+        run([str(robolectric_runner), '-f', test_filter], cwd=out_dir.parent.parent, env=jvm_env)
+    print('PYTHON_HOST_PASS=PASS GN_REAL_PASS=PASS ROBOLECTRIC_PASS=PASS scope=Chromium_runner', flush=True)
 
 
 def android_test_runner(out_dir: Path, target: str) -> Path:

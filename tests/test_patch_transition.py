@@ -4,6 +4,8 @@ import hashlib
 import importlib.util
 import json
 import os
+import errno
+import shutil
 from pathlib import Path
 import subprocess
 import tempfile
@@ -21,6 +23,39 @@ def digest(data):
 
 
 class TransitionTests(unittest.TestCase):
+    def test_real_ninja_rebuilds_only_changed_input_after_transition(self):
+        self.assertTrue(shutil.which('ninja'), 'Real Ninja required for incremental delta fixture')
+        (self.checkout / 'build.ninja').write_text('''rule copy
+  command = cp $in $out
+build shared.out: copy shared.txt
+build unchanged.out: copy unchanged.txt
+default shared.out unchanged.out
+''')
+        subprocess.run(['ninja', '-C', str(self.checkout)], check=True, capture_output=True)
+        before = (self.checkout / 'unchanged.out').stat().st_mtime_ns
+        self.apply()
+        result = subprocess.run(['ninja', '-C', str(self.checkout), '-v'], check=True, capture_output=True, text=True)
+        self.assertIn('cp shared.txt shared.out', result.stdout)
+        self.assertNotIn('cp unchanged.txt unchanged.out', result.stdout)
+        self.assertEqual((self.checkout / 'unchanged.out').stat().st_mtime_ns, before)
+        self.assertEqual((self.checkout / 'shared.out').read_bytes(), b'new\n')
+
+    def test_enospc_transition_rolls_back_all_prior_writes(self):
+        before = self.snapshot()
+        original_write = transition._write_file
+        count = 0
+        def exhausted(*args):
+            nonlocal count
+            count += 1
+            if count == 2:
+                raise OSError(errno.ENOSPC, 'fixture disk full')
+            return original_write(*args)
+        with patch.object(transition, '_write_file', exhausted):
+            with self.assertRaises(OSError) as error:
+                self.apply()
+        self.assertEqual(error.exception.errno, errno.ENOSPC)
+        self.assertEqual(self.snapshot(), before)
+
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
         self.addCleanup(self.tmp.cleanup)

@@ -476,22 +476,19 @@ elif name=='sudo' and args and args[0]=='timeout':
         self.assertNotIn('run_chrome_junit_tests_org.chromium.chrome.browser.tasks',gates)
         self.assertNotIn('out/Archium/obj/chrome/browser/password_manager/android',gates)
 
-    def test_workflow_exposes_source_identity_only_to_first_stage(self):
+    def test_workflow_exposes_source_identity_once_and_has_no_clean_continuation(self):
         workflow=(ROOT / '.github/workflows/baseline-build.yml').read_text()
-        first=workflow[workflow.index('  stage1:'):workflow.index('  stage2:')]
-        self.assertIn('inputs.source_checkpoint',first)
-        self.assertIn('inputs.source_commit',first)
-        continuation=workflow[workflow.index('  stage2:'):]
-        self.assertNotIn('inputs.source_commit',continuation)
-        stage=(ROOT / '.github/workflows/archium-stage.yml').read_text()
+        self.assertIn('workflow_dispatch:',workflow)
+        self.assertNotIn('push:',workflow)
+        self.assertIn('needs: preflight',workflow)
+        self.assertIn('archium-recovery-stage.yml',workflow)
+        self.assertNotIn('  stage2:',workflow)
+        stage=(ROOT / '.github/workflows/archium-recovery-stage.yml').read_text()
         self.assertIn('ARCHIUM_SOURCE_COMMIT:',stage)
-        self.assertIn('ARCHIUM_COMPILE_GATE_TARGETS:',stage)
-        self.assertIn('ARCHIUM_RUN_HOST_GATES:',stage)
-        self.assertIn('chrome_junit_tests',stage)
-        self.assertNotIn('chrome_junit_tests_org.chromium.chrome.browser.tasks',stage)
-        self.assertNotIn('validate_native:',stage)
-        baseline=(ROOT / '.github/workflows/baseline-build.yml').read_text()
-        self.assertNotIn('validate_native:',baseline)
+        self.assertEqual(stage.count('uses: actions/download-artifact'),1)
+        self.assertIn('build-archium-recovery.sh --prepare',stage)
+        self.assertIn('build-archium-recovery.sh --work',stage)
+        self.assertIn("steps.compile.outputs.complete == 'true'",stage)
 
 
 if __name__=='__main__':unittest.main()

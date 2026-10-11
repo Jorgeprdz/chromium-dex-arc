@@ -1,115 +1,64 @@
-name: Archium for Android build in resumable stages
+name: Archium R4 recovery incremental build
 on:
   workflow_dispatch:
     inputs:
+      expected_sha:
+        description: Exact reviewed recovery SHA
+        required: true
+        type: string
       source_checkpoint:
-        description: 'Explicit checkpoint tag from the previous implementation; empty for clean build'
+        description: Complete checkpoint tag; no clean fallback
+        required: true
         type: string
-        default: ''
       source_commit:
-        description: 'Exact 40-character commit that produced source_checkpoint'
+        description: Exact checkpoint source SHA
+        required: true
         type: string
-        default: ''
-  push:
-    branches:
-      - feat/arc-desktop
-    paths:
-      - .archium-final-dispatch
+      source_run_id:
+        description: Run containing those checkpoint artifacts
+        required: true
+        type: string
 permissions:
-  contents: write
+  contents: read
+  actions: read
 concurrency:
-  group: archium-build-staged
+  group: archium-native-Jorgeprdz-chromium-dex-arc
   cancel-in-progress: false
 jobs:
-  stage1:
-    uses: ./.github/workflows/archium-stage.yml
-    with:
-      stage: 1
-      source_tag: ${{ github.event_name == 'push' && 'archium-checkpoint-37255997027-7' || inputs.source_checkpoint }}
-      source_commit: ${{ github.event_name == 'push' && 'c8ffd13ee7fe1c6baab4913da6a01e8009febe18' || inputs.source_commit }}
-  stage2:
-    needs: stage1
-    if: needs.stage1.outputs.complete != 'true'
-    uses: ./.github/workflows/archium-stage.yml
-    with:
-      stage: 2
-      previous_tag: archium-checkpoint-${{ github.run_id }}-1
-  stage3:
-    needs: stage2
-    if: needs.stage2.outputs.complete != 'true'
-    uses: ./.github/workflows/archium-stage.yml
-    with:
-      stage: 3
-      previous_tag: archium-checkpoint-${{ github.run_id }}-2
-  stage4:
-    needs: stage3
-    if: needs.stage3.outputs.complete != 'true'
-    uses: ./.github/workflows/archium-stage.yml
-    with:
-      stage: 4
-      previous_tag: archium-checkpoint-${{ github.run_id }}-3
-  stage5:
-    needs: stage4
-    if: needs.stage4.outputs.complete != 'true'
-    uses: ./.github/workflows/archium-stage.yml
-    with:
-      stage: 5
-      previous_tag: archium-checkpoint-${{ github.run_id }}-4
-  stage6:
-    needs: stage5
-    if: needs.stage5.outputs.complete != 'true'
-    uses: ./.github/workflows/archium-stage.yml
-    with:
-      stage: 6
-      previous_tag: archium-checkpoint-${{ github.run_id }}-5
-  stage7:
-    needs: stage6
-    if: needs.stage6.outputs.complete != 'true'
-    uses: ./.github/workflows/archium-stage.yml
-    with:
-      stage: 7
-      previous_tag: archium-checkpoint-${{ github.run_id }}-6
-  stage8:
-    needs: stage7
-    if: needs.stage7.outputs.complete != 'true'
-    uses: ./.github/workflows/archium-stage.yml
-    with:
-      stage: 8
-      previous_tag: archium-checkpoint-${{ github.run_id }}-7
-  stage9:
-    needs: stage8
-    if: needs.stage8.outputs.complete != 'true'
-    uses: ./.github/workflows/archium-stage.yml
-    with:
-      stage: 9
-      previous_tag: archium-checkpoint-${{ github.run_id }}-8
-  stage10:
-    needs: stage9
-    if: needs.stage9.outputs.complete != 'true'
-    uses: ./.github/workflows/archium-stage.yml
-    with:
-      stage: 10
-      previous_tag: archium-checkpoint-${{ github.run_id }}-9
-  stage11:
-    needs: stage10
-    if: needs.stage10.outputs.complete != 'true'
-    uses: ./.github/workflows/archium-stage.yml
-    with:
-      stage: 11
-      previous_tag: archium-checkpoint-${{ github.run_id }}-10
-  stage12:
-    needs: stage11
-    if: needs.stage11.outputs.complete != 'true'
-    uses: ./.github/workflows/archium-stage.yml
-    with:
-      stage: 12
-      previous_tag: archium-checkpoint-${{ github.run_id }}-11
-  result:
-    needs: stage12
-    if: needs.stage12.outputs.complete == 'false'
+  authorize:
     runs-on: ubuntu-24.04
+    timeout-minutes: 2
     steps:
-      - name: Report resumable unfinished build
+      - name: Reject wrong branch or moving SHA
+        env:
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
         run: |
-          echo 'All 12 compilation slices consumed. Latest checkpoint remains available for continuation.' >&2
-          exit 1
+          set -euo pipefail
+          test "$GITHUB_REF_NAME" = assistant/archium-r4-recovery
+          test "$EXPECTED_SHA" = "$GITHUB_SHA"
+          [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+      - name: Reject concurrent native workflow from historical branches
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/baseline-build.yml/runs?per_page=100" > "$RUNNER_TEMP/native-runs.json"
+          python3 - "$RUNNER_TEMP/native-runs.json" <<'PY'
+          import json, os, sys
+          active = [r['id'] for r in json.load(open(sys.argv[1]))['workflow_runs']
+                    if r['status'] in ('in_progress', 'queued', 'waiting', 'pending')
+                    and str(r['id']) != os.environ['GITHUB_RUN_ID']]
+          if active:
+              raise SystemExit('Concurrent native run rejected: ' + str(active))
+          PY
+  preflight:
+    needs: authorize
+    uses: ./.github/workflows/archium-recovery-preflight.yml
+  build:
+    needs: preflight
+    uses: ./.github/workflows/archium-recovery-stage.yml
+    with:
+      expected_sha: ${{ inputs.expected_sha }}
+      source_checkpoint: ${{ inputs.source_checkpoint }}
+      source_commit: ${{ inputs.source_commit }}
+      source_run_id: ${{ inputs.source_run_id }}

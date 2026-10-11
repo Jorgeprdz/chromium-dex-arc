@@ -1,0 +1,63 @@
+name: Archium recovery host gates
+on:
+  workflow_call:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preflight:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Install bounded host tools
+        run: |
+          set -euo pipefail
+          timeout 300s sudo apt-get update
+          timeout 300s sudo apt-get install -y g++-14 gcc-14 ninja-build python3-pil python3-requests webp
+      - name: Build genuine GN at Chromium DEPS pin
+        env:
+          GN_REV: 3fef1f00031be0d3505e5338ca671ea3752e6fd8
+        run: |
+          set -euo pipefail
+          git clone --filter=blob:none --no-checkout https://gn.googlesource.com/gn "$RUNNER_TEMP/gn-src"
+          git -C "$RUNNER_TEMP/gn-src" fetch origin "$GN_REV"
+          git -C "$RUNNER_TEMP/gn-src" checkout --detach FETCH_HEAD
+          test "$(git -C "$RUNNER_TEMP/gn-src" rev-parse HEAD)" = "$GN_REV"
+          cd "$RUNNER_TEMP/gn-src"
+          CXX=g++-14 CC=gcc-14 python3 build/gen.py --allow-warning --out-path "$RUNNER_TEMP/gn-out"
+          ninja -C "$RUNNER_TEMP/gn-out" gn -j 4
+          "$RUNNER_TEMP/gn-out/gn" --version
+          echo "ARCHIUM_TEST_GN=$RUNNER_TEMP/gn-out/gn" >> "$GITHUB_ENV"
+      - name: Install SDK for host API and bounded resource probes
+        run: |
+          set -euo pipefail
+          SDKMANAGER="${ANDROID_HOME}/cmdline-tools/latest/bin/sdkmanager"
+          test -x "$SDKMANAGER"
+          "$SDKMANAGER" --install 'platforms;android-36' 'platforms;android-37.0' 'build-tools;37.0.0' < <(printf 'y\n%.0s' {1..100})
+          test -s "$ANDROID_HOME/platforms/android-36/android.jar"
+          test -x "$ANDROID_HOME/build-tools/37.0.0/aapt2"
+          echo "ARCHIUM_TEST_ANDROID_JAR=$ANDROID_HOME/platforms/android-36/android.jar" >> "$GITHUB_ENV"
+          echo "ARCHIUM_TEST_AAPT2=$ANDROID_HOME/build-tools/37.0.0/aapt2" >> "$GITHUB_ENV"
+      - name: Execute complete host suite and JVM API probes
+        run: |
+          set -euo pipefail
+          git diff --check
+          bash -n scripts/build-archium-recovery.sh
+          /usr/bin/python3 -m compileall -q scripts tests
+          /usr/bin/python3 scripts/check-arc-preparation.py --android-jar "$ARCHIUM_TEST_ANDROID_JAR"
+          /usr/bin/python3 -m unittest discover -s tests -p 'test_*.py' -v
+          /usr/bin/python3 scripts/check_portal_aapt2_fixture.py --android-jar "$ANDROID_HOME/platforms/android-37.0/android.jar" --aapt2 "$ARCHIUM_TEST_AAPT2"
+          echo 'PYTHON_HOST_PASS=PASS GN_REAL_PASS=PASS ROBOLECTRIC_PASS=PENDING_POST_RESTORE JNI_LINK_PASS=PENDING_POST_RESTORE'
+      - name: Reproduce generated patch twice and validate workflow syntax
+        run: |
+          set -euo pipefail
+          python3 scripts/generate-arc-patch.py
+          git diff --exit-code -- patches/archium-desktop.patch patches/upstream-files.json
+          sha256sum patches/archium-desktop.patch patches/upstream-files.json > "$RUNNER_TEMP/patch-first"
+          python3 scripts/generate-arc-patch.py
+          sha256sum patches/archium-desktop.patch patches/upstream-files.json > "$RUNNER_TEMP/patch-second"
+          cmp "$RUNNER_TEMP/patch-first" "$RUNNER_TEMP/patch-second"
+          go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.7

@@ -1,5 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
+# Recovery branch always uses the fresh restore-only orchestrator.
+# Legacy routing remains for historical branches/checkpoint evidence.
+if [[ "${GITHUB_REF_NAME:-}" == assistant/archium-r4-recovery ]]; then
+    exec bash "$(dirname "$0")/build-archium-recovery.sh" "$@"
+fi
 
 # This script may remove preinstalled SDKs ONLY on this project's disposable CI VM.
 if [[ "${GITHUB_ACTIONS:-}" != true || "${GITHUB_REPOSITORY:-}" != Jorgeprdz/chromium-dex-arc ]]; then
