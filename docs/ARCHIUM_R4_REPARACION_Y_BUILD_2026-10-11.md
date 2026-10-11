@@ -1,5 +1,40 @@
 # Archium R4 — reparación y build, 2026-10-11
 
+## Resultado observado: run 38177451098 FAILED en S0
+
+Este apartado sustituye el estado provisional del snapshot de dispatch inferior. La API confirma [run 38177451098](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38177451098) terminado con `failure`, source SHA `0514027dd41ddb568d033152c8faec76a388ba84`. La autorización de SHA y concurrencia pasó en job `114582731650`. El job [preflight 114582753899](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38177451098/job/114582753899) falló en `Execute complete host suite and JVM API probes`: 215 tests en 154.941 s, 192 passed, 23 failed, 0 skipped. El job build `114583898229` quedó skipped, sin steps. La API de artifacts devuelve `total_count=0`. No hubo descarga del checkpoint, restore, compilación nativa, APK ni instalación.
+
+**CAUSA_CONFIRMADA:** las fixtures de `tests/test_build_routing.py` copiaban `os.environ`, fijaban un SHA ficticio pero heredaban `GITHUB_REF_NAME=assistant/archium-r4-recovery` del job real. El dispatcher de `scripts/build-archium.sh` elegía correctamente el runner nuevo por esa rama; su protección rechazaba el SHA ficticio. Las 23 fallas pertenecen a estas fixtures antiguas. El SHA del dispatch real era correcto; no es un fallo demostrado de compilación Chromium.
+
+Brecha de validación previa: las pruebas locales anteriores no se ejecutaron con la rama ambiental de Actions, por lo que sus resultados no detectaron esta contaminación. La repetición local de la suite reparada fija ahora esa identidad real además de GN y SDK reales; sigue siendo una comprobación host local, no un nuevo PASS de GitHub Actions.
+
+Evidencia auténtica: `gh api repos/Jorgeprdz/chromium-dex-arc/actions/jobs/114582753899/logs` exit 0, archivo local `/workspace/archium-r4-evidence/run-38177451098-preflight.log`, SHA256 `5fc0cdf10406e52b3f9a3657984151a69284e63c4cac679a2fc2160d3c0a94d9`. Primera falla línea 719; detalle líneas 947–952, `test_changed_args_force_gn_even_for_current_checkpoint`, test source línea 274: `AssertionError: 2 != 0 : Dispatch SHA differs from the explicitly authorized SHA.` Resumen líneas 1153–1155. Instalación SDK y construcción de GN real pasaron; generación doble del patch posterior a la suite no se ejecutó en este run.
+
+### Reparación mínima y prueba negativa
+
+Archivos: `tests/test_build_routing.py` fija explícitamente su propia rama/ref antiguas; nuevo `tests/test_build_fixture_environment.py` ejecuta el Bash real de esa fixture bajo la identidad ambiental del run de recuperación y verifica también que el entorno padre no cambia. GN/native/artifacts de esa fixture son boundaries simulados; esta prueba no acredita compilación ni JNI. No se cambian scripts de producción, protección SHA, workflows, Java, iconos ni patch generado.
+
+Reproducción antes del fix: `GITHUB_REF_NAME=assistant/archium-r4-recovery GITHUB_REF=refs/heads/assistant/archium-r4-recovery GITHUB_SHA=0514027dd41ddb568d033152c8faec76a388ba84 python3 -m unittest discover -s tests -p test_build_routing.py -k real_java_preflight_precedes -v`, exit 1, mismo rechazo SHA. Regresión nueva RED: `python3 -m unittest discover -s tests -p test_build_fixture_environment.py -v`, exit 1, `AssertionError: 2 != 0`, archivo `recovery-ci-env-red.log`. Tras el fix, mismo comando GREEN, exit 0, 1 passed en 1.930 s, archivo `recovery-ci-env-green.log`.
+
+Verificación integral terminada: comando siguiente, exit **0**, **216 passed / 0 failed / 0 skipped**, 433.838 s. Las 23 fallas originales pasan, al igual que la regresión nueva, los tres perfiles GN reales, JVM release/debug y AAPT2 acotado real. La suite incluye boundaries nativos simulados que no se cuentan como compilación Chromium. Log `/workspace/archium-r4-evidence/recovery-ci-env-full-host.log`, SHA256 `b911724aad6fc164dca80b6b05c6e27065177949b3093ba8b3c3a49054f38d4b`.
+
+```bash
+GITHUB_ACTIONS=true GITHUB_REPOSITORY=Jorgeprdz/chromium-dex-arc \
+GITHUB_REF_NAME=assistant/archium-r4-recovery \
+GITHUB_REF=refs/heads/assistant/archium-r4-recovery \
+GITHUB_SHA=0514027dd41ddb568d033152c8faec76a388ba84 GITHUB_RUN_ID=38177451098 \
+ARCHIUM_TEST_GN=/usr/bin/gn \
+ARCHIUM_TEST_AAPT2=/opt/android-sdk/build-tools/37.0.0/aapt2 \
+ARCHIUM_TEST_ANDROID_JAR=/opt/android-sdk/platforms/android-37.0/android.jar \
+python3 -m unittest discover -s tests -p 'test_*.py' -v
+```
+
+`git diff --check` y `python3 -m compileall -q tests` exit 0. Ningún diff en `scripts`, workflows o patch; hashes del patch y manifest siguen `bcc1fa363379e9851da4ef7d2611aadfaf604064dcfb21ec51cc5b0bb9c55e75` y `b5fbe0b0169636108a5bc84ac52aaf6020f6cfb048fee92f2b2ce9998b8f0f84`. Refs remotas antes de publicar: rama activa `7bb0f87288147bbd233d77c6d90c2ed0b35c253b`, protegida `51e5ed429661727156ab2534caac99a82ee9264b`, main `6274c653bbe3992403a89b1531d0c1f91646bf6d`. No runs en curso ni en cola. API confirma tres grupos del checkpoint no expirados, con tamaños y digests anteriores intactos; vencen el 25 de octubre.
+
+Estado actual: `HOST_TESTS=PASS_LOCAL_CI_ENV`, `GN_MEDIA_3_CASES=PASS`, `BUILD_STAGE=S0`, `BUILD=FAIL`, `WORKFLOW_RUN=38177451098`, `AAPT2_REAL_RESOURCES=PENDING_POST_RESTORE`, `ROBOLECTRIC=NOT_EXECUTED_CHROMIUM`, `JNI_LINK=NOT_EXECUTED_NEW_RUN`, `APK_PACKAGE=NONE`, `APK_SHA256=NONE`, `APK_ARTIFACT=NONE`, `ANDROID_RUNTIME=NOT_EXECUTED`. Los resultados previos de Robolectric aislado no equivalen a integración Chromium. El próximo gate pendiente es repetir S0 remoto con el fix publicado; S1–S5 requieren una nueva autorización de corrida pesada.
+
+Riesgo: los tests históricos deben ejercer su rama declarada; los tests del runner nuevo siguen validando su autorización de forma independiente. El run fallido permanece FAILED. El checkpoint fuente `archium-checkpoint-38165289963-1` se conserva remoto. La capacidad local medida es 80,935,174,144 bytes, inferior al margen requerido de 100,420,496,293; no se descarga ni elimina ningún output válido. No se lanza automáticamente otro workflow pesado: la autorización de una corrida ya fue consumida.
+
 ## Dispatch observado (2026-10-11 21:42 UTC)
 
 RUN=[38177451098](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38177451098), sourceSHA=`0514027dd41ddb568d033152c8faec76a388ba84`, branchassistant/archium-r4-recovery, workflowID374835814 baseline-build.yml. Comando real `gh workflow run 374835814 --repo Jorgeprdz/chromium-dex-arc --ref assistant/archium-r4-recovery -f expected_sha=0514027dd41ddb568d033152c8faec76a388ba84 -f source_checkpoint=archium-checkpoint-38165289963-1 -f source_commit=dcbd868ea42ffd0991c01c2872adce01316a9768 -f source_run_id=38165289963` exit0. API confirma mismoSHA/statusin_progress. Job114582731650authorize SUCCESS (SHA y concurrencia). Job114582753899preflight/preflight en curso. S0; todavía sin restore/native/APK. No segundo dispatch. La actualización de este informe es solo documentación, posterior alSHA fuente fijado y no altera el checkout delrun.

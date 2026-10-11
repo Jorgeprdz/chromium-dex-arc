@@ -96,7 +96,10 @@ elif name=='sudo' and args and args[0]=='timeout':
         self.env = {**os.environ, 'PATH': str(self.bin) + ':' + os.environ['PATH'],
                     'MOCK_TRACE': str(self.trace), 'GITHUB_ACTIONS': 'true',
                     'GITHUB_REPOSITORY': 'Jorgeprdz/chromium-dex-arc',
-                    'GITHUB_SHA': CURRENT_COMMIT, 'RUNNER_TEMP': str(self.root / 'runner'),
+                    'GITHUB_SHA': CURRENT_COMMIT,
+                    'GITHUB_REF_NAME': 'assistant/archium-r3-visual-fixes',
+                    'GITHUB_REF': 'refs/heads/assistant/archium-r3-visual-fixes',
+                    'RUNNER_TEMP': str(self.root / 'runner'),
                     'GITHUB_WORKSPACE': str(self.repo), 'GITHUB_OUTPUT': str(self.output),
                     'ARCHIUM_CHECKPOINT_TAG': 'archium-checkpoint-456-2'}
         for name in ['ARCHIUM_SOURCE_TAG', 'ARCHIUM_SOURCE_COMMIT', 'ARCHIUM_PREVIOUS_TAG',
