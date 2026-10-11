@@ -1,5 +1,26 @@
 # Archium R4 — reparación y build, 2026-10-11
 
+## Autorización renovada y nuevo dispatch: run 38180906742
+
+Orden posterior del usuario: «cada que tengamos runs fallidos aplica fix y manda el run inmediatamente». Esta autorización sustituye el límite anterior de una sola corrida y la necesidad de pedir permiso tras cada fallo. Se conservan la verificación del fix, gates bloqueantes, ausencia de compilaciones concurrentes, checkpoints compatibles, límite de slices, prohibición de clean fallback y ramas protegidas. No se convierte un run fallido en PASS ni se despacha sin una reparación respaldada por evidencia.
+
+Run real [38180906742](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38180906742), creado `2026-10-11T22:33:38Z`, source SHA **f84a0998b4af4d0a5c06a6f2b339e82f7c1f1f1f**, rama `assistant/archium-r4-recovery`, workflow `374835814` (`baseline-build.yml`). Comando real, exit 0:
+
+```bash
+gh workflow run 374835814 --repo Jorgeprdz/chromium-dex-arc \
+  --ref assistant/archium-r4-recovery \
+  -f expected_sha=f84a0998b4af4d0a5c06a6f2b339e82f7c1f1f1f \
+  -f source_checkpoint=archium-checkpoint-38165289963-1 \
+  -f source_commit=dcbd868ea42ffd0991c01c2872adce01316a9768 \
+  -f source_run_id=38165289963
+```
+
+Antes del dispatch: árbol limpio, HEAD local/remoto iguales; ningún run in_progress o queued. Tres grupos checkpoint unexpired con tamaños/digests intactos. `feat/arc-desktop` sigue `51e5ed429661727156ab2534caac99a82ee9264b`; `main` sigue `6274c653bbe3992403a89b1531d0c1f91646bf6d`. Fix preflight publicado y suite integral 216/216 exit 0 bajo identidad CI real (registro inferior).
+
+Snapshot observado por API: `RUN=in_progress`, `BUILD_STAGE=S0`, `BUILD=INCOMPLETE`. Job [114593069927 authorize](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38180906742/job/114593069927) SUCCESS, SHA y concurrencia comprobados. Job [114593098065 preflight](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38180906742/job/114593098065) en curso, construcción GN real. No se declara restore/JNI/ChromeJUnit/APK PASS. El SHA del run permanece fijado; este registro posterior solo cambia documentación.
+
+Monitor arrancado en nueva sesión nativa Termux **#3**, launcher `/data/data/com.termux/files/home/archium-r4-monitor-termux.sh` actualizado con RUN/SHA exactos. Se usó un shortcut local `./m4` para evitar introducir una ruta larga mientras cambia el foco de DeX. PID observado `26006`: `/usr/bin/python3 /workspace/macdesk-maintenance/archium-r4-monitor.py --run 38180906742 --sha f84a0998b4af4d0a5c06a6f2b339e82f7c1f1f1f`. `bash -n` launcher exit 0. Archivo real `/workspace/.archium-install/38180906742/screen.txt`, UTC 22:37:33: run EN CURSO, elapsed 00:03:55, ETA N/D, 0/6 fases completadas; actividad suite host CI. GN real e instalación SDK ya completados en API. Refresco 600 s; líneas de color, bold/italic, tres eventos API explícitamente etiquetados hasta publicación del log. Mantiene descarga/instalación condicionadas a éxito y verificación de APK; ningún APK descargado ni instalado en este snapshot.
+
 ## Resultado observado: run 38177451098 FAILED en S0
 
 Este apartado sustituye el estado provisional del snapshot de dispatch inferior. La API confirma [run 38177451098](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38177451098) terminado con `failure`, source SHA `0514027dd41ddb568d033152c8faec76a388ba84`. La autorización de SHA y concurrencia pasó en job `114582731650`. El job [preflight 114582753899](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38177451098/job/114582753899) falló en `Execute complete host suite and JVM API probes`: 215 tests en 154.941 s, 192 passed, 23 failed, 0 skipped. El job build `114583898229` quedó skipped, sin steps. La API de artifacts devuelve `total_count=0`. No hubo descarga del checkpoint, restore, compilación nativa, APK ni instalación.
