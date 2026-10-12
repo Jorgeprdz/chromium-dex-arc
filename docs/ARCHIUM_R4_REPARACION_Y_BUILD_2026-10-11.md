@@ -965,3 +965,124 @@ y diagnóstico. Ninguna nueva compilación Chromium está en curso.
 Se reutilizan individualmente herramientas verificadas de checkpoint/transición
 y recursos; no se copia el orquestador ni el conjunto de cambios de la rama vieja.
 Plan y especificación: docs/superpowers/{plans,specs}/2026-10-11-archium-recovery.md.
+
+## 2026-10-12 — Crash DeX posterior a la primera APK instalada
+
+HEAD_START=`91e5937ffd57cc85b45418e22c3e0ef5fb5ae6f7`.
+La APK del [run 38210970891](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38210970891)
+se compiló e instaló; sus bytes instalados coinciden con el artifact:
+`c4e48452380320867a7b8fad7711ea5e3b7d5683963b997a253a46b8eebefc3a`.
+Package `app.archium.android`, ARM64, versión 157.0.8086.0 / 808600074.
+La prueba del usuario confirma crash al abrir DeX: **ANDROID_RUNTIME=FAIL** para
+esa APK. No se convierte el build exitoso en aceptación del navegador.
+
+### Investigación y procedencia
+
+`adb -s emulator-5554 logcat -b crash -d -v threadtime` y captura del log general:
+exit 0. A las 07:24:29.164 aparece NPE en `pkg.onResult`, `tcg.e(boolean)`;
+a las 07:45:35.120 aparece `ViewRootImpl cannot be cast to View` en `a7i.e`,
+`q5h.s`, `l4h.f`. Líneas originales del crash buffer: **187175** y **187204**.
+Se filtran exclusivamente las excepciones de Archium en
+[excerpts](evidence/2026-10-12-dex-runtime/archium-exception-excerpts.txt).
+El buffer completo permanece local; no se publican otros apps ni datos privados.
+
+Se extraen classes.dex/classes2.dex de la APK real y se inspeccionan con
+`dexdump -d` real del SDK bajo QEMU: exit 0. Los métodos/bytecode identifican
+`ToolbarLayout.getLocationBarContentRect` y el callback de vertical tabs con
+`TabStripTransitionCoordinator` nulo. No hubo mapping R8 disponible ni se inventó
+uno. Se comparan clases fuente y tests descargados del pin exacto de Googlesource.
+
+La corrección de estos casos ya existía en
+[`1255da5`](https://github.com/Jorgeprdz/chromium-dex-arc/commit/1255da5745e3cd1453ff17f3b237cd3f97a24b58)
+y la de posición de sugerencias en
+[`a1f3f2b`](https://github.com/Jorgeprdz/chromium-dex-arc/commit/a1f3f2bb5d2e50437aca5b47c63014e38fa998a8).
+Se habían omitido en la recuperación actual. Se recuperan los hunks concretos,
+no el historial completo ni un refactor de la sidebar. **La omnibox sigue siendo
+la LocationBar nativa en la sidebar.** El contrato de ancestro se adapta a
+coordenadas de la ventana compartida; detach/otra ventana invalida el rect/lista.
+ToolbarPhone no espera una transición horizontal inexistente; el callback limpia
+estado/observadores. El caso tablet conserva suppress/unsuppress y resume.
+
+`git fetch origin feat/arc-desktop`, exit 0, revela una referencia local obsoleta:
+el local protegido tenía f71df25, mientras el remoto real sigue en 51e5ed4.
+Se actualiza solamente origin/FETCH_HEAD. `git merge-base HEAD origin/feat/arc-desktop`
+devuelve `51e5ed429661727156ab2534caac99a82ee9264b`. No se mueve la rama protegida.
+`main` remoto sigue `6274c653bbe3992403a89b1531d0c1f91646bf6d`.
+
+Se lee el prompt protegido R3 completo y se contrasta con implementación viva:
+[matriz de 12 requisitos](ARCHIUM_R3_VERIFICACION_2026-10-12.md).
+El color de selección normal incumplía la cápsula blanca; se reproduce y repara
+solo ese estado, con contraste correcto y ramas mobile/incógnito/multi-select
+conservadas. Tooltip de nueva pestaña compacta/navegación usa la etiqueta existente.
+**Blur/vibrancy real no implementado**: fallback opaco configurable explícito;
+WindowManager del teléfono muestra mBlurEnabled=false tras desconectar DeX,
+lo que no prueba una limitación permanente del compositor externo.
+
+### Comandos, RED/GREEN y gates
+
+| Comando | Resultado observado | Alcance |
+|---|---|---|
+| `python3 -m unittest discover -s tests -p test_arc_toolbar_runtime.py -v` | RED exit 1; GREEN exit 0, 6 tests/12 escenarios | Métodos reales; doubles de servicios, no integración Chromium |
+| `python3 scripts/test-android-arc-toolbar.py --device emulator-5554 --sdk /opt/android-sdk --platform-version 37.0 --build-tools-version 37.0.0 --display-id 17 --original` | RED exit 1 con ViewRootImpl real; sin `--original`: GREEN exit 0 | Instrumentación acotada en Samsung, display DeX |
+| Mismo probe con `--original-dropdown` | RED exit 1, fallo de coordenadas de sugerencias en display 17 | Mismo contrato de ancestro de upstream |
+| Probe final en display 17 tras desconectar DeX | Exit 1, SecurityException al lanzar en display ausente | Bloqueo de entorno, no PASS ni skip |
+| Probe final `--display-id 0` | Exit 0: captura+sugerencias reparent/descendiente/detach/otra ventana | Android real; no navegador completo ni validación final DeX |
+| `python3 -m unittest discover -s tests -p test_r3_active_tab_color.py -v` | RED exit 1: ffffffff != ffcacccf; GREEN exit 0 | Binder real ejecutado en límite JVM |
+| `python3 -m unittest discover -s tests -p 'test_*.py' -v` con GN/Ninja/SDK reales | Exit 0, **242 passed / 0 failed / 0 skipped**, 481.682 s | PYTHON_HOST_PASS y GN_MEDIA_3_CASES PASS; no Robolectric/JNI PASS adelantado |
+| `python3 scripts/check-arc-preparation.py --android-jar /opt/android-sdk/platforms/android-36/android.jar` | Exit 0 | Aplicación patch/hash + Java puro + API SDK acotada |
+| `python3 scripts/generate-arc-patch.py` dos veces + SHA256 | Exit 0, 109 files, hashes idénticos | PATCH_REPRODUCIBILITY=PASS |
+| `git diff --check`, `bash -n`, `python3 -m compileall -q scripts tests`, ShellCheck y actionlint | Exit 0 cada uno | STATIC_PASS |
+
+Patch SHA256 `455f96daed8a222c1769253bc8886feb95e36f5d816c91ce8d5bda9c0129dd8b`.
+Manifest SHA256 `034955d92e9f5ec6d69de2b3da1e0ff12fd5f9e11b30b06afa36878d1408f276`.
+Hashes de evidencias en [results.json](evidence/2026-10-12-dex-runtime/results.json).
+No se toca payments, pin, toolchain, identidad Portal, preferencias de ancho ni
+la deprecación del backend propio de contraseñas.
+
+ChromeJUnit nuevo/ampliado se registra y ejecuta como gate fatal antes de libchrome:
+`ArcToolbarReparentingTest`, `ArcTabSelectionTest`,
+`TabbedRootUiCoordinatorUnitTest`, `OmniboxSuggestionsDropdownEmbedderImplUnitTest`.
+También se incluye en la batería final de S3. **ROBOLECTRIC=PENDING_POST_RESTORE**,
+**JNI_LINK=NOT_EXECUTED** para este candidato. Una regresión aborta enlace/APK.
+Los resultados del run anterior no se trasladan como PASS al código nuevo.
+
+### Checkpoint, disco y conectividad
+
+El run exitoso 38210970891 solo publicó la APK, no checkpoint. Se mantiene la
+fuente compatible más reciente: **archium-checkpoint-38203819481-1**,
+source `2de41680a42972253e8daf4cf818938dacf79a93`, 25 fragmentos/4 grupos,
+**26510091404 bytes** de artifacts; no expirados, 2026-10-26 05:26–05:29 UTC.
+API IDs: 11727898692 / 11728410183 / 11728395785 / 11727764299.
+Inventario, digests y permisos de lectura verificados. HTTP Range del manifest:
+solo **5381 bytes**, hash
+`c9c1ee1436df108c8c3a167bf47980e250ad73123bdf7507eb8c2b476448b02c`.
+SHA/tag/pin/25 partes correctos; checksum completo de fragmentos PENDING_S1.
+
+Disco local medido con statvfs: **75389485056 bytes**, **11614339 inodos**.
+Requiere **101510091404 bytes** según política vigente. Gate CLI oficial local:
+exit 1 por disco insuficiente, antes de descargar. **No se descargan 26 GB en
+el teléfono, no se baja el umbral, no clean fallback.** La capacidad del runner
+se mide como gate S0 del mismo workflow antes de S1; estado PENDING_S0 hasta
+observar ese resultado remoto. Checkpoint fuente permanece recuperable.
+
+Al salir de DeX/cambiar red hubo un fallo DNS transitorio en lectura Range,
+exit 1; repetición posterior exit 0 con manifest coincidente y gh API/ls-remote
+correctos. La compilación ocurre en GitHub; el monitor nativo Termux mantiene
+wake-lock y refresco de 600 s. Mantener Termux sin optimización de batería y
+con datos de fondo; no se promete supervivencia si Android mata el proceso.
+Antes del dispatch se verifica ausencia de runs nativos activos, SHA remoto y
+workflow manual/concurrency existente. El ID exacto se registra después del
+dispatch autorizado. No se declara APK/runtime nuevo antes de ese resultado.
+
+Revisión independiente read-only (superpowers:requesting-code-review): cero
+Critical/Important establecidos; APIs y package visibility contrastados con pin.
+Minor corregido: descripción del test de color precisada a su alcance real.
+Minor pendiente de APK: posición vertical final del dropdown bajo la omnibox;
+se incluye explícitamente en la aceptación DeX. Cambio final es comentario,
+sin invalidar los 242 tests; patch regenerado dos veces, hashes finales arriba.
+Termux ya figura en whitelist de batería y tiene PARTIAL_WAKE_LOCK activo,
+observados con adb; no se cambian permisos ni configuración celular.
+
+Runtime fix commit: `eaeac984687e999b86a4e6129e97698dd8721c77`; preparación final de patch
+y API SDK repetida tras precisar comentario: exit 0. La batería 242/0/0
+precede solo a ese cambio de comentario, sin cambio de comportamiento.

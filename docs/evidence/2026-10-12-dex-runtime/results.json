@@ -1,0 +1,89 @@
+{
+  "recorded_utc": "2026-10-12T16:00:56.422906+00:00",
+  "head_start": "91e5937ffd57cc85b45418e22c3e0ef5fb5ae6f7",
+  "protected_branch_sha": "51e5ed429661727156ab2534caac99a82ee9264b",
+  "chromium_pin": "cfd94726b7b5fb48aedcc32662f2f3fbdbadec35",
+  "installed_run": 38210970891,
+  "installed_apk_sha256": "c4e48452380320867a7b8fad7711ea5e3b7d5683963b997a253a46b8eebefc3a",
+  "host_tests": {
+    "passed": 242,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 481.682,
+    "exit_code": 0
+  },
+  "scopes": {
+    "host_runtime_probe": "real production method bodies with explicit service doubles; not full Chromium",
+    "android_geometry": "real Android views in disposable instrumentation; not full browser",
+    "chromium_robolectric": "PENDING_POST_RESTORE; blocking before libchrome",
+    "new_apk_android_runtime": "NOT_EXECUTED"
+  },
+  "patch_sha256": "455f96daed8a222c1769253bc8886feb95e36f5d816c91ce8d5bda9c0129dd8b",
+  "patch_manifest_sha256": "034955d92e9f5ec6d69de2b3da1e0ff12fd5f9e11b30b06afa36878d1408f276",
+  "logs": {
+    "toolbar-host-red.log": {
+      "sha256": "40f43c129f48f13cee9f0f6cf9583d457cc5182180f397a8c44eaf54ca3494e2",
+      "local_file": "/workspace/archium-r4-evidence/dex-crash-20261012/toolbar-host-red.log"
+    },
+    "toolbar-host-green.log": {
+      "sha256": "e77cb637dc2eac3ddba557382d9a987af43dfdf0ea13982c486e66f8ab46d0d3",
+      "local_file": "/workspace/archium-r4-evidence/dex-crash-20261012/toolbar-host-green.log"
+    },
+    "toolbar-android-red.log": {
+      "sha256": "c6e0f64e68d767f470f29418b30213552b60b8cbe66c3e66d5454c144a584fe1",
+      "local_file": "/workspace/archium-r4-evidence/dex-crash-20261012/toolbar-android-red.log"
+    },
+    "toolbar-android-green.log": {
+      "sha256": "e1e3ca9daee655472662932a8b8dfbeb1aafd335a2c0670cfc9d65e70726814f",
+      "local_file": "/workspace/archium-r4-evidence/dex-crash-20261012/toolbar-android-green.log"
+    },
+    "dropdown-android-red.log": {
+      "sha256": "975e0a6b240ce0cea6774e6ca795b8193ce6bfcf61f88c19edd33a8182ed78e5",
+      "local_file": "/workspace/archium-r4-evidence/dex-crash-20261012/dropdown-android-red.log"
+    },
+    "toolbar-dropdown-android-green.log": {
+      "sha256": "23de39304b8291786432281bc3cace646391915de4c2b49bc5b3cb5537c5cfa4",
+      "local_file": "/workspace/archium-r4-evidence/dex-crash-20261012/toolbar-dropdown-android-green.log"
+    },
+    "toolbar-dropdown-android-display0-green.log": {
+      "sha256": "346d2f10361376499953c99cb3710b490e1eca0a08fd9be959db1b50e956cde3",
+      "local_file": "/workspace/archium-r4-evidence/dex-crash-20261012/toolbar-dropdown-android-display0-green.log"
+    },
+    "active-tab-red.log": {
+      "sha256": "1d6ffa9b29d3d307bd20047871211133631af6f192fa93762cf0679d842926e4",
+      "local_file": "/workspace/archium-r4-evidence/dex-crash-20261012/active-tab-red.log"
+    },
+    "active-tab-green.log": {
+      "sha256": "2ea7bcd402b86dde5b24aeaaa046b0d3f3946c3e64934cb9feb8eb9699bcdbc9",
+      "local_file": "/workspace/archium-r4-evidence/dex-crash-20261012/active-tab-green.log"
+    },
+    "host-full-runtime-fix.log": {
+      "sha256": "922cc8ec1c71581de4a83ddff73b9c7418fd7516e152ca7d8dbb4560103f1d03",
+      "local_file": "/workspace/archium-r4-evidence/dex-crash-20261012/host-full-runtime-fix.log"
+    },
+    "preparation-runtime-fix.log": {
+      "sha256": "38bd977399602b6b0d5a07e11bccd695c4440ddb61a28a2e80179298e4138958",
+      "local_file": "/workspace/archium-r4-evidence/dex-crash-20261012/preparation-runtime-fix.log"
+    },
+    "preparation-final-patch.log": {
+      "sha256": "a30f581550ed41bf1433c59f6f30aa130b5326da176e793a50d13558accf97ac",
+      "local_file": "/workspace/archium-r4-evidence/dex-crash-20261012/preparation-final-patch.log",
+      "exit_code": 0
+    }
+  },
+  "checkpoint": {
+    "artifact_id": 11727898692,
+    "range_bytes_read": 5381,
+    "manifest_sha256": "c9c1ee1436df108c8c3a167bf47980e250ad73123bdf7507eb8c2b476448b02c",
+    "tag": "archium-checkpoint-38203819481-1",
+    "commit": "2de41680a42972253e8daf4cf818938dacf79a93",
+    "parts": 25,
+    "compressed_bytes": 26510082500
+  },
+  "runtime_fix_commit": "eaeac984687e999b86a4e6129e97698dd8721c77",
+  "review": {
+    "critical": 0,
+    "important": 0,
+    "remaining": "full browser vertical dropdown/DeX acceptance pending; clarified test comment"
+  }
+}

@@ -1,0 +1,29 @@
+Original crash-buffer line 187175
+10-12 07:24:29.164  9530  9530 E AndroidRuntime: FATAL EXCEPTION: main
+10-12 07:24:29.164  9530  9530 E AndroidRuntime: Process: app.archium.android, PID: 9530
+10-12 07:24:29.164  9530  9530 E AndroidRuntime: java.lang.NullPointerException: Attempt to invoke virtual method 'void tcg.e(boolean)' on a null object reference
+10-12 07:24:29.164  9530  9530 E AndroidRuntime: 	at pkg.onResult(chromium-ChromePublic.apk-default-808600074:45)
+10-12 07:24:29.164  9530  9530 E AndroidRuntime: 	at tga.set(chromium-ChromePublic.apk-default-808600074:37)
+10-12 07:24:29.164  9530  9530 E AndroidRuntime: 	at n1i.j(chromium-ChromePublic.apk-default-808600074:9)
+10-12 07:24:29.164  9530  9530 E AndroidRuntime: 	at eee.p(chromium-ChromePublic.apk-default-808600074:42)
+10-12 07:24:29.164  9530  9530 E AndroidRuntime: 	at eee.w(chromium-ChromePublic.apk-default-808600074:1332)
+10-12 07:24:29.164  9530  9530 E AndroidRuntime: 	at eee.onConfigurationChanged(chromium-ChromePublic.apk-default-808600074:8)
+10-12 07:24:29.164  9530  9530 E AndroidRuntime: 	at di0.onConfigurationChanged(chromium-ChromePublic.apk-default-808600074:28)
+10-12 07:24:29.164  9530  9530 E AndroidRuntime: 	at android.app.ActivityThread.performActivityConfigurationChanged(ActivityThread.java:7908)
+10-12 07:24:29.164  9530  9530 E AndroidRuntime: 	at android.app.ActivityThread.performConfigurationChangedForActivity(ActivityThread.java:7807)
+10-12 07:24:29.164  9530  9530 E AndroidRuntime: 	at android.app.ActivityThread.handleActivityConfigurationChangedInner(ActivityThread.java:8310)
+
+Original crash-buffer line 187204
+10-12 07:45:35.120 17170 17170 E AndroidRuntime: FATAL EXCEPTION: main
+10-12 07:45:35.120 17170 17170 E AndroidRuntime: Process: app.archium.android, PID: 17170
+10-12 07:45:35.120 17170 17170 E AndroidRuntime: java.lang.ClassCastException: android.view.ViewRootImpl cannot be cast to android.view.View
+10-12 07:45:35.120 17170 17170 E AndroidRuntime: 	at a7i.e(chromium-ChromePublic.apk-default-808600074:45)
+10-12 07:45:35.120 17170 17170 E AndroidRuntime: 	at q5h.s(chromium-ChromePublic.apk-default-808600074:48)
+10-12 07:45:35.120 17170 17170 E AndroidRuntime: 	at l4h.f(chromium-ChromePublic.apk-default-808600074:60)
+10-12 07:45:35.120 17170 17170 E AndroidRuntime: 	at h6i.onResult(chromium-ChromePublic.apk-default-808600074:9)
+10-12 07:45:35.120 17170 17170 E AndroidRuntime: 	at dre.a(chromium-ChromePublic.apk-default-808600074:102)
+10-12 07:45:35.120 17170 17170 E AndroidRuntime: 	at i6i.i(chromium-ChromePublic.apk-default-808600074:29)
+10-12 07:45:35.120 17170 17170 E AndroidRuntime: 	at l4h.i(chromium-ChromePublic.apk-default-808600074:8)
+10-12 07:45:35.120 17170 17170 E AndroidRuntime: 	at av6.run(chromium-ChromePublic.apk-default-808600074:29)
+10-12 07:45:35.120 17170 17170 E AndroidRuntime: 	at b52.run(chromium-ChromePublic.apk-default-808600074:8)
+10-12 07:45:35.120 17170 17170 E AndroidRuntime: 	at android.os.Handler.handleCallback(Handler.java:1070)
