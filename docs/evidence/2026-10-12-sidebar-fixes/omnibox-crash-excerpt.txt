@@ -1,0 +1,9 @@
+10-12 13:15:53.929 14178 14178 E AndroidRuntime: FATAL EXCEPTION: main
+10-12 13:15:53.929 14178 14178 E AndroidRuntime: Process: app.archium.android, PID: 14178
+10-12 13:15:53.929 14178 14178 E AndroidRuntime: java.lang.reflect.UndeclaredThrowableException
+10-12 13:15:53.929 14178 14178 E AndroidRuntime: Caused by: java.lang.ClassCastException: android.view.ViewRootImpl cannot be cast to android.view.View
+10-12 13:15:53.929 14178 14178 E AndroidRuntime: 	at a7i.f(chromium-ChromePublic.apk-default-808600074:41)
+10-12 13:15:53.929 14178 14178 E AndroidRuntime: 	at org.chromium.chrome.browser.omnibox.LocationBarTablet.T(chromium-ChromePublic.apk-default-808600074:353)
+10-12 13:15:53.929 14178 14178 E AndroidRuntime: 	at org.chromium.chrome.browser.omnibox.LocationBarTablet.x(chromium-ChromePublic.apk-default-808600074:3)
+10-12 13:15:53.929 14178 14178 E AndroidRuntime: 	at org.chromium.chrome.browser.omnibox.UrlBarApi26.onFocusChanged(chromium-ChromePublic.apk-default-808600074:77)
+10-12 13:15:53.929 14178 14178 E AndroidRuntime: 	at org.chromium.chrome.browser.omnibox.UrlBarApi26.performClick(chromium-ChromePublic.apk-default-808600074:28)

@@ -6,12 +6,13 @@ package org.chromium.chrome.browser.arc;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.SharedPreferences;
-import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.Outline;
 import android.graphics.Path;
 import android.os.Build;
 import android.graphics.drawable.Drawable;
+import android.graphics.drawable.ColorDrawable;
+import android.text.TextUtils;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
 import android.content.res.ColorStateList;
@@ -76,7 +77,8 @@ public final class ArcDesktopCoordinator {
     private final ViewGroup.LayoutParams mCollapseButtonOriginalLayoutParams;
     private final LinearLayout mHeaderActions;
     private final LinearLayout mFooter;
-    private final Button mPasswordButton;
+    private final ImageButton mAppearanceButton;
+    private final ArcCompactOmnibox mCompactOmnibox;
     private final View mLocationBarHost;
     private final ViewGroup mLocationBarOriginalParent;
     private final int mLocationBarOriginalIndex;
@@ -84,6 +86,8 @@ public final class ArcDesktopCoordinator {
     private final CompositorViewHolder mCompositorViewHolder;
     private final View mFrameRoot;
     private final Drawable mOriginalFrameBackground;
+    private final Drawable mOriginalRailBackground;
+    private final ColorStateList mOriginalRailBackgroundTint;
     private final ViewOutlineProvider mOriginalContentOutlineProvider;
     private final boolean mOriginalContentClipToOutline;
     private final int mOriginalContentMarginLeft;
@@ -123,7 +127,10 @@ public final class ArcDesktopCoordinator {
     private ViewOutlineProvider mClippedSurfaceOriginalOutlineProvider;
     private boolean mClippedSurfaceOriginalClipToOutline;
     private AlertDialog mColorDialog;
-    private Integer mPreviewFrameColor;
+    private boolean mPaletteInitialized;
+    private int mPaletteSurface;
+    private boolean mPaletteDesktop;
+    private boolean mPaletteIncognito;
     private final ArcFrameDispatch mFrameDispatch;
 
     public ArcDesktopCoordinator(Activity activity, ViewGroup rail,
@@ -150,6 +157,8 @@ public final class ArcDesktopCoordinator {
         mIncognitoObserver = incognito -> { if (!mDestroyed) { rebindCollections(); applyAppearance(); } };
         mIcons = new LargeIconBridge(profile);
         mPreferences = ArcDesktopAppearance.preferences(activity);
+        mOriginalRailBackground = rail.getBackground();
+        mOriginalRailBackgroundTint = rail.getBackgroundTintList();
         mOriginalRailPaddingLeft = rail.getPaddingLeft();
         mOriginalRailPaddingTop = rail.getPaddingTop();
         mOriginalRailPaddingRight = rail.getPaddingRight();
@@ -243,6 +252,7 @@ public final class ArcDesktopCoordinator {
         mCollapseButtonOriginalIndex = mCollapseButtonOriginalParent.indexOfChild(mCollapseButton);
         mCollapseButtonOriginalLayoutParams = mCollapseButton.getLayoutParams();
         mLocationBarHost = locationBarHost;
+        mCompactOmnibox = new ArcCompactOmnibox(locationBarHost);
         mLocationBarOriginalParent = (ViewGroup) mLocationBarHost.getParent();
         mLocationBarOriginalIndex = mLocationBarOriginalParent.indexOfChild(mLocationBarHost);
         mLocationBarOriginalLayoutParams = mLocationBarHost.getLayoutParams();
@@ -302,13 +312,31 @@ public final class ArcDesktopCoordinator {
         Button bookmarksButton = button(activity.getString(R.string.arc_bookmarks), openBookmarks);
         Button googleButton = button("Google", () -> {});
         googleButton.setOnClickListener(v -> showGoogleMenu(v));
-        Button appearanceButton = button("●", this::showColorPicker);
+        ImageButton appearanceButton = new ImageButton(activity);
+        mAppearanceButton = appearanceButton;
+        GradientDrawable wheel = new GradientDrawable();
+        wheel.setShape(GradientDrawable.OVAL);
+        wheel.setGradientType(GradientDrawable.SWEEP_GRADIENT);
+        wheel.setColors(new int[] {0xffef5350, 0xffffca28, 0xff66bb6a, 0xff26c6da,
+                0xff42a5f5, 0xffab47bc, 0xffef5350});
+        wheel.setSize(dp(24), dp(24));
+        appearanceButton.setImageDrawable(wheel);
+        appearanceButton.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
+        appearanceButton.setPadding(dp(10), dp(10), dp(10), dp(10));
+        appearanceButton.setOnClickListener(v -> showColorPicker());
+        appearanceButton.setTooltipText(activity.getString(R.string.arc_frame_color));
+        bookmarksButton.setText("☆\n" + activity.getString(R.string.arc_bookmarks));
+        bookmarksButton.setTextSize(10);
+        bookmarksButton.setGravity(Gravity.CENTER);
+        googleButton.setText("G\nGoogle");
+        googleButton.setTextSize(10);
+        googleButton.setGravity(Gravity.CENTER);
         appearanceButton.setContentDescription(activity.getString(R.string.arc_frame_color));
-        for (Button action : new Button[] {bookmarksButton, googleButton, appearanceButton}) {
-            mHeaderActions.addView(
-                    action,
-                    new LinearLayout.LayoutParams(
-                            0, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP), 1));
+        for (View action : new View[] {bookmarksButton, googleButton, appearanceButton}) {
+            action.setTag("arc-header-tile");
+            LinearLayout.LayoutParams tile = new LinearLayout.LayoutParams(0, dp(52), 1);
+            tile.setMargins(dp(4), dp(4), dp(4), dp(4));
+            mHeaderActions.addView(action, tile);
         }
         mHeader.addView(mHeaderActions);
         mColumn.addView(mHeader);
@@ -329,16 +357,8 @@ public final class ArcDesktopCoordinator {
         mColumn.addView(mNativeTabs, new LinearLayout.LayoutParams(-1, 0, 1));
 
         mFooter = new LinearLayout(activity);
-        mPasswordButton = button(localPasswordsEnabled ? "Passwords" : "Autofill",
-                openPasswordSettings);
-        mPasswordButton.setContentDescription(
-                localPasswordsEnabled ? "Local passwords" : "Autofill settings");
-        // VerticalTabRailLayout already owns Chromium's real new-tab button and handler. Keep it
-        // as the single new-tab action instead of adding a second Arc handler here.
-        mFooter.addView(
-                mPasswordButton,
-                new LinearLayout.LayoutParams(
-                        0, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP), 1));
+        // VerticalTabRailLayout already owns Chromium's real new-tab button and handler.
+        // The deprecated password/Autofill shortcut is omitted from the Arc footer.
         // Preserve Chromium's native app menu and extension actions after ToolbarTablet itself is
         // removed from layout. These Views retain their existing coordinators/listeners; Arc only
         // changes their parent. The extension container is optional when ExtensionUi is disabled.
@@ -562,6 +582,7 @@ public final class ArcDesktopCoordinator {
         });
         // Navigation/address stay at the top; collections follow the Arc header actions.
         mHeader.addView(mCollectionsView);
+        mPaletteInitialized = false;
     }
 
     private void showGoogleMenu(View anchor) {
@@ -584,18 +605,16 @@ public final class ArcDesktopCoordinator {
         mColorDialog = new ArcColorPicker(mActivity, mPreferences,
                 mActivity.getResources().getStringArray(R.array.arc_frame_palette_names),
                 mActivity.getResources().getStringArray(R.array.arc_frame_rgb_names), preview -> {
-                    mPreviewFrameColor = preview;
-                    if (!mDestroyed) applyAppearance();
+                    ArcDesktopAppearance.setPreviewColor(mActivity, preview);
+                    if (!mDestroyed) {
+                        refreshNativeRows(mNativeTabs);
+                        applyAppearance();
+                    }
                 }).show();
     }
 
     private int frameSurface(boolean incognito) {
-        if (mPreviewFrameColor == null) {
-            return ArcDesktopAppearance.surface(mActivity, incognito);
-        }
-        boolean dark = incognito || (mActivity.getResources().getConfiguration().uiMode
-                & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
-        return ArcDesktopPolicy.surface(mPreviewFrameColor, dark);
+        return ArcDesktopAppearance.surface(mActivity, incognito);
     }
 
     private LinearLayout.LayoutParams arcLocationBarLayoutParams() {
@@ -668,12 +687,20 @@ public final class ArcDesktopCoordinator {
         boolean desktop = ArcDesktopAppearance.isDesktopWindow(mActivity);
         boolean incognito = mIncognitoStateProvider.isIncognitoSelected();
         setArcToolbarCompositionActive(desktop);
-        if (mNativeTabs instanceof VerticalTabRailLayout) {
+        int surface = frameSurface(incognito);
+        boolean paletteChanged = !mPaletteInitialized || mPaletteDesktop != desktop
+                || mPaletteIncognito != incognito || mPaletteSurface != surface;
+        mPaletteInitialized = true;
+        mPaletteDesktop = desktop;
+        mPaletteIncognito = incognito;
+        mPaletteSurface = surface;
+        if (paletteChanged && mNativeTabs instanceof VerticalTabRailLayout) {
             // This binder restores upstream colors/tints too when ARC is no longer active.
             VerticalTabListViewBinder.refreshArcAppearance(
                     (VerticalTabRailLayout) mNativeTabs, incognito);
         }
         if (!desktop) {
+            mCompactOmnibox.restore();
             mNewTabRow.setVisibility(View.GONE);
             mNativeNewTabButton.setVisibility(mNativeNewTabVisibility);
             mHeader.setVisibility(View.GONE);
@@ -701,7 +728,9 @@ public final class ArcDesktopCoordinator {
         mNavigationControls.setVisibility(expanded ? View.VISIBLE : View.GONE);
         mHeaderActions.setVisibility(expanded ? View.VISIBLE : View.GONE);
         mNewTabRow.setVisibility(View.VISIBLE);
-        mNewTabRow.setText(expanded ? "+  " + mActivity.getString(R.string.arc_new_tab) : "+");
+        CharSequence newTabLabel = expanded ? "+  " + mActivity.getString(R.string.arc_new_tab) : "+";
+        if (!TextUtils.equals(mNewTabRow.getText(), newTabLabel)) mNewTabRow.setText(newTabLabel);
+        mCompactOmnibox.setCompact(!expanded);
         mNewTabRow.setGravity(Gravity.CENTER_VERTICAL
                 | (expanded ? Gravity.START : Gravity.CENTER_HORIZONTAL));
         mNewTabRow.setEnabled(mNativeNewTabButton.isEnabled());
@@ -709,7 +738,6 @@ public final class ArcDesktopCoordinator {
         // The native app menu remains reachable while collapsed. Secondary footer actions can
         // disappear so the compact rail does not retain expanded hitboxes.
         mFooter.setVisibility(View.VISIBLE);
-        mPasswordButton.setVisibility(expanded ? View.VISIBLE : View.GONE);
         if (mExtensionsToolbarHost != null) {
             mExtensionsToolbarHost.setVisibility(expanded ? mExtensionsToolbarOriginalVisibility : View.GONE);
         }
@@ -720,8 +748,9 @@ public final class ArcDesktopCoordinator {
         if (expanded && mCollectionsView != null) {
             mCollectionsView.setCollectionHeight(collectionBudget);
         }
-        // Leave native tab selection, incognito and favicon rendering to its binders.
-        int surface = frameSurface(incognito);
+        // Palette work is independent of rail width. Avoid rebuilding drawables on every
+        // animation frame; Chromium continues animating the reserved width and viewport.
+        if (!paletteChanged) return;
         int foreground = ArcDesktopPolicy.foreground(surface);
         mColumn.setBackgroundColor(surface);
         styleInteraction(mNewTabRow, foreground, ArcDesktopPolicy.selection(surface));
@@ -736,6 +765,9 @@ public final class ArcDesktopCoordinator {
         }
         tintHeader(mHeader, foreground, ArcDesktopPolicy.selection(surface));
         tintHeader(mFooter, foreground, ArcDesktopPolicy.selection(surface));
+        if (mCollectionsView != null) {
+            mCollectionsView.setAppearance(surface, foreground, ArcDesktopPolicy.selection(surface));
+        }
     }
 
     private int reservedLeftWidth() {
@@ -832,7 +864,16 @@ public final class ArcDesktopCoordinator {
 
         boolean incognito = mIncognitoStateProvider.isIncognitoSelected();
         int surface = frameSurface(incognito);
-        if (mFrameRoot != null) mFrameRoot.setBackgroundColor(surface);
+        // The rail's top/bottom padding is drawn by the rail itself, outside mColumn.
+        // Tinting only mColumn left the old white background visible as two strips.
+        mRail.setBackgroundTintList(null);
+        if (!(mRail.getBackground() instanceof ColorDrawable railColor)
+                || railColor.getColor() != surface) mRail.setBackground(new ColorDrawable(surface));
+        if (mFrameRoot != null
+                && (!(mFrameRoot.getBackground() instanceof ColorDrawable frameColor)
+                        || frameColor.getColor() != surface)) {
+            mFrameRoot.setBackground(new ColorDrawable(surface));
+        }
     }
 
     private void clearFrameGeometry() {
@@ -856,6 +897,8 @@ public final class ArcDesktopCoordinator {
         mRail.setPadding(
                 mOriginalRailPaddingLeft, mOriginalRailPaddingTop,
                 mOriginalRailPaddingRight, mOriginalRailPaddingBottom);
+        mRail.setBackground(mOriginalRailBackground);
+        mRail.setBackgroundTintList(mOriginalRailBackgroundTint);
         if (mFrameRoot != null) mFrameRoot.setBackground(mOriginalFrameBackground);
     }
 
@@ -919,13 +962,14 @@ public final class ArcDesktopCoordinator {
                 || view == mNavigationControls
                 || view == mCollapseButton
                 || view == mMenuButtonWrapper
-                || view == mExtensionsToolbarHost) {
+                || view == mExtensionsToolbarHost
+                || view == mCollectionsView) {
             return;
         }
         if (view instanceof TextView) ((TextView) view).setTextColor(foreground);
         if (view instanceof Button || view instanceof ImageButton) {
             styleInteraction(view, foreground, selection);
-            if (view instanceof ImageButton) {
+            if (view instanceof ImageButton && view != mAppearanceButton) {
                 ((ImageButton) view).setColorFilter(foreground);
             }
         }
@@ -948,7 +992,8 @@ public final class ArcDesktopCoordinator {
             states.addState(new int[] {state}, active);
         }
         GradientDrawable idle = new GradientDrawable();
-        idle.setColor(Color.TRANSPARENT);
+        idle.setColor("arc-header-tile".equals(view.getTag())
+                ? ArcDesktopPolicy.activeTabSurface(mPaletteSurface) : Color.TRANSPARENT);
         idle.setCornerRadius(dp(8));
         states.addState(new int[] {}, idle);
         view.setBackground(states);
@@ -970,6 +1015,8 @@ public final class ArcDesktopCoordinator {
         if (mDestroyed) return;
         mDestroyed = true;
         mFrameDispatch.destroy();
+        mCompactOmnibox.destroy();
+        ArcDesktopAppearance.setPreviewColor(mActivity, null);
         mNavigationState.destroy();
         mNativeNewTabButton.setVisibility(mNativeNewTabVisibility);
         mIncognitoStateProvider.removeObserver(mIncognitoObserver);

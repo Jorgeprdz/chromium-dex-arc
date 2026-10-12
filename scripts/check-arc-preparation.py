@@ -45,6 +45,7 @@ def synthetic_chromium_r(values_xml: Path) -> str:
         'toolbar', 'desktop_window_spacer', 'location_bar',
         'location_bar_holder', 'collapse_button', 'menu_button_wrapper',
         'extensions_toolbar_container', 'coordinator', 'new_tab_button',
+        'location_bar_status', 'location_bar_status_icon', 'url_bar', 'focus_thief',
     )
 
     def klass(kind, members):

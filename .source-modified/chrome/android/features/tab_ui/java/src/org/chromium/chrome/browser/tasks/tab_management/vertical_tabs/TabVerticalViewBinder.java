@@ -828,9 +828,9 @@ class TabVerticalViewBinder {
     private static ColorStateList getBackgroundTintList(
             Context context, boolean isSelected, boolean isMultiSelected, boolean isIncognito) {
         if (ArcDesktopAppearance.isDesktopWindow(context)) {
-            // R3 keeps the active regular tab as a white capsule; theme tint is
-            // retained for multi-selection and the distinct incognito treatment.
-            return ColorStateList.valueOf(isSelected && !isIncognito ? Color.WHITE
+            // Keep the clear active capsule and derive its pale tint from the user's frame color.
+            return ColorStateList.valueOf(isSelected && !isIncognito
+                    ? ArcDesktopAppearance.activeTabSurface(context, false)
                     : isSelected || isMultiSelected
                             ? ArcDesktopAppearance.selection(context, isIncognito)
                             : Color.TRANSPARENT);
@@ -862,7 +862,7 @@ class TabVerticalViewBinder {
             Context context, boolean isSelected, boolean isIncognito) {
         if (ArcDesktopAppearance.isDesktopWindow(context)) {
             return ArcDesktopPolicy.foreground(isSelected
-                    ? isIncognito ? ArcDesktopAppearance.selection(context, true) : Color.WHITE
+                    ? ArcDesktopAppearance.activeTabSurface(context, isIncognito)
                     : ArcDesktopAppearance.surface(context, isIncognito));
         }
         if (isSelected) {

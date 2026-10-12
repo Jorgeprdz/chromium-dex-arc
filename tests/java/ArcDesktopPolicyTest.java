@@ -39,6 +39,9 @@ public final class ArcDesktopPolicyTest {
                         "text contrast meets 4.5:1");
             }
         }
+        int chosenBlue = ArcDesktopPolicy.surface(0xff0044ee, false);
+        check((chosenBlue & 255) - ((chosenBlue >> 16) & 255) >= 100,
+                "custom window color keeps a perceptible chosen hue instead of bleaching it to gray");
         check(ArcDesktopPolicy.foreground(0xff000000) == 0xffffffff, "black needs white text");
         check(ArcDesktopPolicy.foreground(0xffffffff) == 0xff000000, "white needs black text");
         check(ArcDesktopPolicy.surface(0xff0044ee, true) != ArcDesktopPolicy.surface(0xffee4400, true),

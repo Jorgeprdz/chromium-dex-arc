@@ -15,6 +15,7 @@ chrome_java_sources = [
   "java/src/org/chromium/chrome/browser/arc/ArcAppearanceDialog.java",
   "java/src/org/chromium/chrome/browser/arc/ArcColorDraft.java",
   "java/src/org/chromium/chrome/browser/arc/ArcColorPicker.java",
+  "java/src/org/chromium/chrome/browser/arc/ArcCompactOmnibox.java",
   "java/src/org/chromium/chrome/browser/arc/ArcFrameDispatch.java",
   "java/src/org/chromium/chrome/browser/arc/ArcNavigationControls.java",
   "java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java",

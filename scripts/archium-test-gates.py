@@ -122,6 +122,7 @@ def host_gate(android_jar: Path, out_dir: Path, *, phase: str = 'all') -> None:
     for test_filter in (
             "org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearanceTest.*",
             "org.chromium.chrome.browser.arc.ArcColorPickerTest.*",
+            "org.chromium.chrome.browser.arc.ArcCompactOmniboxTest.*",
             "org.chromium.chrome.browser.arc.ArcFrameDispatchTest.*",
             "org.chromium.chrome.browser.arc.ArcNavigationControlsTest.*",
             "org.chromium.chrome.browser.arc.ArcCollectionsFocusTest.*",

@@ -52,6 +52,42 @@ public class ArcDesktopAppearanceTest {
     }
 
     @Test
+    public void chosenFrameColorKeepsVisibleHue() {
+        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
+        ArcDesktopAppearance.preferences(activity).edit()
+                .putInt(ArcDesktopAppearance.COLOR_KEY, 0xff0044ee).commit();
+        int surface = ArcDesktopAppearance.surface(activity, false);
+        assertTrue((surface & 255) - ((surface >> 16) & 255) >= 100);
+        assertTrue(ArcDesktopPolicy.contrast(surface,
+                ArcDesktopPolicy.foreground(surface)) >= 4.5);
+    }
+
+    @Test
+    public void previewFollowsWrappedWindowAndCancelRestoresSavedColor() {
+        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
+        Activity other = Robolectric.buildActivity(Activity.class).setup().get();
+        try {
+            ArcDesktopAppearance.preferences(activity).edit()
+                    .putInt(ArcDesktopAppearance.COLOR_KEY, 0xff0044ee).commit();
+            int saved = ArcDesktopAppearance.surface(activity, false);
+            android.view.ContextThemeWrapper wrapped = new android.view.ContextThemeWrapper(
+                    activity, android.R.style.Theme_Material);
+            ArcDesktopAppearance.setPreviewColor(activity, 0xffee4400);
+            assertEquals(0xfff28458, ArcDesktopAppearance.surface(wrapped, false));
+            assertEquals(0xfffce0d5, ArcDesktopAppearance.activeTabSurface(wrapped, false));
+            assertEquals(saved, ArcDesktopAppearance.surface(other, false));
+            ArcDesktopAppearance.setPreviewColor(activity, null);
+            assertEquals(saved, ArcDesktopAppearance.surface(wrapped, false));
+            assertEquals(0xff0044ee, ArcDesktopAppearance.preferences(activity).getInt(
+                    ArcDesktopAppearance.COLOR_KEY, 0));
+        } finally {
+            ArcDesktopAppearance.setPreviewColor(activity, null);
+            activity.finish();
+            other.finish();
+        }
+    }
+
+    @Test
     public void externalDisplayBeforeAndAfterAttach() {
         ActivityController<Activity> controller = Robolectric.buildActivity(Activity.class).create();
         Activity activity = windowActivity(controller.get());

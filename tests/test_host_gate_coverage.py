@@ -72,6 +72,7 @@ class HostGateCoverageTests(unittest.TestCase):
             "org.chromium.chrome.browser.arc.ArcFrameDispatchTest.*",
             "org.chromium.chrome.browser.arc.ArcNavigationControlsTest.*",
             "org.chromium.chrome.browser.arc.ArcCollectionsFocusTest.*",
+            "org.chromium.chrome.browser.arc.ArcCompactOmniboxTest.*",
             "org.chromium.chrome.browser.toolbar.top.ArcToolbarReparentingTest.*",
             "org.chromium.chrome.browser.omnibox.OmniboxSuggestionsDropdownEmbedderImplUnitTest.*",
             "org.chromium.chrome.browser.omnibox.LocationBarTabletUnitTest.*",

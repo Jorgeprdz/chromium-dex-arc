@@ -24,11 +24,14 @@ import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy;
 @RunWith(BaseRobolectricTestRunner.class)
 public class ArcTabSelectionTest {
     @Test
-    public void regularActiveTabWhiteAcrossFrameColors() {
+    public void regularActiveTabUsesPaleChosenHue() {
         Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
         ArcDesktopAppearance.setUiMode(activity, ArcDesktopPolicy.MODE_ARC);
         try {
-            for (int seed : new int[] {0xff53657b, 0xffeeeeee, 0xff000000, 0xffee4400, 0xff0044ee}) {
+            assertEquals(Color.WHITE, ArcDesktopAppearance.activeTabSurface(activity, false));
+            // Hand-derived pale capsules for the selected orange and blue frame colors.
+            for (int[] colors : new int[][] {{0xffee4400, 0xfffce0d5}, {0xff0044ee, 0xffd5e0fc}}) {
+                int seed = colors[0];
                 ArcDesktopAppearance.preferences(activity).edit()
                         .putInt(ArcDesktopAppearance.COLOR_KEY, seed).commit();
                 ColorStateList background = ReflectionHelpers.callStaticMethod(
@@ -42,7 +45,7 @@ public class ArcTabSelectionTest {
                         ClassParameter.from(Context.class, activity),
                         ClassParameter.from(boolean.class, true),
                         ClassParameter.from(boolean.class, false));
-                assertEquals(Color.WHITE, background.getDefaultColor());
+                assertEquals(colors[1], background.getDefaultColor());
                 assertEquals(Color.BLACK, foreground);
             }
         } finally {

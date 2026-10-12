@@ -22,7 +22,7 @@ diff --git a/chrome/android/chrome_java_resources.gni b/chrome/android/chrome_ja
 diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java_sources.gni
 --- a/chrome/android/chrome_java_sources.gni
 +++ b/chrome/android/chrome_java_sources.gni
-@@ -5,6 +5,20 @@
+@@ -5,6 +5,21 @@
  import("//content/public/common/features.gni")
 
  chrome_java_sources = [
@@ -36,6 +36,7 @@ diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java
 +  "java/src/org/chromium/chrome/browser/arc/ArcAppearanceDialog.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcColorDraft.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcColorPicker.java",
++  "java/src/org/chromium/chrome/browser/arc/ArcCompactOmnibox.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcFrameDispatch.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcNavigationControls.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java",
@@ -233,9 +234,9 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
      private static ColorStateList getBackgroundTintList(
              Context context, boolean isSelected, boolean isMultiSelected, boolean isIncognito) {
 +        if (ArcDesktopAppearance.isDesktopWindow(context)) {
-+            // R3 keeps the active regular tab as a white capsule; theme tint is
-+            // retained for multi-selection and the distinct incognito treatment.
-+            return ColorStateList.valueOf(isSelected && !isIncognito ? Color.WHITE
++            // Keep the clear active capsule and derive its pale tint from the user's frame color.
++            return ColorStateList.valueOf(isSelected && !isIncognito
++                    ? ArcDesktopAppearance.activeTabSurface(context, false)
 +                    : isSelected || isMultiSelected
 +                            ? ArcDesktopAppearance.selection(context, isIncognito)
 +                            : Color.TRANSPARENT);
@@ -249,7 +250,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
              Context context, boolean isSelected, boolean isIncognito) {
 +        if (ArcDesktopAppearance.isDesktopWindow(context)) {
 +            return ArcDesktopPolicy.foreground(isSelected
-+                    ? isIncognito ? ArcDesktopAppearance.selection(context, true) : Color.WHITE
++                    ? ArcDesktopAppearance.activeTabSurface(context, isIncognito)
 +                    : ArcDesktopAppearance.surface(context, isIncognito));
 +        }
          if (isSelected) {
@@ -1139,11 +1140,12 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
 diff --git a/chrome/android/junit/BUILD.gn b/chrome/android/junit/BUILD.gn
 --- a/chrome/android/junit/BUILD.gn
 +++ b/chrome/android/junit/BUILD.gn
-@@ -431,6 +431,13 @@
+@@ -431,6 +431,14 @@
    # down.
    robolectric_library("chrome_junit_tests_org.chromium.chrome.browser") {
      sources = [
 +      "src/org/chromium/chrome/browser/arc/ArcColorPickerTest.java",
++      "src/org/chromium/chrome/browser/arc/ArcCompactOmniboxTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcFrameDispatchTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcNavigationControlsTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcCollectionsFocusTest.java",
@@ -1153,7 +1155,7 @@ diff --git a/chrome/android/junit/BUILD.gn b/chrome/android/junit/BUILD.gn
        "//chrome/android/java/src/org/chromium/chrome/browser/bottombar/BottomBarAppMenuUpdateBadgeControllerUnitTest.java",
        "//chrome/android/java/src/org/chromium/chrome/browser/bottombar/BottomBarContainerCoordinatorUnitTest.java",
        "src/org/chromium/chrome/browser/BrowserExitReasonTrackerUnitTest.java",
-@@ -463,6 +470,7 @@
+@@ -463,6 +471,7 @@
      ]
 
      deps = [
@@ -4553,11 +4555,225 @@ new file mode 100644
 +        mDialog.dismiss();
 +    }
 +}
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCompactOmnibox.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCompactOmnibox.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCompactOmnibox.java
+@@ -0,0 +1,209 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++import android.graphics.Rect;
++import android.view.View;
++import android.view.ViewGroup;
++import android.view.ViewTreeObserver;
++
++import org.chromium.chrome.R;
++
++import java.util.IdentityHashMap;
++import java.util.Map;
++
++/** Compact presentation of the existing Chromium omnibox, with its native focus/touch path. */
++public final class ArcCompactOmnibox {
++    private final ViewGroup mLocationBar;
++    private final View mStatus;
++    private final View mIcon;
++    private final View mUrl;
++    private final Map<View, ControlVisibility> mHiddenControls = new IdentityHashMap<>();
++    private final ViewTreeObserver.OnGlobalLayoutListener mLayoutListener = this::update;
++    private final ViewTreeObserver.OnGlobalFocusChangeListener mFocusListener =
++            (oldFocus, newFocus) -> update();
++    private final View.OnAttachStateChangeListener mAttachListener =
++            new View.OnAttachStateChangeListener() {
++                @Override public void onViewAttachedToWindow(View view) {
++                    observe();
++                    update();
++                }
++                @Override public void onViewDetachedFromWindow(View view) {
++                    stopObserving();
++                }
++            };
++    private ViewTreeObserver mObserver;
++    private Rect mUrlClip;
++    private Rect mNativeUrlBounds;
++    private Rect mCompactUrlBounds;
++    private Rect mNativeStatusBounds;
++    private Rect mCompactStatusBounds;
++    private boolean mCompact;
++    private boolean mApplied;
++    private boolean mUpdating;
++    private boolean mDestroyed;
++
++    /** Accepts either the real LocationBar view or its original location_bar_holder. */
++    public ArcCompactOmnibox(View host) {
++        View locationBar = host.findViewById(R.id.location_bar);
++        if (locationBar == null) locationBar = host;
++        if (!(locationBar instanceof ViewGroup)) {
++            throw new IllegalArgumentException("Compact omnibox requires Chromium's LocationBar");
++        }
++        mLocationBar = (ViewGroup) locationBar;
++        mStatus = mLocationBar.findViewById(R.id.location_bar_status);
++        mIcon = mLocationBar.findViewById(R.id.location_bar_status_icon);
++        mUrl = mLocationBar.findViewById(R.id.url_bar);
++        if (mStatus == null || mIcon == null || mUrl == null) {
++            throw new IllegalArgumentException("Compact omnibox requires native status and URL views");
++        }
++        mLocationBar.addOnAttachStateChangeListener(mAttachListener);
++        observe();
++    }
++
++    /** Editing always takes precedence over the collapsed sidebar presentation. */
++    public void setCompact(boolean compact) {
++        if (mDestroyed) return;
++        mCompact = compact;
++        update();
++    }
++
++    /** Restores the native presentation on expansion or when leaving desktop mode. */
++    public void restore() {
++        setCompact(false);
++    }
++
++    /** Restores presentation and releases observers; safe to call more than once. */
++    public void destroy() {
++        if (mDestroyed) return;
++        restore();
++        mDestroyed = true;
++        stopObserving();
++        mLocationBar.removeOnAttachStateChangeListener(mAttachListener);
++    }
++
++    private void observe() {
++        if (mDestroyed) return;
++        ViewTreeObserver observer = mLocationBar.getViewTreeObserver();
++        if (observer == mObserver) return;
++        stopObserving();
++        mObserver = observer;
++        mObserver.addOnGlobalLayoutListener(mLayoutListener);
++        mObserver.addOnGlobalFocusChangeListener(mFocusListener);
++    }
++
++    private void stopObserving() {
++        if (mObserver != null && mObserver.isAlive()) {
++            mObserver.removeOnGlobalLayoutListener(mLayoutListener);
++            mObserver.removeOnGlobalFocusChangeListener(mFocusListener);
++        }
++        mObserver = null;
++    }
++
++    private void update() {
++        if (mDestroyed || mUpdating) return;
++        mUpdating = true;
++        try {
++            if (!mCompact || mUrl.hasFocus()) {
++                restorePresentation();
++                return;
++            }
++            if (!mApplied) {
++                mUrlClip = mUrl.getClipBounds();
++                mApplied = true;
++            }
++            for (int i = 0; i < mLocationBar.getChildCount(); i++) {
++                View child = mLocationBar.getChildAt(i);
++                if (child == mStatus || child == mUrl || child.getId() == R.id.focus_thief) {
++                    continue;
++                }
++                int visibility = child.getVisibility();
++                ControlVisibility saved = mHiddenControls.get(child);
++                if (saved == null) {
++                    saved = new ControlVisibility(visibility);
++                    mHiddenControls.put(child, saved);
++                } else if (visibility != saved.appliedVisibility) {
++                    // Chromium may change a control while the sidebar is compact. Retain the latest
++                    // native value rather than the value observed when the sidebar first collapsed.
++                    saved.nativeVisibility = visibility;
++                }
++                // INVISIBLE retains Chromium's constraints and native LayoutParams.
++                if (visibility == View.VISIBLE) child.setVisibility(View.INVISIBLE);
++                saved.appliedVisibility = child.getVisibility();
++            }
++            // Clip drawing only: the real, VISIBLE UrlBar still receives tablet background touches
++            // and programmatic requestFocus(). Its normal native focus listener remains installed.
++            mUrl.setClipBounds(new Rect(0, 0, 0, mUrl.getHeight()));
++            // The UrlBar's original hit rectangle can overlap the centered status icon. Give the
++            // unfocused editor zero horizontal bounds so native icon dispatch still wins. Tablet
++            // background routing calls the real editor directly, even at zero width, and focusing
++            // restores its native bounds synchronously. No invisible duplicate touch target exists.
++            Rect urlBounds = bounds(mUrl);
++            if (mCompactUrlBounds == null || !urlBounds.equals(mCompactUrlBounds)) {
++                mNativeUrlBounds = urlBounds;
++            }
++            mUrl.layout(mUrl.getLeft(), mUrl.getTop(), mUrl.getLeft(), mUrl.getBottom());
++            mCompactUrlBounds = bounds(mUrl);
++            if (mLocationBar.getWidth() <= 0 || mIcon.getWidth() <= 0) return;
++            Rect statusBounds = bounds(mStatus);
++            if (mCompactStatusBounds == null || !statusBounds.equals(mCompactStatusBounds)) {
++                mNativeStatusBounds = statusBounds;
++            }
++            Rect iconBounds = new Rect();
++            mIcon.getDrawingRect(iconBounds);
++            mLocationBar.offsetDescendantRectToMyCoords(mIcon, iconBounds);
++            int shift = Math.round(mLocationBar.getWidth() / 2f - iconBounds.exactCenterX());
++            if (shift != 0) {
++                mStatus.layout(mStatus.getLeft() + shift, mStatus.getTop(),
++                        mStatus.getRight() + shift, mStatus.getBottom());
++            }
++            mCompactStatusBounds = bounds(mStatus);
++        } finally {
++            mUpdating = false;
++        }
++    }
++
++    private void restorePresentation() {
++        if (!mApplied) return;
++        mUrl.setClipBounds(mUrlClip);
++        if (mNativeUrlBounds != null) {
++            mUrl.layout(mNativeUrlBounds.left, mNativeUrlBounds.top,
++                    mNativeUrlBounds.right, mNativeUrlBounds.bottom);
++        }
++        mNativeUrlBounds = null;
++        mCompactUrlBounds = null;
++        for (Map.Entry<View, ControlVisibility> entry : mHiddenControls.entrySet()) {
++            View child = entry.getKey();
++            ControlVisibility saved = entry.getValue();
++            // A native change after the last compact update already has the correct expanded value.
++            if (child.getVisibility() == saved.appliedVisibility) {
++                child.setVisibility(saved.nativeVisibility);
++            }
++        }
++        mHiddenControls.clear();
++        if (mNativeStatusBounds != null) {
++            mStatus.layout(mNativeStatusBounds.left, mNativeStatusBounds.top,
++                    mNativeStatusBounds.right, mNativeStatusBounds.bottom);
++        }
++        mNativeStatusBounds = null;
++        mCompactStatusBounds = null;
++        mUrlClip = null;
++        mApplied = false;
++        mLocationBar.requestLayout();
++    }
++
++    private static final class ControlVisibility {
++        int nativeVisibility;
++        int appliedVisibility;
++
++        ControlVisibility(int visibility) {
++            nativeVisibility = visibility;
++            appliedVisibility = visibility;
++        }
++    }
++
++    private static Rect bounds(View view) {
++        return new Rect(view.getLeft(), view.getTop(), view.getRight(), view.getBottom());
++    }
++}
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
-@@ -0,0 +1,988 @@
+@@ -0,0 +1,1035 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -4566,12 +4782,13 @@ new file mode 100644
 +import android.app.Activity;
 +import android.app.AlertDialog;
 +import android.content.SharedPreferences;
-+import android.content.res.Configuration;
 +import android.graphics.Color;
 +import android.graphics.Outline;
 +import android.graphics.Path;
 +import android.os.Build;
 +import android.graphics.drawable.Drawable;
++import android.graphics.drawable.ColorDrawable;
++import android.text.TextUtils;
 +import android.graphics.drawable.GradientDrawable;
 +import android.graphics.drawable.StateListDrawable;
 +import android.content.res.ColorStateList;
@@ -4636,7 +4853,8 @@ new file mode 100644
 +    private final ViewGroup.LayoutParams mCollapseButtonOriginalLayoutParams;
 +    private final LinearLayout mHeaderActions;
 +    private final LinearLayout mFooter;
-+    private final Button mPasswordButton;
++    private final ImageButton mAppearanceButton;
++    private final ArcCompactOmnibox mCompactOmnibox;
 +    private final View mLocationBarHost;
 +    private final ViewGroup mLocationBarOriginalParent;
 +    private final int mLocationBarOriginalIndex;
@@ -4644,6 +4862,8 @@ new file mode 100644
 +    private final CompositorViewHolder mCompositorViewHolder;
 +    private final View mFrameRoot;
 +    private final Drawable mOriginalFrameBackground;
++    private final Drawable mOriginalRailBackground;
++    private final ColorStateList mOriginalRailBackgroundTint;
 +    private final ViewOutlineProvider mOriginalContentOutlineProvider;
 +    private final boolean mOriginalContentClipToOutline;
 +    private final int mOriginalContentMarginLeft;
@@ -4683,7 +4903,10 @@ new file mode 100644
 +    private ViewOutlineProvider mClippedSurfaceOriginalOutlineProvider;
 +    private boolean mClippedSurfaceOriginalClipToOutline;
 +    private AlertDialog mColorDialog;
-+    private Integer mPreviewFrameColor;
++    private boolean mPaletteInitialized;
++    private int mPaletteSurface;
++    private boolean mPaletteDesktop;
++    private boolean mPaletteIncognito;
 +    private final ArcFrameDispatch mFrameDispatch;
 +
 +    public ArcDesktopCoordinator(Activity activity, ViewGroup rail,
@@ -4710,6 +4933,8 @@ new file mode 100644
 +        mIncognitoObserver = incognito -> { if (!mDestroyed) { rebindCollections(); applyAppearance(); } };
 +        mIcons = new LargeIconBridge(profile);
 +        mPreferences = ArcDesktopAppearance.preferences(activity);
++        mOriginalRailBackground = rail.getBackground();
++        mOriginalRailBackgroundTint = rail.getBackgroundTintList();
 +        mOriginalRailPaddingLeft = rail.getPaddingLeft();
 +        mOriginalRailPaddingTop = rail.getPaddingTop();
 +        mOriginalRailPaddingRight = rail.getPaddingRight();
@@ -4803,6 +5028,7 @@ new file mode 100644
 +        mCollapseButtonOriginalIndex = mCollapseButtonOriginalParent.indexOfChild(mCollapseButton);
 +        mCollapseButtonOriginalLayoutParams = mCollapseButton.getLayoutParams();
 +        mLocationBarHost = locationBarHost;
++        mCompactOmnibox = new ArcCompactOmnibox(locationBarHost);
 +        mLocationBarOriginalParent = (ViewGroup) mLocationBarHost.getParent();
 +        mLocationBarOriginalIndex = mLocationBarOriginalParent.indexOfChild(mLocationBarHost);
 +        mLocationBarOriginalLayoutParams = mLocationBarHost.getLayoutParams();
@@ -4862,13 +5088,31 @@ new file mode 100644
 +        Button bookmarksButton = button(activity.getString(R.string.arc_bookmarks), openBookmarks);
 +        Button googleButton = button("Google", () -> {});
 +        googleButton.setOnClickListener(v -> showGoogleMenu(v));
-+        Button appearanceButton = button("●", this::showColorPicker);
++        ImageButton appearanceButton = new ImageButton(activity);
++        mAppearanceButton = appearanceButton;
++        GradientDrawable wheel = new GradientDrawable();
++        wheel.setShape(GradientDrawable.OVAL);
++        wheel.setGradientType(GradientDrawable.SWEEP_GRADIENT);
++        wheel.setColors(new int[] {0xffef5350, 0xffffca28, 0xff66bb6a, 0xff26c6da,
++                0xff42a5f5, 0xffab47bc, 0xffef5350});
++        wheel.setSize(dp(24), dp(24));
++        appearanceButton.setImageDrawable(wheel);
++        appearanceButton.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
++        appearanceButton.setPadding(dp(10), dp(10), dp(10), dp(10));
++        appearanceButton.setOnClickListener(v -> showColorPicker());
++        appearanceButton.setTooltipText(activity.getString(R.string.arc_frame_color));
++        bookmarksButton.setText("☆\n" + activity.getString(R.string.arc_bookmarks));
++        bookmarksButton.setTextSize(10);
++        bookmarksButton.setGravity(Gravity.CENTER);
++        googleButton.setText("G\nGoogle");
++        googleButton.setTextSize(10);
++        googleButton.setGravity(Gravity.CENTER);
 +        appearanceButton.setContentDescription(activity.getString(R.string.arc_frame_color));
-+        for (Button action : new Button[] {bookmarksButton, googleButton, appearanceButton}) {
-+            mHeaderActions.addView(
-+                    action,
-+                    new LinearLayout.LayoutParams(
-+                            0, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP), 1));
++        for (View action : new View[] {bookmarksButton, googleButton, appearanceButton}) {
++            action.setTag("arc-header-tile");
++            LinearLayout.LayoutParams tile = new LinearLayout.LayoutParams(0, dp(52), 1);
++            tile.setMargins(dp(4), dp(4), dp(4), dp(4));
++            mHeaderActions.addView(action, tile);
 +        }
 +        mHeader.addView(mHeaderActions);
 +        mColumn.addView(mHeader);
@@ -4889,16 +5133,8 @@ new file mode 100644
 +        mColumn.addView(mNativeTabs, new LinearLayout.LayoutParams(-1, 0, 1));
 +
 +        mFooter = new LinearLayout(activity);
-+        mPasswordButton = button(localPasswordsEnabled ? "Passwords" : "Autofill",
-+                openPasswordSettings);
-+        mPasswordButton.setContentDescription(
-+                localPasswordsEnabled ? "Local passwords" : "Autofill settings");
-+        // VerticalTabRailLayout already owns Chromium's real new-tab button and handler. Keep it
-+        // as the single new-tab action instead of adding a second Arc handler here.
-+        mFooter.addView(
-+                mPasswordButton,
-+                new LinearLayout.LayoutParams(
-+                        0, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP), 1));
++        // VerticalTabRailLayout already owns Chromium's real new-tab button and handler.
++        // The deprecated password/Autofill shortcut is omitted from the Arc footer.
 +        // Preserve Chromium's native app menu and extension actions after ToolbarTablet itself is
 +        // removed from layout. These Views retain their existing coordinators/listeners; Arc only
 +        // changes their parent. The extension container is optional when ExtensionUi is disabled.
@@ -5122,6 +5358,7 @@ new file mode 100644
 +        });
 +        // Navigation/address stay at the top; collections follow the Arc header actions.
 +        mHeader.addView(mCollectionsView);
++        mPaletteInitialized = false;
 +    }
 +
 +    private void showGoogleMenu(View anchor) {
@@ -5144,18 +5381,16 @@ new file mode 100644
 +        mColorDialog = new ArcColorPicker(mActivity, mPreferences,
 +                mActivity.getResources().getStringArray(R.array.arc_frame_palette_names),
 +                mActivity.getResources().getStringArray(R.array.arc_frame_rgb_names), preview -> {
-+                    mPreviewFrameColor = preview;
-+                    if (!mDestroyed) applyAppearance();
++                    ArcDesktopAppearance.setPreviewColor(mActivity, preview);
++                    if (!mDestroyed) {
++                        refreshNativeRows(mNativeTabs);
++                        applyAppearance();
++                    }
 +                }).show();
 +    }
 +
 +    private int frameSurface(boolean incognito) {
-+        if (mPreviewFrameColor == null) {
-+            return ArcDesktopAppearance.surface(mActivity, incognito);
-+        }
-+        boolean dark = incognito || (mActivity.getResources().getConfiguration().uiMode
-+                & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
-+        return ArcDesktopPolicy.surface(mPreviewFrameColor, dark);
++        return ArcDesktopAppearance.surface(mActivity, incognito);
 +    }
 +
 +    private LinearLayout.LayoutParams arcLocationBarLayoutParams() {
@@ -5228,12 +5463,20 @@ new file mode 100644
 +        boolean desktop = ArcDesktopAppearance.isDesktopWindow(mActivity);
 +        boolean incognito = mIncognitoStateProvider.isIncognitoSelected();
 +        setArcToolbarCompositionActive(desktop);
-+        if (mNativeTabs instanceof VerticalTabRailLayout) {
++        int surface = frameSurface(incognito);
++        boolean paletteChanged = !mPaletteInitialized || mPaletteDesktop != desktop
++                || mPaletteIncognito != incognito || mPaletteSurface != surface;
++        mPaletteInitialized = true;
++        mPaletteDesktop = desktop;
++        mPaletteIncognito = incognito;
++        mPaletteSurface = surface;
++        if (paletteChanged && mNativeTabs instanceof VerticalTabRailLayout) {
 +            // This binder restores upstream colors/tints too when ARC is no longer active.
 +            VerticalTabListViewBinder.refreshArcAppearance(
 +                    (VerticalTabRailLayout) mNativeTabs, incognito);
 +        }
 +        if (!desktop) {
++            mCompactOmnibox.restore();
 +            mNewTabRow.setVisibility(View.GONE);
 +            mNativeNewTabButton.setVisibility(mNativeNewTabVisibility);
 +            mHeader.setVisibility(View.GONE);
@@ -5261,7 +5504,9 @@ new file mode 100644
 +        mNavigationControls.setVisibility(expanded ? View.VISIBLE : View.GONE);
 +        mHeaderActions.setVisibility(expanded ? View.VISIBLE : View.GONE);
 +        mNewTabRow.setVisibility(View.VISIBLE);
-+        mNewTabRow.setText(expanded ? "+  " + mActivity.getString(R.string.arc_new_tab) : "+");
++        CharSequence newTabLabel = expanded ? "+  " + mActivity.getString(R.string.arc_new_tab) : "+";
++        if (!TextUtils.equals(mNewTabRow.getText(), newTabLabel)) mNewTabRow.setText(newTabLabel);
++        mCompactOmnibox.setCompact(!expanded);
 +        mNewTabRow.setGravity(Gravity.CENTER_VERTICAL
 +                | (expanded ? Gravity.START : Gravity.CENTER_HORIZONTAL));
 +        mNewTabRow.setEnabled(mNativeNewTabButton.isEnabled());
@@ -5269,7 +5514,6 @@ new file mode 100644
 +        // The native app menu remains reachable while collapsed. Secondary footer actions can
 +        // disappear so the compact rail does not retain expanded hitboxes.
 +        mFooter.setVisibility(View.VISIBLE);
-+        mPasswordButton.setVisibility(expanded ? View.VISIBLE : View.GONE);
 +        if (mExtensionsToolbarHost != null) {
 +            mExtensionsToolbarHost.setVisibility(expanded ? mExtensionsToolbarOriginalVisibility : View.GONE);
 +        }
@@ -5280,8 +5524,9 @@ new file mode 100644
 +        if (expanded && mCollectionsView != null) {
 +            mCollectionsView.setCollectionHeight(collectionBudget);
 +        }
-+        // Leave native tab selection, incognito and favicon rendering to its binders.
-+        int surface = frameSurface(incognito);
++        // Palette work is independent of rail width. Avoid rebuilding drawables on every
++        // animation frame; Chromium continues animating the reserved width and viewport.
++        if (!paletteChanged) return;
 +        int foreground = ArcDesktopPolicy.foreground(surface);
 +        mColumn.setBackgroundColor(surface);
 +        styleInteraction(mNewTabRow, foreground, ArcDesktopPolicy.selection(surface));
@@ -5296,6 +5541,9 @@ new file mode 100644
 +        }
 +        tintHeader(mHeader, foreground, ArcDesktopPolicy.selection(surface));
 +        tintHeader(mFooter, foreground, ArcDesktopPolicy.selection(surface));
++        if (mCollectionsView != null) {
++            mCollectionsView.setAppearance(surface, foreground, ArcDesktopPolicy.selection(surface));
++        }
 +    }
 +
 +    private int reservedLeftWidth() {
@@ -5392,7 +5640,16 @@ new file mode 100644
 +
 +        boolean incognito = mIncognitoStateProvider.isIncognitoSelected();
 +        int surface = frameSurface(incognito);
-+        if (mFrameRoot != null) mFrameRoot.setBackgroundColor(surface);
++        // The rail's top/bottom padding is drawn by the rail itself, outside mColumn.
++        // Tinting only mColumn left the old white background visible as two strips.
++        mRail.setBackgroundTintList(null);
++        if (!(mRail.getBackground() instanceof ColorDrawable railColor)
++                || railColor.getColor() != surface) mRail.setBackground(new ColorDrawable(surface));
++        if (mFrameRoot != null
++                && (!(mFrameRoot.getBackground() instanceof ColorDrawable frameColor)
++                        || frameColor.getColor() != surface)) {
++            mFrameRoot.setBackground(new ColorDrawable(surface));
++        }
 +    }
 +
 +    private void clearFrameGeometry() {
@@ -5416,6 +5673,8 @@ new file mode 100644
 +        mRail.setPadding(
 +                mOriginalRailPaddingLeft, mOriginalRailPaddingTop,
 +                mOriginalRailPaddingRight, mOriginalRailPaddingBottom);
++        mRail.setBackground(mOriginalRailBackground);
++        mRail.setBackgroundTintList(mOriginalRailBackgroundTint);
 +        if (mFrameRoot != null) mFrameRoot.setBackground(mOriginalFrameBackground);
 +    }
 +
@@ -5479,13 +5738,14 @@ new file mode 100644
 +                || view == mNavigationControls
 +                || view == mCollapseButton
 +                || view == mMenuButtonWrapper
-+                || view == mExtensionsToolbarHost) {
++                || view == mExtensionsToolbarHost
++                || view == mCollectionsView) {
 +            return;
 +        }
 +        if (view instanceof TextView) ((TextView) view).setTextColor(foreground);
 +        if (view instanceof Button || view instanceof ImageButton) {
 +            styleInteraction(view, foreground, selection);
-+            if (view instanceof ImageButton) {
++            if (view instanceof ImageButton && view != mAppearanceButton) {
 +                ((ImageButton) view).setColorFilter(foreground);
 +            }
 +        }
@@ -5508,7 +5768,8 @@ new file mode 100644
 +            states.addState(new int[] {state}, active);
 +        }
 +        GradientDrawable idle = new GradientDrawable();
-+        idle.setColor(Color.TRANSPARENT);
++        idle.setColor("arc-header-tile".equals(view.getTag())
++                ? ArcDesktopPolicy.activeTabSurface(mPaletteSurface) : Color.TRANSPARENT);
 +        idle.setCornerRadius(dp(8));
 +        states.addState(new int[] {}, idle);
 +        view.setBackground(states);
@@ -5530,6 +5791,8 @@ new file mode 100644
 +        if (mDestroyed) return;
 +        mDestroyed = true;
 +        mFrameDispatch.destroy();
++        mCompactOmnibox.destroy();
++        ArcDesktopAppearance.setPreviewColor(mActivity, null);
 +        mNavigationState.destroy();
 +        mNativeNewTabButton.setVisibility(mNativeNewTabVisibility);
 +        mIncognitoStateProvider.removeObserver(mIncognitoObserver);
@@ -7036,6 +7299,337 @@ new file mode 100644
 +        assertEquals(195, ((SeekBar) tagged("arc-color-rgb:2")).getProgress());
 +    }
 +}
+diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCompactOmniboxTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCompactOmniboxTest.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCompactOmniboxTest.java
+@@ -0,0 +1,326 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++import static org.junit.Assert.*;
++import static org.robolectric.Shadows.shadowOf;
++
++import android.app.Activity;
++import android.graphics.Rect;
++import android.graphics.drawable.ColorDrawable;
++import android.os.Looper;
++import android.view.MotionEvent;
++import android.view.View;
++import android.view.ViewGroup;
++import android.widget.EditText;
++import android.widget.FrameLayout;
++import android.widget.ImageView;
++import android.widget.LinearLayout;
++
++import org.chromium.chrome.R;
++import org.junit.After;
++import org.junit.Before;
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.robolectric.Robolectric;
++import org.robolectric.RobolectricTestRunner;
++import org.robolectric.android.controller.ActivityController;
++import org.robolectric.annotation.Config;
++import org.robolectric.annotation.GraphicsMode;
++import org.robolectric.annotation.LooperMode;
++import org.robolectric.annotation.SQLiteMode;
++
++/** Real Android view layout, clipping, focus and touch dispatch; no Chromium model replacement. */
++@RunWith(RobolectricTestRunner.class)
++@Config(manifest = Config.NONE, sdk = {29, 36})
++@LooperMode(LooperMode.Mode.PAUSED)
++@GraphicsMode(GraphicsMode.Mode.LEGACY)
++@SQLiteMode(SQLiteMode.Mode.LEGACY)
++public class ArcCompactOmniboxTest {
++    private Activity mActivity;
++    private ActivityController<Activity> mActivityController;
++    private FrameLayout mHolder;
++    private NativeTouchLocationBar mBar;
++    private LinearLayout mStatus;
++    private ImageView mIcon;
++    private EditText mUrl;
++    private View mActions;
++    private View mOther;
++    private ArcCompactOmnibox mCompact;
++    private ColorDrawable mFavicon;
++    private ViewGroup.LayoutParams mStatusParams;
++    private Rect mExpandedStatus;
++
++    @Before public void setUp() {
++        mActivityController = Robolectric.buildActivity(Activity.class).setup();
++        mActivity = mActivityController.get();
++        mHolder = new FrameLayout(mActivity);
++        mBar = new NativeTouchLocationBar(mActivity);
++        mBar.setId(R.id.location_bar);
++        mBar.setPadding(5, 3, 13, 7);
++        mHolder.addView(mBar, new FrameLayout.LayoutParams(240, 60));
++        mUrl = new EditText(mActivity);
++        mUrl.setId(R.id.url_bar);
++        mUrl.setSingleLine(true);
++        mUrl.setText("https://example.com/original");
++        FrameLayout.LayoutParams urlParams = new FrameLayout.LayoutParams(180, 50);
++        urlParams.leftMargin = 52;
++        mBar.addView(mUrl, urlParams);
++        mStatus = new LinearLayout(mActivity);
++        mStatus.setId(R.id.location_bar_status);
++        mStatus.setPadding(7, 0, 19, 0);
++        mIcon = new ImageView(mActivity);
++        mIcon.setId(R.id.location_bar_status_icon);
++        mFavicon = new ColorDrawable(0xff4433dd);
++        mIcon.setImageDrawable(mFavicon);
++        mStatus.addView(mIcon, new LinearLayout.LayoutParams(24, 24));
++        mStatusParams = new FrameLayout.LayoutParams(50, 48);
++        ((FrameLayout.LayoutParams) mStatusParams).leftMargin = 4;
++        mBar.addView(mStatus, 0, mStatusParams);
++        mActions = new View(mActivity);
++        mActions.setId(R.id.action_buttons_segment);
++        mBar.addView(mActions, new FrameLayout.LayoutParams(8, 40));
++        mOther = new View(mActivity);
++        mOther.setFocusableInTouchMode(true);
++        mHolder.addView(mOther, new FrameLayout.LayoutParams(1, 1));
++        mActivity.setContentView(mHolder);
++        mOther.requestFocus();
++        layout(240);
++        mExpandedStatus = bounds(mStatus);
++        mCompact = new ArcCompactOmnibox(mHolder);
++    }
++
++    @After public void tearDown() {
++        if (mCompact != null) mCompact.destroy();
++        mActivityController.pause().stop().destroy();
++    }
++
++    @Test public void compactCentersActualFaviconWithoutChangingNativeViewsOrModel() {
++        mCompact.setCompact(true);
++        layout(64);
++        assertEquals(32, iconCenter(), 1);
++        assertNotNull(mUrl.getClipBounds());
++        assertEquals(0, mUrl.getClipBounds().width());
++        assertEquals(View.VISIBLE, mUrl.getVisibility());
++        assertSame(mFavicon, mIcon.getDrawable());
++        assertSame(mUrl, mBar.findViewById(R.id.url_bar));
++        assertSame(mStatusParams, mStatus.getLayoutParams());
++        assertEquals("https://example.com/original", mUrl.getText().toString());
++        assertEquals(View.INVISIBLE, mActions.getVisibility());
++    }
++
++    @Test public void compactTracksNarrowAndRepeatedNativeResizeInBothDirections() {
++        mCompact.setCompact(true);
++        for (int direction : new int[] {View.LAYOUT_DIRECTION_LTR, View.LAYOUT_DIRECTION_RTL}) {
++            mBar.setLayoutDirection(direction);
++            for (int width : new int[] {88, 44, 72, 56, 88}) {
++                layout(width);
++                assertEquals(width / 2f, iconCenter(), 1);
++                assertNotNull(mUrl.getClipBounds());
++                assertEquals(0, mUrl.getClipBounds().width());
++                assertEquals(0f, mBar.getTranslationX(), 0);
++            }
++        }
++    }
++
++    @Test public void realUrlRequestFocusRestoresDrawingBeforeEditingAndBlurRecompacts() {
++        mCompact.setCompact(true);
++        layout(64);
++        assertTrue(mUrl.requestFocus());
++        assertTrue(mUrl.getWidth() > 0);
++        assertNull(mUrl.getClipBounds());
++        assertEquals(View.VISIBLE, mActions.getVisibility());
++        mUrl.setText("https://example.com/new");
++        assertEquals("https://example.com/new", mUrl.getText().toString());
++        assertTrue(mOther.requestFocus());
++        assertNotNull(mUrl.getClipBounds());
++        assertEquals(0, mUrl.getClipBounds().width());
++        assertEquals(32, iconCenter(), 1);
++    }
++
++    @Test public void actualNativeBackgroundTouchReachesUrlAndRevealsEditor() {
++        mCompact.setCompact(true);
++        layout(64);
++        assertNotNull(mUrl.getClipBounds());
++        // Native tablet background touches forward to the nearest shown URL/delete target.
++        MotionEvent down = MotionEvent.obtain(0, 1, MotionEvent.ACTION_DOWN, 58, 55, 0);
++        MotionEvent up = MotionEvent.obtain(0, 2, MotionEvent.ACTION_UP, 58, 55, 0);
++        assertTrue(mBar.dispatchTouchEvent(down));
++        assertTrue(mBar.dispatchTouchEvent(up));
++        down.recycle();
++        up.recycle();
++        assertTrue(mUrl.hasFocus());
++        assertNull(mUrl.getClipBounds());
++    }
++
++    @Test public void centeredNativeIconStillReceivesItsExistingClickAction() {
++        boolean[] clicked = {false};
++        mIcon.setOnClickListener(view -> clicked[0] = true);
++        mCompact.setCompact(true);
++        layout(128);
++        Rect icon = new Rect();
++        mIcon.getDrawingRect(icon);
++        mBar.offsetDescendantRectToMyCoords(mIcon, icon);
++        MotionEvent down = MotionEvent.obtain(0, 1, MotionEvent.ACTION_DOWN,
++                icon.exactCenterX(), icon.exactCenterY(), 0);
++        MotionEvent up = MotionEvent.obtain(0, 2, MotionEvent.ACTION_UP,
++                icon.exactCenterX(), icon.exactCenterY(), 0);
++        mBar.dispatchTouchEvent(down);
++        mBar.dispatchTouchEvent(up);
++        down.recycle();
++        up.recycle();
++        shadowOf(Looper.getMainLooper()).idle();
++        assertTrue("The centered real icon retains its native action", clicked[0]);
++        assertFalse(mUrl.hasFocus());
++    }
++
++    @Test public void expansionRestoresOriginalBoundsClippingVisibilityAndPadding() {
++        Rect clip = new Rect(2, 3, 130, 38);
++        mUrl.setClipBounds(clip);
++        mActions.setVisibility(View.GONE);
++        mCompact.setCompact(true);
++        layout(64);
++        mCompact.restore();
++        layout(240);
++        assertEquals(mExpandedStatus, bounds(mStatus));
++        assertEquals(180, mUrl.getWidth());
++        assertEquals(clip, mUrl.getClipBounds());
++        assertEquals(View.GONE, mActions.getVisibility());
++        assertSame(mStatusParams, mStatus.getLayoutParams());
++        assertEquals(5, mBar.getPaddingLeft());
++        assertEquals(13, mBar.getPaddingRight());
++        assertEquals(7, mStatus.getPaddingLeft());
++        assertEquals(19, mStatus.getPaddingRight());
++    }
++
++    @Test public void nativeGoneAfterSuppressionSurvivesGlobalLayoutAndExpansion() {
++        mCompact.setCompact(true);
++        layout(64);
++        mActions.setVisibility(View.GONE);
++        layout(64);
++        assertEquals(View.GONE, mActions.getVisibility());
++        mCompact.restore();
++        assertEquals(View.GONE, mActions.getVisibility());
++    }
++
++    @Test public void nativeGoneAfterSuppressionSurvivesExpansionBeforeNextLayout() {
++        mCompact.setCompact(true);
++        layout(64);
++        mActions.setVisibility(View.GONE);
++        mCompact.restore();
++        assertEquals(View.GONE, mActions.getVisibility());
++    }
++
++    @Test public void nativeVisibleFromGoneIsSuppressedThenRestoredOnExpansion() {
++        mActions.setVisibility(View.GONE);
++        mCompact.setCompact(true);
++        layout(64);
++        mActions.setVisibility(View.VISIBLE);
++        layout(64);
++        assertEquals(View.INVISIBLE, mActions.getVisibility());
++        mCompact.restore();
++        assertEquals(View.VISIBLE, mActions.getVisibility());
++    }
++
++    @Test public void nativeVisibleFromGoneSurvivesExpansionBeforeNextLayout() {
++        mActions.setVisibility(View.GONE);
++        mCompact.setCompact(true);
++        layout(64);
++        mActions.setVisibility(View.VISIBLE);
++        mCompact.restore();
++        assertEquals(View.VISIBLE, mActions.getVisibility());
++    }
++
++    @Test public void nativeGoneBeforeFocusAndFocusedUpdatesKeepNativeVisibility() {
++        mCompact.setCompact(true);
++        layout(64);
++        mActions.setVisibility(View.GONE);
++        assertTrue(mUrl.requestFocus());
++        assertEquals(View.GONE, mActions.getVisibility());
++        mActions.setVisibility(View.VISIBLE);
++        layout(64);
++        assertEquals(View.VISIBLE, mActions.getVisibility());
++        mCompact.restore();
++        assertEquals(View.VISIBLE, mActions.getVisibility());
++        assertNull(mUrl.getClipBounds());
++    }
++
++    @Test public void destroyRestoresAndRemovesFocusAndLayoutObservers() {
++        mCompact.setCompact(true);
++        layout(64);
++        mCompact.destroy();
++        layout(240);
++        assertEquals(mExpandedStatus, bounds(mStatus));
++        assertNull(mUrl.getClipBounds());
++        mUrl.requestFocus();
++        mOther.requestFocus();
++        layout(80);
++        assertNull(mUrl.getClipBounds());
++        mCompact.setCompact(true);
++        assertNull(mUrl.getClipBounds());
++    }
++
++    @Test public void alreadyFocusedEditorStaysEditableDuringCollapse() {
++        assertTrue(mUrl.requestFocus());
++        mCompact.setCompact(true);
++        layout(64);
++        assertNull(mUrl.getClipBounds());
++        assertEquals(View.VISIBLE, mActions.getVisibility());
++        mCompact.setCompact(false);
++        mOther.requestFocus();
++        assertNull(mUrl.getClipBounds());
++    }
++
++    @Test public void zeroSizeWaitsForActualLayoutAndRestoreIsIdempotent() {
++        layout(0);
++        mCompact.setCompact(true);
++        layout(0);
++        layout(64);
++        assertEquals(32, iconCenter(), 1);
++        mCompact.restore();
++        mCompact.restore();
++        layout(240);
++        assertEquals(mExpandedStatus, bounds(mStatus));
++    }
++
++    private void layout(int width) {
++        mBar.getLayoutParams().width = width;
++        mHolder.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
++                View.MeasureSpec.makeMeasureSpec(60, View.MeasureSpec.EXACTLY));
++        mHolder.layout(0, 0, width, 60);
++        mHolder.getViewTreeObserver().dispatchOnGlobalLayout();
++    }
++
++    private float iconCenter() {
++        Rect rect = new Rect();
++        mIcon.getDrawingRect(rect);
++        mBar.offsetDescendantRectToMyCoords(mIcon, rect);
++        return rect.exactCenterX();
++    }
++
++    private static Rect bounds(View view) {
++        return new Rect(view.getLeft(), view.getTop(), view.getRight(), view.getBottom());
++    }
++
++    /** Adapter for pinned tablet's shown-target touch routing; Android EditText stays real. */
++    private static class NativeTouchLocationBar extends FrameLayout {
++        NativeTouchLocationBar(Activity activity) { super(activity); }
++        @Override public boolean onTouchEvent(MotionEvent event) {
++            // Pinned LocationBarTablet nearest shown-target routing, including its coordinates.
++            View target = findViewById(R.id.url_bar);
++            if (!target.isShown()) return false;
++            Rect bounds = new Rect(0, 0, target.getWidth(), target.getHeight());
++            offsetDescendantRectToMyCoords(target, bounds);
++            float x = event.getX();
++            float y = event.getY();
++            float dx = distanceToRange(bounds.left, bounds.right, x);
++            float dy = distanceToRange(bounds.top, bounds.bottom, y);
++            event.setLocation(x + dx, y + dy);
++            return target.onTouchEvent(event);
++        }
++        private static float distanceToRange(float min, float max, float value) {
++            return value < min ? (min - value) : value > max ? (max - value) : 0;
++        }
++    }
++}
 diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcFrameDispatchTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcFrameDispatchTest.java
 new file mode 100644
 --- /dev/null
@@ -7214,7 +7808,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/tasks/tab_mana
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/ArcTabSelectionTest.java
-@@ -0,0 +1,53 @@
+@@ -0,0 +1,56 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -7241,11 +7835,14 @@ new file mode 100644
 +@RunWith(BaseRobolectricTestRunner.class)
 +public class ArcTabSelectionTest {
 +    @Test
-+    public void regularActiveTabWhiteAcrossFrameColors() {
++    public void regularActiveTabUsesPaleChosenHue() {
 +        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
 +        ArcDesktopAppearance.setUiMode(activity, ArcDesktopPolicy.MODE_ARC);
 +        try {
-+            for (int seed : new int[] {0xff53657b, 0xffeeeeee, 0xff000000, 0xffee4400, 0xff0044ee}) {
++            assertEquals(Color.WHITE, ArcDesktopAppearance.activeTabSurface(activity, false));
++            // Hand-derived pale capsules for the selected orange and blue frame colors.
++            for (int[] colors : new int[][] {{0xffee4400, 0xfffce0d5}, {0xff0044ee, 0xffd5e0fc}}) {
++                int seed = colors[0];
 +                ArcDesktopAppearance.preferences(activity).edit()
 +                        .putInt(ArcDesktopAppearance.COLOR_KEY, seed).commit();
 +                ColorStateList background = ReflectionHelpers.callStaticMethod(
@@ -7259,7 +7856,7 @@ new file mode 100644
 +                        ClassParameter.from(Context.class, activity),
 +                        ClassParameter.from(boolean.class, true),
 +                        ClassParameter.from(boolean.class, false));
-+                assertEquals(Color.WHITE, background.getDefaultColor());
++                assertEquals(colors[1], background.getDefaultColor());
 +                assertEquals(Color.BLACK, foreground);
 +            }
 +        } finally {
@@ -7413,7 +8010,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/ui/vertical_ta
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearanceTest.java
-@@ -0,0 +1,117 @@
+@@ -0,0 +1,153 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -7465,6 +8062,42 @@ new file mode 100644
 +        shadow.setWidth(1100);
 +        assertNotEquals(Display.DEFAULT_DISPLAY, display.getDisplayId());
 +        return display;
++    }
++
++    @Test
++    public void chosenFrameColorKeepsVisibleHue() {
++        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
++        ArcDesktopAppearance.preferences(activity).edit()
++                .putInt(ArcDesktopAppearance.COLOR_KEY, 0xff0044ee).commit();
++        int surface = ArcDesktopAppearance.surface(activity, false);
++        assertTrue((surface & 255) - ((surface >> 16) & 255) >= 100);
++        assertTrue(ArcDesktopPolicy.contrast(surface,
++                ArcDesktopPolicy.foreground(surface)) >= 4.5);
++    }
++
++    @Test
++    public void previewFollowsWrappedWindowAndCancelRestoresSavedColor() {
++        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
++        Activity other = Robolectric.buildActivity(Activity.class).setup().get();
++        try {
++            ArcDesktopAppearance.preferences(activity).edit()
++                    .putInt(ArcDesktopAppearance.COLOR_KEY, 0xff0044ee).commit();
++            int saved = ArcDesktopAppearance.surface(activity, false);
++            android.view.ContextThemeWrapper wrapped = new android.view.ContextThemeWrapper(
++                    activity, android.R.style.Theme_Material);
++            ArcDesktopAppearance.setPreviewColor(activity, 0xffee4400);
++            assertEquals(0xfff28458, ArcDesktopAppearance.surface(wrapped, false));
++            assertEquals(0xfffce0d5, ArcDesktopAppearance.activeTabSurface(wrapped, false));
++            assertEquals(saved, ArcDesktopAppearance.surface(other, false));
++            ArcDesktopAppearance.setPreviewColor(activity, null);
++            assertEquals(saved, ArcDesktopAppearance.surface(wrapped, false));
++            assertEquals(0xff0044ee, ArcDesktopAppearance.preferences(activity).getInt(
++                    ArcDesktopAppearance.COLOR_KEY, 0));
++        } finally {
++            ArcDesktopAppearance.setPreviewColor(activity, null);
++            activity.finish();
++            other.finish();
++        }
 +    }
 +
 +    @Test
@@ -11620,7 +12253,7 @@ diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrom
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java
-@@ -0,0 +1,92 @@
+@@ -0,0 +1,123 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -11628,6 +12261,9 @@ new file mode 100644
 +
 +import android.app.Activity;
 +import android.content.Context;
++import android.content.ContextWrapper;
++
++import java.util.WeakHashMap;
 +import android.content.pm.PackageManager;
 +import android.os.Build;
 +import android.view.Display;
@@ -11643,7 +12279,25 @@ new file mode 100644
 +    public static final String UI_MODE_KEY = "ui_mode";
 +    public static final int DEFAULT_COLOR = 0xff53657b;
 +
++    // UI-thread only. A draft belongs to its Activity, never another window or saved profile.
++    private static final WeakHashMap<Context, Integer> PREVIEW_COLORS = new WeakHashMap<>();
++
 +    private ArcDesktopAppearance() {}
++
++    private static Context visualContext(Context context) {
++        while (!(context instanceof Activity) && context instanceof ContextWrapper wrapper) {
++            Context base = wrapper.getBaseContext();
++            if (base == context) break;
++            context = base;
++        }
++        return context;
++    }
++
++    public static void setPreviewColor(Context context, Integer color) {
++        Context window = visualContext(context);
++        if (color == null) PREVIEW_COLORS.remove(window);
++        else PREVIEW_COLORS.put(window, color);
++    }
 +
 +    public static boolean isDesktopWindow(Context context) {
 +        int mode = getUiMode(context);
@@ -11701,8 +12355,18 @@ new file mode 100644
 +    public static int surface(Context context, boolean incognito) {
 +        boolean dark = incognito || (context.getResources().getConfiguration().uiMode
 +                & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
-+        int seed = preferences(context).getInt(COLOR_KEY, DEFAULT_COLOR);
-+        return ArcDesktopPolicy.surface(seed, dark);
++        Integer preview = PREVIEW_COLORS.get(visualContext(context));
++        if (preview != null) return ArcDesktopPolicy.surface(preview, dark);
++        SharedPreferences saved = preferences(context);
++        if (!saved.contains(COLOR_KEY)) return ArcDesktopPolicy.defaultSurface(dark);
++        return ArcDesktopPolicy.surface(saved.getInt(COLOR_KEY, DEFAULT_COLOR), dark);
++    }
++
++    public static int activeTabSurface(Context context, boolean incognito) {
++        if (incognito) return selection(context, true);
++        boolean custom = PREVIEW_COLORS.containsKey(visualContext(context))
++                || preferences(context).contains(COLOR_KEY);
++        return custom ? ArcDesktopPolicy.activeTabSurface(surface(context, false)) : 0xffffffff;
 +    }
 +
 +    public static int foreground(Context context, boolean incognito) {
@@ -11717,7 +12381,7 @@ diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrom
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java
-@@ -0,0 +1,129 @@
+@@ -0,0 +1,139 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -11756,7 +12420,17 @@ new file mode 100644
 +    }
 +
 +    public static int surface(int seed, boolean dark) {
-+        return blend(seed, dark ? 0xff141414 : 0xfffafafa, dark ? 0.22 : 0.12);
++        return blend(seed, dark ? 0xff141414 : 0xfffafafa, dark ? 0.50 : 0.65);
++    }
++
++    /** The original neutral surface remains the default until the user selects a color. */
++    public static int defaultSurface(boolean dark) {
++        return blend(0xff53657b, dark ? 0xff141414 : 0xfffafafa, dark ? 0.22 : 0.12);
++    }
++
++    /** A pale capsule preserves the active-tab shape while following a chosen frame hue. */
++    public static int activeTabSurface(int surface) {
++        return blend(surface, 0xffffffff, 0.25);
 +    }
 +
 +    public static int selection(int surface) {

@@ -36,6 +36,7 @@ public class BinderColorProbe {
         static int seed;
         static boolean isDesktopWindow(Context c) { return c.arc; }
         static int surface(Context c,boolean incognito) { return ArcDesktopPolicy.surface(seed,incognito); }
+        static int activeTabSurface(Context c,boolean incognito) { return incognito ? selection(c,true) : Color.WHITE; }
         static int selection(Context c,boolean incognito) { return ArcDesktopPolicy.selection(surface(c,incognito)); }
     }
     static class SemanticColorUtils {

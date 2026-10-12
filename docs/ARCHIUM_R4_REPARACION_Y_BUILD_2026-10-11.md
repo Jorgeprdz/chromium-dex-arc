@@ -1197,3 +1197,141 @@ observados con adb; no se cambian permisos ni configuración celular.
 Runtime fix commit: `eaeac984687e999b86a4e6129e97698dd8721c77`; preparación final de patch
 y API SDK repetida tras precisar comentario: exit 0. La batería 242/0/0
 precede solo a ese cambio de comentario, sin cambio de comportamiento.
+
+## 2026-10-12 — APK 38285899318 verificada; crash nuevo al enfocar la omnibox
+
+Se retoma desde `7da34209c78510ae13e128765c6eb21bde955c88`, rama autorizada de
+recuperación `assistant/archium-r4-recovery`. El usuario pausó la ejecución para
+reunir defectos y luego autorizó «esos puntos + lo que ya habíamos señalado.
+procede a fix y siguiente build». El respaldo `feat/arc-desktop` y `main` se
+conservan. No se reinician contraseñas propias, pin, toolchain o identidad Portal.
+
+Run [38285899318](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38285899318)
+SUCCESS, 17:41:36–18:27:39 UTC, fuente exacta `7da3420`.
+Los logs auténticos de build registran restore compatible, recursos reales,
+enlace JNI y APK; 2090 ejecuciones de tests en 28 invocaciones ChromeJUnit
+(incluyen la repetición temprana/final de suites; no son 2090 tests únicos).
+Artifact `Archium-for-Android-arm64`, ID `11765172162`, 154869365 bytes,
+vence 2026-10-19 18:25:16 UTC. ZIP SHA256
+`c42c94cad2d21dceaa0dc9fa470d2cea97dbbf0d3084c9beda295fe5d3960d25`.
+APK SHA256 `bdf31fe1c860b06821951d5c2f633248b02f6c46797e3e4e18f64fab0fc6c9ff`;
+`sha256sum -c` y hash del `base.apk` instalado coinciden. `aapt2 dump badging`
+exit 0: `app.archium.android`, exclusivamente `arm64-v8a`, versión 157.0.8086.0.
+`apksigner verify --verbose` exit 0, firma v2 válida, certificado SHA256
+`32a2fc74d731105859e5a85df16d95f102d85b22099b8064c5d8915c61dad1e0`.
+
+En teléfono arranque COLD observado PASS. En DeX display lógico 18 abre la
+sidebar, pero tocar la omnibox produce FATAL EXCEPTION a las 13:15:53.929 del
+teléfono, PID 14178: `LocationBarTablet` pasa el toolbar anterior a
+`ViewUtils.getRelativeLayoutPosition`; al buscar ese ancestro que ya es un
+hermano se llega a `ViewRootImpl`, y el cast a `View` falla. La causa es distinta
+del bridge de Window.Callback reparado antes. Se conserva un
+[extracto filtrado](evidence/2026-10-12-sidebar-fixes/omnibox-crash-excerpt.txt),
+sin logs de otras aplicaciones, URLs de usuario ni capturas privadas.
+Por tanto, BUILD anterior PASS y ANDROID_RUNTIME anterior FAIL son estados
+compatibles; el APK candidato nuevo aún no existe.
+
+### Fixes concretos tras la nueva autorización
+
+| Causa raíz | Archivos y cambio mínimo | Regresión observada |
+|---|---|---|
+| Foco y fusebox usan ancestro obsoleto | Overlay `LocationBarTablet.java`: resolver contenedor real para headroom, márgenes y activation chip; conservar rutas nativas de ancestro y ventana | Código fijado anterior falla 10/14 ejecuciones; nuevo 14/14 PASS |
+| Collection scroll reserva altura exacta | `ArcCollectionsView`: WRAP_CONTENT con tope AT_MOST; ocultar tira vacía de favoritos | Robolectric mide contenido corto sin panel reservado |
+| Falta eliminación de espacio/carpeta | `ArcSidebarState`, `ArcCollectionsController`, vista y strings: confirmar, conservar tabs/pins/favoritos/IDs, promover hijos; persistir antes de notificar | Escritura fallida deja estado/comandos intactos; último espacio protegido |
+| Favoritos pierden mosaico/tinte real | `ArcCollectionsView`: tiles cuadrados, favicon sin filtro; estilo propio después de refresh | Dimensiones y drawable reales; no se migra a ciegas el almacén de bookmarks Chromium |
+| Color casi imperceptible y preview dividido | `ArcDesktopPolicy`/`ArcDesktopAppearance`/coordinator/binder: paleta perceptible, draft por ventana, cápsula tenue con contraste | JVM rechaza la mezcla anterior; Android prueba preview compartido, aislamiento, aplicar/cancelar |
+| Padding del rail sigue blanco | `ArcDesktopCoordinator`: rail y frame reciben el mismo ColorDrawable; conservar padding y backgrounds móviles originales | Mutante con rail blanco falla 2/6; candidato 6/6 PASS |
+| Compacto deja favicon/URL descentrados | Nuevo `ArcCompactOmnibox`: centrar icono nativo, restaurar edición en foco/expandir; preservar el control real y su touch | Mutante con hit bounds de URL falla; nuevo helper 28/28 PASS |
+| Restauración compacta usa visibilidad antigua | Helper guarda estado nativo y estado aplicado; no sobrescribe cambios posteriores de Chromium | Helper anterior falla cinco métodos; 28/28 SDK29/36 tras fix |
+| Acciones pedidas y trabajo repetido al animar | Coordinator: esfera multicolor, header como tiles, quitar Autofill; cachear paleta y texto sin cambiar animación nativa/viewport | API SDK real compila; fluidez y geometría final de nueva APK requieren dispositivo |
+
+Se registran `ArcCompactOmniboxTest` en GN y el nuevo overlay del test upstream
+`LocationBarTabletUnitTest`. Ambos son gates ChromeJUnit **antes de libchrome**,
+además del gate final. El contrato host de suites se amplía: su mutante que
+retira esas dos invocaciones falla con exit 1 y enumera ambas ausencias; el
+contrato correcto pasa 2/2. No se elimina ningún test ni se convierte un fallo
+en skip. Revisión independiente de lectura cerró el hallazgo de visibilidad;
+cero Critical/Important pendientes establecidos, sin afirmar pruebas que el
+revisor no ejecutó.
+
+### Evidencia barata y límites de los PASS
+
+[results.json](evidence/2026-10-12-sidebar-fixes/results.json) conserva comandos,
+hashes de logs y alcance. Probes locales genuinos Robolectric SDK29/36:
+foco 14/14, compacto 28/28, colecciones 14/14, frame 6/6; exit 0 cada uno.
+Ejecutan código de producción/métodos verbatim y ventanas/vistas Android,
+con adaptadores explícitos de recursos y servicios Chromium. **No equivalen
+al runner completo ChromeJUnit ni a una APK corregida en DeX.** El SDK37 del
+runner acotado local no está soportado: UNVERIFIED local, no PASS ni skip.
+
+Comandos reproducibles de los probes de foco/compacto/frame son los scripts
+`scripts/test-robolectric-location-bar-tablet-fixture.py`,
+`scripts/test-robolectric-compact-omnibox.py` y
+`scripts/test-robolectric-arc-frame.py`, con `--classpath-file`, `--java-home`
+y directorio `--work` reales. Foco agrega `--view-utils-source` del pin.
+Las opciones negativas conservadas permiten ejecutar la referencia anterior
+o mutantes: `--source-stage reference`, `--unsafe-container-mutant`,
+`--keep-url-hit-bounds`, `--white-rail-mutant` según el script correspondiente.
+
+`python3 scripts/check-arc-preparation.py --android-jar
+/opt/android-sdk/platforms/android-36/android.jar`: exit 0 después del helper
+final; Java puro, contratos API SDK acotados y aplicación de los 113 archivos.
+`git diff --check`, `bash -n`, `python3 -m compileall -q scripts tests` y
+actionlint 1.7.7: exit 0. Generador oficial ejecutado dos veces, exit 0,
+hashes idénticos: patch
+`29470240438f48e3bbf03f8e0b1d40eb7420896e070231d1ba93cd6ae2711fdf`,
+manifest `517fe16669d4f7dbfca314efc905f85619d02f78ccfa01112775895cf36e75b6`.
+El resultado integral host se registra al completar la batería, no antes.
+
+### Checkpoint y siguiente run
+
+Se prioriza **archium-checkpoint-38275213327-1**, fuente
+`3c75be2c5fd0aff4a9616e218498886895f088ba`. El run exitoso 38285899318 no publicó
+otro checkpoint. Metadata remota fresca: cuatro grupos, 25 partes,
+26506123626 bytes de artifacts, ninguno expirado; expiración más temprana
+2026-10-26 16:58:07 UTC. IDs 11761207506 / 11760853238 / 11761855716 / 11760504441.
+Lectura autenticada HTTP Range exit 0, solo 5381 bytes; SHA/tag/pin y hashes de
+partes del manifest correctos. Manifest SHA256
+`1771b7a6bda7be8c0b76bcb30cd04c0bc7202ec7a93f624a6245f29574e75004`.
+Ese mismo checkpoint superó checksum/restore íntegro en 38285899318; los bytes
+descargados por el siguiente run se verificarán de nuevo en S1.
+
+Disco local medido: 74358464512 bytes libres, 11611025 inodos; insuficiente para
+la política de 101506123626 bytes. No se descarga el checkpoint al teléfono ni
+se reduce el umbral. **DISK_PREFLIGHT local FAIL; capacidad runner PENDING_S0**,
+bloqueante antes de la descarga masiva. Remoto fuente conservado recuperable.
+Consulta Actions antes de publicar: ningún run activo. Workflow real
+`baseline-build.yml` (ID 374835814), solo workflow_dispatch, cuatro inputs
+expected_sha/source_checkpoint/source_commit/source_run_id, needs secuencial,
+concurrency común sin cancelación. Un solo dispatch nuevo tras gates y push.
+SHA final/ID/URL se registran al observarlos; no se inventa actividad ni APK.
+
+DeX puede desconectarse: logs y capturas necesarias ya están guardados. Se
+requiere reconectar para aceptar el runtime de la próxima APK. El monitor
+debe fijar el nuevo ID y SHA, refrescar cada 600 s, y descargar/instalar solo
+después de SUCCESS y verificación de APK. Después del handoff se detiene el
+trabajo automático, como pidió el usuario.
+
+### Cierre de gates antes del push del candidato
+
+Primera batería host: exit 1, 243 tests / 242 passed / 1 failed / 0 skipped,
+627.388 s. Único fallo: expected filter set del contrato host faltaba ampliar
+para las dos suites nuevas. Se corrige el contrato conservando ambas invocaciones
+reales; gate dirigido 2/2 PASS, mutante con invocaciones retiradas exit 1.
+Repetición completa tras congelar el código: **exit 0, 243 passed / 0 failed /
+0 skipped, 537.243 s**, GN/Ninja/AAPT2/SDK reales. GN arm64, baseline y x64 PASS.
+Avisos JDK/Mockito/deprecación de probes permanecen visibles en logs; no se
+convierten en skips ni se ocultan. Los cinco scripts Bash se verifican por
+separado con `bash -n`, exit 0; ShellCheck sobre recovery exit 0.
+
+STATIC_PASS=PASS; PYTHON_HOST_PASS=PASS; GN_REAL_PASS=PASS (tres perfiles en
+fixture real GN); PATCH_REPRODUCIBILITY=PASS; AAPT2_REAL_RESOURCES=PENDING_S2;
+ROBOLECTRIC_PASS=PENDING_POST_RESTORE para el runner completo Chromium;
+JNI_LINK_PASS=NOT_EXECUTED; APK_VERIFIED=NOT_EXECUTED; ANDROID_RUNTIME nuevo
+NOT_EXECUTED. Los 62 tests Robolectric acotados locales tienen su alcance
+propio explícito y no cambian esos estados nativos.
+
+Los commits se agrupan en foco, colecciones y paleta/compacto. Cada snapshot
+del índice regenera su patch/manifest mediante el generador oficial; el working
+tree validado permanece congelado. Solo se publica el HEAD final completo y
+solo ese SHA puede despacharse. No se realizan ediciones manuales del patch.

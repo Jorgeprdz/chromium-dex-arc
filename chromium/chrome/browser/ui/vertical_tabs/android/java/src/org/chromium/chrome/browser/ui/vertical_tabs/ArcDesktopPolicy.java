@@ -36,7 +36,17 @@ public final class ArcDesktopPolicy {
     }
 
     public static int surface(int seed, boolean dark) {
-        return blend(seed, dark ? 0xff141414 : 0xfffafafa, dark ? 0.22 : 0.12);
+        return blend(seed, dark ? 0xff141414 : 0xfffafafa, dark ? 0.50 : 0.65);
+    }
+
+    /** The original neutral surface remains the default until the user selects a color. */
+    public static int defaultSurface(boolean dark) {
+        return blend(0xff53657b, dark ? 0xff141414 : 0xfffafafa, dark ? 0.22 : 0.12);
+    }
+
+    /** A pale capsule preserves the active-tab shape while following a chosen frame hue. */
+    public static int activeTabSurface(int surface) {
+        return blend(surface, 0xffffffff, 0.25);
     }
 
     public static int selection(int surface) {

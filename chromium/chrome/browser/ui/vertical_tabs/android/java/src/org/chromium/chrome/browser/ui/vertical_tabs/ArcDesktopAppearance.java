@@ -5,6 +5,9 @@ package org.chromium.chrome.browser.ui.vertical_tabs;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.ContextWrapper;
+
+import java.util.WeakHashMap;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.view.Display;
@@ -20,7 +23,25 @@ public final class ArcDesktopAppearance {
     public static final String UI_MODE_KEY = "ui_mode";
     public static final int DEFAULT_COLOR = 0xff53657b;
 
+    // UI-thread only. A draft belongs to its Activity, never another window or saved profile.
+    private static final WeakHashMap<Context, Integer> PREVIEW_COLORS = new WeakHashMap<>();
+
     private ArcDesktopAppearance() {}
+
+    private static Context visualContext(Context context) {
+        while (!(context instanceof Activity) && context instanceof ContextWrapper wrapper) {
+            Context base = wrapper.getBaseContext();
+            if (base == context) break;
+            context = base;
+        }
+        return context;
+    }
+
+    public static void setPreviewColor(Context context, Integer color) {
+        Context window = visualContext(context);
+        if (color == null) PREVIEW_COLORS.remove(window);
+        else PREVIEW_COLORS.put(window, color);
+    }
 
     public static boolean isDesktopWindow(Context context) {
         int mode = getUiMode(context);
@@ -78,8 +99,18 @@ public final class ArcDesktopAppearance {
     public static int surface(Context context, boolean incognito) {
         boolean dark = incognito || (context.getResources().getConfiguration().uiMode
                 & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
-        int seed = preferences(context).getInt(COLOR_KEY, DEFAULT_COLOR);
-        return ArcDesktopPolicy.surface(seed, dark);
+        Integer preview = PREVIEW_COLORS.get(visualContext(context));
+        if (preview != null) return ArcDesktopPolicy.surface(preview, dark);
+        SharedPreferences saved = preferences(context);
+        if (!saved.contains(COLOR_KEY)) return ArcDesktopPolicy.defaultSurface(dark);
+        return ArcDesktopPolicy.surface(saved.getInt(COLOR_KEY, DEFAULT_COLOR), dark);
+    }
+
+    public static int activeTabSurface(Context context, boolean incognito) {
+        if (incognito) return selection(context, true);
+        boolean custom = PREVIEW_COLORS.containsKey(visualContext(context))
+                || preferences(context).contains(COLOR_KEY);
+        return custom ? ArcDesktopPolicy.activeTabSurface(surface(context, false)) : 0xffffffff;
     }
 
     public static int foreground(Context context, boolean incognito) {
