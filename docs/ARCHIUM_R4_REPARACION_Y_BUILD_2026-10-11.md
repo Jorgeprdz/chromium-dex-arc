@@ -1,3 +1,39 @@
+## Dispatch del fix DeX y monitor nuevo: 38275213327 (2026-10-12 16:07–16:09 UTC)
+
+**Código probado y publicado:** `3c75be2c5fd0aff4a9616e218498886895f088ba`.
+Commits: [eaeac98](https://github.com/Jorgeprdz/chromium-dex-arc/commit/eaeac98)
+y [3c75be2](https://github.com/Jorgeprdz/chromium-dex-arc/commit/3c75be2).
+Push normal exit 0; comparación remota previa coincide con HEAD_START; sin PRs
+abiertos ni runs pesados concurrentes. Protected feat/arc-desktop y main intactos.
+Este registro posterior solo añade documentación; no cambia el código del run.
+
+`gh workflow run 374835814 --repo Jorgeprdz/chromium-dex-arc --ref
+assistant/archium-r4-recovery -f expected_sha=3c75be2c5fd0aff4a9616e218498886895f088ba
+-f source_checkpoint=archium-checkpoint-38203819481-1
+-f source_commit=2de41680a42972253e8daf4cf818938dacf79a93 -f source_run_id=38203819481`:
+exit 0. Run real [38275213327](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38275213327),
+workflow_dispatch, created 2026-10-12T16:07:38Z, SHA exacto validado por API.
+Authorize PASS, preflight en curso construyendo GN real al observar el handoff.
+Native/restore/disco CI todavía no ejecutados; APK nueva inexistente.
+
+Monitor nativo configurado con ese ID/SHA, `bash -n` exit 0. Nueva sesión **#2**
+en NewTermux; `./m4` ejecutado en shell nuevo, sin escribir en la sesión Codex #1.
+PID Python real **28715**, `/proc/.../cmdline` y `screen.txt` acreditan run/SHA.
+Monitor muestra elapsed, ETA N/D, % de fases verificadas y tres eventos API mientras
+GitHub no publica log. ASCII/color/bold/italic conservados; refresh 600 s, wake-lock,
+r+Enter refresca, q+Enter sale. SUCCESS permite descargar/verificar/instalar solo
+APK exacta, con Portal/package/ARM64/SHA256/firma/reporte. FAILED no instala.
+
+**BUILD=INCOMPLETE, BUILD_STAGE=S0; ANDROID_RUNTIME del candidato=NOT_EXECUTED.**
+La APK previa instalada continúa con runtime FAIL. Informe R3: 10 PARTIAL,
+2 BLOCKED, sin PASS visual anticipado. Fuente checkpoint intacta; disco local
+FAIL para descarga masiva, disco runner PENDING_S0 y hashes completos PENDING_S1.
+Se detiene el trabajo del agente tras verificar monitor, por orden del usuario,
+y se continúa con monitoreo manual. No se despacha un segundo workflow aquí.
+
+Registro verificable: [dispatch-monitor.json](evidence/2026-10-12-dex-runtime/dispatch-monitor.json)
+y [matriz R3](ARCHIUM_R3_VERIFICACION_2026-10-12.md).
+
 ## Dispatch probado y monitor en sesión nueva: 38210970891 (2026-10-12 06:06–06:09 UTC)
 
 Commits temáticos, commit/push exit 0:

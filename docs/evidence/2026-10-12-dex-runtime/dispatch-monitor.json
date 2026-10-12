@@ -1,0 +1,16 @@
+{
+  "recorded_utc": "2026-10-12T16:09:46.654849+00:00",
+  "run": 38275213327,
+  "url": "https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38275213327",
+  "source_sha": "3c75be2c5fd0aff4a9616e218498886895f088ba",
+  "checkpoint": "archium-checkpoint-38203819481-1",
+  "monitor_pid": 28715,
+  "termux_session": 2,
+  "interval_seconds": 600,
+  "observed_stage": "S0",
+  "observed_activity": "Build genuine GN at Chromium DEPS pin",
+  "new_apk": "NONE",
+  "android_runtime_new_candidate": "NOT_EXECUTED",
+  "previous_installed_apk_android_runtime": "FAIL",
+  "monitor_install_policy": "Only successful exact-SHA run plus APK, Portal, ARM64, checksum and signature checks"
+}
