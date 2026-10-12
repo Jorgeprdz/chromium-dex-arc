@@ -1,0 +1,192 @@
+package app.archium.r4toolbarprobe;
+
+import android.app.Activity;
+import android.app.ActivityOptions;
+import android.app.Dialog;
+import android.app.Instrumentation;
+import android.content.Context;
+import android.content.Intent;
+import android.graphics.Rect;
+import android.os.Bundle;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
+import java.util.concurrent.atomic.AtomicReference;
+
+/** Runs the shipped rectangle method with attached Android views and a real ViewRootImpl. */
+public class ArcToolbarGeometryTest extends Instrumentation {
+    private int mDisplayId;
+    @Override
+    public void onCreate(Bundle arguments) {
+        super.onCreate(arguments);
+        mDisplayId = Integer.parseInt(arguments.getString("display_id", "0"));
+        start();
+    }
+
+    @Override
+    public void onStart() {
+        Bundle result = new Bundle();
+        ProbeActivity activity = null;
+        int status = Activity.RESULT_CANCELED;
+        try {
+            Bundle options = ActivityOptions.makeBasic().setLaunchDisplayId(mDisplayId).toBundle();
+            activity = (ProbeActivity) startActivitySync(new Intent(getTargetContext(),
+                    ProbeActivity.class).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK), options);
+            waitForIdleSync();
+            ProbeActivity attached = activity;
+            AtomicReference<Throwable> failure = new AtomicReference<>();
+            runOnMainSync(() -> {
+                try {
+                    if (attached.getDisplay().getDisplayId() != mDisplayId) {
+                        throw new AssertionError("Probe launched on a different display");
+                    }
+                    attached.verify();
+                } catch (Throwable error) { failure.set(error); }
+            });
+            if (failure.get() != null) throw new AssertionError("Android geometry failed", failure.get());
+            waitForIdleSync();
+            runOnMainSync(() -> {
+                try { attached.verifyForeignWindow(); } catch (Throwable error) { failure.set(error); }
+            });
+            if (failure.get() != null) throw new AssertionError("Different-window geometry failed", failure.get());
+            result.putString("stream", "PASS: real Android root: toolbar and dropdown coordinates, reparented, descendant, detached, different-window");
+            status = Activity.RESULT_OK;
+        } catch (Throwable error) {
+            java.io.StringWriter text = new java.io.StringWriter();
+            error.printStackTrace(new java.io.PrintWriter(text));
+            result.putString("stream", "FAIL: " + text);
+        } finally {
+            if (activity != null) {
+                ProbeActivity closing = activity;
+                runOnMainSync(() -> {
+                    if (closing.dialog != null) closing.dialog.dismiss();
+                    closing.finish();
+                });
+            }
+        }
+        finish(status, result);
+    }
+
+    static class LocationBar {
+        View container;
+        View getContainerView() { return container; }
+    }
+
+    static class ViewUtils {
+        static void getRelativeLayoutPosition(View rootView, View childView, int[] outPosition) {
+            outPosition[0] = outPosition[1] = 0;
+            if (rootView == null || childView == rootView) return;
+            while (childView != null) {
+                outPosition[0] += childView.getLeft();
+                outPosition[1] += childView.getTop();
+                if (childView.getParent() == rootView) break;
+                childView = (View) childView.getParent();
+            }
+        }
+        // Same ancestor-only contract as the upstream helper recorded in the crash.
+        static void getRelativeDrawPosition(ViewGroup root, View view, int[] position) {
+            position[0] = position[1] = 0;
+            while (view != null && view != root) {
+                position[0] += (int) view.getX();
+                position[1] += (int) view.getY();
+                if (view.getParent() == root) return;
+                view = (View) view.getParent();
+            }
+        }
+    }
+
+    static class Toolbar extends FrameLayout {
+        final int[] mTempPosition = new int[2];
+        final LocationBar bar = new LocationBar();
+        Toolbar(Context context) { super(context); }
+        LocationBar getLocationBar() { return bar; }
+        void getLocationBarContentRect(Rect outRect) __TOOLBAR_BODY__
+    }
+
+    static class OmniboxAlignment {
+        OmniboxAlignment(int a, int b, int c, int d, int e, int f, int g, int h) {}
+    }
+    static class AlignmentSupplier {
+        boolean empty;
+        void set(OmniboxAlignment ignored) { empty = true; }
+    }
+    static class Dropdown {
+        View mAnchorView, mAlignmentView;
+        final int[] mPositionArray = new int[2];
+        final AlignmentSupplier mOmniboxAlignmentSupplier = new AlignmentSupplier();
+        void resolvePosition() __DROPDOWN_BODY__
+    }
+
+    public static class ProbeActivity extends Activity {
+        FrameLayout root, header;
+        Toolbar toolbar;
+        View bar;
+        Dialog dialog;
+
+        @Override
+        public void onCreate(Bundle saved) {
+            super.onCreate(saved);
+            root = new FrameLayout(this);
+            toolbar = new Toolbar(this);
+            header = new FrameLayout(this);
+            bar = new View(this);
+            bar.setPadding(2, 3, 1, 2);
+            root.addView(toolbar, new FrameLayout.LayoutParams(200, 100));
+            root.addView(header, new FrameLayout.LayoutParams(200, 150));
+            header.addView(bar, new FrameLayout.LayoutParams(80, 30));
+            toolbar.bar.container = bar;
+            setContentView(root);
+        }
+
+        void verify() {
+            if (!toolbar.isAttachedToWindow() || !bar.isAttachedToWindow()) {
+                throw new AssertionError("Probe requires an attached Android root");
+            }
+            root.layout(0, 0, 500, 700);
+            toolbar.layout(30, 40, 230, 140);
+            header.layout(10, 80, 210, 230);
+            bar.layout(5, 6, 85, 36);
+            expect(-13, 49, 64, 74);
+            expectDropdown(-15, 46, false);
+            header.removeView(bar);
+            toolbar.addView(bar, new FrameLayout.LayoutParams(80, 30));
+            bar.layout(12, 14, 92, 44);
+            expect(14, 17, 91, 42);
+            expectDropdown(12, 14, false);
+            toolbar.removeView(bar);
+            expect(0, 0, 0, 0);
+            expectDropdown(0, 0, true);
+            dialog = new Dialog(this);
+            dialog.setContentView(bar);
+            dialog.show();
+        }
+
+        void verifyForeignWindow() {
+            if (bar.getWindowToken() == null
+                    || bar.getWindowToken() == toolbar.getWindowToken()) {
+                throw new AssertionError("Probe requires a different attached window");
+            }
+            expect(0, 0, 0, 0);
+            expectDropdown(0, 0, true);
+        }
+
+        void expectDropdown(int x, int y, boolean empty) {
+            Dropdown dropdown = new Dropdown();
+            dropdown.mAnchorView = toolbar;
+            dropdown.mAlignmentView = bar;
+            dropdown.resolvePosition();
+            if (dropdown.mOmniboxAlignmentSupplier.empty != empty
+                    || (!empty && (dropdown.mPositionArray[0] != x || dropdown.mPositionArray[1] != y))) {
+                throw new AssertionError("Wrong native dropdown coordinate contract");
+            }
+        }
+
+        void expect(int left, int top, int right, int bottom) {
+            Rect actual = new Rect();
+            toolbar.getLocationBarContentRect(actual);
+            if (!actual.equals(new Rect(left, top, right, bottom))) {
+                throw new AssertionError("Wrong rectangle: " + actual);
+            }
+        }
+    }
+}

@@ -228,30 +228,34 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
  import org.chromium.chrome.browser.ui.vertical_tabs.VerticalTabUtils;
  import org.chromium.chrome.tab_ui.R;
  import org.chromium.components.browser_ui.styles.ChromeColors;
-@@ -825,6 +827,10 @@
+@@ -825,6 +827,14 @@
       */
      private static ColorStateList getBackgroundTintList(
              Context context, boolean isSelected, boolean isMultiSelected, boolean isIncognito) {
 +        if (ArcDesktopAppearance.isDesktopWindow(context)) {
-+            return ColorStateList.valueOf(isSelected || isMultiSelected
-+                    ? ArcDesktopAppearance.selection(context, isIncognito) : Color.TRANSPARENT);
++            // R3 keeps the active regular tab as a white capsule; theme tint is
++            // retained for multi-selection and the distinct incognito treatment.
++            return ColorStateList.valueOf(isSelected && !isIncognito ? Color.WHITE
++                    : isSelected || isMultiSelected
++                            ? ArcDesktopAppearance.selection(context, isIncognito)
++                            : Color.TRANSPARENT);
 +        }
          if (!isSelected && !isMultiSelected) {
              return ColorStateList.valueOf(Color.TRANSPARENT);
          }
-@@ -850,6 +856,11 @@
+@@ -850,6 +860,11 @@
       */
      private static @ColorInt int getTextColor(
              Context context, boolean isSelected, boolean isIncognito) {
 +        if (ArcDesktopAppearance.isDesktopWindow(context)) {
 +            return ArcDesktopPolicy.foreground(isSelected
-+                    ? ArcDesktopAppearance.selection(context, isIncognito)
++                    ? isIncognito ? ArcDesktopAppearance.selection(context, true) : Color.WHITE
 +                    : ArcDesktopAppearance.surface(context, isIncognito));
 +        }
          if (isSelected) {
              return isIncognito
                      ? context.getColor(R.color.default_text_color_light)
-@@ -871,6 +882,9 @@
+@@ -871,6 +886,9 @@
       */
      private static ColorStateList getActionButtonTintList(
              Context context, boolean isSelected, boolean isIncognito) {
@@ -1089,7 +1093,36 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
              if (mToolbarManager != null) {
                  mToolbarManager.setVerticalTabsAutoHiddenSupplier(
                          mVerticalTabsSideUiCoordinator.getIsAutoHiddenSupplier());
-@@ -3429,8 +3517,12 @@
+@@ -2600,7 +2688,14 @@
+                             var transitionCoord =
+                                     assumeNonNull(mToolbarManager)
+                                             .getTabStripTransitionCoordinator();
+-                            assumeNonNull(transitionCoord).suppressTabStrip(true);
++                            if (transitionCoord != null) {
++                                transitionCoord.suppressTabStrip(true);
++                            } else {
++                                // Forced Arc can use ToolbarPhone, which has no horizontal
++                                // strip to animate. Show the shelf without waiting for one.
++                                showVerticalTabs(true);
++                                setTabLayoutSwitchingInProgress(false);
++                            }
+                         } else {
+                             assumeNonNull(mVerticalTabsSideUiCoordinator)
+                                     .setVisible(/* show= */ false, /* suppressAnimations= */ false);
+@@ -2679,9 +2774,11 @@
+     private void onVerticalTabsActiveChanged(boolean active) {
+         var transitionCoordinator =
+                 assumeNonNull(mToolbarManager).getTabStripTransitionCoordinator();
+-        assumeNonNull(transitionCoordinator);
+         maybeClearPendingTabStripUnsuppression();
+         setTabLayoutSwitchingInProgress(false);
++        // ToolbarPhone has no horizontal TabStripTransitionCoordinator. Vertical-tab
++        // state and pending observers still need cleanup when Arc forces this layout.
++        if (transitionCoordinator == null) return;
+         if (active) {
+             transitionCoordinator.suppressTabStrip(true);
+         } else {
+@@ -3429,8 +3526,12 @@
       * activated.
       */
      public BooleanSupplier canActivateTabLayoutToggleMenu() {
@@ -1106,7 +1139,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
 diff --git a/chrome/android/junit/BUILD.gn b/chrome/android/junit/BUILD.gn
 --- a/chrome/android/junit/BUILD.gn
 +++ b/chrome/android/junit/BUILD.gn
-@@ -431,6 +431,11 @@
+@@ -431,6 +431,13 @@
    # down.
    robolectric_library("chrome_junit_tests_org.chromium.chrome.browser") {
      sources = [
@@ -1115,10 +1148,12 @@ diff --git a/chrome/android/junit/BUILD.gn b/chrome/android/junit/BUILD.gn
 +      "src/org/chromium/chrome/browser/arc/ArcNavigationControlsTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcCollectionsFocusTest.java",
 +      "src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearanceTest.java",
++      "src/org/chromium/chrome/browser/toolbar/top/ArcToolbarReparentingTest.java",
++      "src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/ArcTabSelectionTest.java",
        "//chrome/android/java/src/org/chromium/chrome/browser/bottombar/BottomBarAppMenuUpdateBadgeControllerUnitTest.java",
        "//chrome/android/java/src/org/chromium/chrome/browser/bottombar/BottomBarContainerCoordinatorUnitTest.java",
        "src/org/chromium/chrome/browser/BrowserExitReasonTrackerUnitTest.java",
-@@ -463,6 +468,7 @@
+@@ -463,6 +470,7 @@
      ]
 
      deps = [
@@ -1126,6 +1161,80 @@ diff --git a/chrome/android/junit/BUILD.gn b/chrome/android/junit/BUILD.gn
        ":chrome_junit_tests_helper",
        "//chrome/browser/lifetime/android:java",
        "//chrome/browser/settings:java",
+diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinatorUnitTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinatorUnitTest.java
+--- a/chrome/android/junit/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinatorUnitTest.java
++++ b/chrome/android/junit/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinatorUnitTest.java
+@@ -10,6 +10,7 @@
+ import static org.junit.Assert.assertSame;
+ import static org.mockito.Answers.CALLS_REAL_METHODS;
+ import static org.mockito.Mockito.doReturn;
++import static org.mockito.Mockito.verify;
+
+ import android.view.ViewStub;
+ import android.widget.FrameLayout;
+@@ -24,9 +25,14 @@
+ import org.mockito.junit.MockitoRule;
+ import org.robolectric.Robolectric;
+ import org.robolectric.util.ReflectionHelpers;
++import org.robolectric.util.ReflectionHelpers.ClassParameter;
+
+ import org.chromium.base.test.BaseRobolectricTestRunner;
+ import org.chromium.chrome.R;
++import org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher;
++import org.chromium.chrome.browser.lifecycle.PauseResumeWithNativeObserver;
++import org.chromium.chrome.browser.toolbar.ToolbarManager;
++import org.chromium.chrome.browser.toolbar.top.tab_strip.TabStripTransitionCoordinator;
+ import org.chromium.chrome.browser.ui.RootUiCoordinator;
+ import org.chromium.components.browser_ui.widget.loading.LoadingFullscreenCoordinator;
+ import org.chromium.components.browser_ui.widget.scrim.ScrimManager;
+@@ -43,6 +49,47 @@
+     private TabbedRootUiCoordinator mCoordinator;
+
+     @Mock private ScrimManager mScrimManager;
++    @Mock private ToolbarManager mToolbarManager;
++    @Mock private ActivityLifecycleDispatcher mLifecycleDispatcher;
++    @Mock private PauseResumeWithNativeObserver mPendingObserver;
++    @Mock private TabStripTransitionCoordinator mTransitionCoordinator;
++
++    private void prepareVerticalTabsCallback() {
++        AppCompatActivity activity = Robolectric.buildActivity(TestActivity.class).setup().get();
++        ReflectionHelpers.setField(mCoordinator, "mActivity", activity);
++        ReflectionHelpers.setField(mCoordinator, "mToolbarManager", mToolbarManager);
++        ReflectionHelpers.setField(mCoordinator, "mActivityLifecycleDispatcher", mLifecycleDispatcher);
++    }
++
++    private void changeVerticalTabs(boolean active) {
++        ReflectionHelpers.callInstanceMethod(
++                mCoordinator, "onVerticalTabsActiveChanged", ClassParameter.from(boolean.class, active));
++    }
++
++    @Test
++    public void testPhoneVerticalTabsWithoutHorizontalTransition() {
++        prepareVerticalTabsCallback();
++        changeVerticalTabs(true);
++        changeVerticalTabs(false);
++        assertNull(ReflectionHelpers.getField(mCoordinator, "mPendingUnsuppressTabStripObserver"));
++    }
++
++    @Test
++    public void testPhoneVerticalTabsClearPendingObserver() {
++        prepareVerticalTabsCallback();
++        ReflectionHelpers.setField(mCoordinator, "mPendingUnsuppressTabStripObserver", mPendingObserver);
++        changeVerticalTabs(false);
++        verify(mLifecycleDispatcher).unregister(mPendingObserver);
++        assertNull(ReflectionHelpers.getField(mCoordinator, "mPendingUnsuppressTabStripObserver"));
++    }
++
++    @Test
++    public void testTabletVerticalTabsStillSuppressHorizontalStrip() {
++        prepareVerticalTabsCallback();
++        doReturn(mTransitionCoordinator).when(mToolbarManager).getTabStripTransitionCoordinator();
++        changeVerticalTabs(true);
++        verify(mTransitionCoordinator).suppressTabStrip(true);
++    }
+
+     /**
+      * The loading fullscreen coordinator is created lazily on the first call to {@link
 diff --git a/chrome/browser/BUILD.gn b/chrome/browser/BUILD.gn
 --- a/chrome/browser/BUILD.gn
 +++ b/chrome/browser/BUILD.gn
@@ -1736,6 +1845,115 @@ diff --git a/chrome/browser/sync/sync_service_factory.cc b/chrome/browser/sync/s
    builder.SetPrefService(profile->GetPrefs());
    builder.SetPrefServiceSyncable(PrefServiceSyncableFromProfile(profile));
    builder.SetTabGroupSyncService(GetTabGroupSyncService(profile));
+diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImpl.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImpl.java
+--- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImpl.java
++++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImpl.java
+@@ -340,7 +340,27 @@
+             }
+
+             // Tablet positioning logic common between fusebox and non-fusebox cases.
+-            ViewUtils.getRelativeLayoutPosition(mAnchorView, mAlignmentView, mPositionArray);
++            // An Arc desktop shell may move LocationBarTablet out of the original toolbar.
++            // ViewUtils requires an ancestor relationship; preserve its native fast path and
++            // calculate window-relative coordinates when the real omnibox is reparented.
++            android.view.ViewParent ancestor = mAlignmentView.getParent();
++            while (ancestor instanceof View && ancestor != mAnchorView) {
++                ancestor = ancestor.getParent();
++            }
++            if (ancestor == mAnchorView) {
++                ViewUtils.getRelativeLayoutPosition(mAnchorView, mAlignmentView, mPositionArray);
++            } else if (mAnchorView.isAttachedToWindow() && mAlignmentView.isAttachedToWindow()
++                    && mAnchorView.getRootView() == mAlignmentView.getRootView()) {
++                int[] anchorInWindow = new int[2];
++                mAnchorView.getLocationInWindow(anchorInWindow);
++                mAlignmentView.getLocationInWindow(mPositionArray);
++                mPositionArray[0] -= anchorInWindow[0];
++                mPositionArray[1] -= anchorInWindow[1];
++            } else {
++                // Detached during ARC->MOBILE or Activity teardown: no dropdown over a stale view.
++                mOmniboxAlignmentSupplier.set(new OmniboxAlignment(0, 0, 0, 0, 0, 0, 0, 0));
++                return;
++            }
+             int targetWidth = mAlignmentViewTargetWidthSupplier.get();
+             width = targetWidth + 2 * sideSpacing;
+             int leftOffset = mAlignmentViewLeftOffsetSupplier.get();
+diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImplUnitTest.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImplUnitTest.java
+--- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImplUnitTest.java
++++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImplUnitTest.java
+@@ -196,6 +196,40 @@
+     }
+
+     @Test
++    @Config(qualifiers = "ldltr-sw600dp")
++    @DisableFeatures(OmniboxFeatureList.OMNIBOX_MULTIMODAL_INPUT)
++    public void testReparentedOmniboxUsesSharedWindowCoordinates() {
++        assertTrue(mImpl.isWideWindow());
++        mAnchorView.removeView(mHorizontalAlignmentView);
++        mContentView.addView(mHorizontalAlignmentView);
++        setBounds(mHorizontalAlignmentView, 120, 90, ALIGNMENT_WIDTH, ALIGNMENT_HEIGHT);
++        assertTrue(mAnchorView.isAttachedToWindow());
++        assertTrue(mHorizontalAlignmentView.isAttachedToWindow());
++        int[] anchor = new int[2];
++        int[] alignment = new int[2];
++        mAnchorView.getLocationInWindow(anchor);
++        mHorizontalAlignmentView.getLocationInWindow(alignment);
++        mImpl.recalculateOmniboxAlignment();
++        assertEquals(alignment[0] - anchor[0] - mResourceProvider.getDropdownSideSpacing(),
++                mImpl.getCurrentAlignment().left);
++        assertEquals(ALIGNMENT_WIDTH + 2 * mResourceProvider.getDropdownSideSpacing(),
++                mImpl.getCurrentAlignment().width);
++    }
++
++    @Test
++    @Config(qualifiers = "ldltr-sw600dp")
++    @DisableFeatures(OmniboxFeatureList.OMNIBOX_MULTIMODAL_INPUT)
++    public void testDetachedOmniboxClearsPreviousDropdown() {
++        assertTrue(mImpl.isWideWindow());
++        mImpl.recalculateOmniboxAlignment();
++        assertTrue(mImpl.getCurrentAlignment().width > 0);
++        mAnchorView.removeView(mHorizontalAlignmentView);
++        mImpl.recalculateOmniboxAlignment();
++        assertEquals(new OmniboxAlignment(0, 0, 0, 0, 0, 0, 0, 0),
++                mImpl.getCurrentAlignment());
++    }
++
++    @Test
+     public void testPositionInWindow() {
+         mImpl.onAttachedToWindow();
+         // Prime initial vertical and horizontal window offsets.
+diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarLayout.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarLayout.java
+--- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarLayout.java
++++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarLayout.java
+@@ -718,7 +718,28 @@
+                 container.getPaddingTop(),
+                 container.getWidth() - container.getPaddingRight(),
+                 container.getHeight() - container.getPaddingBottom());
+-        ViewUtils.getRelativeDrawPosition(this, getLocationBar().getContainerView(), mTempPosition);
++        var ancestor = container.getParent();
++        while (ancestor instanceof View && ancestor != this) {
++            ancestor = ancestor.getParent();
++        }
++        if (ancestor == this) {
++            ViewUtils.getRelativeDrawPosition(this, container, mTempPosition);
++        } else {
++            // Arc reparents the real omnibox into its sidebar. The toolbar is no longer
++            // an ancestor, so the ancestor-only ViewUtils walk would reach ViewRootImpl.
++            // Keep the rectangle in toolbar coordinates using the shared window origin.
++            if (container.getWindowToken() == null
++                    || container.getWindowToken() != getWindowToken()) {
++                outRect.setEmpty();
++                return;
++            }
++            getLocationInWindow(mTempPosition);
++            int toolbarX = mTempPosition[0];
++            int toolbarY = mTempPosition[1];
++            container.getLocationInWindow(mTempPosition);
++            mTempPosition[0] -= toolbarX;
++            mTempPosition[1] -= toolbarY;
++        }
+         outRect.offset(mTempPosition[0], mTempPosition[1]);
+     }
+
 diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java
 --- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java
 +++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java
@@ -3878,7 +4096,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopC
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
-@@ -0,0 +1,986 @@
+@@ -0,0 +1,988 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -4196,6 +4414,7 @@ new file mode 100644
 +        mNewTabRow = new TextView(activity);
 +        mNewTabRow.setText("+  " + activity.getString(R.string.arc_new_tab));
 +        mNewTabRow.setContentDescription(activity.getString(R.string.arc_new_tab));
++        mNewTabRow.setTooltipText(activity.getString(R.string.arc_new_tab));
 +        mNewTabRow.setGravity(Gravity.CENTER_VERTICAL);
 +        mNewTabRow.setFocusable(true);
 +        mNewTabRow.setClickable(true);
@@ -4375,6 +4594,7 @@ new file mode 100644
 +        ImageButton button = new ImageButton(mActivity);
 +        button.setImageResource(drawableRes);
 +        button.setContentDescription(mActivity.getString(contentDescriptionRes));
++        button.setTooltipText(mActivity.getString(contentDescriptionRes));
 +        button.setMinimumWidth(0);
 +        button.setMinimumHeight(0);
 +        button.setPadding(dp(10), dp(8), dp(10), dp(8));
@@ -6335,6 +6555,200 @@ new file mode 100644
 +        controls.refresh();
 +        for (ImageButton button : buttons) assertFalse(button.isEnabled());
 +        verify(tab, times(1)).addObserver(listener.getValue());
++    }
++}
+diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/ArcTabSelectionTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/ArcTabSelectionTest.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/junit/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/ArcTabSelectionTest.java
+@@ -0,0 +1,53 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.tasks.tab_management.vertical_tabs;
++
++import static org.junit.Assert.assertEquals;
++
++import android.app.Activity;
++import android.content.Context;
++import android.content.res.ColorStateList;
++import android.graphics.Color;
++
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.robolectric.Robolectric;
++import org.robolectric.util.ReflectionHelpers;
++import org.robolectric.util.ReflectionHelpers.ClassParameter;
++
++import org.chromium.base.test.BaseRobolectricTestRunner;
++import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance;
++import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy;
++
++/** Tests the actual Chromium binder's regular active-tab color across frame colors. */
++@RunWith(BaseRobolectricTestRunner.class)
++public class ArcTabSelectionTest {
++    @Test
++    public void regularActiveTabWhiteAcrossFrameColors() {
++        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
++        ArcDesktopAppearance.setUiMode(activity, ArcDesktopPolicy.MODE_ARC);
++        try {
++            for (int seed : new int[] {0xff53657b, 0xffeeeeee, 0xff000000, 0xffee4400, 0xff0044ee}) {
++                ArcDesktopAppearance.preferences(activity).edit()
++                        .putInt(ArcDesktopAppearance.COLOR_KEY, seed).commit();
++                ColorStateList background = ReflectionHelpers.callStaticMethod(
++                        TabVerticalViewBinder.class, "getBackgroundTintList",
++                        ClassParameter.from(Context.class, activity),
++                        ClassParameter.from(boolean.class, true),
++                        ClassParameter.from(boolean.class, false),
++                        ClassParameter.from(boolean.class, false));
++                int foreground = ReflectionHelpers.callStaticMethod(
++                        TabVerticalViewBinder.class, "getTextColor",
++                        ClassParameter.from(Context.class, activity),
++                        ClassParameter.from(boolean.class, true),
++                        ClassParameter.from(boolean.class, false));
++                assertEquals(Color.WHITE, background.getDefaultColor());
++                assertEquals(Color.BLACK, foreground);
++            }
++        } finally {
++            ArcDesktopAppearance.preferences(activity).edit().clear().commit();
++            activity.finish();
++        }
++    }
++}
+diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/toolbar/top/ArcToolbarReparentingTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/toolbar/top/ArcToolbarReparentingTest.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/junit/src/org/chromium/chrome/browser/toolbar/top/ArcToolbarReparentingTest.java
+@@ -0,0 +1,131 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++package org.chromium.chrome.browser.toolbar.top;
++
++import static org.junit.Assert.assertEquals;
++import static org.junit.Assert.assertNotNull;
++import static org.junit.Assert.assertTrue;
++import static org.mockito.Mockito.doReturn;
++
++import android.app.Activity;
++import android.app.Dialog;
++import android.graphics.Rect;
++import android.view.View;
++import android.widget.FrameLayout;
++
++import org.junit.Before;
++import org.junit.Rule;
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.mockito.Mock;
++import org.mockito.junit.MockitoJUnit;
++import org.mockito.junit.MockitoRule;
++import org.robolectric.Robolectric;
++
++import org.chromium.base.test.BaseRobolectricTestRunner;
++import org.chromium.chrome.R;
++import org.chromium.chrome.browser.omnibox.LocationBar;
++
++/** Exercises the real ToolbarLayout and Android view hierarchy after sidebar reparenting. */
++@RunWith(BaseRobolectricTestRunner.class)
++public class ArcToolbarReparentingTest {
++    @Rule public final MockitoRule mMockitoRule = MockitoJUnit.rule();
++    @Mock private LocationBar mLocationBar;
++
++    private Activity mActivity;
++    private FrameLayout mRoot;
++    private TestToolbar mToolbar;
++    private View mOmnibox;
++
++    private static class TestToolbar extends ToolbarLayout {
++        private final LocationBar mLocationBar;
++
++        TestToolbar(Activity activity, LocationBar locationBar) {
++            super(activity, null);
++            mLocationBar = locationBar;
++        }
++
++        @Override
++        protected CaptureReadinessResult isReadyForTextureCapture() {
++            return CaptureReadinessResult.readyForced();
++        }
++
++        @Override
++        public LocationBar getLocationBar() {
++            return mLocationBar;
++        }
++
++        @Override
++        public void requestKeyboardFocus() {}
++    }
++
++    @Before
++    public void setUp() {
++        mActivity = Robolectric.buildActivity(Activity.class).setup().get();
++        mActivity.setTheme(R.style.Theme_BrowserUI_DayNight);
++        mRoot = new FrameLayout(mActivity);
++        mToolbar = new TestToolbar(mActivity, mLocationBar);
++        mOmnibox = new View(mActivity);
++        mOmnibox.setPadding(2, 3, 1, 2);
++        doReturn(mOmnibox).when(mLocationBar).getContainerView();
++        mRoot.addView(mToolbar, new FrameLayout.LayoutParams(200, 60));
++        mActivity.setContentView(mRoot);
++        mRoot.layout(0, 0, 600, 400);
++        mToolbar.layout(130, 40, 330, 100);
++        assertNotNull(mToolbar.getWindowToken());
++    }
++
++    @Test
++    public void sidebarSiblingUsesWindowCoordinates() {
++        FrameLayout sidebar = new FrameLayout(mActivity);
++        mRoot.addView(sidebar, new FrameLayout.LayoutParams(100, 200));
++        sidebar.addView(mOmnibox, new FrameLayout.LayoutParams(80, 30));
++        sidebar.layout(100, 70, 200, 270);
++        mOmnibox.layout(15, 16, 95, 46);
++        int[] toolbarPosition = new int[2];
++        int[] omniboxPosition = new int[2];
++        mToolbar.getLocationInWindow(toolbarPosition);
++        mOmnibox.getLocationInWindow(omniboxPosition);
++        int x = omniboxPosition[0] - toolbarPosition[0];
++        int y = omniboxPosition[1] - toolbarPosition[1];
++        Rect rect = new Rect();
++        mToolbar.getLocationBarContentRect(rect);
++        assertEquals(new Rect(x + 2, y + 3, x + 79, y + 28), rect);
++    }
++
++    @Test
++    public void nativeDescendantKeepsDrawCoordinates() {
++        mToolbar.addView(mOmnibox, new FrameLayout.LayoutParams(80, 30));
++        mOmnibox.layout(12, 14, 92, 44);
++        mOmnibox.setTranslationX(5);
++        Rect rect = new Rect();
++        mToolbar.getLocationBarContentRect(rect);
++        assertEquals(new Rect(19, 17, 96, 42), rect);
++    }
++
++    @Test
++    public void detachedOmniboxClearsPreviousRectangle() {
++        mOmnibox.layout(0, 0, 80, 30);
++        Rect rect = new Rect(1, 2, 3, 4);
++        mToolbar.getLocationBarContentRect(rect);
++        assertTrue(rect.isEmpty());
++    }
++
++    @Test
++    public void foreignWindowClearsPreviousRectangle() {
++        Dialog dialog = new Dialog(mActivity);
++        dialog.setContentView(mOmnibox);
++        try {
++            dialog.show();
++            assertNotNull(mOmnibox.getWindowToken());
++            assertTrue(mOmnibox.getWindowToken() != mToolbar.getWindowToken());
++            Rect rect = new Rect(1, 2, 3, 4);
++            mToolbar.getLocationBarContentRect(rect);
++            assertTrue(rect.isEmpty());
++        } finally {
++            dialog.dismiss();
++        }
 +    }
 +}
 diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearanceTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearanceTest.java

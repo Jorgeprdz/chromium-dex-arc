@@ -436,6 +436,8 @@ if (is_android) {
       "src/org/chromium/chrome/browser/arc/ArcNavigationControlsTest.java",
       "src/org/chromium/chrome/browser/arc/ArcCollectionsFocusTest.java",
       "src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearanceTest.java",
+      "src/org/chromium/chrome/browser/toolbar/top/ArcToolbarReparentingTest.java",
+      "src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/ArcTabSelectionTest.java",
       "//chrome/android/java/src/org/chromium/chrome/browser/bottombar/BottomBarAppMenuUpdateBadgeControllerUnitTest.java",
       "//chrome/android/java/src/org/chromium/chrome/browser/bottombar/BottomBarContainerCoordinatorUnitTest.java",
       "src/org/chromium/chrome/browser/BrowserExitReasonTrackerUnitTest.java",

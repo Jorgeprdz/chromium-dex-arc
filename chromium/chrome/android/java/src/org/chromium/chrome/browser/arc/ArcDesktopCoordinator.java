@@ -315,6 +315,7 @@ public final class ArcDesktopCoordinator {
         mNewTabRow = new TextView(activity);
         mNewTabRow.setText("+  " + activity.getString(R.string.arc_new_tab));
         mNewTabRow.setContentDescription(activity.getString(R.string.arc_new_tab));
+        mNewTabRow.setTooltipText(activity.getString(R.string.arc_new_tab));
         mNewTabRow.setGravity(Gravity.CENTER_VERTICAL);
         mNewTabRow.setFocusable(true);
         mNewTabRow.setClickable(true);
@@ -494,6 +495,7 @@ public final class ArcDesktopCoordinator {
         ImageButton button = new ImageButton(mActivity);
         button.setImageResource(drawableRes);
         button.setContentDescription(mActivity.getString(contentDescriptionRes));
+        button.setTooltipText(mActivity.getString(contentDescriptionRes));
         button.setMinimumWidth(0);
         button.setMinimumHeight(0);
         button.setPadding(dp(10), dp(8), dp(10), dp(8));
