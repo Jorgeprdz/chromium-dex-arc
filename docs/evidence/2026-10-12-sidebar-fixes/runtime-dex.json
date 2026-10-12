@@ -1,0 +1,155 @@
+{
+  "recorded_at_utc": "2026-10-12T22:16:19.335249+00:00",
+  "run_id": 38302845518,
+  "run_url": "https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38302845518",
+  "installed_source_sha": "109c9c5b8d30416e8122a8f17ef43c3832a5c7ad",
+  "installed_apk_sha256": "75983bf7af3d6a6fb039a2a91a6263aa59ef8a764f60d5e3333691739f344ff9",
+  "device": "Samsung physical device; DeX external display 19",
+  "main_pid": 28931,
+  "captured_fatal_lines": 0,
+  "runtime_acceptance": "FAIL",
+  "checks": {
+    "omnibox_focus_no_crash": "PASS",
+    "omnibox_select_all_url_enter": "PASS",
+    "compact_native_icon_centering": "PASS",
+    "compact_new_tab_action": "PASS",
+    "compact_new_tab_visible_glyph": "FAIL",
+    "frame_rail_palette": "PASS",
+    "palette_preview_cancel_restore": "PASS",
+    "empty_folder_create_confirm_delete": "PASS",
+    "space_create_delete_preserve_open_tab": "PASS",
+    "last_space_delete_disabled": "PASS",
+    "favorite_add_remove": "PASS",
+    "favorite_visible_mosaic_surface": "FAIL",
+    "collection_no_large_reserved_gap": "PASS",
+    "sidebar_autofill_shortcut_absent": "PASS",
+    "omnibox_matches_frame_palette": "FAIL",
+    "content_top_not_obscured": "FAIL",
+    "bottom_sidebar_content_junction": "FAIL",
+    "cold_start": "UNVERIFIED",
+    "autocomplete_suggestions": "UNVERIFIED",
+    "animation_frame_pacing": "UNVERIFIED",
+    "folder_with_children_preservation_on_device": "UNVERIFIED"
+  },
+  "evidence": [
+    {
+      "local_file": "navigation-select-all.png",
+      "sha256": "dc718fadfa4894f967c4408e813e0821a823e5ce221aa64c861e0c88a93624c4",
+      "bytes": 842026
+    },
+    {
+      "local_file": "collapsed-newtab-review.png",
+      "sha256": "c6058390468c18f740da9dd4e78da23681d51a3ca88683d7b627665c938beac0",
+      "bytes": 816307
+    },
+    {
+      "local_file": "collapsed-newtab-click.png",
+      "sha256": "cb5e07dac4a003aa4e2e1cd2ace5fcf124640d4b66df5972479ce44c1624295b",
+      "bytes": 2352721
+    },
+    {
+      "local_file": "color-dialog-review.png",
+      "sha256": "9f5b009e413b802d5a01afe0d46badf0e439a37ad851b92302429f8da0fe3dcb",
+      "bytes": 1813357
+    },
+    {
+      "local_file": "color-preview-lavender.png",
+      "sha256": "8270f0bf00a1a5c018d6f41a97518dbbb644f596af28f20ca6e0561623f9659f",
+      "bytes": 1813876
+    },
+    {
+      "local_file": "color-cancel-restored.png",
+      "sha256": "c2b8171e9cc016bada966bfa538d60339a40d2e9e578f10b004f75c15c8f290a",
+      "bytes": 2242937
+    },
+    {
+      "local_file": "folder-created.png",
+      "sha256": "4d34e07b05e98af587caa84705d74017c7129b2be7c20cc4016c64f4bc04b66c",
+      "bytes": 2246365
+    },
+    {
+      "local_file": "folder-delete-confirm.png",
+      "sha256": "81d799f0b0665e37fb24d7cc2609e2d86c676770bf2af325cadc114db50e95f5",
+      "bytes": 1989965
+    },
+    {
+      "local_file": "folder-deleted.png",
+      "sha256": "42f28999a8211f90ab0efaae0f2d785551706c55284d905d6425546abaeddc8f",
+      "bytes": 2242399
+    },
+    {
+      "local_file": "space-menu-original.png",
+      "sha256": "bc16023764c01c296d5e624f4abd6eb88e5d68001cb95d29d747c7b70b410e3b",
+      "bytes": 2245955
+    },
+    {
+      "local_file": "space-created.png",
+      "sha256": "10aa57551be93717d596389c24765826ac4b22bd90c6e8113c4927323abdbcba",
+      "bytes": 2231183
+    },
+    {
+      "local_file": "space-delete-confirm.png",
+      "sha256": "7b45b2d1c577ab8d0263b3042cf07279ca3b177171a1394390efdd880f202503",
+      "bytes": 1977271
+    },
+    {
+      "local_file": "space-deleted-return-personal.png",
+      "sha256": "ca8bff47fdcc83ebc6f369df9ee2d30749f0abcae5a3f16bb88a1e2f58a8ea46",
+      "bytes": 2246214
+    },
+    {
+      "local_file": "favorite-mosaic-added.png",
+      "sha256": "bd8dd48214f588e966422708ea8c892237a956dfedaae3169c6ca6ac302fb1cf",
+      "bytes": 845764
+    },
+    {
+      "local_file": "favorite-removed.png",
+      "sha256": "3d2a1abe775690d9ed80da9e32547f65c35eef937868b3fbc20130df6c8f4cd5",
+      "bytes": 844275
+    },
+    {
+      "local_file": "cleanup-example-test-tab.png",
+      "sha256": "8b5f10ec00b737a3b394d04a15c80198b76f2a9ddc411c70c3c5434e30e46886",
+      "bytes": 1041327
+    },
+    {
+      "local_file": "navigation-select-all.json",
+      "sha256": "1359357ac707a32f58fb1ebc64f927a7932045d35ef7b61270f1317674b26784",
+      "bytes": 629
+    },
+    {
+      "local_file": "pid-28931.log",
+      "sha256": "7485e87cb5d2a0c3f59fb0ffee3deda30244fd0dbd3ee98a23ccf11c9200989b",
+      "bytes": 31408522
+    }
+  ],
+  "privacy": "Screenshots, raw logs and dumps remain outside Git; only file names, hashes and curated observations are published.",
+  "color_cancel": {
+    "stored_seed_hex": "#DA886B",
+    "before_rgb": [
+      229,
+      176,
+      157
+    ],
+    "after_rgb": [
+      229,
+      176,
+      157
+    ]
+  },
+  "cleanup": {
+    "temporary_folder_removed": true,
+    "temporary_space_removed": true,
+    "temporary_favorite_removed": true,
+    "three_owned_test_tabs_closed": true,
+    "user_selected_color_preserved": true,
+    "remaining_tabs_not_closed": 3
+  },
+  "limitations": [
+    "Manual device observations are not automated test counts.",
+    "Earlier navigation attempts were invalidated by focus changes and missing select-all; final guarded retry reached example.org.",
+    "Uiautomator failed to obtain idle state despite exit 0; that dump is not evidence of PASS.",
+    "No source fix or new workflow dispatch performed in this test session.",
+    "Nonfatal location-permission warnings and requestLayout warning remain; no global clean-log claim."
+  ]
+}

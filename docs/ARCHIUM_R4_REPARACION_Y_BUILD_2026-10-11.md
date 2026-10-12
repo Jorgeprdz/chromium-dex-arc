@@ -1453,3 +1453,73 @@ veces, comprobar sugerencias y navegación; expandir/colapsar la sidebar;
 preview/aplicar/cancelar colores y contrastes; mosaicos y eliminación con
 confirmación de carpetas/espacios. Eliminar espacios/carpetas solo si el
 usuario decide probarlo: no se realizan acciones sobre sus datos aquí.
+# Verificación física DeX posterior al run 38302845518 — 2026-10-12
+
+APK instalada de source SHA `109c9c5b8d30416e8122a8f17ef43c3832a5c7ad`;
+hash `75983bf7af3d6a6fb039a2a91a6263aa59ef8a764f60d5e3333691739f344ff9`.
+La compilación sigue SUCCESS, pero la aceptación visual en dispositivo es **FAIL**.
+Registro curado: [runtime-dex.json](evidence/2026-10-12-sidebar-fixes/runtime-dex.json).
+No se modificó código de producción ni se despachó otra compilación durante esta revisión.
+
+El Samsung físico está conectado a DeX, display lógico 19, 1920×1080.
+Se capturó el proceso principal 28931 con `adb logcat --pid=28931 -v threadtime -T 1`.
+`adb shell pidof app.archium.android` mantuvo el mismo PID después de las acciones;
+el registro capturado no contiene `FATAL EXCEPTION`, `Fatal signal` ni `ClassCastException`.
+Esto demuestra ausencia de esos fallos en la sesión observada, no ausencia universal de crashes.
+Persisten advertencias no fatales de permisos de localización y de `requestLayout`.
+
+Secuencia verificada, aproximadamente 22:02–22:15 UTC:
+
+- Omnibox expandida: enfocar, `input -d 19 keycombination 113 29` (Ctrl+A),
+  `input -d 19 text https://example.org/`, `input -d 19 keyevent 66`: exit 0.
+  Antes de cada evento de teclado se comprobó `mCurrentFocus` de Archium mediante
+  `dumpsys window displays`. La captura final muestra example.org cargado.
+  Los intentos anteriores con foco cambiado a Termux o texto concatenado no acreditan fallo de navegación.
+- Colapsar/expandir: el icono nativo queda centrado y no se produjo crash.
+  El `+` de nueva pestaña es invisible; pulsar su área crea una pestaña real.
+  `dumpsys activity app.archium.android` muestra su TextView VISIBLE, bounds
+  locales `0,132–52,176`; no se ha demostrado todavía por qué deja de dibujarse el texto.
+- Selector: seed actual `#DA886B`; preview lavanda cambia marco y rail.
+  Cancelar restaura RGB `(229,176,157)` en ambos. Se conservó el color del usuario.
+- Carpeta temporal `R4_TEST_FOLDER_38302845518`: crear → pulsación larga →
+  Eliminar carpeta → confirmación. La carpeta desapareció. No se probó en dispositivo
+  una carpeta con hijos; ese contrato conserva su evidencia de tests, no un PASS físico nuevo.
+- Espacio temporal `R4_TEST_SPACE_38302845518`: crear → eliminar con confirmación →
+  retorno a Personal. Su pestaña abierta permaneció visible. El menú bloquea eliminar
+  Personal cuando es el último espacio.
+- Favorito temporal: añadir example.org → menú de pulsación larga → quitar.
+  El estado se actualiza, pero el mosaico no tiene superficie visual distinguible:
+  su fondo usa el mismo `mSurface` que la sidebar. El placeholder de una URL sin favicon
+  no permite acreditar la conservación de colores de un favicon real.
+- Limpieza: se retiraron carpeta, espacio y favorito de prueba, y las tres pestañas
+  creadas por nuestras pruebas. Se conservaron las tres pestañas restantes y el color actual.
+  El colector de logcat se cerró deliberadamente con SIGINT (exit 130).
+
+Defectos reproducidos, todavía sin corregir en esta APK:
+
+| Defecto | Observación | Estado de causa raíz |
+| --- | --- | --- |
+| Omnibox no sigue el color | Fondo RGB `(230,232,239)` frente a marco `(229,176,157)` | CAUSA_CONFIRMADA en el código: `tintHeader` excluye `mLocationBarHost`; los fondos nativos mantienen su esquema Chrome. |
+| Barra blanca sobre el contenido | Aproximadamente 55 px sobre páginas web; no se ve igual en NTP nativa | HIPÓTESIS: textura de toolbar compuesta sigue activa. Se oculta ToolbarTablet y se retira su layer del stack, pero eso no equivale a suprimir `TopToolbarOverlayMediator`. |
+| Cuña inferior entre visor y sidebar | Persiste expandido/colapsado y en página nativa/web, dentro del gap de 8 px | HIPÓTESIS: discrepancia entre outline/hole de SurfaceView y clip del holder; requiere prueba gráfica, no basta el contrato matemático host. |
+| `+` colapsado invisible | Acción nativa funciona al pulsar la zona vacía | UNVERIFIED: geometría y visibilidad del TextView existen; falta identificar la causa de dibujo. |
+| Mosaico de favorito sin contraste | Icono aparece directamente sobre la sidebar | CAUSA_CONFIRMADA en estilo: tile y rail usan la misma superficie. |
+
+Se descargaron únicamente dos fuentes pequeñas de Gitiles en el pin exacto
+`cfd94726b7b5fb48aedcc32662f2f3fbdbadec35`, sin checkout/build nuevo:
+`TopToolbarOverlayMediator.java` SHA256
+`c34294cdd30ecacdb75e7f7efa456e1782f766d441fa1724dd49a062af7325d5`
+y `TopToolbarOverlayCoordinator.java` SHA256
+`54ade314d8c003edb1f062e7a3cd8a85e1266d01b9765d8d4315b942285139af`.
+El método `updateVisibility()` de la revisión fijada no toma View.GONE como señal
+de supresión del overlay. La hipótesis de barra necesita aún una regresión que
+falle con el comportamiento actual antes de acreditar el fix.
+
+`uiautomator dump` devolvió exit 0 con `ERROR: could not get idle state`; esa salida
+se considera **UNVERIFIED**, no PASS. Las capturas, dumps y logs sin filtrar se
+conservan fuera de Git por contener pantalla e historial del usuario; el JSON
+publicado guarda nombres y hashes sin publicar su contenido.
+
+No se han verificado aquí cold start, sugerencias de autocomplete ni frame pacing.
+Los PASS específicos de esta sesión no convierten la aceptación completa de Android
+ni la paridad visual R3 en PASS mientras persistan los defectos anteriores.
