@@ -9,6 +9,7 @@ import org.chromium.chrome.browser.arc.ArcCollectionsController;
 // SIMULATED_BOUNDARY: production Arc controller/state with a fake native-tab command boundary.
 public final class ArcCollectionsControllerTest {
     private static final class Native implements ArcTabActions.NativeTabs {
+        Storage persistence;
         final Set<Integer> ids = new HashSet<>();
         int pinned = -1, unpinned = -1, selected = -1, opens, spaceChanges, stateChanges, closeCalls;
         public boolean exists(int id) { return ids.contains(id); }
@@ -17,8 +18,12 @@ public final class ArcCollectionsControllerTest {
         public void pin(int id) { pinned = id; }
         public void unpin(int id) { unpinned = id; }
         public void close(int id) { closeCalls++; }
-        public void onSpaceChanged(ArcSidebarState state) { spaceChanges++; }
-        public void onArcStateChanged(ArcSidebarState state) { stateChanges++; }
+        public void onSpaceChanged(ArcSidebarState state) { published(state); spaceChanges++; }
+        public void onArcStateChanged(ArcSidebarState state) { published(state); stateChanges++; }
+        private void published(ArcSidebarState state) {
+            if (persistence != null) check(state.serialize().equals(persistence.value),
+                    "Native callback must observe already persisted state");
+        }
     }
     private static final class Storage implements ArcSidebarStore.Persistence {
         String value = "";
@@ -32,7 +37,50 @@ public final class ArcCollectionsControllerTest {
     private static void check(boolean condition, String reason) {
         if (!condition) throw new AssertionError(reason);
     }
+    private static void delete(ArcCollectionsController controller, String method, String id) {
+        try { ArcCollectionsController.class.getMethod(method, String.class).invoke(controller, id); }
+        catch (java.lang.reflect.InvocationTargetException failure) {
+            throw (RuntimeException) failure.getCause();
+        } catch (ReflectiveOperationException failure) { throw new AssertionError("Missing " + method, failure); }
+    }
+    private static void safeDeletion() {
+        Storage persistence = new Storage();
+        ArcSidebarStore store = new ArcSidebarStore(persistence);
+        Native tabs = new Native(); tabs.persistence = persistence; tabs.ids.add(51);
+        ArcCollectionsController controller = new ArcCollectionsController(store, new ArcTabActions(store, tabs), tabs);
+        String target = controller.state().selectedSpace();
+        String source = controller.createSpace("Delete me");
+        String folder = controller.createFolder(null, "Dissolve me");
+        String entry = controller.rememberTab(51, "https://safe.test", "Safe", false);
+        controller.move(entry, source, folder, 0);
+        int spaces = tabs.spaceChanges, updates = tabs.stateChanges;
+        String before = persistence.value;
+        persistence.fail = true;
+        try { delete(controller, "deleteFolder", folder); throw new AssertionError("Failed folder deletion accepted"); }
+        catch (IllegalStateException expected) {}
+        try { delete(controller, "deleteSpace", source); throw new AssertionError("Failed Space deletion accepted"); }
+        catch (IllegalStateException expected) {}
+        check(before.equals(persistence.value) && before.equals(controller.state().serialize()),
+                "Failed deletions retain both stored and published metadata");
+        check(tabs.spaceChanges == spaces && tabs.stateChanges == updates && tabs.ids.contains(51)
+                        && tabs.closeCalls == 0 && tabs.unpinned == -1,
+                "Failed deletions issue no native tab or observer commands");
+        persistence.fail = false;
+        delete(controller, "deleteFolder", folder);
+        check(controller.state().entry(entry).folderId == null && tabs.stateChanges == updates + 1,
+                "Folder deletion publishes promoted entries after save");
+        delete(controller, "deleteSpace", source);
+        check(controller.state().selectedSpace().equals(target) && tabs.spaceChanges == spaces + 1,
+                "Space deletion selects retained Space after save");
+        check(controller.state().entry(entry).tabId == 51 && tabs.ids.contains(51)
+                        && tabs.closeCalls == 0 && tabs.unpinned == -1,
+                "Safe deletion preserves real tab and pinned state");
+        controller.destroy();
+        try { delete(controller, "deleteFolder", folder); throw new AssertionError("Destroyed command accepted"); }
+        catch (IllegalStateException expected) {}
+    }
     public static void main(String[] args) {
+        safeDeletion();
         Storage persistence = new Storage();
         ArcSidebarStore store = new ArcSidebarStore(persistence);
         Native nativeTabs = new Native(); nativeTabs.ids.add(7);

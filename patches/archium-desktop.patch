@@ -3622,7 +3622,7 @@ diff --git a/chrome/android/java/res/values/arc_strings.xml b/chrome/android/jav
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/res/values/arc_strings.xml
-@@ -0,0 +1,46 @@
+@@ -0,0 +1,51 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<resources>
 +    <string name="arc_bookmarks">Marcadores</string>
@@ -3638,6 +3638,11 @@ new file mode 100644
 +    <string name="arc_interface_mobile">Móvil</string>
 +    <string name="arc_pin_current">Fijar pestaña</string>
 +    <string name="arc_favorite_current">Añadir a favoritos</string>
++    <string name="arc_delete">Eliminar</string>
++    <string name="arc_delete_space">Eliminar espacio actual</string>
++    <string name="arc_delete_space_preserve">Las carpetas, las pestañas fijadas y las pestañas abiertas se moverán a «%1$s». Los favoritos se conservarán. No se cerrará ninguna pestaña.</string>
++    <string name="arc_delete_folder">Eliminar carpeta</string>
++    <string name="arc_delete_folder_preserve">El contenido y las subcarpetas se moverán a la carpeta superior. Se conservarán las pestañas fijadas y no se cerrará ninguna pestaña.</string>
 +    <string name="arc_new_space">Nuevo espacio</string>
 +    <string name="arc_new_folder">Nueva carpeta</string>
 +    <string name="arc_name">Nombre</string>
@@ -3720,7 +3725,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollecti
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsController.java
-@@ -0,0 +1,97 @@
+@@ -0,0 +1,111 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -3767,6 +3772,20 @@ new file mode 100644
 +        String id = draft.addFolder(draft.selectedSpace(), parentId, name);
 +        mStore.save(draft);
 +        return id;
++    }
++
++    public void deleteFolder(String id) {
++        ArcSidebarState draft = state();
++        draft.deleteFolder(id);
++        mStore.save(draft);
++        mTabs.onArcStateChanged(draft);
++    }
++
++    public void deleteSpace(String id) {
++        ArcSidebarState draft = state();
++        draft.deleteSpace(id);
++        mStore.save(draft);
++        mTabs.onSpaceChanged(draft);
 +    }
 +
 +    public String rememberTab(int tabId, String url, String title, boolean favorite) {
@@ -3822,7 +3841,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollecti
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java
-@@ -0,0 +1,303 @@
+@@ -0,0 +1,417 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -3831,6 +3850,11 @@ new file mode 100644
 +import android.app.Activity;
 +import android.app.AlertDialog;
 +import android.text.TextUtils;
++import android.content.res.ColorStateList;
++import android.graphics.Color;
++import android.graphics.drawable.GradientDrawable;
++import android.graphics.drawable.RippleDrawable;
++import android.graphics.drawable.StateListDrawable;
 +import android.view.Gravity;
 +import android.view.View;
 +import android.widget.Button;
@@ -3866,7 +3890,26 @@ new file mode 100644
 +    private final LinearLayout mFavorites;
 +    private final LinearLayout mEntries;
 +    private final Button mSpace;
-+    private final ScrollView mScroll;
++    private final BoundedScrollView mScroll;
++    private final HorizontalScrollView mFavoritesScroll;
++    private int mSurface = Color.rgb(238, 238, 238);
++    private int mForeground = Color.rgb(32, 32, 32);
++    private int mInteraction = Color.rgb(204, 204, 204);
++
++    /** Budget is a maximum, so short collections never reserve a blank panel. */
++    private final class BoundedScrollView extends ScrollView {
++        private int mBudget = -1;
++        BoundedScrollView(Activity activity) { super(activity); }
++        void setBudget(int pixels) { mBudget = Math.max(0, pixels); requestLayout(); }
++        @Override
++        protected void onMeasure(int widthSpec, int heightSpec) {
++            int cap = mBudget < 0 ? dp(112) : mBudget;
++            if (MeasureSpec.getMode(heightSpec) != MeasureSpec.UNSPECIFIED) {
++                cap = Math.min(cap, MeasureSpec.getSize(heightSpec));
++            }
++            super.onMeasure(widthSpec, MeasureSpec.makeMeasureSpec(cap, MeasureSpec.AT_MOST));
++        }
++    }
 +    private String mOpenFolder;
 +    private String mRenderedSpace;
 +    private AlertDialog mDialog;
@@ -3885,10 +3928,11 @@ new file mode 100644
 +        setPadding(dp(8), dp(4), dp(8), dp(4));
 +        mFavorites = new LinearLayout(activity);
 +        mFavorites.setContentDescription(activity.getString(R.string.arc_favorites));
-+        HorizontalScrollView favoritesScroll = new HorizontalScrollView(activity);
-+        favoritesScroll.setHorizontalScrollBarEnabled(false);
-+        favoritesScroll.addView(mFavorites);
-+        addView(favoritesScroll, new LayoutParams(-1, dp(52)));
++        mFavoritesScroll = new HorizontalScrollView(activity);
++        mFavoritesScroll.setHorizontalScrollBarEnabled(false);
++        mFavoritesScroll.setTag("arc-favorites-mosaic");
++        mFavoritesScroll.addView(mFavorites);
++        addView(mFavoritesScroll, new LayoutParams(-1, dp(72)));
 +        mSpace = button("", this::showSpaces);
 +        mSpace.setTag("arc-current-space");
 +        mSpace.setContentDescription(activity.getString(R.string.arc_spaces));
@@ -3896,9 +3940,10 @@ new file mode 100644
 +        mEntries = new LinearLayout(activity);
 +        mEntries.setOrientation(VERTICAL);
 +        mEntries.setContentDescription(activity.getString(R.string.arc_pinned_tabs));
-+        mScroll = new ScrollView(activity);
++        mScroll = new BoundedScrollView(activity);
++        mScroll.setTag("arc-collection-scroll");
 +        mScroll.addView(mEntries);
-+        addView(mScroll, new LayoutParams(-1, dp(112)));
++        addView(mScroll, new LayoutParams(-1, LayoutParams.WRAP_CONTENT));
 +        LinearLayout controls = new LinearLayout(activity);
 +        Button pin = button(activity.getString(R.string.arc_pin_current), () -> remember(false));
 +        pin.setTag("arc-pin-current");
@@ -3937,8 +3982,49 @@ new file mode 100644
 +    }
 +
 +    public void setCollectionHeight(int height) {
-+        android.view.ViewGroup.LayoutParams params = mScroll.getLayoutParams();
-+        if (params.height != height) { params.height = height; mScroll.setLayoutParams(params); }
++        mScroll.setBudget(height);
++    }
++
++    /** Owns collection styling so site favicons retain their original colors and rounded tiles. */
++    public void setAppearance(int surface, int foreground, int interaction) {
++        mSurface = surface;
++        mForeground = foreground;
++        mInteraction = interaction;
++        applyAppearance(this);
++    }
++
++    private GradientDrawable background(int color, int radius) {
++        GradientDrawable result = new GradientDrawable();
++        result.setColor(color);
++        result.setCornerRadius(dp(radius));
++        return result;
++    }
++
++    private void applyAppearance(android.view.ViewGroup group) {
++        for (int i = 0; i < group.getChildCount(); i++) {
++            View child = group.getChildAt(i);
++            if (child instanceof ImageButton) {
++                ImageButton tile = (ImageButton) child;
++                tile.clearColorFilter();
++                GradientDrawable shape = background(mSurface, 16);
++                tile.setBackground(new RippleDrawable(ColorStateList.valueOf(mInteraction), shape, null));
++                tile.setOnHoverListener((view, event) -> {
++                    if (event.getAction() == android.view.MotionEvent.ACTION_HOVER_ENTER) shape.setColor(mInteraction);
++                    else if (event.getAction() == android.view.MotionEvent.ACTION_HOVER_EXIT) shape.setColor(mSurface);
++                    return false;
++                });
++            } else if (child instanceof Button) {
++                Button button = (Button) child;
++                button.setTextColor(mForeground);
++                StateListDrawable states = new StateListDrawable();
++                states.addState(new int[] {android.R.attr.state_hovered}, background(mInteraction, 10));
++                states.addState(new int[] {android.R.attr.state_focused}, background(mInteraction, 10));
++                states.addState(new int[] {}, background(Color.TRANSPARENT, 10));
++                button.setBackground(new RippleDrawable(ColorStateList.valueOf(mInteraction), states, null));
++            } else if (child instanceof android.view.ViewGroup) {
++                applyAppearance((android.view.ViewGroup) child);
++            }
++        }
 +    }
 +
 +    private void remember(boolean favorite) {
@@ -3958,6 +4044,7 @@ new file mode 100644
 +            // Preserve the original bytes for recovery. A metadata read failure
 +            // must not crash browser startup or silently replace a user's data.
 +            mFavorites.removeAllViews();
++            mFavoritesScroll.setVisibility(GONE);
 +            mEntries.removeAllViews();
 +            mSpace.setText(R.string.arc_collection_error);
 +            findViewWithTag("arc-pin-current").setEnabled(false);
@@ -3973,17 +4060,21 @@ new file mode 100644
 +        String favoriteFocus = focusedTag(mFavorites);
 +        String entryFocus = focusedTag(mEntries);
 +        mFavorites.removeAllViews();
++        mFavoritesScroll.setVisibility(state.favorites().isEmpty() ? GONE : VISIBLE);
 +        for (ArcSidebarState.Entry entry : state.favorites()) {
 +            ImageButton favorite = new ImageButton(mActivity);
 +            favorite.setImageResource(android.R.drawable.ic_menu_view);
 +            favorite.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
-+            favorite.setPadding(dp(12), dp(12), dp(12), dp(12));
++            favorite.setPadding(dp(16), dp(16), dp(16), dp(16));
 +            favorite.setContentDescription(entry.title);
 +            favorite.setTooltipText(entry.title);
 +            favorite.setTag("arc-entry:" + entry.id);
 +            favorite.setOnClickListener(view -> runCommand(() -> open(entry.id)));
 +            favorite.setOnLongClickListener(view -> { showEntryMenu(view, entry); return true; });
-+            mFavorites.addView(favorite, new LayoutParams(dp(52), dp(48)));
++            favorite.setOnContextClickListener(view -> { showEntryMenu(view, entry); return true; });
++            LayoutParams tileParams = new LayoutParams(dp(64), dp(64));
++            tileParams.setMargins(dp(4), dp(4), dp(4), dp(4));
++            mFavorites.addView(favorite, tileParams);
 +            mLoadIcon.accept(entry, favorite);
 +        }
 +        for (ArcSidebarState.Space space : state.spaces()) {
@@ -4001,6 +4092,7 @@ new file mode 100644
 +                String parent = current.parentId;
 +                Button back = button("‹  " + current.name, () -> mOpenFolder = parent);
 +                back.setTag("arc-folder-back:" + current.id);
++                attachFolderMenu(back, current);
 +                mEntries.addView(back, new LayoutParams(-1, dp(44)));
 +            }
 +        }
@@ -4008,6 +4100,7 @@ new file mode 100644
 +            if (!java.util.Objects.equals(folder.parentId, mOpenFolder)) continue;
 +            Button folderRow = button("▸  " + folder.name, () -> mOpenFolder = folder.id);
 +            folderRow.setTag("arc-folder:" + folder.id);
++            attachFolderMenu(folderRow, folder);
 +            mEntries.addView(folderRow, new LayoutParams(-1, dp(44)));
 +        }
 +        for (ArcSidebarState.Entry entry : state.entries(state.selectedSpace())) {
@@ -4029,6 +4122,7 @@ new file mode 100644
 +        });
 +        newFolder.setTag("arc-new-folder:" + state.selectedSpace());
 +        mEntries.addView(newFolder, new LayoutParams(-1, dp(44)));
++        applyAppearance(this);
 +        restoreFocus(mFavorites, favoriteFocus);
 +        restoreFocus(mEntries, entryFocus);
 +    }
@@ -4060,14 +4154,53 @@ new file mode 100644
 +        mMenu = menu;
 +        for (int i = 0; i < spaces.size(); i++) menu.getMenu().add(0, i, i, spaces.get(i).name);
 +        menu.getMenu().add(0, spaces.size(), spaces.size(), R.string.arc_new_space);
++        menu.getMenu().add(0, spaces.size() + 1, spaces.size() + 1, R.string.arc_delete_space)
++                .setEnabled(spaces.size() > 1);
 +        menu.setOnMenuItemClickListener(item -> {
 +            runCommand(() -> {
 +                if (item.getItemId() < spaces.size()) mController.selectSpace(spaces.get(item.getItemId()).id);
-+                else requestName(R.string.arc_new_space, mController::createSpace);
++                else if (item.getItemId() == spaces.size()) requestName(R.string.arc_new_space, mController::createSpace);
++                else {
++                    ArcSidebarState.Space target = null;
++                    for (ArcSidebarState.Space space : spaces) {
++                        if (!space.id.equals(state.selectedSpace())) { target = space; break; }
++                    }
++                    if (target != null) confirm(R.string.arc_delete_space,
++                            mActivity.getString(R.string.arc_delete_space_preserve, target.name),
++                            () -> mController.deleteSpace(state.selectedSpace()));
++                }
 +            });
 +            return true;
 +        });
 +        menu.show();
++    }
++
++    private void attachFolderMenu(View row, ArcSidebarState.Folder folder) {
++        row.setOnLongClickListener(view -> { showFolderMenu(view, folder); return true; });
++        row.setOnContextClickListener(view -> { showFolderMenu(view, folder); return true; });
++    }
++
++    private void showFolderMenu(View anchor, ArcSidebarState.Folder folder) {
++        if (mDestroyed) return;
++        PopupMenu menu = new PopupMenu(mActivity, anchor);
++        mMenu = menu;
++        menu.getMenu().add(0, 0, 0, R.string.arc_delete_folder);
++        menu.setOnMenuItemClickListener(item -> {
++            confirm(R.string.arc_delete_folder, mActivity.getString(R.string.arc_delete_folder_preserve),
++                    () -> mController.deleteFolder(folder.id));
++            return true;
++        });
++        menu.show();
++    }
++
++    private void confirm(int title, String message, Runnable command) {
++        if (mDestroyed) return;
++        mDialog = new AlertDialog.Builder(mActivity).setTitle(title).setMessage(message)
++                .setPositiveButton(R.string.arc_delete, (dialog, which) -> runCommand(command))
++                .setNegativeButton(android.R.string.cancel, null).create();
++        mDialog.show();
++        mDialog.getButton(AlertDialog.BUTTON_POSITIVE).setTag("arc-confirm-delete");
++        mDialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTag("arc-cancel-delete");
 +    }
 +
 +    private void showEntryMenu(View anchor, ArcSidebarState.Entry entry) {
@@ -6006,7 +6139,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarS
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarState.java
-@@ -0,0 +1,362 @@
+@@ -0,0 +1,409 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -6112,6 +6245,53 @@ new file mode 100644
 +        mFolders.put(id, new Folder(id, spaceId, parentId, name));
 +        return id;
 +    }
++    /** Dissolves one folder; its immediate contents move to its parent with their IDs intact. */
++    public void deleteFolder(String id) {
++        Folder removed = mFolders.get(id);
++        if (removed == null) throw invalid();
++        for (Folder folder : new ArrayList<>(mFolders.values())) {
++            if (id.equals(folder.parentId)) {
++                mFolders.put(folder.id, new Folder(folder.id, folder.spaceId,
++                        removed.parentId, folder.name));
++            }
++        }
++        for (int i = 0; i < mEntries.size(); i++) {
++            Entry entry = mEntries.get(i);
++            if (id.equals(entry.folderId)) {
++                mEntries.set(i, new Entry(entry.id, entry.spaceId, removed.parentId,
++                        entry.url, entry.title, entry.tabId, entry.favorite));
++            }
++        }
++        mFolders.remove(id);
++    }
++
++    /** Transfers all content and native-tab ownership to the first remaining Space. */
++    public void deleteSpace(String id) {
++        requireSpace(id);
++        if (mSpaces.size() == 1) throw invalid();
++        String target = null;
++        for (String candidate : mSpaces.keySet()) {
++            if (!id.equals(candidate)) { target = candidate; break; }
++        }
++        for (Folder folder : new ArrayList<>(mFolders.values())) {
++            if (id.equals(folder.spaceId)) {
++                mFolders.put(folder.id, new Folder(folder.id, target, folder.parentId, folder.name));
++            }
++        }
++        for (int i = 0; i < mEntries.size(); i++) {
++            Entry entry = mEntries.get(i);
++            if (id.equals(entry.spaceId)) {
++                mEntries.set(i, new Entry(entry.id, target, entry.folderId,
++                        entry.url, entry.title, entry.tabId, entry.favorite));
++            }
++        }
++        for (Map.Entry<Integer, String> ownership : mTabSpaces.entrySet()) {
++            if (id.equals(ownership.getValue())) ownership.setValue(target);
++        }
++        mSpaces.remove(id);
++        if (id.equals(mSelected)) mSelected = target;
++    }
++
 +    public void moveFolder(String id, String parentId) {
 +        Folder folder = mFolders.get(id);
 +        if (folder == null) throw invalid();
@@ -6507,7 +6687,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCollect
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCollectionsFocusTest.java
-@@ -0,0 +1,61 @@
+@@ -0,0 +1,206 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -6522,6 +6702,8 @@ new file mode 100644
 +import android.view.View;
 +
 +import org.junit.Test;
++import org.junit.After;
++import org.robolectric.android.controller.ActivityController;
 +import org.junit.runner.RunWith;
 +import org.robolectric.Robolectric;
 +import org.robolectric.RobolectricTestRunner;
@@ -6535,6 +6717,24 @@ new file mode 100644
 +@GraphicsMode(GraphicsMode.Mode.LEGACY)
 +@SQLiteMode(SQLiteMode.Mode.LEGACY)
 +public class ArcCollectionsFocusTest {
++    private final java.util.List<ActivityController<Activity>> mActivities = new java.util.ArrayList<>();
++    private final java.util.List<ArcCollectionsView> mViews = new java.util.ArrayList<>();
++    private final java.util.List<ArcCollectionsController> mControllers = new java.util.ArrayList<>();
++
++    private Activity createActivity() {
++        ActivityController<Activity> activity = Robolectric.buildActivity(Activity.class).setup();
++        mActivities.add(activity);
++        return activity.get();
++    }
++
++    @After
++    public void tearDown() {
++        for (ArcCollectionsView view : mViews) view.destroy();
++        for (ArcCollectionsController controller : mControllers) controller.destroy();
++        for (ActivityController<Activity> activity : mActivities) activity.pause().stop().destroy();
++        shadowOf(Looper.getMainLooper()).idle();
++    }
++
 +    @Test
 +    public void focusedEntrySurvivesRefreshByIdentity() {
 +        checkFocus(false);
@@ -6545,8 +6745,131 @@ new file mode 100644
 +        checkFocus(true);
 +    }
 +
++    private final class Fixture {
++        final Activity activity = createActivity();
++        final ArcTabActions.NativeTabs tabs = mock(ArcTabActions.NativeTabs.class);
++        final ArcSidebarStore store = new ArcSidebarStore(null);
++        final ArcCollectionsController controller = new ArcCollectionsController(store, new ArcTabActions(store, tabs), tabs);
++        final ArcCollectionsView view;
++        Fixture() {
++            when(tabs.exists(anyInt())).thenReturn(true);
++            view = new ArcCollectionsView(activity, controller,
++                    () -> new ArcCollectionsView.CurrentTab(7, "https://example.test", "Saved"),
++                    (entry, button) -> {});
++            activity.setContentView(view);
++            mViews.add(view);
++            mControllers.add(controller);
++            shadowOf(Looper.getMainLooper()).idle();
++        }
++        void measure() {
++            view.measure(View.MeasureSpec.makeMeasureSpec(320, View.MeasureSpec.EXACTLY),
++                    View.MeasureSpec.makeMeasureSpec(1200, View.MeasureSpec.AT_MOST));
++            view.layout(0, 0, view.getMeasuredWidth(), view.getMeasuredHeight());
++        }
++    }
++
++    @Test
++    public void emptyCollectionWrapsContentInsideBudget() {
++        Fixture f = new Fixture();
++        f.view.setCollectionHeight(240);
++        f.measure();
++        View newFolder = f.view.findViewWithTag("arc-new-folder:" + f.controller.state().selectedSpace());
++        View scroll = (View) newFolder.getParent().getParent();
++        assertEquals("Empty collection has only its actual New folder row", newFolder.getMeasuredHeight(), scroll.getMeasuredHeight());
++        assertEquals(android.view.ViewGroup.LayoutParams.WRAP_CONTENT, scroll.getLayoutParams().height);
++    }
++
++    @Test
++    public void collectionCapsOverflowAndRespondsToSmallerBudget() {
++        Fixture f = new Fixture();
++        for (int i = 0; i < 20; i++) f.controller.createFolder(null, "Folder " + i);
++        f.view.refresh(); f.view.setCollectionHeight(240); f.measure();
++        View scroll = (View) f.view.findViewWithTag("arc-new-folder:" + f.controller.state().selectedSpace()).getParent().getParent();
++        assertEquals(240, scroll.getMeasuredHeight());
++        f.view.setCollectionHeight(100); f.measure();
++        assertEquals(100, scroll.getMeasuredHeight());
++    }
++
++    @Test
++    public void favoriteIsSquareRoundedTileAndKeepsFaviconColors() throws Exception {
++        Fixture f = new Fixture();
++        String id = f.controller.rememberTab(7, "https://example.test", "Saved", true);
++        f.view.refresh();
++        android.widget.ImageButton tile = f.view.findViewWithTag("arc-entry:" + id);
++        android.graphics.drawable.ColorDrawable favicon = new android.graphics.drawable.ColorDrawable(0xffe04020);
++        tile.setImageDrawable(favicon);
++        ArcCollectionsView.class.getMethod("setAppearance", int.class, int.class, int.class)
++                .invoke(f.view, 0xffe0e0e0, 0xff222222, 0xff777777);
++        f.measure();
++        assertEquals(tile.getMeasuredWidth(), tile.getMeasuredHeight());
++        assertTrue(tile.getBackground() instanceof android.graphics.drawable.RippleDrawable);
++        android.graphics.drawable.RippleDrawable background = (android.graphics.drawable.RippleDrawable) tile.getBackground();
++        assertTrue(background.getDrawable(0) instanceof android.graphics.drawable.GradientDrawable);
++        assertTrue(((android.graphics.drawable.GradientDrawable) background.getDrawable(0)).getCornerRadius() > 0);
++        assertSame(favicon, tile.getDrawable());
++        assertNull(tile.getColorFilter());
++    }
++
++    @Test
++    public void folderContextMenuConfirmsAndDissolvesWithoutRemovingPinnedTab() {
++        Fixture f = new Fixture();
++        String folder = f.controller.createFolder(null, "Read");
++        String id = f.controller.rememberTab(7, "https://example.test", "Saved", false);
++        f.controller.move(id, f.controller.state().selectedSpace(), folder, 0);
++        f.view.refresh();
++        View row = f.view.findViewWithTag("arc-folder:" + folder);
++        assertTrue(row.performLongClick());
++        android.widget.PopupMenu menu = org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu();
++        assertNotNull(menu);
++        menu.getMenu().performIdentifierAction(0, 0);
++        android.app.AlertDialog dialog = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();
++        assertNotNull(dialog);
++        dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).performClick();
++        shadowOf(Looper.getMainLooper()).idle();
++        assertEquals(folder, f.controller.state().entry(id).folderId);
++        assertTrue(row.performContextClick());
++        org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu().getMenu().performIdentifierAction(0, 0);
++        dialog = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();
++        dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();
++        shadowOf(Looper.getMainLooper()).idle();
++        assertNull(f.controller.state().entry(id).folderId);
++        assertEquals(Integer.valueOf(7), f.controller.state().entry(id).tabId);
++        verify(f.tabs, never()).close(anyInt());
++        verify(f.tabs, never()).unpin(anyInt());
++    }
++
++    @Test
++    public void spaceDropdownConfirmsDeletionAndDisablesLastSpace() {
++        Fixture f = new Fixture();
++        String personal = f.controller.state().selectedSpace();
++        String work = f.controller.createSpace("Work");
++        String id = f.controller.rememberTab(7, "https://example.test", "Saved", false);
++        f.view.refresh();
++        f.view.findViewWithTag("arc-current-space").performClick();
++        android.widget.PopupMenu menu = org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu();
++        android.view.MenuItem deletion = menu.getMenu().findItem(3);
++        assertNotNull("Space dropdown offers explicit deletion", deletion);
++        assertTrue(deletion.isEnabled());
++        menu.getMenu().performIdentifierAction(3, 0);
++        android.app.AlertDialog dialog = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();
++        assertNotNull(dialog);
++        dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).performClick();
++        shadowOf(Looper.getMainLooper()).idle();
++        assertEquals(work, f.controller.state().selectedSpace());
++        f.view.findViewWithTag("arc-current-space").performClick();
++        org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu().getMenu().performIdentifierAction(3, 0);
++        org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog().getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();
++        shadowOf(Looper.getMainLooper()).idle();
++        assertEquals(personal, f.controller.state().selectedSpace());
++        assertEquals(personal, f.controller.state().entry(id).spaceId);
++        f.view.findViewWithTag("arc-current-space").performClick();
++        assertFalse(org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu().getMenu().findItem(2).isEnabled());
++        verify(f.tabs, never()).close(anyInt());
++        verify(f.tabs, never()).unpin(anyInt());
++    }
++
 +    private void checkFocus(boolean favorite) {
-+        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
++        Activity activity = createActivity();
 +        ArcTabActions.NativeTabs tabs = mock(ArcTabActions.NativeTabs.class);
 +        when(tabs.exists(anyInt())).thenReturn(true);
 +        ArcSidebarStore store = new ArcSidebarStore(null);
@@ -6557,6 +6880,8 @@ new file mode 100644
 +                () -> new ArcCollectionsView.CurrentTab(7, "https://example.test", "Saved"),
 +                (entry, button) -> {});
 +        activity.setContentView(view);
++        mViews.add(view);
++        mControllers.add(controller);
 +        shadowOf(Looper.getMainLooper()).idle();
 +        View before = view.findViewWithTag("arc-entry:" + id);
 +        assertTrue(before.requestFocus());

@@ -176,10 +176,10 @@
     "components/password_manager/core/browser/ui/saved_passwords_presenter.cc": "11243ed603ccd26f3f69d37cd9efdbbb6ece519cee500ba52b050ca4702d1ba3",
     "components/password_manager/core/browser/ui/saved_passwords_presenter.h": "f424533e8a6b6295666389bddff3051a1359189576eee9f1c1bb3029bd80b55c",
     "components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java": "a9faf05fad2ac86ababc815d12dd98f4e5bf6c2f1badb36adee86d66edbbb248",
-    "chrome/android/java/res/values/arc_strings.xml": "2db0aaae0b9ef99a8bb87cbc408289350316638a876f9ed1a4b464a73e03ca1a",
+    "chrome/android/java/res/values/arc_strings.xml": "6283831fc8e1cf22319a19fbbb81b78b64b6ce6ebc5c311d2c5ef1ae42617975",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAppearanceDialog.java": "466f7bd99df2721b289905b7662268c1f82811bf08fc2a1537661a582641a33a",
-    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsController.java": "c2a9e014f6bd5a0cf9a26003b1498dfcb5d28bfba28062172535b371858f126b",
-    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java": "b0b26a74f73a70f9b1fb96e20fbb5e108614c2b7eda16170b1fbadc54c61d59c",
+    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsController.java": "c850d4e939c72e1bbc23046396837975898db5d350bb95212b81afcf574c05b1",
+    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java": "46c4f35336d18a22205456ea16f78a57f8add1e2f3c66643f8dfeb25506304aa",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcColorDraft.java": "6ec85c5aef2b6416c7f3664bb84e1f562ae5e721840a1ee70ac990954354b054",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcColorPicker.java": "b603b1bdecf3f4c31cc9a3a32f4a86dfde99e5849edd0ba704ee7878a0d7f3da",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java": "4d3676d40868664a5890e2ad51d642a8994f3043a60a0be7a2f22deefc1607fe",
@@ -188,10 +188,10 @@
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcNativeTabSession.java": "6cb8696d8c1444cdb3a6a99441700c1d91773af9a16cf7bc317a189e11eb9b16",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcNavigationControls.java": "e37b353d5b56613ab13766359a46139a46688886e68f74f1bd9c8f5f02337b08",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarProfiles.java": "16ca484649483c7255aac1d31e3e55a391f5c36cce8921509232cf8ac9ffb52c",
-    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarState.java": "e1411e337358c45293f8a110b9a291a37fa2cf003f5d97aa5d8f6f3e7412b16e",
+    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarState.java": "43bd8ddcb2a07b11dd326a97bd91a21cb738d115d70680c7f58bdc3831b679db",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarStore.java": "4e8f9f565079d87cdf8b5dccb4a780664618f7e3c77993edbaaf23d161b23a1b",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcTabActions.java": "33d3ffcb067dbabae3cb992b394426253483efe4a3ae9286fe5f66d10a17eee3",
-    "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCollectionsFocusTest.java": "0a2babc9d734fb9b7db2bdd50bb3972776b389b5c5b1927f65af25b28c3bb6c0",
+    "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCollectionsFocusTest.java": "11d15f781eb0bfe6017105c9806c6963507fa5842e4a1f55b04e05f6c835a052",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcColorPickerTest.java": "d9e30c75b9d1c783b14c0f04af385942c66f9d8b51da8e2548c58633604c5940",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcFrameDispatchTest.java": "7c5ed7e3c17bad07f79cd203a4dfd01db9a4de6426af309f4e36e9355ab1285d",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcNavigationControlsTest.java": "3809443031086a6cf6442b755eef05ba94c680a53a4e2ac31367775ec5abfed4",
@@ -226,5 +226,5 @@
     "components/password_manager/core/browser/password_store/password_store_backend.cc": "45764d4ad0e05acc5a216944a5a6763212f6c17e71bf689e9c973f12fb5c87d8",
     "components/password_manager/core/browser/password_store/password_store_interface.cc": "7e9dd5813ce8ece459ec66abdd3306028b7b3d6bbae048664872a34d8d097268"
   },
-  "patch_sha256": "f321af3ead2368989b1e8edaf061a99f56eb4e57dbe70295153721377c08a1dc"
+  "patch_sha256": "795062b89906f16893d245de8e0b08ae1929a074bed71b66ac0532c433218fff"
 }

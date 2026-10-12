@@ -12,6 +12,8 @@ import android.os.Looper;
 import android.view.View;
 
 import org.junit.Test;
+import org.junit.After;
+import org.robolectric.android.controller.ActivityController;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
 import org.robolectric.RobolectricTestRunner;
@@ -25,6 +27,24 @@ import org.robolectric.annotation.SQLiteMode;
 @GraphicsMode(GraphicsMode.Mode.LEGACY)
 @SQLiteMode(SQLiteMode.Mode.LEGACY)
 public class ArcCollectionsFocusTest {
+    private final java.util.List<ActivityController<Activity>> mActivities = new java.util.ArrayList<>();
+    private final java.util.List<ArcCollectionsView> mViews = new java.util.ArrayList<>();
+    private final java.util.List<ArcCollectionsController> mControllers = new java.util.ArrayList<>();
+
+    private Activity createActivity() {
+        ActivityController<Activity> activity = Robolectric.buildActivity(Activity.class).setup();
+        mActivities.add(activity);
+        return activity.get();
+    }
+
+    @After
+    public void tearDown() {
+        for (ArcCollectionsView view : mViews) view.destroy();
+        for (ArcCollectionsController controller : mControllers) controller.destroy();
+        for (ActivityController<Activity> activity : mActivities) activity.pause().stop().destroy();
+        shadowOf(Looper.getMainLooper()).idle();
+    }
+
     @Test
     public void focusedEntrySurvivesRefreshByIdentity() {
         checkFocus(false);
@@ -35,8 +55,131 @@ public class ArcCollectionsFocusTest {
         checkFocus(true);
     }
 
+    private final class Fixture {
+        final Activity activity = createActivity();
+        final ArcTabActions.NativeTabs tabs = mock(ArcTabActions.NativeTabs.class);
+        final ArcSidebarStore store = new ArcSidebarStore(null);
+        final ArcCollectionsController controller = new ArcCollectionsController(store, new ArcTabActions(store, tabs), tabs);
+        final ArcCollectionsView view;
+        Fixture() {
+            when(tabs.exists(anyInt())).thenReturn(true);
+            view = new ArcCollectionsView(activity, controller,
+                    () -> new ArcCollectionsView.CurrentTab(7, "https://example.test", "Saved"),
+                    (entry, button) -> {});
+            activity.setContentView(view);
+            mViews.add(view);
+            mControllers.add(controller);
+            shadowOf(Looper.getMainLooper()).idle();
+        }
+        void measure() {
+            view.measure(View.MeasureSpec.makeMeasureSpec(320, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(1200, View.MeasureSpec.AT_MOST));
+            view.layout(0, 0, view.getMeasuredWidth(), view.getMeasuredHeight());
+        }
+    }
+
+    @Test
+    public void emptyCollectionWrapsContentInsideBudget() {
+        Fixture f = new Fixture();
+        f.view.setCollectionHeight(240);
+        f.measure();
+        View newFolder = f.view.findViewWithTag("arc-new-folder:" + f.controller.state().selectedSpace());
+        View scroll = (View) newFolder.getParent().getParent();
+        assertEquals("Empty collection has only its actual New folder row", newFolder.getMeasuredHeight(), scroll.getMeasuredHeight());
+        assertEquals(android.view.ViewGroup.LayoutParams.WRAP_CONTENT, scroll.getLayoutParams().height);
+    }
+
+    @Test
+    public void collectionCapsOverflowAndRespondsToSmallerBudget() {
+        Fixture f = new Fixture();
+        for (int i = 0; i < 20; i++) f.controller.createFolder(null, "Folder " + i);
+        f.view.refresh(); f.view.setCollectionHeight(240); f.measure();
+        View scroll = (View) f.view.findViewWithTag("arc-new-folder:" + f.controller.state().selectedSpace()).getParent().getParent();
+        assertEquals(240, scroll.getMeasuredHeight());
+        f.view.setCollectionHeight(100); f.measure();
+        assertEquals(100, scroll.getMeasuredHeight());
+    }
+
+    @Test
+    public void favoriteIsSquareRoundedTileAndKeepsFaviconColors() throws Exception {
+        Fixture f = new Fixture();
+        String id = f.controller.rememberTab(7, "https://example.test", "Saved", true);
+        f.view.refresh();
+        android.widget.ImageButton tile = f.view.findViewWithTag("arc-entry:" + id);
+        android.graphics.drawable.ColorDrawable favicon = new android.graphics.drawable.ColorDrawable(0xffe04020);
+        tile.setImageDrawable(favicon);
+        ArcCollectionsView.class.getMethod("setAppearance", int.class, int.class, int.class)
+                .invoke(f.view, 0xffe0e0e0, 0xff222222, 0xff777777);
+        f.measure();
+        assertEquals(tile.getMeasuredWidth(), tile.getMeasuredHeight());
+        assertTrue(tile.getBackground() instanceof android.graphics.drawable.RippleDrawable);
+        android.graphics.drawable.RippleDrawable background = (android.graphics.drawable.RippleDrawable) tile.getBackground();
+        assertTrue(background.getDrawable(0) instanceof android.graphics.drawable.GradientDrawable);
+        assertTrue(((android.graphics.drawable.GradientDrawable) background.getDrawable(0)).getCornerRadius() > 0);
+        assertSame(favicon, tile.getDrawable());
+        assertNull(tile.getColorFilter());
+    }
+
+    @Test
+    public void folderContextMenuConfirmsAndDissolvesWithoutRemovingPinnedTab() {
+        Fixture f = new Fixture();
+        String folder = f.controller.createFolder(null, "Read");
+        String id = f.controller.rememberTab(7, "https://example.test", "Saved", false);
+        f.controller.move(id, f.controller.state().selectedSpace(), folder, 0);
+        f.view.refresh();
+        View row = f.view.findViewWithTag("arc-folder:" + folder);
+        assertTrue(row.performLongClick());
+        android.widget.PopupMenu menu = org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu();
+        assertNotNull(menu);
+        menu.getMenu().performIdentifierAction(0, 0);
+        android.app.AlertDialog dialog = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();
+        assertNotNull(dialog);
+        dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).performClick();
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(folder, f.controller.state().entry(id).folderId);
+        assertTrue(row.performContextClick());
+        org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu().getMenu().performIdentifierAction(0, 0);
+        dialog = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();
+        dialog.getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();
+        shadowOf(Looper.getMainLooper()).idle();
+        assertNull(f.controller.state().entry(id).folderId);
+        assertEquals(Integer.valueOf(7), f.controller.state().entry(id).tabId);
+        verify(f.tabs, never()).close(anyInt());
+        verify(f.tabs, never()).unpin(anyInt());
+    }
+
+    @Test
+    public void spaceDropdownConfirmsDeletionAndDisablesLastSpace() {
+        Fixture f = new Fixture();
+        String personal = f.controller.state().selectedSpace();
+        String work = f.controller.createSpace("Work");
+        String id = f.controller.rememberTab(7, "https://example.test", "Saved", false);
+        f.view.refresh();
+        f.view.findViewWithTag("arc-current-space").performClick();
+        android.widget.PopupMenu menu = org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu();
+        android.view.MenuItem deletion = menu.getMenu().findItem(3);
+        assertNotNull("Space dropdown offers explicit deletion", deletion);
+        assertTrue(deletion.isEnabled());
+        menu.getMenu().performIdentifierAction(3, 0);
+        android.app.AlertDialog dialog = org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog();
+        assertNotNull(dialog);
+        dialog.getButton(android.app.AlertDialog.BUTTON_NEGATIVE).performClick();
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(work, f.controller.state().selectedSpace());
+        f.view.findViewWithTag("arc-current-space").performClick();
+        org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu().getMenu().performIdentifierAction(3, 0);
+        org.robolectric.shadows.ShadowAlertDialog.getLatestAlertDialog().getButton(android.app.AlertDialog.BUTTON_POSITIVE).performClick();
+        shadowOf(Looper.getMainLooper()).idle();
+        assertEquals(personal, f.controller.state().selectedSpace());
+        assertEquals(personal, f.controller.state().entry(id).spaceId);
+        f.view.findViewWithTag("arc-current-space").performClick();
+        assertFalse(org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu().getMenu().findItem(2).isEnabled());
+        verify(f.tabs, never()).close(anyInt());
+        verify(f.tabs, never()).unpin(anyInt());
+    }
+
     private void checkFocus(boolean favorite) {
-        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
+        Activity activity = createActivity();
         ArcTabActions.NativeTabs tabs = mock(ArcTabActions.NativeTabs.class);
         when(tabs.exists(anyInt())).thenReturn(true);
         ArcSidebarStore store = new ArcSidebarStore(null);
@@ -47,6 +190,8 @@ public class ArcCollectionsFocusTest {
                 () -> new ArcCollectionsView.CurrentTab(7, "https://example.test", "Saved"),
                 (entry, button) -> {});
         activity.setContentView(view);
+        mViews.add(view);
+        mControllers.add(controller);
         shadowOf(Looper.getMainLooper()).idle();
         View before = view.findViewWithTag("arc-entry:" + id);
         assertTrue(before.requestFocus());

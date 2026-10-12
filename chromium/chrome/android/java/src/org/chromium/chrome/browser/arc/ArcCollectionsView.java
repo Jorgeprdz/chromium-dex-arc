@@ -6,6 +6,11 @@ package org.chromium.chrome.browser.arc;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.text.TextUtils;
+import android.content.res.ColorStateList;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
+import android.graphics.drawable.StateListDrawable;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
@@ -41,7 +46,26 @@ public final class ArcCollectionsView extends LinearLayout {
     private final LinearLayout mFavorites;
     private final LinearLayout mEntries;
     private final Button mSpace;
-    private final ScrollView mScroll;
+    private final BoundedScrollView mScroll;
+    private final HorizontalScrollView mFavoritesScroll;
+    private int mSurface = Color.rgb(238, 238, 238);
+    private int mForeground = Color.rgb(32, 32, 32);
+    private int mInteraction = Color.rgb(204, 204, 204);
+
+    /** Budget is a maximum, so short collections never reserve a blank panel. */
+    private final class BoundedScrollView extends ScrollView {
+        private int mBudget = -1;
+        BoundedScrollView(Activity activity) { super(activity); }
+        void setBudget(int pixels) { mBudget = Math.max(0, pixels); requestLayout(); }
+        @Override
+        protected void onMeasure(int widthSpec, int heightSpec) {
+            int cap = mBudget < 0 ? dp(112) : mBudget;
+            if (MeasureSpec.getMode(heightSpec) != MeasureSpec.UNSPECIFIED) {
+                cap = Math.min(cap, MeasureSpec.getSize(heightSpec));
+            }
+            super.onMeasure(widthSpec, MeasureSpec.makeMeasureSpec(cap, MeasureSpec.AT_MOST));
+        }
+    }
     private String mOpenFolder;
     private String mRenderedSpace;
     private AlertDialog mDialog;
@@ -60,10 +84,11 @@ public final class ArcCollectionsView extends LinearLayout {
         setPadding(dp(8), dp(4), dp(8), dp(4));
         mFavorites = new LinearLayout(activity);
         mFavorites.setContentDescription(activity.getString(R.string.arc_favorites));
-        HorizontalScrollView favoritesScroll = new HorizontalScrollView(activity);
-        favoritesScroll.setHorizontalScrollBarEnabled(false);
-        favoritesScroll.addView(mFavorites);
-        addView(favoritesScroll, new LayoutParams(-1, dp(52)));
+        mFavoritesScroll = new HorizontalScrollView(activity);
+        mFavoritesScroll.setHorizontalScrollBarEnabled(false);
+        mFavoritesScroll.setTag("arc-favorites-mosaic");
+        mFavoritesScroll.addView(mFavorites);
+        addView(mFavoritesScroll, new LayoutParams(-1, dp(72)));
         mSpace = button("", this::showSpaces);
         mSpace.setTag("arc-current-space");
         mSpace.setContentDescription(activity.getString(R.string.arc_spaces));
@@ -71,9 +96,10 @@ public final class ArcCollectionsView extends LinearLayout {
         mEntries = new LinearLayout(activity);
         mEntries.setOrientation(VERTICAL);
         mEntries.setContentDescription(activity.getString(R.string.arc_pinned_tabs));
-        mScroll = new ScrollView(activity);
+        mScroll = new BoundedScrollView(activity);
+        mScroll.setTag("arc-collection-scroll");
         mScroll.addView(mEntries);
-        addView(mScroll, new LayoutParams(-1, dp(112)));
+        addView(mScroll, new LayoutParams(-1, LayoutParams.WRAP_CONTENT));
         LinearLayout controls = new LinearLayout(activity);
         Button pin = button(activity.getString(R.string.arc_pin_current), () -> remember(false));
         pin.setTag("arc-pin-current");
@@ -112,8 +138,49 @@ public final class ArcCollectionsView extends LinearLayout {
     }
 
     public void setCollectionHeight(int height) {
-        android.view.ViewGroup.LayoutParams params = mScroll.getLayoutParams();
-        if (params.height != height) { params.height = height; mScroll.setLayoutParams(params); }
+        mScroll.setBudget(height);
+    }
+
+    /** Owns collection styling so site favicons retain their original colors and rounded tiles. */
+    public void setAppearance(int surface, int foreground, int interaction) {
+        mSurface = surface;
+        mForeground = foreground;
+        mInteraction = interaction;
+        applyAppearance(this);
+    }
+
+    private GradientDrawable background(int color, int radius) {
+        GradientDrawable result = new GradientDrawable();
+        result.setColor(color);
+        result.setCornerRadius(dp(radius));
+        return result;
+    }
+
+    private void applyAppearance(android.view.ViewGroup group) {
+        for (int i = 0; i < group.getChildCount(); i++) {
+            View child = group.getChildAt(i);
+            if (child instanceof ImageButton) {
+                ImageButton tile = (ImageButton) child;
+                tile.clearColorFilter();
+                GradientDrawable shape = background(mSurface, 16);
+                tile.setBackground(new RippleDrawable(ColorStateList.valueOf(mInteraction), shape, null));
+                tile.setOnHoverListener((view, event) -> {
+                    if (event.getAction() == android.view.MotionEvent.ACTION_HOVER_ENTER) shape.setColor(mInteraction);
+                    else if (event.getAction() == android.view.MotionEvent.ACTION_HOVER_EXIT) shape.setColor(mSurface);
+                    return false;
+                });
+            } else if (child instanceof Button) {
+                Button button = (Button) child;
+                button.setTextColor(mForeground);
+                StateListDrawable states = new StateListDrawable();
+                states.addState(new int[] {android.R.attr.state_hovered}, background(mInteraction, 10));
+                states.addState(new int[] {android.R.attr.state_focused}, background(mInteraction, 10));
+                states.addState(new int[] {}, background(Color.TRANSPARENT, 10));
+                button.setBackground(new RippleDrawable(ColorStateList.valueOf(mInteraction), states, null));
+            } else if (child instanceof android.view.ViewGroup) {
+                applyAppearance((android.view.ViewGroup) child);
+            }
+        }
     }
 
     private void remember(boolean favorite) {
@@ -133,6 +200,7 @@ public final class ArcCollectionsView extends LinearLayout {
             // Preserve the original bytes for recovery. A metadata read failure
             // must not crash browser startup or silently replace a user's data.
             mFavorites.removeAllViews();
+            mFavoritesScroll.setVisibility(GONE);
             mEntries.removeAllViews();
             mSpace.setText(R.string.arc_collection_error);
             findViewWithTag("arc-pin-current").setEnabled(false);
@@ -148,17 +216,21 @@ public final class ArcCollectionsView extends LinearLayout {
         String favoriteFocus = focusedTag(mFavorites);
         String entryFocus = focusedTag(mEntries);
         mFavorites.removeAllViews();
+        mFavoritesScroll.setVisibility(state.favorites().isEmpty() ? GONE : VISIBLE);
         for (ArcSidebarState.Entry entry : state.favorites()) {
             ImageButton favorite = new ImageButton(mActivity);
             favorite.setImageResource(android.R.drawable.ic_menu_view);
             favorite.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
-            favorite.setPadding(dp(12), dp(12), dp(12), dp(12));
+            favorite.setPadding(dp(16), dp(16), dp(16), dp(16));
             favorite.setContentDescription(entry.title);
             favorite.setTooltipText(entry.title);
             favorite.setTag("arc-entry:" + entry.id);
             favorite.setOnClickListener(view -> runCommand(() -> open(entry.id)));
             favorite.setOnLongClickListener(view -> { showEntryMenu(view, entry); return true; });
-            mFavorites.addView(favorite, new LayoutParams(dp(52), dp(48)));
+            favorite.setOnContextClickListener(view -> { showEntryMenu(view, entry); return true; });
+            LayoutParams tileParams = new LayoutParams(dp(64), dp(64));
+            tileParams.setMargins(dp(4), dp(4), dp(4), dp(4));
+            mFavorites.addView(favorite, tileParams);
             mLoadIcon.accept(entry, favorite);
         }
         for (ArcSidebarState.Space space : state.spaces()) {
@@ -176,6 +248,7 @@ public final class ArcCollectionsView extends LinearLayout {
                 String parent = current.parentId;
                 Button back = button("‹  " + current.name, () -> mOpenFolder = parent);
                 back.setTag("arc-folder-back:" + current.id);
+                attachFolderMenu(back, current);
                 mEntries.addView(back, new LayoutParams(-1, dp(44)));
             }
         }
@@ -183,6 +256,7 @@ public final class ArcCollectionsView extends LinearLayout {
             if (!java.util.Objects.equals(folder.parentId, mOpenFolder)) continue;
             Button folderRow = button("▸  " + folder.name, () -> mOpenFolder = folder.id);
             folderRow.setTag("arc-folder:" + folder.id);
+            attachFolderMenu(folderRow, folder);
             mEntries.addView(folderRow, new LayoutParams(-1, dp(44)));
         }
         for (ArcSidebarState.Entry entry : state.entries(state.selectedSpace())) {
@@ -204,6 +278,7 @@ public final class ArcCollectionsView extends LinearLayout {
         });
         newFolder.setTag("arc-new-folder:" + state.selectedSpace());
         mEntries.addView(newFolder, new LayoutParams(-1, dp(44)));
+        applyAppearance(this);
         restoreFocus(mFavorites, favoriteFocus);
         restoreFocus(mEntries, entryFocus);
     }
@@ -235,14 +310,53 @@ public final class ArcCollectionsView extends LinearLayout {
         mMenu = menu;
         for (int i = 0; i < spaces.size(); i++) menu.getMenu().add(0, i, i, spaces.get(i).name);
         menu.getMenu().add(0, spaces.size(), spaces.size(), R.string.arc_new_space);
+        menu.getMenu().add(0, spaces.size() + 1, spaces.size() + 1, R.string.arc_delete_space)
+                .setEnabled(spaces.size() > 1);
         menu.setOnMenuItemClickListener(item -> {
             runCommand(() -> {
                 if (item.getItemId() < spaces.size()) mController.selectSpace(spaces.get(item.getItemId()).id);
-                else requestName(R.string.arc_new_space, mController::createSpace);
+                else if (item.getItemId() == spaces.size()) requestName(R.string.arc_new_space, mController::createSpace);
+                else {
+                    ArcSidebarState.Space target = null;
+                    for (ArcSidebarState.Space space : spaces) {
+                        if (!space.id.equals(state.selectedSpace())) { target = space; break; }
+                    }
+                    if (target != null) confirm(R.string.arc_delete_space,
+                            mActivity.getString(R.string.arc_delete_space_preserve, target.name),
+                            () -> mController.deleteSpace(state.selectedSpace()));
+                }
             });
             return true;
         });
         menu.show();
+    }
+
+    private void attachFolderMenu(View row, ArcSidebarState.Folder folder) {
+        row.setOnLongClickListener(view -> { showFolderMenu(view, folder); return true; });
+        row.setOnContextClickListener(view -> { showFolderMenu(view, folder); return true; });
+    }
+
+    private void showFolderMenu(View anchor, ArcSidebarState.Folder folder) {
+        if (mDestroyed) return;
+        PopupMenu menu = new PopupMenu(mActivity, anchor);
+        mMenu = menu;
+        menu.getMenu().add(0, 0, 0, R.string.arc_delete_folder);
+        menu.setOnMenuItemClickListener(item -> {
+            confirm(R.string.arc_delete_folder, mActivity.getString(R.string.arc_delete_folder_preserve),
+                    () -> mController.deleteFolder(folder.id));
+            return true;
+        });
+        menu.show();
+    }
+
+    private void confirm(int title, String message, Runnable command) {
+        if (mDestroyed) return;
+        mDialog = new AlertDialog.Builder(mActivity).setTitle(title).setMessage(message)
+                .setPositiveButton(R.string.arc_delete, (dialog, which) -> runCommand(command))
+                .setNegativeButton(android.R.string.cancel, null).create();
+        mDialog.show();
+        mDialog.getButton(AlertDialog.BUTTON_POSITIVE).setTag("arc-confirm-delete");
+        mDialog.getButton(AlertDialog.BUTTON_NEGATIVE).setTag("arc-cancel-delete");
     }
 
     private void showEntryMenu(View anchor, ArcSidebarState.Entry entry) {

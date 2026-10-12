@@ -13,6 +13,11 @@
     <string name="arc_interface_mobile">Móvil</string>
     <string name="arc_pin_current">Fijar pestaña</string>
     <string name="arc_favorite_current">Añadir a favoritos</string>
+    <string name="arc_delete">Eliminar</string>
+    <string name="arc_delete_space">Eliminar espacio actual</string>
+    <string name="arc_delete_space_preserve">Las carpetas, las pestañas fijadas y las pestañas abiertas se moverán a «%1$s». Los favoritos se conservarán. No se cerrará ninguna pestaña.</string>
+    <string name="arc_delete_folder">Eliminar carpeta</string>
+    <string name="arc_delete_folder_preserve">El contenido y las subcarpetas se moverán a la carpeta superior. Se conservarán las pestañas fijadas y no se cerrará ninguna pestaña.</string>
     <string name="arc_new_space">Nuevo espacio</string>
     <string name="arc_new_folder">Nueva carpeta</string>
     <string name="arc_name">Nombre</string>

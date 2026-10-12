@@ -39,6 +39,17 @@ public final class ArcCollectionsViewTest {
                         () -> new ArcCollectionsView.CurrentTab(7, "https://example.test/", "Example"),
                         (entry, button) -> {});
                 activity.setContentView(view);
+                // REAL_ANDROID_VIEW: measure production controls, without claiming native Chromium
+                // observer coverage at the simulated command boundary.
+                view.setCollectionHeight(240);
+                view.measure(View.MeasureSpec.makeMeasureSpec(320, View.MeasureSpec.EXACTLY),
+                        View.MeasureSpec.makeMeasureSpec(1200, View.MeasureSpec.AT_MOST));
+                View newFolder = view.findViewWithTag("arc-new-folder:" + personal);
+                View collectionScroll = view.findViewWithTag("arc-collection-scroll");
+                check(collectionScroll.getMeasuredHeight() == newFolder.getMeasuredHeight(),
+                        "empty collection reserves only its real row height");
+                check(collectionScroll.getLayoutParams().height == android.view.ViewGroup.LayoutParams.WRAP_CONTENT,
+                        "collection budget caps content instead of reserving blank space");
                 View pin = view.findViewWithTag("arc-pin-current");
                 check(pin != null && pin.performClick(), "real pin button clickable");
                 String id = controller.state().entries(personal).get(0).id;
@@ -50,6 +61,12 @@ public final class ArcCollectionsViewTest {
                 check(controller.state().favorites().get(0).id.equals(id), "conversion preserves identity");
                 check(view.findViewWithTag("arc-entry:" + id) instanceof ImageButton,
                         "favorite rendered as an actual icon control");
+                ImageButton tile = view.findViewWithTag("arc-entry:" + id);
+                view.setAppearance(0xffe0e0e0, 0xff222222, 0xff777777);
+                check(tile.getLayoutParams().width == tile.getLayoutParams().height
+                                && tile.getBackground() instanceof android.graphics.drawable.RippleDrawable,
+                        "Favorite uses a square tile with its own rounded interactive background");
+                check(tile.getColorFilter() == null, "Favorite preserves site favicon colors");
                 String work = controller.createSpace("Work");
                 String workPin = controller.rememberTab(8, "https://work.test/", "Work tab", false);
                 view.refresh();

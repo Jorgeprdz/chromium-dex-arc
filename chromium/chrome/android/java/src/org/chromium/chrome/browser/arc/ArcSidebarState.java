@@ -103,6 +103,53 @@ public final class ArcSidebarState {
         mFolders.put(id, new Folder(id, spaceId, parentId, name));
         return id;
     }
+    /** Dissolves one folder; its immediate contents move to its parent with their IDs intact. */
+    public void deleteFolder(String id) {
+        Folder removed = mFolders.get(id);
+        if (removed == null) throw invalid();
+        for (Folder folder : new ArrayList<>(mFolders.values())) {
+            if (id.equals(folder.parentId)) {
+                mFolders.put(folder.id, new Folder(folder.id, folder.spaceId,
+                        removed.parentId, folder.name));
+            }
+        }
+        for (int i = 0; i < mEntries.size(); i++) {
+            Entry entry = mEntries.get(i);
+            if (id.equals(entry.folderId)) {
+                mEntries.set(i, new Entry(entry.id, entry.spaceId, removed.parentId,
+                        entry.url, entry.title, entry.tabId, entry.favorite));
+            }
+        }
+        mFolders.remove(id);
+    }
+
+    /** Transfers all content and native-tab ownership to the first remaining Space. */
+    public void deleteSpace(String id) {
+        requireSpace(id);
+        if (mSpaces.size() == 1) throw invalid();
+        String target = null;
+        for (String candidate : mSpaces.keySet()) {
+            if (!id.equals(candidate)) { target = candidate; break; }
+        }
+        for (Folder folder : new ArrayList<>(mFolders.values())) {
+            if (id.equals(folder.spaceId)) {
+                mFolders.put(folder.id, new Folder(folder.id, target, folder.parentId, folder.name));
+            }
+        }
+        for (int i = 0; i < mEntries.size(); i++) {
+            Entry entry = mEntries.get(i);
+            if (id.equals(entry.spaceId)) {
+                mEntries.set(i, new Entry(entry.id, target, entry.folderId,
+                        entry.url, entry.title, entry.tabId, entry.favorite));
+            }
+        }
+        for (Map.Entry<Integer, String> ownership : mTabSpaces.entrySet()) {
+            if (id.equals(ownership.getValue())) ownership.setValue(target);
+        }
+        mSpaces.remove(id);
+        if (id.equals(mSelected)) mSelected = target;
+    }
+
     public void moveFolder(String id, String parentId) {
         Folder folder = mFolders.get(id);
         if (folder == null) throw invalid();

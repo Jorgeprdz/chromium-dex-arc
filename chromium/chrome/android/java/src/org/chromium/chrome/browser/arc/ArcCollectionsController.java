@@ -46,6 +46,20 @@ public final class ArcCollectionsController {
         return id;
     }
 
+    public void deleteFolder(String id) {
+        ArcSidebarState draft = state();
+        draft.deleteFolder(id);
+        mStore.save(draft);
+        mTabs.onArcStateChanged(draft);
+    }
+
+    public void deleteSpace(String id) {
+        ArcSidebarState draft = state();
+        draft.deleteSpace(id);
+        mStore.save(draft);
+        mTabs.onSpaceChanged(draft);
+    }
+
     public String rememberTab(int tabId, String url, String title, boolean favorite) {
         requireLive();
         if (!mTabs.exists(tabId)) throw new IllegalStateException("Arc tab is not active");

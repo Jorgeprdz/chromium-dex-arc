@@ -9,7 +9,55 @@ public final class ArcSidebarStateTest {
         try { action.run(); throw new AssertionError(message); }
         catch (IllegalArgumentException expected) { }
     }
+    private static void delete(ArcSidebarState state, String operation, String id) {
+        try { ArcSidebarState.class.getMethod(operation, String.class).invoke(state, id); }
+        catch (java.lang.reflect.InvocationTargetException failure) {
+            throw (RuntimeException) failure.getCause();
+        } catch (ReflectiveOperationException failure) { throw new AssertionError("Missing safe " + operation, failure); }
+    }
+    private static void safeDeletion() {
+        ArcSidebarState state = new ArcSidebarState();
+        String source = state.selectedSpace();
+        String target = state.addSpace("Remaining");
+        String another = state.addSpace("Later");
+        String parent = state.addFolder(source, null, "Parent");
+        String folder = state.addFolder(source, parent, "Dissolve");
+        String child = state.addFolder(source, folder, "Child");
+        String nested = state.pin(source, folder, "https://nested.test", "Nested", 41);
+        String deeper = state.pin(source, child, "https://deep.test", "Deep", null);
+        String global = state.favorite("https://global.test", "Global", 42);
+        state.associateTab(43, source);
+        state.associateTab(44, another);
+        delete(state, "deleteFolder", folder);
+        check(state.folders(source).stream().noneMatch(f -> f.id.equals(folder)), "Deleted folder removed");
+        check(state.folders(source).stream().anyMatch(f -> f.id.equals(child) && parent.equals(f.parentId)),
+                "Child folder promoted with stable identity");
+        check(parent.equals(state.entry(nested).folderId) && state.entry(nested).tabId == 41,
+                "Dissolved entry promoted without losing native association");
+        check(child.equals(state.entry(deeper).folderId), "Deeper contents retain nested identity");
+        delete(state, "deleteSpace", source);
+        check(state.selectedSpace().equals(target), "First remaining Space selected deterministically");
+        check(state.entry(nested).spaceId.equals(target) && state.entry(nested).id.equals(nested),
+                "Space deletion transfers pins with stable metadata identity");
+        check(state.folders(target).stream().anyMatch(f -> f.id.equals(child) && parent.equals(f.parentId)),
+                "Space deletion preserves full folder tree");
+        check(state.visibleTab(41) && state.visibleTab(43) && !state.visibleTab(44),
+                "Pinned and ordinary native tabs transfer ownership without closing");
+        check(state.favorites().get(0).id.equals(global) && !state.hasTabSpace(42),
+                "Space deletion retains global Favorites unchanged");
+        check(ArcSidebarState.deserialize(state.serialize()).serialize().equals(state.serialize()),
+                "Deleted structure roundtrips without dangling references");
+        state.selectSpace(target);
+        delete(state, "deleteSpace", another);
+        check(target.equals(state.selectedSpace()), "Deleting inactive Space keeps active selection");
+        String before = state.serialize();
+        rejected(() -> delete(state, "deleteSpace", target), "Cannot delete final Space");
+        rejected(() -> delete(state, "deleteSpace", "missing"), "Unknown Space deletion rejected");
+        rejected(() -> delete(state, "deleteFolder", "missing"), "Unknown folder deletion rejected");
+        check(before.equals(state.serialize()), "Rejected deletions leave state unchanged");
+    }
     public static void main(String[] args) {
+        safeDeletion();
         ArcSidebarState state = new ArcSidebarState();
         String initial = state.selectedSpace();
         String work = state.addSpace("Trabajo");
