@@ -1,5 +1,31 @@
 # Archium R4 — reparación y build, 2026-10-11
 
+## Run nuevo y monitor activo: 38194736077 (2026-10-12 02:10–02:12 UTC)
+
+Publicación verificada, commits y push exit 0:
+
+- [8a8e00e8a59c29d9ec165f153893e20461b645e8](https://github.com/Jorgeprdz/chromium-dex-arc/commit/8a8e00e8a59c29d9ec165f153893e20461b645e8): lectura/manifiesto/stdout/stderr de Ninja preservan bytes, sin imponer UTF-8.
+- [3c2d5f689ffc9314806c725699778482795f8231](https://github.com/Jorgeprdz/chromium-dex-arc/commit/3c2d5f689ffc9314806c725699778482795f8231): contraseñas propias **DEPRECATED**, owners propios condicionados fuera del build, settings estándar, gates sobre biblioteca real APK, consulta adelantada y regresiones.
+
+HEAD inicial de esta reparación `d0274c8c0e43f6cf85a523099e8c608455eaa407`; SHA de código probado/push/run **3c2d5f689ffc9314806c725699778482795f8231**. El commit posterior de este registro solo añade documentación y no cambia el SHA fijado del run. Rama activa exclusiva `assistant/archium-r4-recovery`; protegido y main comprobados sin cambios después del dispatch. Suite **227/227**, 0 fallas/0 skips, exit 0; detalles, comandos y hashes en la sección siguiente.
+
+Dispatch manual real, exit 0, una sola llamada (no repetida):
+
+```bash
+gh workflow run 374835814 --repo Jorgeprdz/chromium-dex-arc \
+  --ref assistant/archium-r4-recovery \
+  -f expected_sha=3c2d5f689ffc9314806c725699778482795f8231 \
+  -f source_checkpoint=archium-checkpoint-38186699186-1 \
+  -f source_commit=d69a14e7e698c4dc125cada4b4f490c177fb3069 \
+  -f source_run_id=38186699186
+```
+
+Run [**38194736077**](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38194736077), creación **2026-10-12T02:10:16Z**, event `workflow_dispatch`, headSha exacto **3c2d5f689ffc9314806c725699778482795f8231**. Authorize [114634801002](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38194736077/job/114634801002) **SUCCESS**: SHA/branch y concurrencia comprobados. Preflight [114634827696](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38194736077/job/114634827696) **IN_PROGRESS**, iniciado 02:10:27Z; monitor observó `Build genuine GN at Chromium DEPS pin` a **02:12:32 UTC**. Todavía no se acredita restore nuevo, JNI, APK o runtime. No hay artefacto APK nuevo.
+
+Monitor nativo iniciado mediante **./m4** en una **nueva sesión #4** de NewTermux; PID genuino **15334**, argumentos `--run 38194736077 --sha 3c2d5f689ffc9314806c725699778482795f8231` verificados en proceso. Evidencia local `/workspace/.archium-install/38194736077/r4-monitor.pid` y `screen.txt`: EN CURSO, elapsed **00:02:16**, **0/6** fases completadas, ETA **N/D**, eventos API identificados explícitamente porque log activo no está publicado. Refresco **600 s**, líneas ASCII continuas/separadores, colores, bold/italic; descarga/instalación automática exclusivamente con SUCCESS y reporte/SHA/recursos/firma/ABI verificados. Se conserva el monitor viejo y las otras sesiones. DeX estaba desconectado (solo display 0); se usó la actividad nativa normal del teléfono para crear el shell. Un intento de traer la actividad volvió a seleccionar la sesión Codex: se corrigió seleccionando el shell nuevo antes de escribir, sin repetir dispatch. El monitor queda en ejecución aunque el usuario use otras apps; agente se detiene para monitoreo manual conforme a su instrucción.
+
+**FASE=S0; SHA=3c2d5f6; RUN=38194736077; GATE=AUTHORIZE_PASS/PREFLIGHT_RUNNING; CHECKPOINT=38186699186-1 REMOTE_PRESERVED; DISCO_CI=PENDING_S0; ERRORES_NUEVOS=NONE_OBSERVED; SIGUIENTE=S0→S1→S2→S3→S4→S5 SOLO SI GATES PASS.** Contraseñas propias=DEPRECATED/OUT_OF_SCOPE; APK/JNI/runtime nuevos=NOT_EXECUTED. Esta entrega de código y monitor no se presenta como BUILD_PASS ni como APK terminada.
+
 ## Fallo 38186699186 y retirada de contraseñas propias (2026-10-12)
 
 Run [38186699186](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38186699186), source `d69a14e7e698c4dc125cada4b4f490c177fb3069`, FAILED. Authorize y preflight SUCCESS. [Job 114611828079](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38186699186/job/114611828079), primera falla auténtica línea **36867**: `NINJA_QUERY=FAIL: 'utf-8' codec can't decode byte 0xc3 in position 1253: invalid continuation byte`; gate exit **1**, etapas posteriores bloqueadas. El enlace/compilación anterior terminó `Build Succeeded: 12 steps` en línea 36866. Recursos reales Chromium PASS (2998); nueve suites tempranas de Robolectric PASS (36814, 605 ejecuciones agregadas); JNI `llvm-nm`, S3 y APK NO EJECUTADOS. No se acredita la entrega como exitosa.
