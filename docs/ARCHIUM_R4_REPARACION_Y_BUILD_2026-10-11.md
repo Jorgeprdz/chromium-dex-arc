@@ -1587,3 +1587,57 @@ La incorporación de Objects.requireNonNull en el drawable conocido evita
 desreferenciar un Drawable nullable; no cambia el recurso nativo elegido.
 Los diagnósticos de tar/HTTP de fixtures negativas son esperados; no se ocultan
 como un supuesto stdout sin advertencias.
+
+## 2026-10-12 — Primer dispatch nuevo, fallo barato y reparación
+
+Commit ca48f6a0267ecb576634d83bcbd04c5943aed2a5,
+[run 38319319640](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38319319640),
+[job 115043392253](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38319319640/job/115043392253).
+S0 falló en javac a las 22:58:25Z; build SKIPPED. No se descargó ni restauró el
+checkpoint ni se ejecutó trabajo nativo. No hay output nativo nuevo que recuperar.
+
+CAUSA_CONFIRMADA, log API del job (67,933 bytes), líneas 667 en adelante: siete
+errores, LocationBarLayout ausente en los contratos de la fixture, ic_add_24dp
+ausente en R sintético, y ArcDesktopPolicy sin import en ArcCollectionsView.
+El entrypoint check-arc-preparation.py no se ejecutó antes del primer dispatch;
+la suite unittest anterior no cubría esa compilación aislada completa.
+
+Se añade el import real de producción y se actualizan exclusivamente los contratos
+de tipo de la fixture con el hook público entregado y el drawable del XML fijado.
+Una negativa exige autoridad del hook público y rechaza un drawable inventado;
+el probe javac ejecutado ahora referencia también ic_add_24dp. Los contratos
+sintéticos no prueban runtime Chromium ni recursos finales.
+
+La negativa local reproduce los mismos siete errores (preparation-red-local.log,
+exit 1). Después del import/contratos, el entrypoint completo termina exit 0
+(preparation-green-local.log); se vuelve a ejecutar con la validación de autoridad
+adicional antes de publicar. Un intento local con patch sin regenerar fue rechazado
+como Stale patch: ArcCollectionsView; se regeneró por el script oficial antes de
+continuar. Se mantiene bloqueado el enlace pesado hasta finalizar todos los gates.
+
+El segundo host completo terminó 245 tests / 1 fail / 0 skips, 736.695 s,
+exit 1: test_global_cut_waits_for_ninja_sigint_flush_before_packing produjo exit 9
+del pack al no existir el log de flush. Ejecutado aislado dio 1/0/0, exit 0.
+Una reproducción controlada consume los 4 s en restore: exit 9 y cero llamadas
+a autoninja, mismo stderr; confirma que el límite de la fixture puede vencer
+antes de llegar al comportamiento que pretende comprobar. La carga concurrente
+como explicación del caso original es HIPÓTESIS; no hay evidencia de un defecto
+en el timeout nativo de producción.
+
+La fixture permite 12 s de preparación/trabajo y mantiene al Ninja sintético
+esperando 60 s: SIGINT real sigue siendo obligatorio antes de que termine.
+Se exige explícitamente que haya arrancado autoninja, complete=false y el contenido
+exacto «flushed after SIGINT» antes de aceptar el pack. No se cambian slices,
+reservas ni budgets de los scripts de producción. Se repite la suite completa
+sin probes concurrentes. Los resultados fallidos anteriores permanecen registrados.
+
+Host final de la reparación: 245 passed / 0 failed / 0 skipped, 641.061 s, exit 0,
+SDK36 y aapt2 37.0.0 como CI. La suite incluye los tres perfiles GN reales.
+Entrypoint completo check-arc-preparation: exit 0, 117 archivos aplicados y hashes
+coherentes; Android adapters compilados con dependencias sintéticas declaradas.
+AAPT2 fixture independiente: exit 0, 18 recursos; no es la fusión final de Chromium.
+
+Doble generación: patch 121256adbdb0ff92319465c8239a2e02086b505c42829e63f216211bf6f815e0;
+manifest 456bcfadeb7f9df2b2f74ec186a2dd484d167da582e109072e3a4c7fae1093dd.
+Metadata remota reconsultada: 4 grupos válidos no expirados, 26,506,123,626 bytes.
+El checkpoint remoto permanece disponible; no se ha descargado localmente.

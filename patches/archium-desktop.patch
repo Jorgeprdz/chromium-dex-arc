@@ -4074,7 +4074,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollecti
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java
-@@ -0,0 +1,418 @@
+@@ -0,0 +1,419 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -4100,6 +4100,7 @@ new file mode 100644
 +import android.widget.Toast;
 +
 +import org.chromium.chrome.R;
++import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy;
 +
 +import java.util.List;
 +import java.util.function.BiConsumer;

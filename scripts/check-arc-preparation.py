@@ -9,6 +9,7 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import tempfile
@@ -17,6 +18,16 @@ import xml.etree.ElementTree as ET
 
 ROOT = Path(__file__).resolve().parents[1]
 ANDROID_JAR = Path('/opt/android-sdk/platforms/android-36/android.jar')
+
+
+def verify_shell_contract_authority(location_bar: str, rail_xml: str):
+    """Reject adapter contracts that diverge from the delivered/pinned APIs."""
+    if not re.search(r'public\s+void\s+setArcSurfaceColor\s*\(\s*@Nullable\s+Integer\s+color\s*\)', location_bar):
+        raise ValueError('Delivered public LocationBarLayout lacks setArcSurfaceColor')
+    source = '{http://schemas.android.com/apk/res/android}src'
+    if not any(node.get(source) == '@drawable/ic_add_24dp'
+               for node in ET.fromstring(rail_xml).iter()):
+        raise ValueError('Pinned rail lacks ic_add_24dp resource authority')
 
 
 # R3.3: This contract is only for the isolated adapter javac gate. It is NOT
@@ -60,7 +71,7 @@ def synthetic_chromium_r(values_xml: Path) -> str:
             klass('string', string_names) +
             klass('id', id_names) +
             klass('array', array_names) +
-            klass('drawable', ['btn_back', 'btn_forward', 'btn_reload_stop']) +
+            klass('drawable', ['btn_back', 'btn_forward', 'btn_reload_stop', 'ic_add_24dp']) +
             '}')
 
 
@@ -184,9 +195,20 @@ def main():
                 'VerticalTabRailLayout.java')
         if 'findViewById(R.id.new_tab_button)' not in rail.read_text():
             raise RuntimeError('Pinned Chromium source lacks new_tab_button authority')
+        verify_shell_contract_authority(
+            (checkout / 'chrome/browser/ui/android/omnibox/java/src/org/chromium/'
+             'chrome/browser/omnibox/LocationBarLayout.java').read_text(),
+            (ROOT / '.source-reference/chrome/android/features/tab_ui/java/res/layout/'
+             'vertical_tab_layout.xml').read_text())
         definitions['org.chromium.chrome.R'] = synthetic_chromium_r(
             ROOT / 'chromium/chrome/android/java/res/values/arc_strings.xml')
         definitions.update({
+            # Type-only adapter for the public base hook shipped in the same patch.
+            # Actual color/focus behavior is verified separately with Android/Chromium tests.
+            'org.chromium.chrome.browser.omnibox.LocationBarLayout': '''public class LocationBarLayout extends android.widget.FrameLayout {
+                public LocationBarLayout(android.content.Context c){super(c);}
+                public void setArcSurfaceColor(Integer color){}
+            }''',
             # Minimal type contracts from cfd94726's CompositorViewHolder,
             # TouchEventObserver and NullableObservableSupplier. Stub bodies are
             # never used as evidence of compositor/touch/browser runtime behavior.

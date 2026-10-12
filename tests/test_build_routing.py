@@ -84,7 +84,7 @@ elif name=='autoninja':
    (pathlib.Path.cwd()/'out/Archium/.ninja_log').write_text('flushed after SIGINT')
    sys.exit(130)
   signal.signal(signal.SIGINT,stopped)
-  time.sleep(10)
+  time.sleep(60)
  is_java='obj/archium-fixture.javac.jar' in args
  sys.exit(int(os.environ.get('MOCK_JAVA_NINJA_RESULT' if is_java else 'MOCK_NINJA_RESULT','0')))
 elif name=='sudo' and args and args[0]=='timeout':
@@ -185,10 +185,14 @@ elif name=='sudo' and args and args[0]=='timeout':
         self.assertEqual(self.output.read_text(), 'complete=true\n')
 
     def test_global_cut_waits_for_ninja_sigint_flush_before_packing(self):
+        # Leave room for fixture preparation on slower hosts. Ninja must still
+        # outlive the real work timeout, receive SIGINT and flush before packing.
+        # The production slice/reserve budgets are unaffected.
         result = self.run_build(ARCHIUM_PREVIOUS_TAG=CURRENT_TAG,
-                                ARCHIUM_WORK_SECONDS='4', MOCK_REAL_TIMEOUT='true',
+                                ARCHIUM_WORK_SECONDS='12', MOCK_REAL_TIMEOUT='true',
                                 MOCK_NINJA_WAIT='true', MOCK_REQUIRE_FLUSH='true')
-        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr + str(self.calls()))
+        self.assertTrue(any(c[0] == 'autoninja' for c in self.calls()))
         self.assertEqual(self.output.read_text(), 'complete=false\n')
         self.assertEqual((self.root/'runner/chromium-archium/checkout/src/out/Archium/.ninja_log').read_text(),
                          'flushed after SIGINT')

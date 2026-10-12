@@ -23,6 +23,7 @@ import android.widget.ScrollView;
 import android.widget.Toast;
 
 import org.chromium.chrome.R;
+import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy;
 
 import java.util.List;
 import java.util.function.BiConsumer;

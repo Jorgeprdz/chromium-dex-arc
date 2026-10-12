@@ -19,6 +19,16 @@ def load():
 
 
 class SyntheticRContractTests(unittest.TestCase):
+    def test_shell_contract_rejects_missing_public_hook_and_wrong_resource(self):
+        module = load()
+        java = 'public void setArcSurfaceColor(@Nullable Integer color) {}'
+        xml = '<View xmlns:android="http://schemas.android.com/apk/res/android" android:src="@drawable/ic_add_24dp"/>'
+        module.verify_shell_contract_authority(java, xml)
+        with self.assertRaisesRegex(ValueError, 'public LocationBarLayout'):
+            module.verify_shell_contract_authority(java.replace('public ', ''), xml)
+        with self.assertRaisesRegex(ValueError, 'resource authority'):
+            module.verify_shell_contract_authority(java, xml.replace('ic_add_24dp', 'invented'))
+
     def test_compiles_real_picker_array_and_new_tab_references(self):
         if not shutil.which('javac') or not shutil.which('java'):
             self.fail('javac/java required for resource host gate')
@@ -32,6 +42,7 @@ class SyntheticRContractTests(unittest.TestCase):
 public class Probe {
     public static void main(String[] args) {
         if (R.id.new_tab_button == 0 ||
+            R.drawable.ic_add_24dp == 0 ||
             R.array.arc_frame_palette_names == 0 ||
             R.array.arc_frame_rgb_names == 0 ||
             R.string.arc_frame_color == 0) throw new AssertionError();

@@ -13,14 +13,15 @@
   ],
   "gates": {
     "STATIC_PASS": "PASS",
-    "PYTHON_HOST_PASS": "PASS: 244 passed, 0 failed, 0 skipped; 561.765 seconds",
+    "PYTHON_HOST_PASS": "PASS: 245 passed, 0 failed, 0 skipped; 641.061 seconds; exit 0",
     "GN_REAL_PASS": "PASS: actual GN arm64, baseline and x64 scenarios inside the host suite",
     "BOUNDED_ROBOLECTRIC_PASS": "PASS: 8 frame + 6 shell + 2 about executions at API29/36",
     "CHROMIUM_ROBOLECTRIC_PASS": "PENDING_POST_RESTORE",
     "JNI_LINK_PASS": "PENDING_POST_RESTORE",
     "AAPT2_REAL_RESOURCES": "PENDING_POST_RESTORE",
     "APK_VERIFIED": "NOT_EXECUTED",
-    "AAPT2_FIXTURE": "PASS: real compile/link, synthetic fixture manifest; not Chromium resource merge"
+    "AAPT2_FIXTURE": "PASS: real compile/link, synthetic fixture manifest; not Chromium resource merge",
+    "ISOLATED_ANDROID_ADAPTER_JAVAC": "PASS: complete preparation entrypoint, Android SDK36; dependency contracts stubbed"
   },
   "patch": {
     "double_generation": "PASS",
@@ -28,8 +29,8 @@
     "full_Chromium_checkout_application": "PENDING_RESTORE",
     "modified_files": 117,
     "hashes": {
-      "patches/archium-desktop.patch": "0947124c09904a67ad759fbd710d81f7d9d70d2de984f772f4a4011012ef8cbe",
-      "patches/upstream-files.json": "908799a4de4571cfc9b207a5db0ef66ff4ec3cfd2b200d6da1cab012c86f6d35"
+      "patches/archium-desktop.patch": "121256adbdb0ff92319465c8239a2e02086b505c42829e63f216211bf6f815e0",
+      "patches/upstream-files.json": "456bcfadeb7f9df2b2f74ec186a2dd484d167da582e109072e3a4c7fae1093dd"
     }
   },
   "checkpoint": {
@@ -71,5 +72,38 @@
     "Checkpoint all-byte integrity and actual CI disk capacity are mandatory S0/S1 gates, not preclaimed locally."
   ],
   "source_public_access": "LocationBarLayout public hook; package-private LocationBarTablet remains package-private",
-  "host_log_sha256": "64ebffd845ae6a91c40a84ad6b24c1f221716b568c20b2281b2d9bbff1d92a4d"
+  "host_log_sha256": "af8fa2d7a0b52a922717a8d9cd880e77f78e1a4d44d440f8cffd6edc3d796cec",
+  "first_dispatch": {
+    "run": 38319319640,
+    "url": "https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38319319640",
+    "sha": "ca48f6a0267ecb576634d83bcbd04c5943aed2a5",
+    "stage": "S0",
+    "conclusion": "failure",
+    "build": "SKIPPED",
+    "checkpoint_downloaded": false,
+    "root_causes": [
+      "Missing production ArcDesktopPolicy import",
+      "Fixture missing public LocationBarLayout type contract and ic_add_24dp"
+    ],
+    "job": 115043392253,
+    "first_error_line": 667,
+    "log_sha256": "1ccfe4e0cc325a39072b6434535f53946b16d966a47bf8e4d93cdd3d0f088fe4"
+  },
+  "retry_host_history": [
+    {
+      "tests": 245,
+      "failed": 1,
+      "skipped": 0,
+      "seconds": 736.695,
+      "exit": 1,
+      "first_failure": "Ninja SIGINT fixture pack returned 9 before flush"
+    },
+    {
+      "tests": 245,
+      "failed": 0,
+      "skipped": 0,
+      "seconds": 641.061,
+      "exit": 0
+    }
+  ]
 }
