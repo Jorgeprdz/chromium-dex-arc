@@ -1,5 +1,15 @@
 # Archium for Android — preparación
 
+## Próxima etapa — Archium Desktop Engine R1
+
+Prioridad de producto: navegación y renderizado de páginas en modo escritorio,
+rendimiento, eficiencia y compatibilidad con Googlebook OS, Samsung DeX y
+Motorola Smart Connect / Ready For. La especificación es un **roadmap pendiente
+de implementación y validación**, no una declaración de rendimiento alcanzado.
+
+**Documento técnico:** [Archium Desktop Engine R1 — Performance & Rendering](docs/ARCHIUM_DESKTOP_ENGINE_R1_PERFORMANCE_RENDERING_2026-10-12.md).
+
+
 Diseño aprobado: [docs/design.md](docs/design.md).
 
 Para retomar el trabajo actual, usar la rama `feat/arc-desktop` y leer el
