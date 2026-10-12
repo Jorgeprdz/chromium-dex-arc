@@ -1,3 +1,70 @@
+## Run 38203819481 FAILED en S4: optimización de nombres no cubierta (2026-10-12)
+
+HEAD inicial de esta reparación: `a904041dead58f4ebbd639a41cc99b66652e8876`. Rama `assistant/archium-r4-recovery`; protegido `feat/arc-desktop` = `51e5ed429661727156ab2534caac99a82ee9264b`, main = `6274c653bbe3992403a89b1531d0c1f91646bf6d`, comprobados contra remoto y sin cambios. PRs abiertos: ninguno. No runs activos al comenzar la revisión; no escrituras concurrentes observadas. Contraseñas propias siguen **DEPRECATED**, config false; identidad visual aprobada intacta.
+
+[Run 38203819481](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38203819481), source `2de41680a42972253e8daf4cf818938dacf79a93`, FAILED, 01:03:22, terminó 05:30:18 UTC. [Job build 114664052206](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38203819481/job/114664052206). Comando `gh api repos/Jorgeprdz/chromium-dex-arc/actions/jobs/114664052206/logs`, exit 0; log `/workspace/archium-r4-evidence/run-38203819481-build.log`, SHA256 `5bd575500e2fd2aae2225549a3274e66f8e91a520a0732e0dd440fc111400623`.
+
+| Evidencia real del run | Estado / línea del log |
+|---|---|
+| S0 disco antes de descarga | PASS, 293: 115530907648 bytes / 18975260 inodos |
+| S1 restore/transición | PASS, sin build limpio |
+| Host en PATH restaurado | 230 passed / 0 failed / 0 skipped, 203.834 s, 2955–2958 |
+| Recursos reales Chromium sin optimizar | PASS, 2982 |
+| Robolectric temprano, runner Chromium | 605 ejecuciones PASS, 31100 |
+| Biblioteca APK / símbolos JNI | PASS, 31131 |
+| Robolectric ampliado, runner Chromium | 1351 ejecuciones PASS, 65450 |
+| `chrome_public_apk` incremental | **Build Succeeded**, 1180 pasos / 9m39.41s / 152384 nodos reutilizados, 67842 |
+| Verificación final Portal | **FAIL**, primer error 67852, `ValueError: APK is missing registered launcher resources: drawable/themed_app_icon` |
+| Publicación APK / firma / ABI final / instalación | NOT_EXECUTED; no APK verificada ni artefacto APK publicado |
+| Checkpoint | 25 fragmentos, cuatro grupos publicados; outputs de S4 conservados |
+
+**CAUSA_CONFIRMADA por reproducción real AAPT2:** el gate S2 verificaba el `.ap_` anterior a la optimización. La fixture host solo usaba `--shorten-resource-paths`. El optimizador oficial además usa `--collapse-resource-names`; conserva tipos mipmap/id desde R.txt y las excepciones `chrome/android/aapt2.config`. La configuración original protege los dos launcher drawables pero no `themed_app_icon`; el verificador final exige ese alias registrado. No hubo fallo de compilación C++/Java en S4: falló el contrato de nombre entre optimización y verificador. La reproducción aislada demuestra la transformación; no pretende sustituir la inspección de la APK del checkout remoto.
+
+Originales consultados exclusivamente en pin `cfd94726b7b5fb48aedcc32662f2f3fbdbadec35`, mediante HTTPS `chromium.googlesource.com/chromium/src/+/PIN/PATH?format=TEXT`: `build/android/gyp/optimize_resources.py`, SHA256 `02e006ca42cf7eeda3f8dffb305f968bc66b6e9d942983ac15c32317b7968730`; `chrome/android/aapt2.config`, SHA256 `bef6fb84d20ee92cca00731a4a1dfbd33f50c5c5777430028699b2ab40f6c572`; `build/config/android/internal_rules.gni`. El original exacto aapt2.config se añadió al mecanismo oficial `.source-reference`, su delta a `.source-modified`.
+
+**Fix mínimo:** una línea `drawable/themed_app_icon#no_collapse` en la configuración real. Sigue el mecanismo de las excepciones launcher de Chromium; no cambia XML, píxeles, iconos, manifest, dependencias, GN args o toolchain y no desactiva la optimización. El verificador estricto se conserva sin modificaciones.
+
+**Corrección del gate:** la fixture hace conversión proto, collapse + short paths con configuración real y conversion binary. Los negativos de manifest ajeno y seis alteraciones del vector también pasan por el optimizador antes del rechazo. En S2, `check-portal-chromium-resources.py` obtiene la acción optimizadora y args de GN reales; ejecuta el script oficial fijado sobre el recurso `.ap_` real y su R.txt/configs, con outputs temporales separados de Siso/Ninja, y exige verificación antes de Java/link. No ejecuta la dependencia final-dex del target para este probe. La optimización después de R8/shrinking sigue verificada en la APK final; no se anticipa como PASS.
+
+**RED observado antes del fix:** `ARCHIUM_TEST_AAPT2=/opt/android-sdk/build-tools/37.0.0/aapt2 ARCHIUM_TEST_ANDROID_JAR=/opt/android-sdk/platforms/android-36/android.jar python3 -m unittest discover -s tests -p test_portal_optimized_alias.py -v`, exit 1, 1 test, 29.954 s; mismo ValueError exacto. Log `portal-collapse-red.log`. La prueba negativa adicional conserva el original upstream sin excepción y exige ese rechazo incluso después del fix. Cuatro contratos Python de args/output/config del probe pasan (0.008 s), sin acreditarlos como integración Chromium.
+
+**GREEN:** misma prueba AAPT2 después del fix y del refuerzo negativo, exit 0, **2 passed / 0 failed / 0 skipped**, **344.401 s**. Compilación real de 18 recursos, variantes PNG y WebP con flags Chromium, nombres colapsados y rutas cortas. La configuración upstream sin excepción reproduce el rechazo; configuración corregida pasa; manifest ajeno y seis cambios de vector son rechazados tras optimización. Hash logs RED `9da2fcba3267afa14c37d9ffc1e526d8c20123e27c8beefd98de42ef1a41828e`, GREEN `d773adba4b2f1a6fbd4c06bfaf84cfb1939cb16a904f5a165dc26f9a94dc4c9a`. Reporte de preparación hash `d093e11c507962070dde173850dc2ea265a1d2b0fe939040488d0880f19968d6`.
+
+**Patch:** generación oficial dos veces, exit 0, `cmp` exit 0, 103 archivos. SHA256 patch `69d23d6f75c8b1c73a5577c9927b88710b622657c8214c935b201200a631dac9`, manifest `6a7a9c6c90d7eb30510a2d340feb45ae40247a8344aeef4ef2be6855c039b014`. `check-arc-preparation.py --android-jar /opt/android-sdk/platforms/android-36/android.jar`, exit 0; los 103 archivos aplicados y hashes comprobados. Diff-check, Bash, ShellCheck, compileall y actionlint exit 0. La suite integral nueva y AAPT2 GREEN quedan registradas al finalizar, antes de publicar código o dispatch.
+
+**Suite integral final:** `GITHUB_ACTIONS=true GITHUB_REPOSITORY=Jorgeprdz/chromium-dex-arc GITHUB_REF_NAME=assistant/archium-r4-recovery GITHUB_REF=refs/heads/assistant/archium-r4-recovery GITHUB_SHA=2de41680a42972253e8daf4cf818938dacf79a93 GITHUB_RUN_ID=38203819481 ARCHIUM_TEST_GN=/usr/bin/gn ARCHIUM_TEST_NINJA=/workspace/archium-r4-evidence/ninja-query/pinned-arm64/ninja ARCHIUM_TEST_AAPT2=/opt/android-sdk/build-tools/37.0.0/aapt2 ARCHIUM_TEST_ANDROID_JAR=/opt/android-sdk/platforms/android-36/android.jar python3 -m unittest discover -s tests -p 'test_*.py' -v`, **exit 0**, **235 passed / 0 failed / 0 skipped**, **714.845 s**. Log `portal-collapse-full-ci-env.log`, SHA256 `7d083ede7635d8b609b5aeb97985ca9fc4f8f800e212801b85e4711f31bd5cfb`. Identidad CI reproducida del run fallido; código ejecutado es el delta local completo que se publica después. Tres perfiles GN reales (arm64/baseline/x64) PASS, negativos de checkpoint/routing/disco y recurso PASS. Esto acredita Python host/fixtures JVM y GN/AAPT2 aislados; el nuevo probe en checkout completo, Robolectric/JNI y APK nuevos siguen bloqueantes dentro de CI.
+
+| Gate previo / nuevo run | Estado | Evidencia o requisito |
+|---|---|---|
+| STATIC_PASS | PASS | diff-check, Bash, ShellCheck, compileall, actionlint |
+| PYTHON_HOST_PASS | PASS | 235/235, sin skips |
+| GN_REAL_PASS | PASS | tres escenarios con GN real; GN pin exacto se repite en CI |
+| AAPT2 aislado release | PASS | RED/GREEN + variantes PNG/WebP + negativos optimizados |
+| AAPT2 real checkout con probe nuevo | PENDING | S2 tras restore, antes de Java/link |
+| PATCH_REPRODUCIBILITY | PASS | 103 archivos, dos hashes idénticos y aplicación comprobada |
+| CHECKPOINT_METADATA | PASS | API/range/source/pin/expiry/count; no transferencia grande local |
+| CHECKPOINT_ALL_BYTES | PENDING | SHA256 de cada fragmento en S1 |
+| DISK_PREFLIGHT local | FAIL | insuficiente para restore masivo; no se usa para descargar |
+| DISK_PREFLIGHT CI nuevo | PENDING | medición S0 antes de descarga, requisito bloqueante |
+| ROBOLECTRIC_PASS nuevo | PENDING_POST_RESTORE | suites reales obligatorias; anterior 605 + 1351 PASS |
+| JNI_LINK_PASS nuevo | PENDING_POST_RESTORE | libchrome real y símbolos; anterior PASS |
+| APK_VERIFIED nuevo | PENDING | paquete, ABI, recursos/contenido, firma y SHA256 S4 |
+
+### Checkpoint preferido recuperable
+
+`archium-checkpoint-38203819481-1`, source `2de41680a42972253e8daf4cf818938dacf79a93`. API autenticada inventory exit 0, cuatro grupos no expirados, 26510091404 bytes totales (partes comprimidas: 26510082500), fecha mínima de expiración 2026-10-26T05:26:47Z.
+
+| Grupo | Artifact ID | Bytes | SHA256 artifact |
+|---|---:|---:|---|
+| 00 | 11727898692 | 8589940572 | 29ef26b8c295d1c496418e7bef50d5af21d3ca878845b67850efb477dd4538b0 |
+| 01 | 11728410183 | 8589935970 | 6518b8c5f6a048514dbb12f356ace84d5f5b5b60ee7762be2ffe0459520ed870 |
+| 02 | 11728395785 | 8589935970 | e0b9c43983fa0ded21bf6e7dd9afb0b012b0300def3ca2dd7af3ee8d32ed8d99 |
+| 03 | 11727764299 | 740278892 | d7f8b060cb36ded695571284e858a2bad99f6a205eb2f2186bd92e13e76427f9 |
+
+Manifest obtenido por HTTP Range autenticado, solo 5381 bytes; schema/pin/SHA/tag/workspace y 25 fragmentos validados exit 0. Manifest SHA256 `c9c1ee1436df108c8c3a167bf47980e250ad73123bdf7507eb8c2b476448b02c`. Integridad completa de cada fragmento PENDING_POST_DOWNLOAD, bloqueante S1. Disco local medido 78020317184 bytes / 11623170 inodos, menor que el mínimo 101510091404: **no descarga masiva local**, no eliminación de outputs válidos. CI vuelve a medir capacidad S0 antes de descargar; no reutiliza una medición vieja como garantía de capacidad nueva. Fuentes 38194736077 y anteriores también conservadas.
+
+**Revisión de los fallos repetidos:** los fixes previos avanzaron gates concretos, pero la cobertura dejó diferencias entre host y checkout restaurado, y entre recursos sin optimizar y release. Los tests de routing prueban corte de etapas; no acreditan Java/link/recursos. El porcentaje 2/6 del monitor refleja pasos visibles de Actions, no objetos compilados: en este run los logs demuestran S2/S3 completos y S4 compilado antes del fallo final. No existe garantía de cero fallos desconocidos ni APK verificable todavía. La siguiente ejecución solo procede tras gates baratos verdes, con SHA obtenido directamente de Git, checkpoint compatible reciente y sin otro run activo, conforme a la autorización posterior de corregir/reintentar.
+
 # Archium R4 — reparación y build, 2026-10-11
 
 ## Recuperación relanzada: 38203819481 y monitor sesión #5 (2026-10-12 04:26–04:28 UTC)

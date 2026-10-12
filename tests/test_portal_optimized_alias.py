@@ -1,4 +1,4 @@
-"""Real AAPT2 resource-path optimization must not break the Portal verifier.
+"""Real AAPT2 name collapse and path optimization preserve Portal verification.
 
 This is a resource fixture with a synthetic manifest; Chromium merge is a distinct CI gate.
 """
@@ -16,6 +16,16 @@ sys.path.insert(0, str(ROOT / 'scripts'))
 
 
 class OptimizedAliasTest(unittest.TestCase):
+    def test_pinned_upstream_config_reproduces_missing_themed_alias(self):
+        aapt2 = os.environ.get('ARCHIUM_TEST_AAPT2') or shutil.which('aapt2')
+        android = os.environ.get('ARCHIUM_TEST_ANDROID_JAR')
+        self.assertTrue(aapt2 and android, 'Genuine AAPT2 and Android SDK required')
+        spec = importlib.util.spec_from_file_location('fixture', ROOT / 'scripts/check_portal_aapt2_fixture.py')
+        fixture = importlib.util.module_from_spec(spec); spec.loader.exec_module(fixture)
+        with self.assertRaisesRegex(ValueError, 'missing registered launcher resources: drawable/themed_app_icon'):
+            fixture.run_aapt2_fixture(Path(android), Path(aapt2), optimize=True,
+                                     resource_config=ROOT / '.source-reference/chrome/android/aapt2.config')
+
     def test_real_aapt2_shortened_alias_and_foreign_manifest_rejection(self):
         aapt2 = os.environ.get('ARCHIUM_TEST_AAPT2') or shutil.which('aapt2')
         android = os.environ.get('ARCHIUM_TEST_ANDROID_JAR')

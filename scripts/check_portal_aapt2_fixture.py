@@ -22,7 +22,8 @@ def load(portal_path):
     return module
 
 
-def run_aapt2_fixture(android_jar, aapt2, *, optimize=False, verify_negative=False, chromium_images=False):
+def run_aapt2_fixture(android_jar, aapt2, *, optimize=False, verify_negative=False,
+                     chromium_images=False, resource_config=None):
     here = Path(__file__).resolve().parent
     portal = load(here / "integrate-archium-portal.py")
     source = portal.expected_resources()
@@ -83,10 +84,31 @@ def run_aapt2_fixture(android_jar, aapt2, *, optimize=False, verify_negative=Fal
         run(str(aapt2), "link", "-o", str(apk), "-I", str(android_jar),
             "--manifest", str(manifest), "--auto-add-overlay", *chromium_link_flags,
             str(output))
+        def optimized_archive(original, suffix):
+            # Chromium also collapses drawable names. Its optimizer preserves
+            # mipmap names from R.txt and explicit chrome/android/aapt2.config.
+            # A shortened-path-only probe misses this release transformation.
+            config_source = Path(resource_config) if resource_config else (
+                here.parent / '.source-modified/chrome/android/aapt2.config')
+            if not config_source.is_file():
+                config_source = here.parent / '.source-reference/chrome/android/aapt2.config'
+            config = root / 'aapt2.config'
+            mipmaps = sorted({Path(path).stem for path in source
+                              if '/mipmap-' in path})
+            config.write_text(config_source.read_text() + '\n' + ''.join(
+                f'mipmap/{name}#no_collapse\n' for name in mipmaps))
+            proto = root / f'{suffix}.proto.ap_'
+            run(str(aapt2), 'convert', '--output-format', 'proto', '-o', str(proto), str(original))
+            optimized_proto = root / f'{suffix}.optimized.proto.ap_'
+            run(str(aapt2), 'optimize', '--collapse-resource-names',
+                '--resources-config-path', str(config), '--shorten-resource-paths',
+                '-o', str(optimized_proto), str(proto))
+            optimized = root / f'{suffix}.optimized.apk'
+            run(str(aapt2), 'convert', '--output-format', 'binary',
+                '-o', str(optimized), str(optimized_proto))
+            return optimized
         if optimize:
-            optimized = root / "optimized.apk"
-            run(str(aapt2), "optimize", "--shorten-resource-paths", "-o", str(optimized), str(apk))
-            apk = optimized
+            apk = optimized_archive(apk, 'fixture')
         verifier = load(here / "verify-archium-portal-apk.py")
         result = verifier.inspect(apk, aapt2, "app.archium.android")
         if result["status"] != "PASS":
@@ -97,6 +119,8 @@ def run_aapt2_fixture(android_jar, aapt2, *, optimize=False, verify_negative=Fal
             poisoned = root / 'poisoned.apk'
             run(str(aapt2), "link", "-o", str(poisoned), "-I", str(android_jar),
                 "--manifest", str(manifest), "--auto-add-overlay", *chromium_link_flags, str(output))
+            if optimize:
+                poisoned = optimized_archive(poisoned, 'foreign-manifest')
             try:
                 verifier.inspect(poisoned, aapt2, "app.archium.android")
             except ValueError as error:
@@ -131,6 +155,8 @@ def run_aapt2_fixture(android_jar, aapt2, *, optimize=False, verify_negative=Fal
                     run(str(aapt2), 'link', '-o', str(poisoned_apk), '-I', str(android_jar),
                         '--manifest', str(manifest), '--auto-add-overlay', *chromium_link_flags,
                         str(poisoned_resources))
+                    if optimize:
+                        poisoned_apk = optimized_archive(poisoned_apk, 'vector-' + name)
                     try:
                         verifier.inspect(poisoned_apk, aapt2, 'app.archium.android')
                     except ValueError as error:
