@@ -45,7 +45,8 @@ elif name=='python3' and args and args[0].endswith('archium-ninja-query.py'):
 elif name=='python3' and args and args[0].endswith('check-archium-password-deprecation.py'):
  os.execv('/usr/bin/python3',['python3',os.environ['REAL_DEPRECATION_SCRIPT']]+args[1:])
 elif name=='python3' and args and args[0].endswith('archium-test-gates.py'):
- if args[1]=='host':sys.exit(int(os.environ.get('HOST_EXIT','0')))
+ if args[1] in ('host','host-preflight'):sys.exit(int(os.environ.get('HOST_EXIT','0')))
+ if args[1]=='robolectric':sys.exit(int(os.environ.get('FINAL_ROBO_EXIT','0')))
  if args[1]=='verify-device-runners':sys.exit(int(os.environ.get('DEVICE_RUNNER_EXIT','0')))
 elif name=='python3' and args and args[0].endswith('check-portal-chromium-resources.py'):sys.exit(int(os.environ.get('RESOURCE_EXIT','0')))
 elif name=='python3' and args and args[0].endswith('archium-media-preflight.py'):sys.exit(int(os.environ.get('MEDIA_EXIT','0')))
@@ -125,6 +126,14 @@ class RecoveryBuildRoutingTests(unittest.TestCase):
  def test_reactivated_password_feature_blocks_apk(self):self.assert_blocked(self.build(BAD_PASSWORD_FLAG='1'),1)
  def test_retired_password_dependency_blocks_apk(self):self.assert_blocked(self.build(RETIRED_PASSWORD_DEP='1'),1)
  def test_complete_host_failure_blocks_apk(self):self.assert_blocked(self.build(HOST_EXIT='20'),20)
+ def test_restored_host_failure_happens_before_any_native_compilation(self):
+  self.assert_blocked(self.build(HOST_EXIT='20'),20)
+  self.assertEqual(self.targets(),[],'Full host suite must fail before all native work')
+  self.assertFalse(any('pack' in c for c in self.calls()),
+                   'No native work changed: preserve remote source instead of repacking it')
+ def test_final_robolectric_failure_blocks_apk_after_real_native_gate(self):
+  self.assert_blocked(self.build(FINAL_ROBO_EXIT='24'),24)
+  self.assertTrue(any('libchrome' in c for c in self.targets()))
  def test_failed_signature_blocks_publication(self):
   r=self.build(SIGN_EXIT='21');self.assertEqual(r.returncode,21,r.stdout+r.stderr);self.assertNotIn('complete=true',self.output.read_text())
  def test_first_failure_survives_failed_checkpoint_pack(self):self.assert_blocked(self.build(MEDIA_EXIT='22',PACK_EXIT='23'),22)

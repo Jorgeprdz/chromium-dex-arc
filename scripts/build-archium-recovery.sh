@@ -179,13 +179,20 @@ gate "$host_python" "$GITHUB_WORKSPACE/scripts/check-archium-password-deprecatio
     --out out/Archium --deps "$RUNNER_TEMP/archium-apk-link-deps.txt"
 grep -Fq '//chrome/browser/payments:impl' "$RUNNER_TEMP/archium-apk-link-deps.txt" ||
     die 'Payments owner absent from the real GN graph.'
-compile_slice chrome_public_apk__compile_resources
 android_config=build/config/android/config.gni
 tools_version=$(sed -n 's/^[[:space:]]*public_android_sdk_build_tools_version = "\([^"]*\)"/\1/p' "$android_config" | head -n1)
 platform_version=$(sed -n 's/^[[:space:]]*public_android_sdk_platform_version = "\([^"]*\)"/\1/p' "$android_config" | head -n1)
 [[ -n "$tools_version" && -n "$platform_version" ]] || die 'Pinned SDK version absent.'
 sdk_tools="$PWD/third_party/android_sdk/public/build-tools/$tools_version"
 android_jar="$PWD/third_party/android_sdk/public/platforms/android-$platform_version/android.jar"
+# Validate the complete host suite under the restored PATH/toolchain before native work.
+# A failure here has no new native outputs to save: retain the remote source.
+host_preflight_status=0
+run_work TERM "$host_seconds" false \
+    "$host_python" "$GITHUB_WORKSPACE/scripts/archium-test-gates.py" host-preflight \
+    --out "$PWD/out/Archium" --android-jar "$android_jar" || host_preflight_status=$?
+(( host_preflight_status == 0 )) || exit "$host_preflight_status"
+compile_slice chrome_public_apk__compile_resources
 gate "$host_python" "$GITHUB_WORKSPACE/scripts/check-portal-chromium-resources.py" \
     --out "$PWD/out/Archium" --aapt2 "$sdk_tools/aapt2" --report "$PWD/out/Archium/archium-real-resources.json"
 targets="$PWD/out/Archium/archium-java-targets.txt"
@@ -221,7 +228,7 @@ fi
 printf 'JNI_LINK_PASS=PASS scope=real_APK_libchrome_link_and_symbols\n'
 stage S3
 printf 'PASSWORD_TESTS=DEPRECATED OUT_OF_SCOPE; no native test PASS claimed\n'
-gate "$host_python" "$GITHUB_WORKSPACE/scripts/archium-test-gates.py" host --out "$PWD/out/Archium" --android-jar "$android_jar"
+gate "$host_python" "$GITHUB_WORKSPACE/scripts/archium-test-gates.py" robolectric --out "$PWD/out/Archium" --android-jar "$android_jar"
 stage S4
 compile_slice chrome_public_apk
 apk="$PWD/out/Archium/apks/ChromePublic.apk"

@@ -76,7 +76,7 @@ def resolve_pinned_android_sdk(out_dir: Path) -> tuple[Path, str, str, Path]:
     return sdk_root, platform_dir_name, build_tools_version, android_jar
 
 
-def host_gate(android_jar: Path, out_dir: Path) -> None:
+def host_gate(android_jar: Path, out_dir: Path, *, phase: str = 'all') -> None:
     """Execute every Archium gate that is runnable on the Linux CI host."""
     require_file(android_jar, 'Android platform jar')
     out_dir = out_dir.resolve()
@@ -84,23 +84,33 @@ def host_gate(android_jar: Path, out_dir: Path) -> None:
     require_file(pinned_gn, 'Pinned Chromium GN')
     if not os.access(pinned_gn, os.X_OK):
         raise SystemExit('Pinned Chromium GN is not executable')
+    pinned_ninja = out_dir.parent.parent / 'third_party/ninja/ninja'
+    require_file(pinned_ninja, 'Pinned Chromium Ninja')
+    if not os.access(pinned_ninja, os.X_OK):
+        raise SystemExit('Pinned Chromium Ninja is not executable')
     sdk_root, _, tools_version, _ = resolve_pinned_android_sdk(out_dir)
     host_env = dict(os.environ)
     host_env.update(ARCHIUM_TEST_GN=str(pinned_gn),
+                    ARCHIUM_TEST_NINJA=str(pinned_ninja),
                     ARCHIUM_TEST_AAPT2=str(sdk_root / 'build-tools' / tools_version / 'aapt2'),
                     ARCHIUM_TEST_ANDROID_JAR=str(android_jar))
-    run([str(pinned_gn), '--version'], cwd=ROOT, env=host_env)
-    run([
-        sys.executable,
-        str(ROOT / 'scripts/check-arc-preparation.py'),
-        '--android-jar', str(android_jar),
-    ], cwd=ROOT, env=host_env)
-    run([
-        sys.executable, '-m', 'unittest', 'discover',
-        '-s', str(ROOT / 'tests'), '-p', 'test_*.py',
-    ], cwd=ROOT, env=host_env)
-
-    print('PYTHON_HOST_PASS=PASS GN_REAL_PASS=PASS ROBOLECTRIC_PASS=PENDING_POST_RESTORE JNI_LINK_PASS=UNVERIFIED', flush=True)
+    if phase not in ('all', 'preflight', 'robolectric'):
+        raise ValueError('Unknown host phase')
+    if phase != 'robolectric':
+        run([str(pinned_gn), '--version'], cwd=ROOT, env=host_env)
+        run([str(pinned_ninja), '--version'], cwd=ROOT, env=host_env)
+        run([
+            sys.executable,
+            str(ROOT / 'scripts/check-arc-preparation.py'),
+            '--android-jar', str(android_jar),
+        ], cwd=ROOT, env=host_env)
+        run([
+            sys.executable, '-m', 'unittest', 'discover',
+            '-s', str(ROOT / 'tests'), '-p', 'test_*.py',
+        ], cwd=ROOT, env=host_env)
+        print('PYTHON_HOST_PASS=PASS GN_REAL_PASS=PASS ROBOLECTRIC_PASS=PENDING_POST_RESTORE JNI_LINK_PASS=UNVERIFIED', flush=True)
+        if phase == 'preflight':
+            return
     robolectric_runner = (
         out_dir / 'bin' / 'run_chrome_junit_tests'
     )
@@ -126,7 +136,7 @@ def host_gate(android_jar: Path, out_dir: Path) -> None:
             'org.chromium.chrome.browser.tasks.tab_management.TabListMediatorUnitTest.*',
             'org.chromium.chrome.browser.toolbar.top.ToolbarTabletUnitTest.*'):
         run([str(robolectric_runner), '-f', test_filter], cwd=out_dir.parent.parent, env=jvm_env)
-    print('PYTHON_HOST_PASS=PASS GN_REAL_PASS=PASS ROBOLECTRIC_PASS=PASS scope=Chromium_runner', flush=True)
+    print('ROBOLECTRIC_PASS=PASS scope=Chromium_runner', flush=True)
 
 
 def android_test_runner(out_dir: Path, target: str) -> Path:
@@ -212,9 +222,10 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest='gate', required=True)
 
-    host = sub.add_parser('host')
-    host.add_argument('--android-jar', type=Path, required=True)
-    host.add_argument('--out', type=Path, required=True)
+    for name in ('host', 'host-preflight', 'robolectric'):
+        host = sub.add_parser(name)
+        host.add_argument('--android-jar', type=Path, required=True)
+        host.add_argument('--out', type=Path, required=True)
 
     verify = sub.add_parser('verify-device-runners')
     verify.add_argument('--out', type=Path, required=True)
@@ -229,8 +240,9 @@ def main() -> None:
     post.add_argument('--package', default='app.archium.android')
 
     args = parser.parse_args()
-    if args.gate == 'host':
-        host_gate(args.android_jar, args.out)
+    if args.gate in ('host', 'host-preflight', 'robolectric'):
+        host_gate(args.android_jar, args.out, phase={
+            'host': 'all', 'host-preflight': 'preflight', 'robolectric': 'robolectric'}[args.gate])
     elif args.gate == 'verify-device-runners':
         verify_device_runners(args.out)
     elif args.gate == 'device':

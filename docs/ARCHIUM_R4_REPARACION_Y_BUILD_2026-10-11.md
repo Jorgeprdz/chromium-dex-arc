@@ -1,5 +1,70 @@
 # Archium R4 — reparación y build, 2026-10-11
 
+## Run 38194736077 FAILED: enlace recuperable y entorno Ninja corregido (2026-10-12 04:08–04:24 UTC)
+
+[Run 38194736077](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38194736077), source **3c2d5f689ffc9314806c725699778482795f8231**, terminó FAILED a **04:07:46 UTC**, elapsed **01:57:30**. [Job build 114635793824](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38194736077/job/114635793824). No APK publicada ni instalación. HEAD inicial reparación **6d1be54a571c7f186de88a7ee126e0c8d1cc1193**.
+
+Log final auténtico: `gh api repos/Jorgeprdz/chromium-dex-arc/actions/jobs/114635793824/logs`, exit 0, `/workspace/archium-r4-evidence/run-38194736077-latest-build.log`, SHA256 **173f7c5675d7b8e53fc1c9e7c4f930d9099034627aafdbbb3abc192fee84572f**. Primer fallo reportado línea **37961**, `test_query_failure_stops_fanout_and_requests_quiescent_checkpoint`; línea **37970**, causa concreta: wrapper `third_party/ninja/ninja` de la fixture intentó ejecutar `third_party/ninja/python-bin/python3`, inexistente, **exit 127**. Segunda falla, `test_siso_query_uses_pinned_binary_without_writing_incremental_state`, mismo motivo (37982). Suite host S3 **227 tests, 225 passed / 2 failed / 0 skipped**, **174.938 s**, exit 1; gate real corta etapas posteriores (38005).
+
+**CAUSA_CONFIRMADA:** `archium-test-gates.py` fijaba GN, AAPT2 y Android jar pero omitía `ARCHIUM_TEST_NINJA`. En el checkout restaurado, PATH contiene `depot_tools`; las dos fixtures que ejecutan Bash completo seleccionaron su launcher por `shutil.which('ninja')` y lo enlazaron en un directorio sintético. El launcher calcula `python-bin` relativo a su ruta de invocación, produciendo el error observado. En preflight/local se usaba `/usr/bin/ninja` o una variable explícita al binario real, por eso no apareció antes. SHA `bbbb...` pertenece a la fixture, no al código entregado. No fue un fallo de linker ni un build limpio.
+
+### Avance real conservado
+
+| Gate / trabajo | Estado observado y evidencia |
+|---|---|
+| Restore fuente | PASS, línea 365; download 5m47s, restore/transición 14m44s |
+| Ninja query completo | PASS, 25612 manifests, 2840; fix UTF-8 anterior funciona |
+| Contraseñas propias | DEPRECATED, flag efectivo false y deps ausentes, 2865 |
+| Recursos Portal reales Chromium | PASS, 3044 |
+| Java owners actuales | PASS, 37/37 fuentes y 8 acciones reales, 3045 |
+| Recursos / Java / JUnit | Build Succeeded: 75 / 104 / 731 pasos, 3042/3282/4774 |
+| Robolectric temprano | PASS, nueve grupos, 605 ejecuciones, 37572 |
+| `libchrome` real | Build Succeeded: **137 pasos**, **21m57.14s**, 37877; Siso `skip:131650` |
+| Linker | SOLINK entre 03:04:04 y 03:22:23, **18m17.65s**, 37876; ningún fallo ld.lld |
+| JNI symbols reales de APK | **PASS**, 37878, library real + llvm-nm |
+| Host S3 / Robolectric ampliado / APK | Host FAIL; Robolectric ampliado y APK NOT_EXECUTED |
+| Checkpoint nuevo | staged **25 partes**, 38007; cuatro grupos publicados SUCCESS |
+
+El log parcial obtenido mientras corría terminaba a las 03:00. El log final demuestra que después hubo trabajo efectivo de enlace, no un atasco confirmado. Una parte importante del elapsed tras fallar correspondió a empaquetar y publicar el checkpoint: **03:25:36→03:58:24**, luego uploads hasta **04:05:15**. El tiempo sin APK fue real; los outputs de compilación quedaron guardados.
+
+### Fix mínimo, regresión y detección temprana
+
+`archium-test-gates.py` valida y fija el Ninja genuino del checkout (`third_party/ninja/ninja`), imprime su versión y propaga `ARCHIUM_TEST_NINJA` a toda la suite host. Agrega modos explícitos `host-preflight` y `robolectric`; `host` conserva ambos para compatibilidad. Python/SDK/GN ejecutan antes del primer trabajo nativo, bajo el PATH restaurado; las mismas once suites Robolectric siguen bloqueantes en S3 después de sus outputs. Ningún test crítico se convierte a skip ni se acredita Robolectric por mocks.
+
+Regresión real: el test ejecuta las dos pruebas que fallaron con un launcher en PATH que reproduce el cálculo de `python-bin`; dependencia SDK/Robo se simula explícitamente y no acredita integración Chromium. RED **exit 1**, dos fallas internas con el mismo **127**; GREEN **2/2 outer tests**, exit 0, **7.138 s**, con Ninja CIPD genuino 1.12.1. Logs `ninja-query/host-ninja-{red,green}.log`, SHA256 RED **485db8366c420789aaafaa798df332ee2b93014ce7832bdea7363131dc702b6c**, GREEN **857d59481db99b5a0e9237047b20fa5299d2fa2656803dfdc28541b9a322d250**.
+
+Bash: `host-preflight` se ejecuta antes de `chrome_public_apk__compile_resources`, Java, JUnit y libchrome. Prueba negativa RED **exit 1 / 3.832 s**, mostró cuatro comandos nativos antes del fallo host; tras moverlo GREEN **exit 0 / 2.941 s**, ningún comando nativo. Si ese gate temprano falla sin trabajo nativo nuevo, conserva el checkpoint fuente remoto y no empaqueta otra copia idéntica: regresión RED **exit 1 / 3.070 s**, GREEN **exit 0 / 2.916 s**, ningún pack. El timeout conserva exit 124; no ejecuta APK. Los gates posteriores conservan guardado quiescente y el primer exit code. Regresión adicional: fallo de Robolectric final sigue bloqueando APK tras libchrome.
+
+Suite integral final **230 passed / 0 failed / 0 skipped**, **443.856 s**, **exit 0**, identidad CI real y herramientas GN/Ninja/AAPT2/SDK auténticas. Log `/workspace/archium-r4-evidence/ninja-query/pinned-host-full-ci-env.log`, SHA256 **472406603d4f6bfb8949e4e1e4dca301b0e5a034a2f75cbb8e6fb19d82f9564a**. Durante esa suite se fortaleció la regresión para prohibir repack temprano; esa aserción nueva se ejecutó también separadamente RED/GREEN con los valores anteriores. El resto de la suite ejercitó el Bash actualizado. Comando:
+
+```bash
+GITHUB_ACTIONS=true GITHUB_REPOSITORY=Jorgeprdz/chromium-dex-arc \
+GITHUB_REF_NAME=assistant/archium-r4-recovery GITHUB_REF=refs/heads/assistant/archium-r4-recovery \
+GITHUB_SHA=3c2d5f689ffc9314806c725699778482795f8231 GITHUB_RUN_ID=38194736077 \
+ARCHIUM_TEST_GN=/usr/bin/gn \
+ARCHIUM_TEST_NINJA=/workspace/archium-r4-evidence/ninja-query/pinned-arm64/ninja \
+ARCHIUM_TEST_AAPT2=/opt/android-sdk/build-tools/37.0.0/aapt2 \
+ARCHIUM_TEST_ANDROID_JAR=/opt/android-sdk/platforms/android-36/android.jar \
+python3 -m unittest discover -s tests -p 'test_*.py' -v
+```
+
+Static gates diff-check/Bash/ShellCheck/compileall/actionlint exit 0. Doble generación oficial 102 files, hashes idénticos y **sin cambios**: patch **e757f5723d2f199a658c50039355009af217b118da977c4a34f0a012bc93aa66**, manifest **9f848493ea7e5e1c2a223959fe9f1de9a9d649c109de9d01bb37085b03bdd621**. No cambiaron fuentes Chromium, GN args, toolchain, pin, iconos o la exclusión DEPRECATED de contraseñas. Se puede reutilizar el delta compilado; la siguiente corrida todavía debe comprobar sus gates reales y APK, sin prometer recompilación cero.
+
+### Fuente preferida: checkpoint 38194736077
+
+**archium-checkpoint-38194736077-1**, source **3c2d5f689ffc9314806c725699778482795f8231**. Metadata actual no expirada, expiración **2026-10-26 03:58–04:05 UTC**.
+
+| Grupo | Artifact ID | Bytes | SHA256 artifact |
+|---|---:|---:|---|
+| 00 | 11726002555 | 8589940572 | 07a24b19d409254cd6ebabb07fb12417a9babe0468df7d162873b9c4d0ed3c54 |
+| 01 | 11725893252 | 8589935970 | 7f4bd37269156e6e5ae427fb202598b8a94abff5ec8a1d1929e48f4e78e45562 |
+| 02 | 11725743633 | 8589935970 | e2f00c9975c8bf34e1e08ef4440e85a2117cba8f8fd394986bddacfdd36ca535 |
+| 03 | 11725893432 | 377020333 | 5c7f1f0e7f099130a9d09523d6f5a83f92f3d2b5e58e58fc8d928308dbb463c0 |
+
+Total **26146832845 bytes**. Lectura autenticada HTTP Range solo **5381 bytes**, manifest hash **ed7c5b5a10e62aae873f8864bb3de781e7dbf3935b8cb0840c7987ea925cb4d0**, schema/pin/source/tag/workspace/count **PASS**, exit 0; integridad de cada fragmento **PENDING_POST_DOWNLOAD** bloqueante S1. No descarga masiva local: **78479921152 bytes / 11624247 inodos** observados; umbral **101146832845 bytes**, local FAIL, CI debe medir su disco S0 antes de transferir. Fuente anterior y remoto nuevo no se borran. Ninguna corrida concurrente/en cola antes de publicación; protegido/main mantienen sus SHA.
+
+Estado de esta reparación: host/static/patch PASS; metadata/remoto PASS; integridad completa/restore nuevo/Robolectric ampliado/APK/runtime pendientes. Nueva corrida autorizada por la instrucción posterior de corregir/reintentar; se publicará solo el fix probado y se fijará SHA exacto antes del dispatch.
+
 ## Run nuevo y monitor activo: 38194736077 (2026-10-12 02:10–02:12 UTC)
 
 Publicación verificada, commits y push exit 0:
