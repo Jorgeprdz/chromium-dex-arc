@@ -45,3 +45,15 @@ class JavaPreflightTests(unittest.TestCase):
         self.graph['//chrome:arc__compile_java']['outputs']=['//out/Other/arc.jar']
         with self.assertRaisesRegex(RuntimeError,'outside'):
             loader().resolve(self.graph,self.paths,self.checkout,self.out)
+
+    def test_deprecated_source_absent_from_actions_is_not_delivered_coverage(self):
+        retired='chrome/retired/ArchiumPasswordCsv.java'
+        targets,coverage=loader().resolve(self.graph,self.paths,self.checkout,self.out,[retired])
+        self.assertEqual(set(coverage),set(self.paths))
+        self.assertNotIn(retired,coverage)
+
+    def test_deprecated_source_still_compiled_fails_instead_of_silent_exclusion(self):
+        retired='chrome/retired/ArchiumPasswordCsv.java'
+        self.graph['//chrome:arc__compile_java']['inputs'].append('//'+retired)
+        with self.assertRaisesRegex(RuntimeError,'Deprecated password Java still compiled'):
+            loader().resolve(self.graph,self.paths,self.checkout,self.out,[retired])

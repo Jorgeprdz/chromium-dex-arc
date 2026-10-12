@@ -18,16 +18,22 @@ def gn_path(value, checkout):
     return Path(value).resolve() if Path(value).is_absolute() else (checkout / value).resolve()
 
 
-def resolve(graph, paths, checkout, out):
+def resolve(graph, paths, checkout, out, excluded=()):
     checkout, out = checkout.resolve(), out.resolve()
     wanted = {gn_path('//' + name, checkout): name for name in paths}
+    retired = {gn_path('//' + name, checkout): name for name in excluded}
     coverage = {}
     outputs = set()
     for label, target in graph.items():
         if (target.get('type') != 'action'
                 or not target.get('script', '').endswith('/compile_java.py')):
             continue
-        owned = wanted.keys() & {gn_path(path, checkout) for path in target.get('inputs', [])}
+        inputs = {gn_path(path, checkout) for path in target.get('inputs', [])}
+        present = retired.keys() & inputs
+        if present:
+            raise RuntimeError('Deprecated password Java still compiled: ' +
+                               ', '.join(retired[path] for path in sorted(present)))
+        owned = wanted.keys() & inputs
         if not owned:
             continue
         jars = [path for path in target.get('outputs', []) if path.endswith('.jar')]
@@ -58,14 +64,22 @@ def main():
     checkout = out.parent.parent
     manifest = json.loads((ROOT / 'patches/upstream-files.json').read_text())
     paths = sorted(path for path in manifest['modified'] if path.endswith('.java'))
+    policy = json.loads((ROOT / 'config/archium-deprecated-features.json').read_text())
+    feature = policy['local_password_manager']
+    if feature['status'] != 'DEPRECATED':
+        raise RuntimeError('Password feature deprecation policy changed')
+    excluded = feature['java_sources']
+    paths = [path for path in paths if path not in excluded]
     # Default-toolchain actions match the configured APK/test build. Action inputs
     # contain invoker.source_files in pinned internal_rules.gni:3068.
     result = subprocess.run(['gn', 'desc', str(out), '*', '--format=json',
                              '--default-toolchain'], text=True, capture_output=True,
                             check=True, timeout=180)
-    targets, coverage = resolve(json.loads(result.stdout), paths, checkout, out)
+    targets, coverage = resolve(json.loads(result.stdout), paths, checkout, out, excluded)
     args.targets_file.write_text('\n'.join(targets) + '\n')
     (out / 'archium-java-coverage.json').write_text(json.dumps(coverage, indent=2) + '\n')
+    (out / 'archium-deprecated-java.json').write_text(json.dumps({
+        'status': 'DEPRECATED', 'compiled': False, 'sources': excluded}, indent=2) + '\n')
     print(f'Java preflight coverage: {len(coverage)}/{len(paths)} sources, '
           f'{len(targets)} real javac actions', flush=True)
 

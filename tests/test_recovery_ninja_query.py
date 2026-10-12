@@ -15,6 +15,55 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 class RecoveryNinjaQueryTests(unittest.TestCase):
+    def test_non_utf8_manifests_and_query_output_preserve_exact_bytes(self):
+        ninja = os.environ.get('ARCHIUM_TEST_NINJA') or shutil.which('ninja')
+        self.assertTrue(ninja, 'Genuine Ninja required; no skip')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            out = root / 'out'; out.mkdir()
+            # Ninja accepts byte strings: rejecting these as UTF-8 breaks a valid graph.
+            (out / 'build.ninja').write_bytes(
+                b'# comment: \xc3(\ninclude child.ninja\n'
+                b'build libchrome: phony library\xc3(.so\n')
+            (out / 'child.ninja').write_bytes(b'build library\xc3(.so: phony\n')
+            for name in ('.siso_deps', '.ninja_log', '.ninja_deps'):
+                (out / name).write_bytes(b'original state\n')
+            before = {p.name: (p.read_bytes(), p.stat().st_mtime_ns) for p in out.iterdir()}
+            reference = root / 'reference'; reference.mkdir()
+            for source in out.glob('*.ninja'):
+                shutil.copy2(source, reference / source.name)
+            expected = subprocess.run([ninja, '-C', str(reference), '-t', 'query',
+                'libchrome'], capture_output=True, timeout=120)
+            self.assertEqual(expected.returncode, 0, repr(expected.stderr))
+            self.assertIn(b'library\xc3(.so', expected.stdout)
+            report = root / 'query.txt'
+            result = subprocess.run(['python3', str(ROOT / 'scripts/archium-ninja-query.py'),
+                '--out', str(out), '--ninja', ninja, '--target',
+                'libchrome', '--report', str(report)],
+                capture_output=True, timeout=120)
+            self.assertEqual(result.returncode, 0, repr(result.stderr))
+            self.assertEqual(report.read_bytes(), expected.stdout)
+            self.assertEqual(before, {p.name: (p.read_bytes(), p.stat().st_mtime_ns)
+                                      for p in out.iterdir()})
+
+    def test_non_utf8_ninja_error_still_fails_without_hiding_stderr(self):
+        ninja = os.environ.get('ARCHIUM_TEST_NINJA') or shutil.which('ninja')
+        self.assertTrue(ninja, 'Genuine Ninja required; no skip')
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            out = root / 'out'; out.mkdir()
+            # Missing input manifest remains a real Ninja error with original bytes.
+            (out / 'build.ninja').write_bytes(b'include missing\xc3(.ninja\n')
+            report = root / 'query.txt'
+            result = subprocess.run(['python3', str(ROOT / 'scripts/archium-ninja-query.py'),
+                '--out', str(out), '--ninja', ninja, '--target', 'target',
+                '--report', str(report)], capture_output=True, timeout=120)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn(b'ninja: error:', result.stderr)
+            self.assertIn(b'missing\xc3(.ninja', result.stderr)
+            self.assertNotIn(b'UnicodeDecodeError', result.stderr)
+            self.assertFalse(report.exists())
+
     def fixture(self, include_target=True):
         spec = importlib.util.spec_from_file_location('query_routing_fixture',
             ROOT / 'tests/test_recovery_build_routing.py')
@@ -35,7 +84,7 @@ class RecoveryNinjaQueryTests(unittest.TestCase):
         graph = 'rule forbidden\n  command = touch unexpected-compilation\n'
         graph += 'build library.so: forbidden input.cc\n'
         if include_target:
-            graph += 'build archium_password_manager_tests: phony library.so\n'
+            graph += 'build libchrome: phony library.so\n'
         (out / 'build.ninja').write_text(graph)
         for name in ('.siso_deps', '.ninja_log', '.ninja_deps', 'input.cc'):
             (out / name).write_bytes(b'preserved incremental fixture\n')
@@ -48,7 +97,7 @@ class RecoveryNinjaQueryTests(unittest.TestCase):
         result = case.build('--work', REJECT_SISO_WRAPPER='1')
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         query = (case.root / 'runner/archium-native-query.txt').read_text()
-        self.assertIn('archium_password_manager_tests:', query)
+        self.assertIn('libchrome:', query)
         self.assertIn('library.so', query)
         self.assertEqual(before, {p.name: (p.read_bytes(), p.stat().st_mtime_ns)
                                  for p in out.iterdir() if p.is_file() and p.name in before})
@@ -62,7 +111,7 @@ class RecoveryNinjaQueryTests(unittest.TestCase):
             root = Path(directory)
             (root / '.gn').write_text('buildconfig = "//BUILDCONFIG.gn"\n')
             (root / 'BUILDCONFIG.gn').write_text('set_default_toolchain("//:default")\n')
-            (root / 'BUILD.gn').write_text('toolchain("default") { tool("stamp") { command = "touch {{output}}" } }\ngroup("archium_password_manager_tests") { }\n')
+            (root / 'BUILD.gn').write_text('toolchain("default") { tool("stamp") { command = "touch {{output}}" } }\ngroup("libchrome") { }\n')
             result = subprocess.run([gn, 'gen', 'out'], cwd=root, text=True,
                                     capture_output=True, timeout=120)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
@@ -74,10 +123,10 @@ class RecoveryNinjaQueryTests(unittest.TestCase):
             report = root / 'query.txt'
             result = subprocess.run(['python3', str(ROOT / 'scripts/archium-ninja-query.py'),
                 '--out', str(out), '--ninja', ninja,
-                '--target', 'archium_password_manager_tests', '--report', str(report)],
+                '--target', 'libchrome', '--report', str(report)],
                 text=True, capture_output=True, timeout=120)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
-            self.assertIn('archium_password_manager_tests:', report.read_text())
+            self.assertIn('libchrome:', report.read_text())
             self.assertEqual(before, [(p.read_bytes(), p.stat().st_mtime_ns) for p in states])
 
     def test_manifest_cannot_redirect_logs_or_includes_outside_snapshot(self):
@@ -104,5 +153,6 @@ class RecoveryNinjaQueryTests(unittest.TestCase):
         case.assert_blocked(result, 1)
         self.assertIn('unknown target', result.stderr)
         self.assertTrue(any('pack' in call for call in case.calls()))
+        self.assertEqual(case.targets(), [], 'Query must fail before any native compilation')
         self.assertFalse(any('archium_key_provider_tests' in call for call in case.targets()))
         self.assertFalse((out / 'unexpected-compilation').exists())

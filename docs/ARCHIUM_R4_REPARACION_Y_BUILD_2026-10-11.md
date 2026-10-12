@@ -1,5 +1,70 @@
 # Archium R4 — reparación y build, 2026-10-11
 
+## Fallo 38186699186 y retirada de contraseñas propias (2026-10-12)
+
+Run [38186699186](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38186699186), source `d69a14e7e698c4dc125cada4b4f490c177fb3069`, FAILED. Authorize y preflight SUCCESS. [Job 114611828079](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38186699186/job/114611828079), primera falla auténtica línea **36867**: `NINJA_QUERY=FAIL: 'utf-8' codec can't decode byte 0xc3 in position 1253: invalid continuation byte`; gate exit **1**, etapas posteriores bloqueadas. El enlace/compilación anterior terminó `Build Succeeded: 12 steps` en línea 36866. Recursos reales Chromium PASS (2998); nueve suites tempranas de Robolectric PASS (36814, 605 ejecuciones agregadas); JNI `llvm-nm`, S3 y APK NO EJECUTADOS. No se acredita la entrega como exitosa.
+
+Log descargado por `gh api repos/Jorgeprdz/chromium-dex-arc/actions/jobs/114611828079/logs`, exit 0, SHA256 `f1402c0d434565e9c0942ccdc210d727f873fc78cf7b96d9f1fecbbae724a7d6`; archivo local `/workspace/archium-r4-evidence/run-38186699186-build.log`.
+
+**CAUSA_CONFIRMADA:** el helper nuevo imponía UTF-8 tanto al leer manifiestos (`read_text`) como al capturar stdout/stderr (`text=True`). Una fixture válida con byte `c3 28` falla exactamente con el mismo diagnóstico, mientras el Ninja genuino fijado acepta el grafo. El log CI no incluye traceback/nombre de archivo: el manifiesto específico y la llamada exacta que disparó la excepción quedan **NO_VERIFICABLE**, sin inventarlos. Esta diferencia no impide reproducir el defecto de la interpretación UTF-8.
+
+Regresión RED: seis tests, dos FAIL, exit 1, 13.675 s (`ninja-query/utf8-red.log`). Después se agregó el requisito de consultar antes de toda compilación: tres FAIL, exit 1, 14.051 s (`utf8-early-red.log`). Fix: parsear únicamente directivas ASCII sobre bytes, `os.fsdecode` para comprobar rutas preservando los bytes, subprocess binario y reporte binario idéntico a stdout real; stderr completo conserva bytes y exit code. No usar `ignore`/`replace`, no limpiar logs ni alterar outputs restaurados. Se adelantó la consulta al inicio S2, antes de fanout/Robolectric. GREEN inicial: **6/6**, exit 0, 7.255 s (`utf8-green.log`), Ninja CIPD 1.12.1 real y GN real; incluye error real en include inexistente, target inexistente, rechazo de escapes y preservación exacta de bytes/mtime.
+
+### Cambio de alcance explícito: DEPRECATED
+
+Durante esta reparación el usuario corrigió el alcance: «solo contraseñas» y «ya queda deprecated». Se registró en [ARCHIUM_CONTRASENAS_DEPRECATED.md](ARCHIUM_CONTRASENAS_DEPRECATED.md), spec y plan. Sustituye el requisito anterior de habilitar el gestor propio y sus targets nativos. No es un skip ni test retirado acreditado como PASS.
+
+Cambios acotados: `config/archium-args.gn` flag false; Java/JNI/CSV y puente nativo propios solo se incorporan cuando el flag true (actualmente prohibido por gate); settings usa las rutas originales Chromium; Arc abre autofill estándar. Se conservan fuentes y pruebas históricas. El workflow exige el flag efectivo false y ausencia de los targets propios en dependencias reales de APK; Java preflight separa cinco fuentes explícitamente DEPRECATED y falla si cualquier acción javac aún las compila. Se reemplazan gates nativos propios por `//chrome/android:libchrome`, target real usado por el template upstream de `chrome_public_apk`; payments owner y comprobación de símbolos continúan bloqueantes. No se desactiva pagos, ni se ocultan undefined symbols. UI Arc, colores, DeX, iconos y pin no cambian.
+
+RED de exclusión: GN genuino arm64/x64 mostraba flag true y routing todavía compilaba targets propios (3 fallas, además del gate aún no implementado). Después del cambio, **3/3** pruebas de deprecación pasan (6.956 s, exit 0); **6/6** pruebas de selección Java pasan (0.082 s, exit 0), incluidas ausencia de cobertura ficticia y rechazo de fuente retirada aún compilada. Un primer intento local de routing encontró seis fallas por un nombre incorrecto de la biblioteca en la fixture; se corrigió esa fixture. Dos ejecuciones parciales compartieron por error el mismo archivo de log; ese archivo **NO se usa como evidencia final**. La suite integral final usa un log independiente.
+
+### Checkpoint más reciente conservado
+
+El guardado tras falla sí se ejecutó: línea 36870 `ACTIONS_CHECKPOINT_STAGED=PASS parts=24`; uploads 00/01/02 SUCCESS. Fuente preferida próxima: **archium-checkpoint-38186699186-1**, source **d69a14e7e698c4dc125cada4b4f490c177fb3069**.
+
+| Grupo | Artifact ID | Bytes | SHA256 artifact |
+|---|---:|---:|---|
+| 00 | 11720954154 | 8589940404 | 75667b6ba242b835212024282011e40ebb0c430741cef2e12a9cb23ee205c03d |
+| 01 | 11721956194 | 8589935970 | 78ace732e1c3fbf92d4e1eee1959f29dff97f152a13bcfd670059310f80b8acf |
+| 02 | 11722036029 | 8431166172 | 36387a47251ba0d10673df8803247ee401a705fcfb348ebff444d0e9885aa40e |
+
+Metadata API observada: tres grupos, no expirados, expiración **2026-10-26 01:28–01:30 UTC**. Total **25611042546 bytes**. Lectura remota autenticada HTTP Range de solo **5213 bytes**, manifest hash **42dc50aa458bedaacf72cc75f4476feb6ab3e90f8646546429fef32846c640fd**; schema/tag/source/pin/workspace/count validados con el mecanismo oficial, exit 0. Integridad de cada fragmento **PENDING_POST_DOWNLOAD**, bloqueante S1. No se descargaron 25 GB localmente: disco local observado **79619993600 bytes**, **11630340 inodos**, FAIL para descarga masiva (requiere **100611042546 bytes**). El runner CI mide su propio disco en S0 antes de transferir; no se bajó ningún umbral. Cambiar el flag requiere GN gen y recompilar delta; no clean fallback y remoto íntegro preservado.
+
+Static gates (`gn format --dump-tree=json` en ambos BUILD editados, Bash/ShellCheck, compileall, actionlint, diff-check), exit 0. Generador oficial dos veces, 102 files, SHA idénticos: patch **e757f5723d2f199a658c50039355009af217b118da977c4a34f0a012bc93aa66**, manifest **9f848493ea7e5e1c2a223959fe9f1de9a9d649c109de9d01bb37085b03bdd621**. `check-arc-preparation.py --android-jar /opt/android-sdk/platforms/android-36/android.jar`, exit 0; API/stubs y pruebas históricas NO acreditan Robolectric/JNI/contraseñas de APK. Monitor: 4 pruebas fases + 3 pruebas primer fallo/caché, exit 0.
+
+Suite host integral final: **227 passed / 0 failed / 0 skipped**, **574.606 s**, exit **0**. Log independiente `/workspace/archium-r4-evidence/ninja-query/deprecated-full-host-ci-env.log`, SHA256 **3e2ece22cd7ca1d79ea270429c09ad08d063c674ad24477a7c8a13f0528f828b**. Comando real:
+
+```bash
+GITHUB_ACTIONS=true GITHUB_REPOSITORY=Jorgeprdz/chromium-dex-arc \
+GITHUB_REF_NAME=assistant/archium-r4-recovery \
+GITHUB_REF=refs/heads/assistant/archium-r4-recovery \
+GITHUB_SHA=d69a14e7e698c4dc125cada4b4f490c177fb3069 GITHUB_RUN_ID=38186699186 \
+ARCHIUM_TEST_GN=/usr/bin/gn \
+ARCHIUM_TEST_NINJA=/workspace/archium-r4-evidence/ninja-query/pinned-arm64/ninja \
+ARCHIUM_TEST_AAPT2=/opt/android-sdk/build-tools/37.0.0/aapt2 \
+ARCHIUM_TEST_ANDROID_JAR=/opt/android-sdk/platforms/android-36/android.jar \
+python3 -m unittest discover -s tests -p 'test_*.py' -v
+```
+
+| Gate nuevo | Estado | Alcance real / prueba pendiente |
+|---|---|---|
+| STATIC_PASS | PASS | GN parser de ambos BUILD, Bash/ShellCheck, compileall, actionlint, diff-check |
+| PYTHON_HOST_PASS | PASS | 227/227 sin skips; fronteras de routing explícitamente simuladas |
+| GN_REAL_PASS media | PASS | Tres perfiles genuinos con contexto acotado, no GN completo Chromium |
+| Contraseñas DEPRECATED | LOCAL_PASS / PENDING_CI_GRAPH | GN arm64/x64 flag false; APK deps y javac owners completos bloqueantes S2 |
+| Ninja query UTF-8 | PASS_ACOTADO / PENDING_CI_GRAPH | Bytes y stderr reales Ninja, logs/mtime preservados; grafo completo tras restore |
+| Patch reproducible | PASS | Generación oficial doble, aplicación/hash en check-arc-preparation |
+| AAPT2_REAL_RESOURCES nuevo SHA | PENDING_POST_RESTORE | Fixtures reales PASS; merge Chromium nuevo SHA aún no ejecutado |
+| ROBOLECTRIC_PASS nuevo SHA | PENDING_POST_RESTORE | Suite Chromium ejecutará en S2/S3; 605 anteriores solo acreditan source d69 |
+| JNI_LINK_PASS nuevo SHA | PENDING_POST_RESTORE | Enlace real libchrome + llvm-nm antes de APK, sin ejecutar aún |
+| Checkpoint metadata/read/manifest | PASS | Tres grupos y lectura autenticada acotada; SHA256 partes bloqueante S1 |
+| DISK_PREFLIGHT | LOCAL_FAIL / CI_PENDING_S0 | No descarga masiva local; CI medirá bytes/inodos antes de descargar |
+| APK_VERIFIED / runtime | NOT_EXECUTED | Ninguna APK nueva, no instalación |
+
+Preflight histórico run 38186699186: **220/220 en 200.403 s**, job114610468261 SUCCESS, log SHA256 **b9787937de0b235ad6fb0bd58c16008688f0f69b6372372c2c6cd686e2cf1a15**. Nueva fuente tiene los outputs realmente compilados, pero cambio de flag obliga a GN gen/recompile delta. Autorización posterior vigente: corregir y relanzar tras los gates sin otra pregunta. Ninguna corrida activa/en cola observada antes de publicación; protegido `51e5ed429661727156ab2534caac99a82ee9264b` y main `6274c653bbe3992403a89b1531d0c1f91646bf6d` sin cambios.
+
+Referencia upstream leída de la revisión fijada: `chrome/android/BUILD.gn:3399` declara `libchrome`; [chrome_public_apk_tmpl.gni](https://chromium.googlesource.com/chromium/src/+/cfd94726b7b5fb48aedcc32662f2f3fbdbadec35/chrome/android/chrome_public_apk_tmpl.gni) usa esa biblioteca y su registro JNI (558–561). `chrome_common_shared_library.gni` y `third_party/jni_zero/jni_zero.gni` se descargaron acotadamente del mismo pin para confirmar que se mantiene el target JNI genuino, no un ejecutable inventado. Los gates sobre checkout completo nuevo y su APK siguen pendientes CI.
+
 ## Nuevo run observado: 38186699186 (2026-10-12 00:05:37 UTC)
 
 Fix publicado: [d69a14e7e698c4dc125cada4b4f490c177fb3069](https://github.com/Jorgeprdz/chromium-dex-arc/commit/d69a14e7e698c4dc125cada4b4f490c177fb3069), `fix(build): isolate Ninja query from Siso output state`. Commit y push exit 0; comparación remota anterior `a92735a7a7d8db1808d9d43a39f20389617b02a9`, sin cambios concurrentes. Suite host actual 220/220 exit 0, cuatro regresiones de query con GN/Ninja genuinos y tres regresiones del monitor PASS. Ningún cambio Java/GN/iconos/pin/patch. Ramas protegida y main conservan sus SHA anteriores.

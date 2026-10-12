@@ -115,10 +115,11 @@ source_set("backend") {
 }
 
 android_library("java") {
-  deps = [ ":archium_password_csv_java" ]
+  deps = []
   if (enable_archium_local_passwords) {
     deps += [
       ":archium_key_java",
+      ":archium_password_csv_java",
     ]
   }
   deps += [
@@ -189,14 +190,18 @@ android_library("java") {
     "java/src/org/chromium/chrome/browser/password_manager/PasswordSettingsUpdaterReceiverBridge.java",
     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreAndroidBackendDispatcherBridgeImpl.java",
     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreAndroidBackendReceiverBridgeImpl.java",
-    "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordManagerBridge.java",
-    "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordSettingsFragment.java",
     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreBridge.java",
     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreCredential.java",
     "java/src/org/chromium/chrome/browser/password_manager/PasswordSyncControllerDelegateBridgeImpl.java",
     "java/src/org/chromium/chrome/browser/password_manager/settings/PasswordsPreference.java",
   ]
 
+  if (enable_archium_local_passwords) {
+    sources += [
+      "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordManagerBridge.java",
+      "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordSettingsFragment.java",
+    ]
+  }
   resources_package = "org.chromium.chrome.browser.password_manager"
 }
 
@@ -214,11 +219,13 @@ generate_jni("jni_headers") {
     "java/src/org/chromium/chrome/browser/password_manager/PasswordSettingsUpdaterReceiverBridge.java",
     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreAndroidBackendDispatcherBridgeImpl.java",
     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreAndroidBackendReceiverBridgeImpl.java",
-    "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordManagerBridge.java",
     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreBridge.java",
     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreCredential.java",
     "java/src/org/chromium/chrome/browser/password_manager/PasswordSyncControllerDelegateBridgeImpl.java",
   ]
+  if (enable_archium_local_passwords) {
+    sources += [ "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordManagerBridge.java" ]
+  }
 }
 
 android_library("utils_java") {
@@ -815,8 +822,9 @@ if (enable_archium_local_passwords) {
   }
 }
 
-# Pure transport is also compiled with the local store flag off; its UI route is
-# guarded by the native capability and never substitutes for Google's manager.
-android_library("archium_password_csv_java") {
-  sources = [ "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordCsv.java" ]
+# DEPRECATED: retain historical code, exclude its transport from current builds.
+if (enable_archium_local_passwords) {
+  android_library("archium_password_csv_java") {
+    sources = [ "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordCsv.java" ]
+  }
 }

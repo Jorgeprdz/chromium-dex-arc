@@ -73,8 +73,6 @@ import org.chromium.chrome.browser.app.tabwindow.TabWindowManagerSingleton;
 import org.chromium.chrome.browser.back_press.BackPressManager;
 import org.chromium.chrome.browser.arc.ArcDesktopCoordinator;
 import org.chromium.chrome.browser.arc.ArcDesktopWindowObserver;
-import org.chromium.chrome.browser.password_manager.ArchiumPasswordManagerBridge;
-import org.chromium.chrome.browser.password_manager.ArchiumPasswordSettingsFragment;
 import org.chromium.chrome.browser.autofill.settings.options.AutofillOptionsFragment;
 import org.chromium.chrome.browser.settings.SettingsNavigationFactory;
 import org.chromium.chrome.browser.tab.TabLaunchType;
@@ -2571,15 +2569,10 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
                     () -> mBookmarkManagerOpenerSupplier.asNonNull().get().showBookmarkManager(
                             mActivity, mActivityTabProvider.get(), currentlySelectedProfile),
                     () -> {
-                        if (ArchiumPasswordManagerBridge.isLocalEnabled()) {
-                            SettingsNavigationFactory.createSettingsNavigation().startSettings(
-                                    mActivity, ArchiumPasswordSettingsFragment.class);
-                        } else {
-                            SettingsNavigationFactory.createSettingsNavigation().startSettings(
-                                    mActivity, AutofillOptionsFragment.class);
-                        }
+                        SettingsNavigationFactory.createSettingsNavigation().startSettings(
+                                mActivity, AutofillOptionsFragment.class);
                     },
-                    ArchiumPasswordManagerBridge.isLocalEnabled(),
+                    false, // Own password manager is DEPRECATED; retain standard autofill.
                     mIncognitoStateProvider,
                     verticalTabListCoordinator,
                     mCompositorViewHolderSupplier.asNonNull().get(),

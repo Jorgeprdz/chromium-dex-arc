@@ -164,12 +164,20 @@ stage S2
 ninja_query="$PWD/third_party/ninja/ninja"
 [[ -x "$ninja_query" ]] || die 'Pinned Ninja query tool absent.'
 gate "$ninja_query" --version
+# Validate the generated graph before spending a slice on compilation/tests.
+# Query copied manifests only: depot_tools rejects Siso here, and raw Ninja
+# can repair logs even for `-t query`. The restored output must stay untouched.
+gate "$host_python" "$GITHUB_WORKSPACE/scripts/archium-ninja-query.py" \
+    --out "$PWD/out/Archium" --ninja "$ninja_query" \
+    --target libchrome --report "$RUNNER_TEMP/archium-native-query.txt"
 gate python3 "$GITHUB_WORKSPACE/scripts/archium-media-preflight.py" \
     --out "$PWD/out/Archium" --report "$PWD/out/Archium/archium-media-config.json"
-gate gn check out/Archium //chrome/browser/password_manager/android:archium_password_manager_tests
-gn desc out/Archium //chrome/browser/password_manager/android:archium_password_manager_tests deps --all \
-    > "$RUNNER_TEMP/archium-password-link-deps.txt"
-grep -Fq '//chrome/browser/payments:impl' "$RUNNER_TEMP/archium-password-link-deps.txt" ||
+gate gn check out/Archium //chrome/android:chrome_public_apk
+gate gn desc out/Archium //chrome/android:chrome_public_apk deps --all \
+    > "$RUNNER_TEMP/archium-apk-link-deps.txt"
+gate "$host_python" "$GITHUB_WORKSPACE/scripts/check-archium-password-deprecation.py" \
+    --out out/Archium --deps "$RUNNER_TEMP/archium-apk-link-deps.txt"
+grep -Fq '//chrome/browser/payments:impl' "$RUNNER_TEMP/archium-apk-link-deps.txt" ||
     die 'Payments owner absent from the real GN graph.'
 compile_slice chrome_public_apk__compile_resources
 android_config=build/config/android/config.gni
@@ -202,24 +210,17 @@ for suite in \
     gate env JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:-} -ea" "$runner" -f "$suite"
 done
 printf 'ROBOLECTRIC_PASS=PASS scope=early_Chromium_suites\n'
-compile_slice archium_password_manager_tests archium_login_database_tests
-# Query copied manifests only: depot_tools rejects Siso here, and raw Ninja
-# can repair logs even for `-t query`. The restored output must stay untouched.
-gate "$host_python" "$GITHUB_WORKSPACE/scripts/archium-ninja-query.py" \
-    --out "$PWD/out/Archium" --ninja "$ninja_query" \
-    --target archium_password_manager_tests --report "$RUNNER_TEMP/archium-native-query.txt"
+compile_slice libchrome
 nm="$PWD/third_party/llvm-build/Release+Asserts/bin/llvm-nm"
-[[ -x "$nm" && -s out/Archium/lib.unstripped/libarchium_password_manager_tests__library.so ]] ||
+[[ -x "$nm" && -s out/Archium/lib.unstripped/libchrome.so ]] ||
     die 'Real native library or symbol tool absent.'
-"$nm" -C out/Archium/lib.unstripped/libarchium_password_manager_tests__library.so > "$RUNNER_TEMP/archium-native-symbols.txt"
+"$nm" -C out/Archium/lib.unstripped/libchrome.so > "$RUNNER_TEMP/archium-native-symbols.txt"
 if grep -E '(^|[[:space:]])U[[:space:]].*(WebPaymentsObserver|ServiceWorkerPaymentAppBridge)' "$RUNNER_TEMP/archium-native-symbols.txt"; then
     die 'Unresolved payment JNI symbols.'
 fi
-printf 'JNI_LINK_PASS=PASS scope=real_link_and_symbols\n'
+printf 'JNI_LINK_PASS=PASS scope=real_APK_libchrome_link_and_symbols\n'
 stage S3
-compile_slice archium_key_provider_tests archium_key_java archium_password_import_tests \
-    archium_password_csv_java chrome_junit_tests chrome/browser/password_manager:unit_tests
-gate python3 "$GITHUB_WORKSPACE/scripts/archium-test-gates.py" verify-device-runners --out "$PWD/out/Archium"
+printf 'PASSWORD_TESTS=DEPRECATED OUT_OF_SCOPE; no native test PASS claimed\n'
 gate "$host_python" "$GITHUB_WORKSPACE/scripts/archium-test-gates.py" host --out "$PWD/out/Archium" --android-jar "$android_jar"
 stage S4
 compile_slice chrome_public_apk
@@ -247,6 +248,7 @@ Path(sys.argv[1]).write_text(json.dumps({
     'source_sha': os.environ['GITHUB_SHA'],
     'chromium_pin': 'cfd94726b7b5fb48aedcc32662f2f3fbdbadec35',
     'APK_VERIFIED': 'PASS', 'ROBOLECTRIC_PASS': 'PASS', 'JNI_LINK_PASS': 'PASS',
+    'ARCHIUM_PASSWORD_FEATURE': 'DEPRECATED', 'ARCHIUM_PASSWORD_TESTS': 'OUT_OF_SCOPE',
     'ANDROID_RUNTIME': 'NOT_EXECUTED'}, indent=2) + '\n')
 PY
 printf 'APK_VERIFIED=PASS\ncomplete=true\n' >> "$GITHUB_OUTPUT"

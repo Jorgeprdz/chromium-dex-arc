@@ -1,5 +1,12 @@
 # Archium R4 Recovery Implementation Plan
 
+Actualización 2026-10-12, autorizada por el usuario: contraseñas propias
+**DEPRECATED** (`docs/ARCHIUM_CONTRASENAS_DEPRECATED.md`). Desactivar el argumento,
+excluir owners propios Java/JNI/CSV del grafo, restaurar rutas estándar de settings,
+reemplazar gates nativos retirados por el enlace real de `chrome/android:libchrome`
+y comprobar flag/dependencias reales antes del fanout. No acreditar tests retirados
+como PASS. Conservar fuentes, tests históricos y checkpoints.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Rehacer los cambios posteriores al respaldo en una nueva rama, preservando Archium y eliminando el flujo de CI acumulado.

@@ -804,16 +804,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSe
  import org.chromium.chrome.browser.appearance.settings.AppearanceSettingsFragment;
  import org.chromium.chrome.browser.autofill.settings.SettingsNavigationHelper;
  import org.chromium.chrome.browser.autofill.settings.options.AutofillOptionsFragment;
-@@ -46,6 +49,8 @@
- import org.chromium.chrome.browser.flags.ChromeFeatureList;
- import org.chromium.chrome.browser.glic.GlicEnabling;
- import org.chromium.chrome.browser.homepage.HomepageManager;
-+import org.chromium.chrome.browser.password_manager.ArchiumPasswordManagerBridge;
-+import org.chromium.chrome.browser.password_manager.ArchiumPasswordSettingsFragment;
- import org.chromium.chrome.browser.password_manager.ManagePasswordsReferrer;
- import org.chromium.chrome.browser.password_manager.PasswordExportLauncher;
- import org.chromium.chrome.browser.password_manager.PasswordManagerHelper;
-@@ -130,6 +135,9 @@
+@@ -130,6 +133,9 @@
      public static final String PREF_AUTOFILL_PAYMENTS = "autofill_payment_methods";
      public static final String PREF_SAFETY_HUB = "safety_hub";
      public static final String PREF_ADDRESS_BAR = "address_bar";
@@ -823,7 +814,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSe
      public static final String PREF_APPEARANCE = "appearance";
      public static final String PREF_DEFAULT_BROWSER = "default_browser";
      public static final String PREF_GLIC = "glic";
-@@ -256,6 +264,10 @@
+@@ -256,6 +262,10 @@
 
      @Override
      public void onDestroy() {
@@ -834,7 +825,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSe
          super.onDestroy();
          setMultiColumnSettings(null, null);
          mCallbackController.destroy();
-@@ -370,6 +382,20 @@
+@@ -370,6 +380,20 @@
          mManagedPreferenceDelegate = createManagedPreferenceDelegate();
 
          SettingsUtils.addPreferencesFromResource(this, R.xml.main_preferences);
@@ -855,7 +846,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSe
 
          IdentityManager identityManager =
                  IdentityServicesProvider.get().getIdentityManager(getProfile());
-@@ -603,6 +629,7 @@
+@@ -603,6 +627,7 @@
          updateAutofillPreferences();
          updateAddressBarPreference();
          updateAppearancePreference();
@@ -863,96 +854,28 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSe
          addPreferenceIfAbsent(PREF_TABS);
 
          updateHomepagePreference();
-@@ -681,7 +708,13 @@
-     }
-
-     private void updateAutofillPreferences() {
--        if (ChromeFeatureList.isEnabled(ChromeFeatureList.YOUR_SAVED_INFO_SETTINGS_PAGE_ANDROID)) {
-+        if (ArchiumPasswordManagerBridge.isLocalEnabled()) {
-+            // Archium's local vault is an in-Chrome settings surface. Keep the dedicated
-+            // password row visible even if upstream would replace it with the combined page.
-+            removePreferenceIfPresent(PREF_AUTOFILL_AND_PASSWORDS);
-+            updateAutofillPreferencesPreAutofillAndPasswords();
-+        } else if (ChromeFeatureList.isEnabled(
-+                ChromeFeatureList.YOUR_SAVED_INFO_SETTINGS_PAGE_ANDROID)) {
-             updateAutofillAndPasswords();
-         } else {
-             removePreferenceIfPresent(PREF_AUTOFILL_AND_PASSWORDS);
-@@ -738,13 +771,23 @@
-         passwordsPreference.setProfile(getProfile());
-         passwordsPreference.setOnPreferenceClickListener(
-                 preference -> {
--                    onExternalActivityPreferenceClicked(preference);
--                    showPasswordSettings(
--                            getActivity(),
--                            getProfile(),
--                            mModalDialogManagerSupplier.asNonNull().get());
-+                    if (ArchiumPasswordManagerBridge.isLocalEnabled()) {
-+                        onPreferenceSelected(preference);
-+                        openArchiumPasswordSettings(getActivity());
-+                    } else {
-+                        onExternalActivityPreferenceClicked(preference);
-+                        showPasswordSettings(
-+                                getActivity(),
-+                                getProfile(),
-+                                mModalDialogManagerSupplier.asNonNull().get());
-+                    }
-                     return true;
-                 });
-+    }
-+
-+    private static void openArchiumPasswordSettings(Context context) {
-+        SettingsNavigationFactory.createSettingsNavigation(context)
-+                .startSettings(context, ArchiumPasswordSettingsFragment.class);
-     }
-
-     private static void openAutofillOptions(Context context) {
-@@ -790,6 +833,10 @@
-             ModalDialogManager modalDialogManager,
-             boolean shownInTab) {
-         if (key.equals(PREF_PASSWORDS)) {
-+            if (ArchiumPasswordManagerBridge.isLocalEnabled()) {
-+                openArchiumPasswordSettings(context);
-+                return true;
-+            }
-             MainSettings.showPasswordSettings(context, profile, modalDialogManager);
-             // Open an external activity. Keep the state as is.
-             return false;
-@@ -812,6 +859,10 @@
-
-     private static void showPasswordSettings(
-             Context context, Profile profile, ModalDialogManager modalDialogManager) {
-+        if (ArchiumPasswordManagerBridge.isLocalEnabled()) {
-+            openArchiumPasswordSettings(context);
-+            return;
-+        }
-         PasswordManagerLauncher.showPasswordSettings(
-                 context,
-                 profile,
-@@ -851,6 +902,12 @@
-         return !DeviceInfo.isAutomotive()
-                 && (DeviceInfo.isFoldable()
+@@ -853,6 +878,12 @@
                          || !DeviceFormFactor.isNonMultiDisplayContextOnTablet(context));
-+    }
-+
+     }
+
 +    private void updateArcAppearancePreference() {
 +        Preference pref = findPreference(PREF_ARC_INTERFACE);
 +        pref.setSummary(ArcAppearanceDialog.labelForMode(
 +                ArcDesktopAppearance.getUiMode(requireContext())));
-     }
-
++    }
++
      private void updateAppearancePreference() {
+         Preference pref = findPreference(PREF_APPEARANCE);
+         pref.setTitle(AppearanceSettingsFragment.getTitle(getContext()));
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java
 --- a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java
-@@ -71,6 +71,14 @@
+@@ -71,6 +71,12 @@
  import org.chromium.chrome.browser.ai_overlay_dialog.AiOverlayDialogBridge;
  import org.chromium.chrome.browser.app.tabwindow.TabWindowManagerSingleton;
  import org.chromium.chrome.browser.back_press.BackPressManager;
 +import org.chromium.chrome.browser.arc.ArcDesktopCoordinator;
 +import org.chromium.chrome.browser.arc.ArcDesktopWindowObserver;
-+import org.chromium.chrome.browser.password_manager.ArchiumPasswordManagerBridge;
-+import org.chromium.chrome.browser.password_manager.ArchiumPasswordSettingsFragment;
 +import org.chromium.chrome.browser.autofill.settings.options.AutofillOptionsFragment;
 +import org.chromium.chrome.browser.settings.SettingsNavigationFactory;
 +import org.chromium.chrome.browser.tab.TabLaunchType;
@@ -960,7 +883,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
  import org.chromium.chrome.browser.bookmarks.BookmarkManagerOpener;
  import org.chromium.chrome.browser.bookmarks.BookmarkManagerOpenerImpl;
  import org.chromium.chrome.browser.bookmarks.BookmarkModel;
-@@ -391,6 +399,11 @@
+@@ -391,6 +397,11 @@
      private final DataSharingTabManager mDataSharingTabManager;
      private final Supplier<Boolean> mCanAnimateBrowserControls;
      protected @Nullable InstantMessageDelegateImpl mInstantMessageDelegateImpl;
@@ -972,7 +895,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
      private @Nullable BookmarkBarCoordinator mBookmarkBarCoordinator;
      private @Nullable BookmarkBarIphController mBookmarkBarIphController;
      private @Nullable BookmarkBarVisibilityProvider mBookmarkBarVisibilityProvider;
-@@ -507,13 +520,13 @@
+@@ -507,13 +518,13 @@
 
      private static class BottomSheetContainerMarginAdjusterForSideUi
              extends ViewMarginAdjusterForSideUi implements LayoutStateProvider.LayoutStateObserver {
@@ -989,7 +912,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
          }
 
          @Override
-@@ -539,9 +552,9 @@
+@@ -539,9 +550,9 @@
          public void onStartedHiding(@LayoutType int layoutType) {
              if (layoutType == LayoutType.HUB) {
                  mIsInHub = false;
@@ -1002,7 +925,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
                  }
              }
          }
-@@ -883,11 +896,20 @@
+@@ -883,11 +894,20 @@
              Log.w(TAG, "Error getting application info", e);
              mApplicationLabel = mActivity.getResources().getString(R.string.app_name);
          }
@@ -1023,7 +946,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
          if (mVerticalTabsPreferenceListener != null) {
              ContextUtils.getAppSharedPreferences()
                      .unregisterOnSharedPreferenceChangeListener(mVerticalTabsPreferenceListener);
-@@ -1977,6 +1999,38 @@
+@@ -1977,6 +1997,38 @@
          return mGlicPromoCoordinator != null;
      }
 
@@ -1062,7 +985,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
      private void updateTopControlsHeight() {
          updateTopControlsHeight(/* allowAnimations= */ true);
      }
-@@ -2473,34 +2527,75 @@
+@@ -2473,34 +2525,70 @@
          }
 
          if (VerticalTabUtils.isVerticalTabsEligible(mActivity)) {
@@ -1133,15 +1056,10 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
 +                    () -> mBookmarkManagerOpenerSupplier.asNonNull().get().showBookmarkManager(
 +                            mActivity, mActivityTabProvider.get(), currentlySelectedProfile),
 +                    () -> {
-+                        if (ArchiumPasswordManagerBridge.isLocalEnabled()) {
-+                            SettingsNavigationFactory.createSettingsNavigation().startSettings(
-+                                    mActivity, ArchiumPasswordSettingsFragment.class);
-+                        } else {
-+                            SettingsNavigationFactory.createSettingsNavigation().startSettings(
-+                                    mActivity, AutofillOptionsFragment.class);
-+                        }
++                        SettingsNavigationFactory.createSettingsNavigation().startSettings(
++                                mActivity, AutofillOptionsFragment.class);
 +                    },
-+                    ArchiumPasswordManagerBridge.isLocalEnabled(),
++                    false, // Own password manager is DEPRECATED; retain standard autofill.
 +                    mIncognitoStateProvider,
 +                    verticalTabListCoordinator,
 +                    mCompositorViewHolderSupplier.asNonNull().get(),
@@ -1161,7 +1079,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
              if (mToolbarManager != null) {
                  mToolbarManager.setVerticalTabsAutoHiddenSupplier(
                          mVerticalTabsSideUiCoordinator.getIsAutoHiddenSupplier());
-@@ -3429,8 +3524,12 @@
+@@ -3429,8 +3517,12 @@
       * activated.
       */
      public BooleanSupplier canActivateTabLayoutToggleMenu() {
@@ -1318,22 +1236,21 @@ diff --git a/chrome/browser/password_manager/BUILD.gn b/chrome/browser/password_
 
  source_set("password_manager") {
    sources = []
-@@ -223,9 +224,14 @@
-       "android/password_manager_error_message_delegate.cc",
-       "android/password_manager_error_message_helper_bridge_impl.cc",
-       "android/password_manager_launcher_android.cc",
-+      "android/archium_password_manager_bridge.cc",
-+      "android/archium_password_manager_bridge.h",
+@@ -226,6 +227,13 @@
        "android/password_store_bridge.cc",
        "android/save_update_password_message_delegate.cc",
      ]
 +    if (enable_archium_local_passwords) {
++      sources += [
++        "android/archium_password_manager_bridge.cc",
++        "android/archium_password_manager_bridge.h",
++      ]
 +      deps += [ "//chrome/browser/password_manager/android:archium_local_password_manager" ]
 +    }
      deps += [
        "//chrome/android:chrome_jni_headers",
        "//chrome/browser/keyboard_accessory/android",
-@@ -457,6 +463,7 @@
+@@ -457,6 +465,7 @@
      "//components/password_manager/core/browser",
      "//components/password_manager/core/browser:passkey_credential",
      "//components/password_manager/core/browser:password_form",
@@ -1341,7 +1258,7 @@ diff --git a/chrome/browser/password_manager/BUILD.gn b/chrome/browser/password_
      "//components/password_manager/core/browser:test_support",
      "//components/password_manager/core/browser/features:password_features",
      "//components/password_manager/core/browser/password_store:test_support",
-@@ -486,6 +493,16 @@
+@@ -486,6 +495,16 @@
    ]
 
    if (is_android) {
@@ -1370,39 +1287,46 @@ diff --git a/chrome/browser/password_manager/android/BUILD.gn b/chrome/browser/p
  import("//third_party/jni_zero/jni_zero.gni")
  import("//third_party/protobuf/proto_library.gni")
 
-@@ -113,7 +115,13 @@
+@@ -113,7 +115,14 @@
  }
 
  android_library("java") {
 -  deps = [
-+  deps = [ ":archium_password_csv_java" ]
++  deps = []
 +  if (enable_archium_local_passwords) {
 +    deps += [
 +      ":archium_key_java",
++      ":archium_password_csv_java",
 +    ]
 +  }
 +  deps += [
      ":android_backend_java_enums",
      ":java_resources",
      ":settings_interface_java",
-@@ -181,6 +189,8 @@
-     "java/src/org/chromium/chrome/browser/password_manager/PasswordSettingsUpdaterReceiverBridge.java",
-     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreAndroidBackendDispatcherBridgeImpl.java",
-     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreAndroidBackendReceiverBridgeImpl.java",
-+    "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordManagerBridge.java",
-+    "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordSettingsFragment.java",
-     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreBridge.java",
+@@ -187,6 +196,12 @@
+     "java/src/org/chromium/chrome/browser/password_manager/settings/PasswordsPreference.java",
+   ]
+
++  if (enable_archium_local_passwords) {
++    sources += [
++      "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordManagerBridge.java",
++      "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordSettingsFragment.java",
++    ]
++  }
+   resources_package = "org.chromium.chrome.browser.password_manager"
+ }
+
+@@ -208,6 +223,9 @@
      "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreCredential.java",
      "java/src/org/chromium/chrome/browser/password_manager/PasswordSyncControllerDelegateBridgeImpl.java",
-@@ -204,6 +214,7 @@
-     "java/src/org/chromium/chrome/browser/password_manager/PasswordSettingsUpdaterReceiverBridge.java",
-     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreAndroidBackendDispatcherBridgeImpl.java",
-     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreAndroidBackendReceiverBridgeImpl.java",
-+    "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordManagerBridge.java",
-     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreBridge.java",
-     "java/src/org/chromium/chrome/browser/password_manager/PasswordStoreCredential.java",
-     "java/src/org/chromium/chrome/browser/password_manager/PasswordSyncControllerDelegateBridgeImpl.java",
-@@ -616,6 +627,14 @@
+   ]
++  if (enable_archium_local_passwords) {
++    sources += [ "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordManagerBridge.java" ]
++  }
+ }
+
+ android_library("utils_java") {
+@@ -616,6 +634,14 @@
      "//ui/base",
    ]
 
@@ -1417,7 +1341,7 @@ diff --git a/chrome/browser/password_manager/android/BUILD.gn b/chrome/browser/p
    # TODO(crbug.com/40031409): Fix code that adds exit-time destructors and
    # enable the diagnostic by removing this line.
    configs += [ "//build/config/compiler:no_exit_time_destructors" ]
-@@ -699,3 +718,105 @@
+@@ -699,3 +725,106 @@
      "//testing/gtest",
    ]
  }
@@ -1518,10 +1442,11 @@ diff --git a/chrome/browser/password_manager/android/BUILD.gn b/chrome/browser/p
 +  }
 +}
 +
-+# Pure transport is also compiled with the local store flag off; its UI route is
-+# guarded by the native capability and never substitutes for Google's manager.
-+android_library("archium_password_csv_java") {
-+  sources = [ "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordCsv.java" ]
++# DEPRECATED: retain historical code, exclude its transport from current builds.
++if (enable_archium_local_passwords) {
++  android_library("archium_password_csv_java") {
++    sources = [ "java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordCsv.java" ]
++  }
 +}
 diff --git a/chrome/browser/password_manager/android/password_manager_android_util.cc b/chrome/browser/password_manager/android/password_manager_android_util.cc
 --- a/chrome/browser/password_manager/android/password_manager_android_util.cc

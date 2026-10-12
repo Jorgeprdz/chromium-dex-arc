@@ -49,8 +49,6 @@ import org.chromium.chrome.browser.feature_engagement.TrackerFactory;
 import org.chromium.chrome.browser.flags.ChromeFeatureList;
 import org.chromium.chrome.browser.glic.GlicEnabling;
 import org.chromium.chrome.browser.homepage.HomepageManager;
-import org.chromium.chrome.browser.password_manager.ArchiumPasswordManagerBridge;
-import org.chromium.chrome.browser.password_manager.ArchiumPasswordSettingsFragment;
 import org.chromium.chrome.browser.password_manager.ManagePasswordsReferrer;
 import org.chromium.chrome.browser.password_manager.PasswordExportLauncher;
 import org.chromium.chrome.browser.password_manager.PasswordManagerHelper;
@@ -708,13 +706,7 @@ public class MainSettings extends ChromeBaseSettingsFragment
     }
 
     private void updateAutofillPreferences() {
-        if (ArchiumPasswordManagerBridge.isLocalEnabled()) {
-            // Archium's local vault is an in-Chrome settings surface. Keep the dedicated
-            // password row visible even if upstream would replace it with the combined page.
-            removePreferenceIfPresent(PREF_AUTOFILL_AND_PASSWORDS);
-            updateAutofillPreferencesPreAutofillAndPasswords();
-        } else if (ChromeFeatureList.isEnabled(
-                ChromeFeatureList.YOUR_SAVED_INFO_SETTINGS_PAGE_ANDROID)) {
+        if (ChromeFeatureList.isEnabled(ChromeFeatureList.YOUR_SAVED_INFO_SETTINGS_PAGE_ANDROID)) {
             updateAutofillAndPasswords();
         } else {
             removePreferenceIfPresent(PREF_AUTOFILL_AND_PASSWORDS);
@@ -771,23 +763,13 @@ public class MainSettings extends ChromeBaseSettingsFragment
         passwordsPreference.setProfile(getProfile());
         passwordsPreference.setOnPreferenceClickListener(
                 preference -> {
-                    if (ArchiumPasswordManagerBridge.isLocalEnabled()) {
-                        onPreferenceSelected(preference);
-                        openArchiumPasswordSettings(getActivity());
-                    } else {
-                        onExternalActivityPreferenceClicked(preference);
-                        showPasswordSettings(
-                                getActivity(),
-                                getProfile(),
-                                mModalDialogManagerSupplier.asNonNull().get());
-                    }
+                    onExternalActivityPreferenceClicked(preference);
+                    showPasswordSettings(
+                            getActivity(),
+                            getProfile(),
+                            mModalDialogManagerSupplier.asNonNull().get());
                     return true;
                 });
-    }
-
-    private static void openArchiumPasswordSettings(Context context) {
-        SettingsNavigationFactory.createSettingsNavigation(context)
-                .startSettings(context, ArchiumPasswordSettingsFragment.class);
     }
 
     private static void openAutofillOptions(Context context) {
@@ -833,10 +815,6 @@ public class MainSettings extends ChromeBaseSettingsFragment
             ModalDialogManager modalDialogManager,
             boolean shownInTab) {
         if (key.equals(PREF_PASSWORDS)) {
-            if (ArchiumPasswordManagerBridge.isLocalEnabled()) {
-                openArchiumPasswordSettings(context);
-                return true;
-            }
             MainSettings.showPasswordSettings(context, profile, modalDialogManager);
             // Open an external activity. Keep the state as is.
             return false;
@@ -859,10 +837,6 @@ public class MainSettings extends ChromeBaseSettingsFragment
 
     private static void showPasswordSettings(
             Context context, Profile profile, ModalDialogManager modalDialogManager) {
-        if (ArchiumPasswordManagerBridge.isLocalEnabled()) {
-            openArchiumPasswordSettings(context);
-            return;
-        }
         PasswordManagerLauncher.showPasswordSettings(
                 context,
                 profile,

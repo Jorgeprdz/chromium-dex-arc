@@ -1,5 +1,10 @@
 # Archium R4: recuperación y reescritura
 
+Actualización de alcance autorizada 2026-10-12: gestor propio de contraseñas
+**DEPRECATED**, excluido de R4 según
+`docs/ARCHIUM_CONTRASENAS_DEPRECATED.md`. Mantener Chromium estándar, Arc/DeX
+y Portal; no reactivar el gestor propio ni sus gates nativos.
+
 Base elegida y autorizada: 51e5ed429661727156ab2534caac99a82ee9264b.
 Implementación exclusiva: assistant/archium-r4-recovery. Chromium pin:
 cfd94726b7b5fb48aedcc32662f2f3fbdbadec35. main y feat/arc-desktop intactos.
@@ -27,8 +32,9 @@ con assertions exclusivamente en los runners, nunca en javac/D8/Ninja. Verificar
 recursos fusionados y enlaces JNI antes del fanout y APK. Guardar checkpoint
 quiescente cuando sea seguro conservando el primer exit code fallido.
 
-No lanzar otra corrida pesada automáticamente después de 38165289963 FAILED.
-Publicar código probado y estado exacto; una nueva corrida requiere autorización
-posterior a la revisión de esta recuperación. Monitor: refresco 600 s, log final
+Autorización posterior vigente del usuario: «cada que tengamos runs fallidos
+aplica fix y manda el run inmediatamente». Permite corregir con regresión,
+superar gates baratos, publicar y relanzar sobre SHA exacto, sin pedir permiso
+otra vez. No permite clean builds ni omitir gates. Monitor: refresco 600 s, log final
 sin caché parcial, tres líneas de primer error real, solo instalar APK verificada
 si el run entero es SUCCESS. La APK histórica no reemplaza la entrega R4.
