@@ -1,0 +1,34 @@
+--- a/archium-r4-monitor.py
++++ b/archium-r4-monitor.py
+@@ -129,7 +129,8 @@
+ def log_tail(jobs, state):
+     ordered = sorted([j for j in jobs if j.get('status') == 'completed'
+                       and j.get('conclusion') != 'skipped'],
+-                     key=lambda j: j.get('completed_at') or '', reverse=True)
++                     key=lambda j: (j.get('conclusion') == 'failure',
++                                    j.get('completed_at') or ''), reverse=True)
+     active = [j for j in jobs if j.get('status') == 'in_progress']
+     for job in active + ordered:
+         cached = state / f"job-{job['id']}.log"
+@@ -145,6 +146,7 @@
+                 lines = [x for x in ANSI.sub('', cached.read_text(errors='replace')).splitlines() if x.strip()]
+                 if job.get('conclusion') == 'failure':
+                     cleaned = [re.sub(r'^\ufeff?\d{4}-\d\d-\d\dT\S+\s*', '', x) for x in lines]
++                    cleaned = [re.sub(r'^\s*\d+\|\s*', '', x) for x in cleaned]
+                     cleaned = [x for x in cleaned if x.strip()]
+                     for index, entry in enumerate(cleaned):
+                         if entry.startswith('depot_tools/ninja.py:'):
+@@ -152,7 +154,12 @@
+                             return 'PRIMER ERROR REAL', ['Ninja wrapper:'] + textwrap.wrap(reason, width=38)[:2]
+                         if entry.startswith(('ninja: error:', 'NINJA_QUERY=FAIL:')):
+                             return 'PRIMER ERROR REAL', textwrap.wrap(entry, width=38)[:3]
+-                        if re.match(r'^(?:[\w.]+(?:Error|Exception)|SystemExit):|^ld\.lld: error:|^\S+:\d+(?::\d+)?: (?:fatal )?error:', entry):
++                        if re.match(r'^(?:[\w.]+(?:Error|Exception)|SystemExit)(?::|$)|^ld\.lld: error:|^\S+:\d+(?::\d+)?: (?:fatal )?error:', entry):
++                            frame = next((x.strip() for x in cleaned[index + 1:index + 25]
++                                          if 'at org.chromium.' in x), None)
++                            if frame:
++                                return 'PRIMER ERROR REAL', [entry] + textwrap.wrap(
++                                    frame.removeprefix('at org.chromium.chrome.browser.'), width=54)[:2]
+                             return 'PRIMER ERROR REAL', textwrap.wrap(entry, width=54)[:3]
+                         if entry.startswith('FAILED:'):
+                             # Siso may fail because javac wrote stderr even with

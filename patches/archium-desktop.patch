@@ -6619,7 +6619,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/toolbar/top/Ar
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/toolbar/top/ArcToolbarReparentingTest.java
-@@ -0,0 +1,131 @@
+@@ -0,0 +1,136 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -6630,10 +6630,12 @@ new file mode 100644
 +import static org.junit.Assert.assertNotNull;
 +import static org.junit.Assert.assertTrue;
 +import static org.mockito.Mockito.doReturn;
++import static org.robolectric.Shadows.shadowOf;
 +
 +import android.app.Activity;
 +import android.app.Dialog;
 +import android.graphics.Rect;
++import android.os.Looper;
 +import android.view.View;
 +import android.widget.FrameLayout;
 +
@@ -6741,6 +6743,8 @@ new file mode 100644
 +        dialog.setContentView(mOmnibox);
 +        try {
 +            dialog.show();
++            // Dialog attachment is queued in Chromium's PAUSED Robolectric looper.
++            shadowOf(Looper.getMainLooper()).idle();
 +            assertNotNull(mOmnibox.getWindowToken());
 +            assertTrue(mOmnibox.getWindowToken() != mToolbar.getWindowToken());
 +            Rect rect = new Rect(1, 2, 3, 4);
@@ -6748,6 +6752,7 @@ new file mode 100644
 +            assertTrue(rect.isEmpty());
 +        } finally {
 +            dialog.dismiss();
++            shadowOf(Looper.getMainLooper()).idle();
 +        }
 +    }
 +}

@@ -1,3 +1,78 @@
+## 2026-10-12 — Fix de fixture PAUSED tras run 38275213327 FAILED
+
+Run [38275213327](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38275213327),
+SHA `3c75be2c5fd0aff4a9616e218498886895f088ba`,
+[job 114901953193](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38275213327/job/114901953193).
+HEAD_START del retry: `44fae738b22428a49b2c8316efed76517eba1d75`.
+El run se mantiene FAILED. S0/S1 pasaron, al igual que host 242/0/0,
+recursos Chromium reales con optimización release y compilación de los 43/43
+owners Java. Cinco suites Arc pasaron. El nuevo test toolbar obtuvo **6 PASS,
+2 FAIL** (caso foreignWindow en API 29/37). El enlace libchrome no comenzó.
+
+### Primera causa real y corrección
+
+`gh run view --job ... --log`: exit 0 con output vacío; no se infiere éxito.
+Lectura directa `gh api repos/Jorgeprdz/chromium-dex-arc/actions/jobs/114901953193/logs`:
+exit 0, 7381 líneas/580938 bytes. Primera aserción en línea **3789**,
+16:39:08.6928613Z, `assertNotNull` de `ArcToolbarReparentingTest.java:122`.
+El diálogo se muestra, pero en looper **LEGACY/PAUSED** su attachment está pendiente;
+el test comprueba `windowToken` antes de ejecutar la cola. El log incluye
+`UnExecutedRunnablesException`. Esto es un fallo de preparación del test,
+no evidencia de otra regresión del código de producción.
+
+Fix: procesar `shadowOf(Looper.getMainLooper()).idle()` después de `dialog.show()`
+y tras `dismiss()`. Se conservan todas las aserciones: token no nulo, ventana
+diferente y rect vacío. Ningún test deshabilitado/skip/expected-failure.
+Producción, omnibox en sidebar, DeX, Portal y contraseñas DEPRECATED no cambian.
+
+### RED/GREEN observado antes del siguiente dispatch
+
+`python3 scripts/test-robolectric-arc-toolbar-fixture.py --classpath-file
+/workspace/archium-r4-evidence/robolectric/classpath --java-home
+/workspace/archium-r4-evidence/robolectric/jdk21/jdk-21.0.12.1+1 --work
+/workspace/archium-r4-evidence/run-38275213327/robo-green`:
+RED antes del fix exit 1, **8 tests/2 failures**; GREEN después exit 0,
+**8 tests/0 failures/skips**, API29/36, 18.612 s.
+`--remove-dialog-idle`: mutante negativo exit 1, **exactamente 2 failures**.
+Métodos entregados y rect de producción extraídos sin modificar sus cuerpos;
+ventanas y looper son Robolectric real. Construcción/resource IDs de Chrome usan
+adaptadores explícitos. **No se confunde esta prueba con ChromeJUnit completo**;
+API37 y runner Chromium siguen bloqueantes en S2 del retry, antes del enlace.
+Warnings de agente Mockito/CDS observados, no ocultados como PASS.
+
+Patch generado dos veces con hashes idénticos, 109 archivos:
+`630ccb1435386d7c1852546ae17a36d7819417a5b8aab39d41ad6de3733befff`;
+manifest `25eb76a1e217065f4094483b787bec6b6a557358b0797609e19d31f0707be2a7`.
+Bash/sintaxis Python/actionlint/ShellCheck/diff check: exit 0.
+Suite host integral repetida: **242 passed/0 failed/0 skipped**, 509.059 s, exit 0.
+Aplicación final del patch + probes JVM/API SDK: exit 0. Logs/hash registrados
+antes del push/dispatch.
+
+### Avance recuperado y monitor
+
+Checkpoint nuevo **archium-checkpoint-38275213327-1**, source SHA del run fallido,
+25 partes/4 grupos, **26506123626 bytes**, expira 26 Oct 16:58–17:00 UTC.
+Contiene los outputs Java reales recién compilados. API IDs:
+11761207506/11760853238/11761855716/11760504441, no expirados, digests presentes.
+Manifest leído mediante Range, **5381 bytes**, hash
+`1771b7a6bda7be8c0b76bcb30cd04c0bc7202ec7a93f624a6245f29574e75004`;
+SHA/tag/pin/workspace/count verificados. Integridad completa pendiente S1.
+Disco local **75475378176 bytes**, **11612654 inodos**: insuficiente para
+101506123626 bytes de política; no descarga masiva local ni reducción del umbral.
+S0 del runner nuevo mide capacidad antes de descarga. En el run fallido el gate
+real tuvo 114592665600 bytes y 18963648 inodos, PASS observado.
+
+El monitor priorizaba authorize/cleanup cuando los timestamps de cierre empataban,
+y no reconocía `0| java.lang.AssertionError` sin dos puntos. Ahora prioriza job
+FAILED, normaliza prefijo de shard y muestra aserción/frame Chromium auténticos.
+Regresión contra log real: RED 3 tests/2 failures; GREEN **3/3**, exit0.
+Monitor instalado actualizado en /workspace/macdesk-maintenance/archium-r4-monitor.py;
+[diff exacto](evidence/2026-10-12-robolectric-dialog/monitor-diagnostics.patch).
+No cambia frecuencia, estilo, ni el gate de descarga/instalación.
+
+[evidencia/primer error](evidence/2026-10-12-robolectric-dialog/first-error.txt),
+[hashes/resultados/checkpoint](evidence/2026-10-12-robolectric-dialog/results.json).
+
 ## Dispatch del fix DeX y monitor nuevo: 38275213327 (2026-10-12 16:07–16:09 UTC)
 
 **Código probado y publicado:** `3c75be2c5fd0aff4a9616e218498886895f088ba`.

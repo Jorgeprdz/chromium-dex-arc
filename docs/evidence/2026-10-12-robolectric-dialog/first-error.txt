@@ -1,0 +1,12 @@
+Run 38275213327; job 114901953193; original log line 3789
+2026-10-12T16:39:08.6928613Z  0| java.lang.AssertionError
+2026-10-12T16:39:08.6940742Z  0| 	at org.junit.Assert.fail(Assert.java:87)
+2026-10-12T16:39:08.6941793Z  0| 	at org.junit.Assert.assertTrue(Assert.java:42)
+2026-10-12T16:39:08.6942643Z  0| 	at org.junit.Assert.assertNotNull(Assert.java:713)
+2026-10-12T16:39:08.6943529Z  0| 	at org.junit.Assert.assertNotNull(Assert.java:723)
+2026-10-12T16:39:08.6945147Z  0| 	at org.chromium.chrome.browser.toolbar.top.ArcToolbarReparentingTest.foreignWindowClearsPreviousRectangle(ArcToolbarReparentingTest.java:122)
+2026-10-12T16:39:08.6947356Z  0| 	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:104)
+2026-10-12T16:39:08.6948603Z  0| 	at java.base/java.lang.reflect.Method.invoke(Method.java:565)
+2026-10-12T16:39:08.6949714Z  0| 	at org.junit.runners.model.FrameworkMethod$1.runReflectiveCall(FrameworkMethod.java:59)
+2026-10-12T16:39:08.6950966Z  0| 	at org.junit.internal.runners.model.ReflectiveCallable.run(ReflectiveCallable.java:12)
+2026-10-12T16:39:08.6952101Z  0| 	at org.junit.runners.model.FrameworkMethod.invokeExplosively(FrameworkMethod.java:61)

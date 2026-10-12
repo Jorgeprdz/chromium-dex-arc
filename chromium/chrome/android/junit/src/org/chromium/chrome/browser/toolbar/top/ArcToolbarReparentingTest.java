@@ -8,10 +8,12 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.doReturn;
+import static org.robolectric.Shadows.shadowOf;
 
 import android.app.Activity;
 import android.app.Dialog;
 import android.graphics.Rect;
+import android.os.Looper;
 import android.view.View;
 import android.widget.FrameLayout;
 
@@ -119,6 +121,8 @@ public class ArcToolbarReparentingTest {
         dialog.setContentView(mOmnibox);
         try {
             dialog.show();
+            // Dialog attachment is queued in Chromium's PAUSED Robolectric looper.
+            shadowOf(Looper.getMainLooper()).idle();
             assertNotNull(mOmnibox.getWindowToken());
             assertTrue(mOmnibox.getWindowToken() != mToolbar.getWindowToken());
             Rect rect = new Rect(1, 2, 3, 4);
@@ -126,6 +130,7 @@ public class ArcToolbarReparentingTest {
             assertTrue(rect.isEmpty());
         } finally {
             dialog.dismiss();
+            shadowOf(Looper.getMainLooper()).idle();
         }
     }
 }

@@ -1,0 +1,74 @@
+{
+  "recorded_utc": "2026-10-12T17:36:49.504459+00:00",
+  "head_start": "44fae738b22428a49b2c8316efed76517eba1d75",
+  "failed_run": 38275213327,
+  "failed_source_sha": "3c75be2c5fd0aff4a9616e218498886895f088ba",
+  "failed_job": 114901953193,
+  "first_error_log_line": 3789,
+  "first_error": "ArcToolbarReparentingTest.java:122 assertNotNull: Dialog not attached in PAUSED looper",
+  "ci_toolbar_tests": {
+    "passed": 6,
+    "failed": 2,
+    "profiles": [
+      29,
+      37
+    ]
+  },
+  "local_fixture_tests": {
+    "red_exit": 1,
+    "red_passed": 6,
+    "red_failed": 2,
+    "green_exit": 0,
+    "green_passed": 8,
+    "green_failed": 0,
+    "skipped": 0,
+    "profiles": [
+      29,
+      36
+    ],
+    "mutant_exit": 1,
+    "mutant_failed": 2,
+    "scope": "Real Robolectric windows/looper, actual delivered test methods, actual production rectangle method; explicit Chrome construction/resource adapters; NOT full Chromium"
+  },
+  "monitor_tests": {
+    "red_exit": 1,
+    "red_failed": 2,
+    "green_exit": 0,
+    "green_passed": 3,
+    "scope": "Real failed log and routing fixtures; not build proof"
+  },
+  "checkpoint": {
+    "tag": "archium-checkpoint-38275213327-1",
+    "source_sha": "3c75be2c5fd0aff4a9616e218498886895f088ba",
+    "manifest_sha256": "1771b7a6bda7be8c0b76bcb30cd04c0bc7202ec7a93f624a6245f29574e75004",
+    "bounded_read_bytes": 5381,
+    "groups": 4,
+    "parts": 25,
+    "artifact_bytes": 26506123626,
+    "part_bytes": 26506114722,
+    "local_available_bytes": 75475378176,
+    "local_free_inodes": 11612654,
+    "CHECKPOINT_METADATA": "PASS",
+    "CHECKPOINT_ALL_BYTES": "PENDING_S1",
+    "DISK_CI": "PENDING_S0"
+  },
+  "patch_sha256": "630ccb1435386d7c1852546ae17a36d7819417a5b8aab39d41ad6de3733befff",
+  "patch_manifest_sha256": "25eb76a1e217065f4094483b787bec6b6a557358b0797609e19d31f0707be2a7",
+  "logs": {
+    "native-job-direct.log": "95eca6b74696a2fc656d6fe9be2162830f0a7ff3b98974c834a279ba22e38746",
+    "robo-red.log": "532bb6a3776be30f4004e10d83855fbc94fd9cb7a7d981108369b26f6dfeefad",
+    "robo-green.log": "16ce932bf54dd3121eeb532c3b770419904024bf145d6d951962a9cf5f1557ea",
+    "robo-mutant-red.log": "cdd1d81ce24c875c115e960aad0b9eddcf5ef2e7dd5140965aa38a9328e2d805",
+    "monitor-red.log": "10dd4bd9e77df5c0fdcc9db10bca6cdbabaebd07074f80f009f494db9f10ac2d",
+    "monitor-green.log": "076d4c772b70a3eb905f7ee17824a028f8bffdebb5e7f332b072c2588016681e",
+    "host-final.log": "8c9a8c86463539baec88e8d57ba0d870797b065175b1338327658232486aa44e",
+    "preparation-final.log": "69e6789cdd6fc8739c34b412aac776c4052b005ddad46a6f0e828255d654df37"
+  },
+  "host_tests": {
+    "passed": 242,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 509.059,
+    "exit_code": 0
+  }
+}
