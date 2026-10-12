@@ -161,6 +161,9 @@ gate() {
     return "$result"
 }
 stage S2
+ninja_query="$PWD/third_party/ninja/ninja"
+[[ -x "$ninja_query" ]] || die 'Pinned Ninja query tool absent.'
+gate "$ninja_query" --version
 gate python3 "$GITHUB_WORKSPACE/scripts/archium-media-preflight.py" \
     --out "$PWD/out/Archium" --report "$PWD/out/Archium/archium-media-config.json"
 gate gn check out/Archium //chrome/browser/password_manager/android:archium_password_manager_tests
@@ -200,7 +203,11 @@ for suite in \
 done
 printf 'ROBOLECTRIC_PASS=PASS scope=early_Chromium_suites\n'
 compile_slice archium_password_manager_tests archium_login_database_tests
-ninja -C out/Archium -t query archium_password_manager_tests > "$RUNNER_TEMP/archium-native-query.txt"
+# Query copied manifests only: depot_tools rejects Siso here, and raw Ninja
+# can repair logs even for `-t query`. The restored output must stay untouched.
+gate "$host_python" "$GITHUB_WORKSPACE/scripts/archium-ninja-query.py" \
+    --out "$PWD/out/Archium" --ninja "$ninja_query" \
+    --target archium_password_manager_tests --report "$RUNNER_TEMP/archium-native-query.txt"
 nm="$PWD/third_party/llvm-build/Release+Asserts/bin/llvm-nm"
 [[ -x "$nm" && -s out/Archium/lib.unstripped/libarchium_password_manager_tests__library.so ]] ||
     die 'Real native library or symbol tool absent.'

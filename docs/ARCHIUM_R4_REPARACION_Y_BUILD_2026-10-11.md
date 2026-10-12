@@ -1,5 +1,58 @@
 # Archium R4 — reparación y build, 2026-10-11
 
+## Fallo S2 observado en 38180906742: diagnóstico Ninja sobre estado Siso
+
+[Run 38180906742](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38180906742), source SHA `f84a0998b4af4d0a5c06a6f2b339e82f7c1f1f1f`, FAILED. [Job 114594471563 build/build](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38180906742/job/114594471563), primer error auténtico líneas 27328–27332: `depot_tools/ninja.py: out/Archium contains Siso state file.`, exit 1. El paso de compilación inmediatamente anterior terminó `Build Succeeded: 12 steps` (línea 27326). Las líneas finales de cleanup/Node deprecation que mostraba el monitor no eran la causa del fallo.
+
+**CAUSA_CONFIRMADA:** `scripts/build-archium-recovery.sh` llamaba `ninja -C out/Archium -t query archium_password_manager_tests` desde PATH, que seleccionaba el wrapper de depot_tools. Se leyó `ninja.py` del pin real `8a5434051036b32412a2ecb10c213a72e3f3ccb9`: su whitelist de herramientas no incluye `query`; `check_out_dir()` rechaza `.siso_deps` antes de ejecutar Ninja. Se ejecutó esa función upstream auténtica sobre una fixture diminuta y devolvió exit 1 con el mismo diagnóstico. No se ejecutó la sugerencia upstream de `gn clean`.
+
+Evidencia completa: `gh api repos/Jorgeprdz/chromium-dex-arc/actions/jobs/114594471563/logs` exit 0, log local `/workspace/archium-r4-evidence/run-38180906742-build.log`, SHA256 `c213b636c4b39fad6df368f594e69620f4d5cca3143c2fc2140cb34a2fb10435`. Preflight job `114593098065` SUCCESS: 216 passed, 0 failed, 0 skipped en 196.311 s; log SHA256 `bb136478e427f312fb8b433ec9c58a8a85586763a9e0f633085f451334a28a09`.
+
+### Gates auténticos observados antes del fallo
+
+| Gate | Estado | Evidencia del build log |
+|---|---|---|
+| Disco CI antes de transferir | PASS | línea 293: 115531063296 bytes, 18975266 inodos libres |
+| Integridad/restore checkpoint | PASS | líneas 364–365, restore valida SHA256 de todas las partes antes de extraer |
+| Transición y GN real | PASS | línea 2812, mtimes preservados; línea 2815, 93144 targets / 4922 files |
+| Disco posrestore/preparación | OBSERVED | línea 2817: 52637491200 bytes libres; 17268484 inodos |
+| Media/GN check | PASS | bloque 2842–2869, effective args reales y Header dependency check OK |
+| Recursos reales Chromium | PASS | línea 2997: `AAPT2_REAL_RESOURCES=PASS scope=Chromium_merged_manifest_resource_target` |
+| Java owners | PASS | línea 2998: 42/42 sources, 11 javac actions |
+| Robolectric Chromium temprano | PASS | nueve grupos: 9+14+6+6+4+2+294+208+62 = 605 ejecuciones; línea 27272 PASS |
+| Targets password/login | BUILD_SUCCEEDED | línea 27326; verificación `llvm-nm` posterior todavía NOT_EXECUTED |
+| JNI symbols / S3 / APK / runtime | NOT_EXECUTED | query falló antes de esos gates; ninguna APK nueva |
+
+API artifacts del run: `total_count=0`. No se publicó un checkpoint nuevo; el runner efímero ya terminó. La fuente `archium-checkpoint-38165289963-1` conserva sus tres grupos remotos no expirados. El próximo run restaurará esa fuente compatible; no hay clean fallback. Este registro no convierte el run FAILED en PASS.
+
+### Reparación con preservación demostrada del output
+
+La primera regresión RED ejecutó el Bash real con la frontera del wrapper que reprodujo su rechazo, exit 1; dos tests fallaron. Una primera prueba con el binario Ninja directo detectó además que `-t query` puede borrar un `.ninja_log` inválido. Por eso se descartó consultar el output restaurado directamente: no se debilitó la prueba ni se alteraron logs del checkout real.
+
+Fix final: `scripts/archium-ninja-query.py` copia **solo manifiestos `.ninja`** a una carpeta temporal independiente y ejecuta allí el `third_party/ninja/ninja` del checkout fijado. No copia ni abre `.ninja_log`, `.ninja_deps`, `.siso_deps` originales para escritura; no ejecuta compilación. Rechaza includes/builddir que escapen del snapshot. El Bash comprueba el binario antes del fanout y usa el helper como gate; un fallo de query corta las siguientes etapas y solicita checkpoint después de los builds ya quiescentes. Se conservan errores, versión del toolchain y backend Siso.
+
+Pruebas nuevas: consulta real y preservación de bytes/mtime; target inexistente bloquea fanout y solicita pack; manifiestos producidos por GN real funcionan con Ninja real; rutas de logs/includes fuera de snapshot se rechazan. Ninja usado en verificación local proviene del paquete CIPD que exige DEPS: `infra/3pp/tools/ninja/linux-arm64`, `version:3@1.12.1.chromium.4`, binario `1.12.1`. Download acotado 2814884 bytes, SHA256 ZIP `6f7c6cc12315c80e1ab819def849c5b68c0cf65504bb36cd438ac4f6325350bb`; no cambio de toolchain en Chromium. Comando `ARCHIUM_TEST_NINJA=/workspace/archium-r4-evidence/ninja-query/pinned-arm64/ninja ARCHIUM_TEST_GN=/usr/bin/gn python3 -m unittest discover -s tests -p test_recovery_ninja_query.py -v`, exit 0, **4/4 en 9.704 s**. Logs `ninja-query/regression-red.log`, `regression-green.log`, `pinned-gn-green.log`.
+
+Monitor local: nueva regresión con el log auténtico FAILED antes del fix porque mostraba cleanup; tras reconocer el prefijo del wrapper devuelve `PRIMER ERROR REAL` y `Siso state file`. Tres tests pasan, exit 0 en 0.393 s (`ninja-query/monitor-{red,green}.log`). No cambia el criterio de descarga/instalación.
+
+Static gates diff/Bash/ShellCheck/compileall/actionlint exit 0. Patch oficial regenerado dos veces, 102 files, hashes idénticos y ningún diff: patch `bcc1fa363379e9851da4ef7d2611aadfaf604064dcfb21ec51cc5b0bb9c55e75`, manifest `b5fbe0b0169636108a5bc84ac52aaf6020f6cfb048fee92f2b2ce9998b8f0f84`. Java, identidad Portal y GN/JNI quedan sin cambios.
+
+Suite host integral terminada: **220 passed / 0 failed / 0 skipped**, 451.807 s, exit **0**. Comando bajo identidad CI real; los probes GN/Ninja/AAPT2/JVM usan herramientas auténticas:
+
+```bash
+GITHUB_ACTIONS=true GITHUB_REPOSITORY=Jorgeprdz/chromium-dex-arc \
+GITHUB_REF_NAME=assistant/archium-r4-recovery \
+GITHUB_REF=refs/heads/assistant/archium-r4-recovery \
+GITHUB_SHA=f84a0998b4af4d0a5c06a6f2b339e82f7c1f1f1f GITHUB_RUN_ID=38180906742 \
+ARCHIUM_TEST_GN=/usr/bin/gn \
+ARCHIUM_TEST_NINJA=/workspace/archium-r4-evidence/ninja-query/pinned-arm64/ninja \
+ARCHIUM_TEST_AAPT2=/opt/android-sdk/build-tools/37.0.0/aapt2 \
+ARCHIUM_TEST_ANDROID_JAR=/opt/android-sdk/platforms/android-36/android.jar \
+python3 -m unittest discover -s tests -p 'test_*.py' -v
+```
+
+Los tests de routing siguen simulando sus fronteras nativas explícitamente; solo los probes declarados ejecutan herramientas reales. Log `/workspace/archium-r4-evidence/ninja-query/full-host-ci-env.log`, SHA256 `47b8b3f87c3afe5f1d653efa08be1b22618e8238793a47ab93e02a8c7c4f3812`. Nueva corrida autorizada tras publicación del fix; todavía no se afirma APK PASS. Antes de publicar, HEAD remoto `a92735a7a7d8db1808d9d43a39f20389617b02a9`, rama protegida y main intactas; ninguna corrida en curso o en cola. Fuente checkpoint completa conservada.
+
 ## Autorización renovada y nuevo dispatch: run 38180906742
 
 Orden posterior del usuario: «cada que tengamos runs fallidos aplica fix y manda el run inmediatamente». Esta autorización sustituye el límite anterior de una sola corrida y la necesidad de pedir permiso tras cada fallo. Se conservan la verificación del fix, gates bloqueantes, ausencia de compilaciones concurrentes, checkpoints compatibles, límite de slices, prohibición de clean fallback y ramas protegidas. No se convierte un run fallido en PASS ni se despacha sin una reparación respaldada por evidencia.

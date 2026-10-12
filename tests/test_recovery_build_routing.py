@@ -19,6 +19,7 @@ elif name=='python3' and args and args[0].endswith('archium-checkpoint.py'):
  w=pathlib.Path(args[2]);s=w/'checkout/src';(s/'out/Archium/apks').mkdir(parents=True)
  (s/'out/Archium/apks/ChromePublic.apk').write_bytes(b'synthetic routing artifact, not APK')
  (s/'out/Archium/args.gn').write_text('previous GN args')
+ (s/'out/Archium/build.ninja').write_text('build archium_password_manager_tests: phony\n')
  (s/'LICENSE').write_text('synthetic routing license')
  (s/'build').mkdir();(s/'build/install-build-deps.sh').write_text('#!/bin/sh\nexit 0\n');(s/'build/install-build-deps.sh').chmod(0o755)
  config=s/'build/config/android/config.gni';config.parent.mkdir(parents=True);config.write_text('public_android_sdk_platform_version = "37.0"\npublic_android_sdk_build_tools_version = "37.0.0"\n')
@@ -27,6 +28,7 @@ elif name=='python3' and args and args[0].endswith('archium-checkpoint.py'):
  tools=s/'third_party/android_sdk/public/build-tools/37.0.0';tools.mkdir(parents=True)
  for tool in ('aapt2','apksigner'):(tools/tool).symlink_to(pathlib.Path(sys.argv[0]).resolve())
  nm=s/'third_party/llvm-build/Release+Asserts/bin/llvm-nm';nm.parent.mkdir(parents=True);nm.symlink_to(pathlib.Path(sys.argv[0]).resolve())
+ ninja=s/'third_party/ninja/ninja';ninja.parent.mkdir(parents=True);ninja.symlink_to(pathlib.Path(sys.argv[0]).resolve())
  lib=s/'out/Archium/lib.unstripped/libarchium_password_manager_tests__library.so';lib.parent.mkdir(parents=True);lib.write_bytes(b'synthetic symbol presence')
 elif name=='python3' and args and args[0].endswith('archium-autoninja.py'):
  targets=args[2:]
@@ -38,6 +40,8 @@ elif name=='python3' and args and args[0].endswith('archium-autoninja.py'):
   if r.returncode or r.stderr:print('JAVAC_STDERR='+r.stderr,file=sys.stderr);sys.exit(83)
 elif name=='python3' and args and args[0].endswith('archium-java-preflight.py'):
  pathlib.Path(args[args.index('--targets-file')+1]).write_text('obj/recovery-fixture.javac.jar\n')
+elif name=='python3' and args and args[0].endswith('archium-ninja-query.py'):
+ os.execv('/usr/bin/python3',['python3',os.environ['REAL_QUERY_SCRIPT']]+args[1:])
 elif name=='python3' and args and args[0].endswith('archium-test-gates.py'):
  if args[1]=='host':sys.exit(int(os.environ.get('HOST_EXIT','0')))
  if args[1]=='verify-device-runners':sys.exit(int(os.environ.get('DEVICE_RUNNER_EXIT','0')))
@@ -50,6 +54,8 @@ elif name=='sudo':
 elif name=='gn':
  if 'check' in args:sys.exit(int(os.environ.get('GN_CHECK_EXIT','0')))
  if 'desc' in args:print('//chrome/browser/payments:impl' if not os.environ.get('MISSING_PAYMENTS') else '//base')
+elif name=='ninja' and os.environ.get('REJECT_SISO_WRAPPER'):
+ print('depot_tools/ninja.py: out/Archium contains Siso state file.',file=sys.stderr);sys.exit(1)
 elif name=='llvm-nm':
  if os.environ.get('UNDEFINED_JNI'):print(' U ServiceWorkerPaymentAppBridge::GetInstance()')
 elif name=='run_chrome_junit_tests':
@@ -76,6 +82,7 @@ class RecoveryBuildRoutingTests(unittest.TestCase):
    'ARCHIUM_SOURCE_TAG':'archium-checkpoint-123-1','ARCHIUM_SOURCE_COMMIT':'a'*40,
    'ARCHIUM_CHECKPOINT_TAG':'archium-checkpoint-456-1','ARCHIUM_CHECKPOINT_DIR':str(self.root/'checkpoint'),
    'ARCHIUM_HOST_PYTHON':str(self.bin/'python3')}
+  self.env['REAL_QUERY_SCRIPT']=str(ROOT/'scripts/archium-ninja-query.py')
   (self.root/'runner').mkdir();(self.root/'checkpoint').mkdir()
   self.env.pop('JAVA_TOOL_OPTIONS',None)
  def build(self,phase='--all',**env):
