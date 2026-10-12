@@ -1,5 +1,30 @@
 # Archium R4 — reparación y build, 2026-10-11
 
+## Recuperación relanzada: 38203819481 y monitor sesión #5 (2026-10-12 04:26–04:28 UTC)
+
+Fix publicado [**2de41680a42972253e8daf4cf818938dacf79a93**](https://github.com/Jorgeprdz/chromium-dex-arc/commit/2de41680a42972253e8daf4cf818938dacf79a93), commit/push exit 0, suite **230/230**, sin skips, mismo patch/config/toolchain nativo. Nueva fuente **archium-checkpoint-38194736077-1**, source **3c2d5f689ffc9314806c725699778482795f8231**, con libchrome realmente enlazado y guardado. Los hashes/metadata y el primer fallo están en la sección siguiente.
+
+**Error de operación reconocido:** primer dispatch [38203753670](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38203753670) envió por copia manual `expected_sha=2de41686ba0588070937c921990a501dce74bc39`, diferente del SHA real `2de41680a42972253e8daf4cf818938dacf79a93`. [Job authorize 114662580978](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38203753670/job/114662580978) rechazó `test EXPECTED_SHA = GITHUB_SHA`, exit 1, **04:25:59–04:26:03 UTC**. Log auténtico `gh run view 38203753670 --log-failed`, exit 0, `/workspace/archium-r4-evidence/run-38203753670-sha-guard.log`. Preflight y build no se ejecutaron, sin descarga/checkpoint/compilación. El run quedó FAILED; no se borró ni se convirtió a PASS. La corrección toma SHA directamente de Git y compara el remoto antes del dispatch; no se relajó ninguna puerta.
+
+Dispatch corregido, exit 0:
+
+```bash
+archium_dispatch_sha=$(git rev-parse HEAD)
+test "$archium_dispatch_sha" = 2de41680a42972253e8daf4cf818938dacf79a93
+test "$(git ls-remote origin refs/heads/assistant/archium-r4-recovery | cut -f1)" = "$archium_dispatch_sha"
+gh workflow run 374835814 --repo Jorgeprdz/chromium-dex-arc \
+  --ref assistant/archium-r4-recovery -f expected_sha="$archium_dispatch_sha" \
+  -f source_checkpoint=archium-checkpoint-38194736077-1 \
+  -f source_commit=3c2d5f689ffc9314806c725699778482795f8231 \
+  -f source_run_id=38194736077
+```
+
+Run [**38203819481**](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38203819481), creado **2026-10-12T04:26:56Z**, headSha exacto **2de41680a42972253e8daf4cf818938dacf79a93**. Authorize [114662785000](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38203819481/job/114662785000) **SUCCESS**, SHA/branch/concurrencia comprobados. Preflight [114662806609](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38203819481/job/114662806609) **IN_PROGRESS**, iniciado **04:27:05Z**. Monitor observó `Build genuine GN at Chromium DEPS pin` a **04:28:00 UTC**. No se acredita restore/JNI/APK nuevo antes de su ejecución.
+
+Monitor **PID 1904** en **nueva sesión #5** de NewTermux, lanzado por `./m4` después de verificar el shell nativo vacío, sin escribir en Codex u otras apps. Args reales `--run 38203819481 --sha 2de41680a42972253e8daf4cf818938dacf79a93`, existencia y proceso comprobados; screen `/workspace/.archium-install/38203819481/screen.txt`: EN CURSO, elapsed **00:01:04**, **0/6**, ETA N/D. Refresco 600 s, líneas ASCII, colores/bold/italic y últimas tres líneas disponibles; eventos API diferenciados de log aún no publicado. Nueva pantalla DeX lógica **16** identificada antes de abrir la actividad; otras sesiones intactas. Solo descarga/instala ante SUCCESS y APK/SHA/manifest/ABI/Portal/firma verificadas. Se detiene el agente para seguimiento manual por petición del usuario.
+
+**FASE=S0; SHA=2de4168; RUN=38203819481; GATE=AUTHORIZE_PASS/PREFLIGHT_RUNNING; CHECKPOINT=38194736077-1 REMOTE_PRESERVED; DISCO_CI=PENDING_S0; ERRORES_ACTUALES=NONE_OBSERVED; SIGUIENTE=S0→S1→HOST_ANTES_DE_NATIVE→S2/S3/S4/S5 CON GATES.** Los PASS de libchrome/605 Robo/recursos anteriores pertenecen a la fuente recuperable 3c2d5f6. Build actual todavía no terminado, APK nueva NONE, runtime NOT_EXECUTED. Contraseñas propias mantienen estado DEPRECATED.
+
 ## Run 38194736077 FAILED: enlace recuperable y entorno Ninja corregido (2026-10-12 04:08–04:24 UTC)
 
 [Run 38194736077](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38194736077), source **3c2d5f689ffc9314806c725699778482795f8231**, terminó FAILED a **04:07:46 UTC**, elapsed **01:57:30**. [Job build 114635793824](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38194736077/job/114635793824). No APK publicada ni instalación. HEAD inicial reparación **6d1be54a571c7f186de88a7ee126e0c8d1cc1193**.
