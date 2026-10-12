@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Query real GN manifests with pinned Ninja without touching Siso state/logs."""
 import argparse
+import os
 from pathlib import Path
 import re
 import shutil
@@ -18,13 +19,15 @@ def query(out, ninja, target, report):
         count = 0
         for source in out.rglob('*.ninja'):
             # Reject log directories or includes that could escape the snapshot.
-            for line in source.read_text().splitlines():
-                if re.match(r'^\s*builddir\s*=', line):
-                    if line.split('=', 1)[1].strip() != '.':
+            # Ninja manifests and paths are byte strings, not necessarily UTF-8.
+            # Parse ASCII directives without dropping or replacing other bytes.
+            for line in source.read_bytes().splitlines():
+                if re.match(rb'^\s*builddir\s*=', line):
+                    if line.split(b'=', 1)[1].strip() != b'.':
                         raise ValueError('Ninja builddir must remain inside query snapshot')
-                match = re.match(r'^\s*(?:include|subninja)\s+(.+)$', line)
+                match = re.match(rb'^\s*(?:include|subninja)\s+(.+)$', line)
                 if match:
-                    included = Path(match.group(1).strip())
+                    included = Path(os.fsdecode(match.group(1).strip()))
                     if included.is_absolute() or '..' in included.parts or '$' in str(included):
                         raise ValueError('Ninja include must remain inside query snapshot')
             destination = scratch / source.relative_to(out)
@@ -32,12 +35,12 @@ def query(out, ninja, target, report):
             shutil.copy2(source, destination)
             count += 1
         result = subprocess.run([str(ninja), '-C', str(scratch), '-t', 'query', target],
-                                capture_output=True, text=True, timeout=120)
+                                capture_output=True, timeout=120)
         if result.stderr:
-            print(result.stderr, file=sys.stderr, end='')
+            sys.stderr.buffer.write(result.stderr)
         if result.returncode:
             return result.returncode
-        report.write_text(result.stdout)
+        report.write_bytes(result.stdout)
         print(f'NINJA_QUERY=PASS manifests={count} graph_source={out} scope=isolated_manifest_query')
         return 0
 
