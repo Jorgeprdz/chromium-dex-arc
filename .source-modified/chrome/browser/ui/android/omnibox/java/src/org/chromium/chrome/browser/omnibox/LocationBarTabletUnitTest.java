@@ -8,6 +8,7 @@ import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
+import static org.junit.Assert.assertNotEquals;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.doReturn;
@@ -810,6 +811,44 @@ public class LocationBarTabletUnitTest {
                 ShadowToast.showedCustomToast(
                         mActivity.getResources().getString(stringId), R.id.toast_text));
         ToastManager.resetForTesting();
+    }
+
+    @Test
+    public void testArcPaletteUnfocusedAndRestoredChromeScheme() {
+        mLocationBarTablet.updateVisualsForState(BrandedColorScheme.APP_DEFAULT);
+        LocationBarBackgroundDrawable background =
+                (LocationBarBackgroundDrawable) mLocationBarTablet.getBackground();
+        int original = background.getBackgroundGradient().getColor().getDefaultColor();
+        mLocationBarTablet.setArcSurfaceColor(0xffe5b09d);
+        assertNotEquals(original,
+                background.getBackgroundGradient().getColor().getDefaultColor());
+        mLocationBarTablet.setShowFocusRing(true);
+        assertNotEquals(OmniboxResourceProvider.getTabletToolbarTextBoxStandbyBackgroundColor(
+                mActivity, BrandedColorScheme.APP_DEFAULT),
+                background.getBackgroundGradient().getColor().getDefaultColor());
+        mLocationBarTablet.setShowFocusRing(false);
+        mLocationBarTablet.setArcSurfaceColor(null);
+        assertEquals(original, background.getBackgroundGradient().getColor().getDefaultColor());
+    }
+
+    @Test
+    @EnableFeatures(OmniboxFeatureList.OMNIBOX_MULTIMODAL_INPUT)
+    public void testArcPaletteFocusedPopupSurvivesSchemeUpdates() {
+        mLocationBarTablet.onFuseboxStateChanged(FuseboxState.EXPANDED);
+        mLocationBarTablet.setArcSurfaceColor(0xffe5b09d);
+        mLocationBarTablet.updateVisualsForState(BrandedColorScheme.INCOGNITO);
+        LayerDrawable background = (LayerDrawable) mLocationBarTablet.getBackground();
+        GradientDrawable outer =
+                (GradientDrawable) background.findDrawableByLayerId(R.id.focused_popup_bg);
+        GradientDrawable inner =
+                (GradientDrawable) background.findDrawableByLayerId(R.id.focused_popup_inner_bg);
+        assertNotEquals(OmniboxResourceProvider.getSuggestionsDropdownBackgroundColor(
+                mActivity, BrandedColorScheme.INCOGNITO), outer.getColor().getDefaultColor());
+        assertNotEquals(OmniboxResourceProvider.getStandardSuggestionBackgroundColor(
+                mActivity, BrandedColorScheme.INCOGNITO), inner.getColor().getDefaultColor());
+        mLocationBarTablet.setArcSurfaceColor(null);
+        assertEquals(OmniboxResourceProvider.getSuggestionsDropdownBackgroundColor(
+                mActivity, BrandedColorScheme.INCOGNITO), outer.getColor().getDefaultColor());
     }
 
     @Test

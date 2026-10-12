@@ -1,0 +1,75 @@
+{
+  "created_utc": "2026-10-12T22:51:29.395228+00:00",
+  "head_start": "9e56a8d817320ad09b0815bc5aa49a0558ecb5e1",
+  "branch": "assistant/archium-r4-recovery",
+  "chromium_pin": "cfd94726b7b5fb48aedcc32662f2f3fbdbadec35",
+  "fixes": [
+    "Composited toolbar suppression combines Arc, XR and narrow-window reasons",
+    "Public LocationBarLayout hook; native focus/hover/popup palettes tinted rather than replaced",
+    "Native Chromium ic_add_24dp drawable remains visible in compact rail",
+    "Rectangular compositor and surface clips constrain the sidebar/frame gap and restore original bounds",
+    "Favorite tiles use a distinguishable pale surface without favicon tint",
+    "About dialog shows application package icon and installed versionName/versionCode"
+  ],
+  "gates": {
+    "STATIC_PASS": "PASS",
+    "PYTHON_HOST_PASS": "PASS: 244 passed, 0 failed, 0 skipped; 561.765 seconds",
+    "GN_REAL_PASS": "PASS: actual GN arm64, baseline and x64 scenarios inside the host suite",
+    "BOUNDED_ROBOLECTRIC_PASS": "PASS: 8 frame + 6 shell + 2 about executions at API29/36",
+    "CHROMIUM_ROBOLECTRIC_PASS": "PENDING_POST_RESTORE",
+    "JNI_LINK_PASS": "PENDING_POST_RESTORE",
+    "AAPT2_REAL_RESOURCES": "PENDING_POST_RESTORE",
+    "APK_VERIFIED": "NOT_EXECUTED",
+    "AAPT2_FIXTURE": "PASS: real compile/link, synthetic fixture manifest; not Chromium resource merge"
+  },
+  "patch": {
+    "double_generation": "PASS",
+    "reference_file_application": "PASS",
+    "full_Chromium_checkout_application": "PENDING_RESTORE",
+    "modified_files": 117,
+    "hashes": {
+      "patches/archium-desktop.patch": "0947124c09904a67ad759fbd710d81f7d9d70d2de984f772f4a4011012ef8cbe",
+      "patches/upstream-files.json": "908799a4de4571cfc9b207a5db0ef66ff4ec3cfd2b200d6da1cab012c86f6d35"
+    }
+  },
+  "checkpoint": {
+    "metadata": "PASS",
+    "read_access": "PASS",
+    "manifest_integrity": "PASS",
+    "all_checkpoint_bytes": "PENDING_POST_DOWNLOAD",
+    "tag": "archium-checkpoint-38275213327-1",
+    "source_sha": "3c75be2c5fd0aff4a9616e218498886895f088ba",
+    "source_run": 38275213327,
+    "artifact_bytes": 26506123626,
+    "groups": 4,
+    "manifest_sha256": "1771b7a6bda7be8c0b76bcb30cd04c0bc7202ec7a93f624a6245f29574e75004",
+    "bounded_bytes_read": 5381,
+    "CI_disk": "PENDING_S0; workflow checks real bytes and inodes before download",
+    "local_checkpoint_download": false
+  },
+  "failed_first_host_gate": {
+    "total": 244,
+    "failed": 3,
+    "skipped": 0,
+    "causes": [
+      "Affected-suite inventory missing the newly mandatory About suite",
+      "ARCHIUM_TEST_ANDROID_JAR missing in two real AAPT2 regressions"
+    ],
+    "log": "host-final.log"
+  },
+  "negative_proofs": {
+    "toolbar": "suppression-red.log: mask 4 rejected, exit 1",
+    "frame": "frame-rect-red.log: null clip bounds; 8 executions, 2 failures",
+    "glyph_tiles": "shell-red.log: missing drawable and identical tile surface; 4 executions, 4 failures",
+    "native_palette": "palette-red-final.log: native background ignores Arc; 6 executions, 2 failures",
+    "native_tint": "palette-tint-red.log: raw seed instead of native-compatible tint; 6 executions, 2 failures",
+    "about_version": "about-mutant/test.log: hard-coded version rejected; 2 executions, 2 failures"
+  },
+  "limitations": [
+    "Bounded Android view tests do not certify Chromium activity or GPU surface composition.",
+    "No production-ready claim before successful APK verification and physical DeX checks.",
+    "Checkpoint all-byte integrity and actual CI disk capacity are mandatory S0/S1 gates, not preclaimed locally."
+  ],
+  "source_public_access": "LocationBarLayout public hook; package-private LocationBarTablet remains package-private",
+  "host_log_sha256": "64ebffd845ae6a91c40a84ad6b24c1f221716b568c20b2281b2d9bbff1d92a4d"
+}

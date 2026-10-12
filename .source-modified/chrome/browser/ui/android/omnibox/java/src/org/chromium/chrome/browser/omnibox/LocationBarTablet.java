@@ -112,6 +112,7 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
     private int mTargetPopoverLeftOffset;
     private @BrandedColorScheme int mBrandedColorScheme = BrandedColorScheme.APP_DEFAULT;
     private boolean mShowFocusRing;
+    private @Nullable Integer mArcSurfaceColor;
     private boolean mIsHovered;
     private boolean mIsGlifActive;
     private boolean mStartGlifOnNextLayout;
@@ -512,28 +513,36 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
         if (mLayoutMode == FuseboxLayoutMode.SUGGESTIONS_POPOVER) {
             @ColorInt
             int popoverColor =
-                    OmniboxResourceProvider.getPopoverSuggestionBackgroundColor(
-                            context, mBrandedColorScheme);
+                    tintArcBackground(OmniboxResourceProvider.getPopoverSuggestionBackgroundColor(
+                            context, mBrandedColorScheme));
             mOuterRect.setColor(popoverColor);
             mInnerRect.setColor(popoverColor);
         } else {
             mOuterRect.setColor(
-                    OmniboxResourceProvider.getSuggestionsDropdownBackgroundColor(
-                            context, mBrandedColorScheme));
+                    tintArcBackground(OmniboxResourceProvider.getSuggestionsDropdownBackgroundColor(
+                            context, mBrandedColorScheme)));
             mInnerRect.setColor(
-                    OmniboxResourceProvider.getStandardSuggestionBackgroundColor(
-                            context, mBrandedColorScheme));
+                    tintArcBackground(OmniboxResourceProvider.getStandardSuggestionBackgroundColor(
+                            context, mBrandedColorScheme)));
         }
 
         updateBackgroundColor();
+    }
+
+    /** Keep native focus/hover drawables while sharing the Arc window palette. */
+    @Override
+    public void setArcSurfaceColor(@Nullable Integer color) {
+        if (color == null ? mArcSurfaceColor == null : color.equals(mArcSurfaceColor)) return;
+        mArcSurfaceColor = color;
+        updateVisualsForState(mBrandedColorScheme);
     }
 
     private void updateBackgroundColor() {
         Context context = getContext();
         if (mShowFocusRing) {
             mLocationBarBackground.setBackgroundColor(
-                    OmniboxResourceProvider.getTabletToolbarTextBoxStandbyBackgroundColor(
-                            context, mBrandedColorScheme));
+                    tintArcBackground(OmniboxResourceProvider.getTabletToolbarTextBoxStandbyBackgroundColor(
+                            context, mBrandedColorScheme)));
             @ColorInt
             int standbyBorderColor =
                     OmniboxResourceProvider.getColorPrimary(context, mBrandedColorScheme);
@@ -547,8 +556,20 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
                             color,
                             mBrandedColorScheme == BrandedColorScheme.INCOGNITO,
                             /* isCustomTab= */ false);
-            mLocationBarBackground.setBackgroundColor(textBoxColor);
+            mLocationBarBackground.setBackgroundColor(tintArcBackground(textBoxColor));
         }
+    }
+
+    private int tintArcBackground(int nativeColor) {
+        Integer surface = mArcSurfaceColor;
+        if (surface == null) return nativeColor;
+        int result = 0xff000000;
+        for (int shift = 0; shift <= 16; shift += 8) {
+            int nativeChannel = (nativeColor >> shift) & 255;
+            int arcChannel = (surface >> shift) & 255;
+            result |= Math.round(nativeChannel * 0.35f + arcChannel * 0.65f) << shift;
+        }
+        return result;
     }
 
     @Override
@@ -607,6 +628,7 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
             mGlifBorderDrawable.setCornerRadius(mOmniboxSuggestionDropdownRoundCornerRadius);
             updateLayoutAndBackground();
         }
+        if (mArcSurfaceColor != null) updateVisualsForState(mBrandedColorScheme);
     }
 
     @Override

@@ -67,6 +67,7 @@ class HostGateCoverageTests(unittest.TestCase):
                 gates.host_gate(jar,out)
         filters=[args[args.index('-f')+1] for args in calls if args[0]==str(runner)]
         self.assertEqual(set(filters),{
+            "org.chromium.chrome.browser.arc.ArcAboutDialogTest.*",
             "org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearanceTest.*",
             "org.chromium.chrome.browser.arc.ArcColorPickerTest.*",
             "org.chromium.chrome.browser.arc.ArcFrameDispatchTest.*",

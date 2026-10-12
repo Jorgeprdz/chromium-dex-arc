@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="arc_about">Acerca de Archium</string>
+    <string name="arc_version">Versión %1$s (%2$d)</string>
     <string name="arc_bookmarks">Marcadores</string>
     <string name="arc_bookmark_root">‹ Carpetas</string>
     <string name="arc_frame_color">Color del navegador</string>

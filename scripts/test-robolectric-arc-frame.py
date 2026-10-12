@@ -41,6 +41,7 @@ import android.view.ContextThemeWrapper;
 import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.Outline;
+import android.graphics.Rect;
 import android.graphics.drawable.ColorDrawable;
 import android.view.View;
 import android.view.ViewGroup;
@@ -94,6 +95,7 @@ public class FramePaletteProbe {
             ArcDesktopAppearance.setUiMode(a,ArcDesktopPolicy.MODE_ARC);
         }
         int dp(int n) { return n; }
+        int reservedLeftWidth() { return 52; }
         void applyActiveSurfaceClip() {} // Native compositor is outside this bounded view probe.
         int frameSurface(boolean incognito) __FRAME__
         void applyFrameGeometry() __BODY__
@@ -128,6 +130,12 @@ public class FramePaletteProbe {
             ArcDesktopAppearance.preferences(a).edit().putInt(ArcDesktopAppearance.COLOR_KEY,0xffee4400).commit();
             assertEquals(0xfff28458,ArcDesktopAppearance.surface(a,false));
         } finally { ArcDesktopAppearance.setPreviewColor(a,null);a.finish();other.finish(); }
+    }
+    @Test public void holderRectClipExcludesTheSidebarAndFrameGap() {
+        Frame f=new Frame(activity());
+        f.mCompositorViewHolder.layout(8,8,328,488);
+        f.applyFrameGeometry();
+        assertEquals(new Rect(52,0,320,480),f.mCompositorViewHolder.getClipBounds());
     }
     @Test public void chosenPaletteKeepsVisibleHueAndContrast() {
         Activity a=activity();

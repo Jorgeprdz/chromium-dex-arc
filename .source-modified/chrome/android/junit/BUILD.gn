@@ -431,6 +431,7 @@ if (is_android) {
   # down.
   robolectric_library("chrome_junit_tests_org.chromium.chrome.browser") {
     sources = [
+      "src/org/chromium/chrome/browser/arc/ArcAboutDialogTest.java",
       "src/org/chromium/chrome/browser/arc/ArcColorPickerTest.java",
       "src/org/chromium/chrome/browser/arc/ArcCompactOmniboxTest.java",
       "src/org/chromium/chrome/browser/arc/ArcFrameDispatchTest.java",

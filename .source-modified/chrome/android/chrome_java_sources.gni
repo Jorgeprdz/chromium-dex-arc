@@ -5,6 +5,7 @@
 import("//content/public/common/features.gni")
 
 chrome_java_sources = [
+  "java/src/org/chromium/chrome/browser/arc/ArcAboutDialog.java",
   "java/src/org/chromium/chrome/browser/arc/ArcCollectionsController.java",
   "java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java",
   "java/src/org/chromium/chrome/browser/arc/ArcNativeTabSession.java",

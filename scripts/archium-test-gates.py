@@ -120,6 +120,7 @@ def host_gate(android_jar: Path, out_dir: Path, *, phase: str = 'all') -> None:
     jvm_env = dict(host_env)
     jvm_env["JAVA_TOOL_OPTIONS"] = jvm_env.get("JAVA_TOOL_OPTIONS", "") + " -ea"
     for test_filter in (
+            "org.chromium.chrome.browser.arc.ArcAboutDialogTest.*",
             "org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearanceTest.*",
             "org.chromium.chrome.browser.arc.ArcColorPickerTest.*",
             "org.chromium.chrome.browser.arc.ArcCompactOmniboxTest.*",

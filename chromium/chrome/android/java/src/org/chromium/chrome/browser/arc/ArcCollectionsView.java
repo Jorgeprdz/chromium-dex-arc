@@ -162,11 +162,12 @@ public final class ArcCollectionsView extends LinearLayout {
             if (child instanceof ImageButton) {
                 ImageButton tile = (ImageButton) child;
                 tile.clearColorFilter();
-                GradientDrawable shape = background(mSurface, 16);
+                int tileSurface = ArcDesktopPolicy.activeTabSurface(mSurface);
+                GradientDrawable shape = background(tileSurface, 16);
                 tile.setBackground(new RippleDrawable(ColorStateList.valueOf(mInteraction), shape, null));
                 tile.setOnHoverListener((view, event) -> {
                     if (event.getAction() == android.view.MotionEvent.ACTION_HOVER_ENTER) shape.setColor(mInteraction);
-                    else if (event.getAction() == android.view.MotionEvent.ACTION_HOVER_EXIT) shape.setColor(mSurface);
+                    else if (event.getAction() == android.view.MotionEvent.ACTION_HOVER_EXIT) shape.setColor(tileSurface);
                     return false;
                 });
             } else if (child instanceof Button) {

@@ -22,10 +22,11 @@ diff --git a/chrome/android/chrome_java_resources.gni b/chrome/android/chrome_ja
 diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java_sources.gni
 --- a/chrome/android/chrome_java_sources.gni
 +++ b/chrome/android/chrome_java_sources.gni
-@@ -5,6 +5,21 @@
+@@ -5,6 +5,22 @@
  import("//content/public/common/features.gni")
 
  chrome_java_sources = [
++  "java/src/org/chromium/chrome/browser/arc/ArcAboutDialog.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcCollectionsController.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcNativeTabSession.java",
@@ -961,7 +962,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
          if (mVerticalTabsPreferenceListener != null) {
              ContextUtils.getAppSharedPreferences()
                      .unregisterOnSharedPreferenceChangeListener(mVerticalTabsPreferenceListener);
-@@ -1977,6 +1997,38 @@
+@@ -1977,6 +1997,39 @@
          return mGlicPromoCoordinator != null;
      }
 
@@ -972,6 +973,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
 +        View toolbarHairline = mActivity.findViewById(R.id.toolbar_hairline);
 +
 +        var toolbarCoordinator = mToolbarManager.getTopToolbarCoordinator();
++        mToolbarManager.setArcToolbarSuppressed(suppressed);
 +        if (suppressed) {
 +            mArcToolbarOriginalVisibility = toolbarView.getVisibility();
 +            if (toolbarHairline != null) {
@@ -1000,7 +1002,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
      private void updateTopControlsHeight() {
          updateTopControlsHeight(/* allowAnimations= */ true);
      }
-@@ -2473,34 +2525,70 @@
+@@ -2473,34 +2526,70 @@
          }
 
          if (VerticalTabUtils.isVerticalTabsEligible(mActivity)) {
@@ -1094,7 +1096,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
              if (mToolbarManager != null) {
                  mToolbarManager.setVerticalTabsAutoHiddenSupplier(
                          mVerticalTabsSideUiCoordinator.getIsAutoHiddenSupplier());
-@@ -2600,7 +2688,14 @@
+@@ -2600,7 +2689,14 @@
                              var transitionCoord =
                                      assumeNonNull(mToolbarManager)
                                              .getTabStripTransitionCoordinator();
@@ -1110,7 +1112,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
                          } else {
                              assumeNonNull(mVerticalTabsSideUiCoordinator)
                                      .setVisible(/* show= */ false, /* suppressAnimations= */ false);
-@@ -2679,9 +2774,11 @@
+@@ -2679,9 +2775,11 @@
      private void onVerticalTabsActiveChanged(boolean active) {
          var transitionCoordinator =
                  assumeNonNull(mToolbarManager).getTabStripTransitionCoordinator();
@@ -1123,7 +1125,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
          if (active) {
              transitionCoordinator.suppressTabStrip(true);
          } else {
-@@ -3429,8 +3526,12 @@
+@@ -3429,8 +3527,12 @@
       * activated.
       */
      public BooleanSupplier canActivateTabLayoutToggleMenu() {
@@ -1137,13 +1139,36 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
                          && mVerticalTabsSideUiCoordinator.canActivateTabLayoutToggleMenu()
                          && !VerticalTabUtils.isTabLayoutSwitchingInProgress();
      }
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java b/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java
+@@ -3945,8 +3945,17 @@
+         updateToolbarSceneLayerSuppression();
+     }
+
++    private boolean mIsArcToolbarSuppressed;
++
++    /** Suppress the composited texture when the real omnibox is hosted in the Arc sidebar. */
++    public void setArcToolbarSuppressed(boolean suppressed) {
++        mIsArcToolbarSuppressed = suppressed;
++        updateToolbarSceneLayerSuppression();
++    }
++
+     private void updateToolbarSceneLayerSuppression() {
+-        mSuppressToolbarSceneLayerSupplier.set(mIsXrFsm || mIsVerticalTabsHiddenDueToNarrow);
++        mSuppressToolbarSceneLayerSupplier.set(
++                mIsXrFsm || mIsVerticalTabsHiddenDueToNarrow || mIsArcToolbarSuppressed);
+     }
+
+     @VisibleForTesting
 diff --git a/chrome/android/junit/BUILD.gn b/chrome/android/junit/BUILD.gn
 --- a/chrome/android/junit/BUILD.gn
 +++ b/chrome/android/junit/BUILD.gn
-@@ -431,6 +431,14 @@
+@@ -431,6 +431,15 @@
    # down.
    robolectric_library("chrome_junit_tests_org.chromium.chrome.browser") {
      sources = [
++      "src/org/chromium/chrome/browser/arc/ArcAboutDialogTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcColorPickerTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcCompactOmniboxTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcFrameDispatchTest.java",
@@ -1155,7 +1180,7 @@ diff --git a/chrome/android/junit/BUILD.gn b/chrome/android/junit/BUILD.gn
        "//chrome/android/java/src/org/chromium/chrome/browser/bottombar/BottomBarAppMenuUpdateBadgeControllerUnitTest.java",
        "//chrome/android/java/src/org/chromium/chrome/browser/bottombar/BottomBarContainerCoordinatorUnitTest.java",
        "src/org/chromium/chrome/browser/BrowserExitReasonTrackerUnitTest.java",
-@@ -463,6 +471,7 @@
+@@ -463,6 +472,7 @@
      ]
 
      deps = [
@@ -1847,10 +1872,107 @@ diff --git a/chrome/browser/sync/sync_service_factory.cc b/chrome/browser/sync/s
    builder.SetPrefService(profile->GetPrefs());
    builder.SetPrefServiceSyncable(PrefServiceSyncableFromProfile(profile));
    builder.SetTabGroupSyncService(GetTabGroupSyncService(profile));
+diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarLayout.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarLayout.java
+--- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarLayout.java
++++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarLayout.java
+@@ -231,6 +231,9 @@
+         mDeleteButton.setBackgroundResource(resourceId);
+     }
+
++    /** Optional window palette; phone layouts retain their native appearance. */
++    public void setArcSurfaceColor(@Nullable Integer color) {}
++
+     /* package */ void updateVisualsForState(@BrandedColorScheme int brandedColorScheme) {
+         updateActivationChipVisuals(brandedColorScheme);
+     }
 diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java
 --- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java
 +++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java
-@@ -727,9 +727,13 @@
+@@ -112,6 +112,7 @@
+     private int mTargetPopoverLeftOffset;
+     private @BrandedColorScheme int mBrandedColorScheme = BrandedColorScheme.APP_DEFAULT;
+     private boolean mShowFocusRing;
++    private @Nullable Integer mArcSurfaceColor;
+     private boolean mIsHovered;
+     private boolean mIsGlifActive;
+     private boolean mStartGlifOnNextLayout;
+@@ -512,28 +513,36 @@
+         if (mLayoutMode == FuseboxLayoutMode.SUGGESTIONS_POPOVER) {
+             @ColorInt
+             int popoverColor =
+-                    OmniboxResourceProvider.getPopoverSuggestionBackgroundColor(
+-                            context, mBrandedColorScheme);
++                    tintArcBackground(OmniboxResourceProvider.getPopoverSuggestionBackgroundColor(
++                            context, mBrandedColorScheme));
+             mOuterRect.setColor(popoverColor);
+             mInnerRect.setColor(popoverColor);
+         } else {
+             mOuterRect.setColor(
+-                    OmniboxResourceProvider.getSuggestionsDropdownBackgroundColor(
+-                            context, mBrandedColorScheme));
++                    tintArcBackground(OmniboxResourceProvider.getSuggestionsDropdownBackgroundColor(
++                            context, mBrandedColorScheme)));
+             mInnerRect.setColor(
+-                    OmniboxResourceProvider.getStandardSuggestionBackgroundColor(
+-                            context, mBrandedColorScheme));
++                    tintArcBackground(OmniboxResourceProvider.getStandardSuggestionBackgroundColor(
++                            context, mBrandedColorScheme)));
+         }
+
+         updateBackgroundColor();
++    }
++
++    /** Keep native focus/hover drawables while sharing the Arc window palette. */
++    @Override
++    public void setArcSurfaceColor(@Nullable Integer color) {
++        if (color == null ? mArcSurfaceColor == null : color.equals(mArcSurfaceColor)) return;
++        mArcSurfaceColor = color;
++        updateVisualsForState(mBrandedColorScheme);
+     }
+
+     private void updateBackgroundColor() {
+         Context context = getContext();
+         if (mShowFocusRing) {
+             mLocationBarBackground.setBackgroundColor(
+-                    OmniboxResourceProvider.getTabletToolbarTextBoxStandbyBackgroundColor(
+-                            context, mBrandedColorScheme));
++                    tintArcBackground(OmniboxResourceProvider.getTabletToolbarTextBoxStandbyBackgroundColor(
++                            context, mBrandedColorScheme)));
+             @ColorInt
+             int standbyBorderColor =
+                     OmniboxResourceProvider.getColorPrimary(context, mBrandedColorScheme);
+@@ -547,8 +556,20 @@
+                             color,
+                             mBrandedColorScheme == BrandedColorScheme.INCOGNITO,
+                             /* isCustomTab= */ false);
+-            mLocationBarBackground.setBackgroundColor(textBoxColor);
+-        }
++            mLocationBarBackground.setBackgroundColor(tintArcBackground(textBoxColor));
++        }
++    }
++
++    private int tintArcBackground(int nativeColor) {
++        Integer surface = mArcSurfaceColor;
++        if (surface == null) return nativeColor;
++        int result = 0xff000000;
++        for (int shift = 0; shift <= 16; shift += 8) {
++            int nativeChannel = (nativeColor >> shift) & 255;
++            int arcChannel = (surface >> shift) & 255;
++            result |= Math.round(nativeChannel * 0.35f + arcChannel * 0.65f) << shift;
++        }
++        return result;
+     }
+
+     @Override
+@@ -607,6 +628,7 @@
+             mGlifBorderDrawable.setCornerRadius(mOmniboxSuggestionDropdownRoundCornerRadius);
+             updateLayoutAndBackground();
+         }
++        if (mArcSurfaceColor != null) updateVisualsForState(mBrandedColorScheme);
+     }
+
+     @Override
+@@ -727,9 +749,13 @@
              int additionalWidth =
                      isPopoverMode ? mPopoverAdditionalWidth : mLocationBarTabletFuseboxPopupInset;
              // Determine available headroom above toolbar (stored in mPositionArray[1]).
@@ -1867,7 +1989,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
                  availableTopHeadroomPx = Math.max(0, mPositionArray[1]);
              }
              int topMarginExpansion = Math.min(expansionPx, availableTopHeadroomPx);
-@@ -845,18 +849,44 @@
+@@ -845,18 +871,44 @@
          }
      }
 
@@ -1917,7 +2039,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
          int unexpandedWidth =
                  mHolder.getMeasuredWidth() + layoutParams.leftMargin + layoutParams.rightMargin;
          int unexpandedLeft = mPositionArray[0] - layoutParams.leftMargin;
-@@ -996,9 +1026,8 @@
+@@ -996,9 +1048,8 @@
       * falling back to the window width before the container has been laid out.
       */
      private @Px int getAvailableContainerWidth() {
@@ -1932,7 +2054,12 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
 diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTabletUnitTest.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTabletUnitTest.java
 --- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTabletUnitTest.java
 +++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTabletUnitTest.java
-@@ -12,11 +12,14 @@
+@@ -8,15 +8,19 @@
+ import static org.junit.Assert.assertEquals;
+ import static org.junit.Assert.assertFalse;
+ import static org.junit.Assert.assertNotNull;
++import static org.junit.Assert.assertNotEquals;
+ import static org.junit.Assert.assertNull;
  import static org.junit.Assert.assertTrue;
  import static org.mockito.Mockito.doReturn;
  import static org.mockito.Mockito.lenient;
@@ -1947,7 +2074,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
  import android.view.Gravity;
  import android.view.InputDevice;
  import android.view.MotionEvent;
-@@ -31,6 +34,7 @@
+@@ -31,6 +35,7 @@
 
  import androidx.annotation.ColorInt;
 
@@ -1955,7 +2082,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
  import org.junit.Before;
  import org.junit.Rule;
  import org.junit.Test;
-@@ -41,6 +45,7 @@
+@@ -41,6 +46,7 @@
  import org.mockito.quality.Strictness;
  import org.robolectric.Robolectric;
  import org.robolectric.RuntimeEnvironment;
@@ -1963,7 +2090,52 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
  import org.robolectric.annotation.Config;
  import org.robolectric.shadows.ShadowLooper;
  import org.robolectric.shadows.ShadowToast;
-@@ -991,7 +996,9 @@
+@@ -808,6 +814,44 @@
+     }
+
+     @Test
++    public void testArcPaletteUnfocusedAndRestoredChromeScheme() {
++        mLocationBarTablet.updateVisualsForState(BrandedColorScheme.APP_DEFAULT);
++        LocationBarBackgroundDrawable background =
++                (LocationBarBackgroundDrawable) mLocationBarTablet.getBackground();
++        int original = background.getBackgroundGradient().getColor().getDefaultColor();
++        mLocationBarTablet.setArcSurfaceColor(0xffe5b09d);
++        assertNotEquals(original,
++                background.getBackgroundGradient().getColor().getDefaultColor());
++        mLocationBarTablet.setShowFocusRing(true);
++        assertNotEquals(OmniboxResourceProvider.getTabletToolbarTextBoxStandbyBackgroundColor(
++                mActivity, BrandedColorScheme.APP_DEFAULT),
++                background.getBackgroundGradient().getColor().getDefaultColor());
++        mLocationBarTablet.setShowFocusRing(false);
++        mLocationBarTablet.setArcSurfaceColor(null);
++        assertEquals(original, background.getBackgroundGradient().getColor().getDefaultColor());
++    }
++
++    @Test
++    @EnableFeatures(OmniboxFeatureList.OMNIBOX_MULTIMODAL_INPUT)
++    public void testArcPaletteFocusedPopupSurvivesSchemeUpdates() {
++        mLocationBarTablet.onFuseboxStateChanged(FuseboxState.EXPANDED);
++        mLocationBarTablet.setArcSurfaceColor(0xffe5b09d);
++        mLocationBarTablet.updateVisualsForState(BrandedColorScheme.INCOGNITO);
++        LayerDrawable background = (LayerDrawable) mLocationBarTablet.getBackground();
++        GradientDrawable outer =
++                (GradientDrawable) background.findDrawableByLayerId(R.id.focused_popup_bg);
++        GradientDrawable inner =
++                (GradientDrawable) background.findDrawableByLayerId(R.id.focused_popup_inner_bg);
++        assertNotEquals(OmniboxResourceProvider.getSuggestionsDropdownBackgroundColor(
++                mActivity, BrandedColorScheme.INCOGNITO), outer.getColor().getDefaultColor());
++        assertNotEquals(OmniboxResourceProvider.getStandardSuggestionBackgroundColor(
++                mActivity, BrandedColorScheme.INCOGNITO), inner.getColor().getDefaultColor());
++        mLocationBarTablet.setArcSurfaceColor(null);
++        assertEquals(OmniboxResourceProvider.getSuggestionsDropdownBackgroundColor(
++                mActivity, BrandedColorScheme.INCOGNITO), outer.getColor().getDefaultColor());
++    }
++
++    @Test
+     public void testUpdateVisualsForState_unfocused() {
+         // TODO(https://crbug.com/495794043): Replace with a render test.
+         mLocationBarTablet.updateVisualsForState(BrandedColorScheme.INCOGNITO);
+@@ -991,7 +1035,9 @@
 
      @Test
      public void isTooNarrowForExpandedActivationChip_atThreshold() {
@@ -1974,7 +2146,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
          container.layout(0, 0, mLocationBarTablet.mMinWidthForExpandedActivationChip, 100);
          mLocationBarTablet.setHolderAndContainer(mHolderView, container);
 
-@@ -1000,7 +1007,9 @@
+@@ -1000,7 +1046,9 @@
 
      @Test
      public void isTooNarrowForExpandedActivationChip_aboveThreshold() {
@@ -1985,7 +2157,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
          container.layout(0, 0, mLocationBarTablet.mMinWidthForExpandedActivationChip + 1, 100);
          mLocationBarTablet.setHolderAndContainer(mHolderView, container);
 
-@@ -1078,8 +1087,188 @@
+@@ -1078,8 +1126,188 @@
          assertEquals(0f, urlBar.getTranslationX(), MathUtils.EPSILON);
      }
 
@@ -3624,9 +3796,11 @@ diff --git a/chrome/android/java/res/values/arc_strings.xml b/chrome/android/jav
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/res/values/arc_strings.xml
-@@ -0,0 +1,51 @@
+@@ -0,0 +1,53 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<resources>
++    <string name="arc_about">Acerca de Archium</string>
++    <string name="arc_version">Versión %1$s (%2$d)</string>
 +    <string name="arc_bookmarks">Marcadores</string>
 +    <string name="arc_bookmark_root">‹ Carpetas</string>
 +    <string name="arc_frame_color">Color del navegador</string>
@@ -3676,6 +3850,63 @@ new file mode 100644
 +    </string-array>
 +    <string name="arc_new_tab">Nueva pestaña</string>
 +</resources>
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAboutDialog.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAboutDialog.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAboutDialog.java
+@@ -0,0 +1,52 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++import android.app.Activity;
++import android.app.AlertDialog;
++import android.content.pm.PackageInfo;
++import android.content.pm.PackageManager;
++import android.view.Gravity;
++import android.widget.ImageView;
++import android.widget.LinearLayout;
++import android.widget.TextView;
++
++import java.util.Locale;
++
++/** Displays the installed application's approved icon and actual package version. */
++public final class ArcAboutDialog {
++    private ArcAboutDialog() {}
++
++    public static AlertDialog show(Activity activity, String title, String versionFormat) {
++        int padding = Math.round(24 * activity.getResources().getDisplayMetrics().density);
++        LinearLayout content = new LinearLayout(activity);
++        content.setOrientation(LinearLayout.VERTICAL);
++        content.setGravity(Gravity.CENTER_HORIZONTAL);
++        content.setPadding(padding, padding, padding, padding);
++        ImageView logo = new ImageView(activity);
++        logo.setTag("arc-about-logo");
++        logo.setContentDescription("Archium");
++        logo.setImageDrawable(activity.getPackageManager().getApplicationIcon(
++                activity.getApplicationInfo()));
++        logo.setScaleType(ImageView.ScaleType.FIT_CENTER);
++        content.addView(logo, new LinearLayout.LayoutParams(padding * 3, padding * 3));
++        TextView version = new TextView(activity);
++        version.setTag("arc-about-version");
++        version.setGravity(Gravity.CENTER);
++        version.setPadding(0, padding, 0, 0);
++        try {
++            PackageInfo info = activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0);
++            String name = info.versionName == null ? Long.toString(info.getLongVersionCode()) : info.versionName;
++            version.setText(String.format(Locale.getDefault(), versionFormat, name, info.getLongVersionCode()));
++        } catch (PackageManager.NameNotFoundException unavailable) {
++            // Own package metadata should exist; an unavailable package manager must not crash UI.
++            version.setText("Versión no disponible");
++        }
++        content.addView(version);
++        AlertDialog dialog = new AlertDialog.Builder(activity).setTitle(title).setView(content)
++                .setPositiveButton(android.R.string.ok, null).create();
++        dialog.show();
++        return dialog;
++    }
++}
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAppearanceDialog.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAppearanceDialog.java
 new file mode 100644
 --- /dev/null
@@ -3843,7 +4074,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollecti
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java
-@@ -0,0 +1,417 @@
+@@ -0,0 +1,418 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -4008,11 +4239,12 @@ new file mode 100644
 +            if (child instanceof ImageButton) {
 +                ImageButton tile = (ImageButton) child;
 +                tile.clearColorFilter();
-+                GradientDrawable shape = background(mSurface, 16);
++                int tileSurface = ArcDesktopPolicy.activeTabSurface(mSurface);
++                GradientDrawable shape = background(tileSurface, 16);
 +                tile.setBackground(new RippleDrawable(ColorStateList.valueOf(mInteraction), shape, null));
 +                tile.setOnHoverListener((view, event) -> {
 +                    if (event.getAction() == android.view.MotionEvent.ACTION_HOVER_ENTER) shape.setColor(mInteraction);
-+                    else if (event.getAction() == android.view.MotionEvent.ACTION_HOVER_EXIT) shape.setColor(mSurface);
++                    else if (event.getAction() == android.view.MotionEvent.ACTION_HOVER_EXIT) shape.setColor(tileSurface);
 +                    return false;
 +                });
 +            } else if (child instanceof Button) {
@@ -4773,7 +5005,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopC
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
-@@ -0,0 +1,1035 @@
+@@ -0,0 +1,1093 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -4785,6 +5017,7 @@ new file mode 100644
 +import android.graphics.Color;
 +import android.graphics.Outline;
 +import android.graphics.Path;
++import android.graphics.Rect;
 +import android.os.Build;
 +import android.graphics.drawable.Drawable;
 +import android.graphics.drawable.ColorDrawable;
@@ -4813,6 +5046,7 @@ new file mode 100644
 +
 +import java.util.function.Consumer;
 +import java.util.function.Supplier;
++import java.util.Objects;
 +import org.chromium.chrome.browser.tab.Tab;
 +import org.chromium.chrome.browser.tabmodel.TabCreator;
 +import org.chromium.chrome.browser.tabmodel.TabModel;
@@ -4823,6 +5057,7 @@ new file mode 100644
 +import org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabListViewBinder;
 +import org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabRailLayout;
 +import org.chromium.chrome.browser.toolbar.top.ToolbarTablet;
++import org.chromium.chrome.browser.omnibox.LocationBarLayout;
 +
 +/** Composes profile-owned Arc collections around Chromium's real vertical tab rail. */
 +public final class ArcDesktopCoordinator {
@@ -4832,6 +5067,7 @@ new file mode 100644
 +    private final View mNativeNewTabButton;
 +    private final int mNativeNewTabVisibility;
 +    private final TextView mNewTabRow;
++    private final Drawable mNewTabIcon;
 +    private final View mCaptionSpacer;
 +    private final ArcNavigationControls mNavigationState;
 +    private final LinearLayout mColumn;
@@ -4866,6 +5102,7 @@ new file mode 100644
 +    private final ColorStateList mOriginalRailBackgroundTint;
 +    private final ViewOutlineProvider mOriginalContentOutlineProvider;
 +    private final boolean mOriginalContentClipToOutline;
++    private final Rect mOriginalContentClipBounds;
 +    private final int mOriginalContentMarginLeft;
 +    private final int mOriginalContentMarginTop;
 +    private final int mOriginalContentMarginRight;
@@ -4902,7 +5139,9 @@ new file mode 100644
 +    private View mClippedSurface;
 +    private ViewOutlineProvider mClippedSurfaceOriginalOutlineProvider;
 +    private boolean mClippedSurfaceOriginalClipToOutline;
++    private Rect mClippedSurfaceOriginalClipBounds;
 +    private AlertDialog mColorDialog;
++    private AlertDialog mAboutDialog;
 +    private boolean mPaletteInitialized;
 +    private int mPaletteSurface;
 +    private boolean mPaletteDesktop;
@@ -4987,6 +5226,7 @@ new file mode 100644
 +        mOriginalFrameBackground = mFrameRoot == null ? null : mFrameRoot.getBackground();
 +        mOriginalContentOutlineProvider = compositorViewHolder.getOutlineProvider();
 +        mOriginalContentClipToOutline = compositorViewHolder.getClipToOutline();
++        mOriginalContentClipBounds = compositorViewHolder.getClipBounds();
 +        ViewGroup.LayoutParams rawContentLayoutParams = compositorViewHolder.getLayoutParams();
 +        if (rawContentLayoutParams instanceof ViewGroup.MarginLayoutParams) {
 +            ViewGroup.MarginLayoutParams margins = (ViewGroup.MarginLayoutParams) rawContentLayoutParams;
@@ -5117,6 +5357,8 @@ new file mode 100644
 +        mHeader.addView(mHeaderActions);
 +        mColumn.addView(mHeader);
 +        mNewTabRow = new TextView(activity);
++        mNewTabIcon = Objects.requireNonNull(activity.getDrawable(R.drawable.ic_add_24dp)).mutate();
++        mNewTabIcon.setBounds(0, 0, dp(24), dp(24));
 +        mNewTabRow.setText("+  " + activity.getString(R.string.arc_new_tab));
 +        mNewTabRow.setContentDescription(activity.getString(R.string.arc_new_tab));
 +        mNewTabRow.setTooltipText(activity.getString(R.string.arc_new_tab));
@@ -5153,6 +5395,17 @@ new file mode 100644
 +                            dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
 +        }
 +        mColumn.addView(mFooter);
++        ImageButton about = new ImageButton(activity);
++        about.setImageResource(android.R.drawable.ic_menu_info_details);
++        about.setContentDescription(activity.getString(R.string.arc_about));
++        about.setTooltipText(activity.getString(R.string.arc_about));
++        about.setOnClickListener(v -> {
++            if (mDestroyed) return;
++            if (mAboutDialog != null) mAboutDialog.dismiss();
++            mAboutDialog = ArcAboutDialog.show(activity, activity.getString(R.string.arc_about),
++                    activity.getString(R.string.arc_version));
++        });
++        mFooter.addView(about, new LinearLayout.LayoutParams(dp(44), dp(44)));
 +        rail.addView(mColumn, new ViewGroup.LayoutParams(-1, -1));
 +
 +        mArcContentOutlineProvider =
@@ -5470,6 +5723,13 @@ new file mode 100644
 +        mPaletteDesktop = desktop;
 +        mPaletteIncognito = incognito;
 +        mPaletteSurface = surface;
++        if (paletteChanged) {
++            View locationBar = mLocationBarHost.findViewById(R.id.location_bar);
++            if (locationBar instanceof LocationBarLayout) {
++                ((LocationBarLayout) locationBar).setArcSurfaceColor(
++                        desktop ? surface : null);
++            }
++        }
 +        if (paletteChanged && mNativeTabs instanceof VerticalTabRailLayout) {
 +            // This binder restores upstream colors/tints too when ARC is no longer active.
 +            VerticalTabListViewBinder.refreshArcAppearance(
@@ -5503,17 +5763,13 @@ new file mode 100644
 +        mNavigationRow.setVisibility(View.VISIBLE);
 +        mNavigationControls.setVisibility(expanded ? View.VISIBLE : View.GONE);
 +        mHeaderActions.setVisibility(expanded ? View.VISIBLE : View.GONE);
-+        mNewTabRow.setVisibility(View.VISIBLE);
-+        CharSequence newTabLabel = expanded ? "+  " + mActivity.getString(R.string.arc_new_tab) : "+";
-+        if (!TextUtils.equals(mNewTabRow.getText(), newTabLabel)) mNewTabRow.setText(newTabLabel);
 +        mCompactOmnibox.setCompact(!expanded);
-+        mNewTabRow.setGravity(Gravity.CENTER_VERTICAL
-+                | (expanded ? Gravity.START : Gravity.CENTER_HORIZONTAL));
-+        mNewTabRow.setEnabled(mNativeNewTabButton.isEnabled());
-+        mNativeNewTabButton.setVisibility(View.GONE);
++        updateNewTabRow(expanded);
 +        // The native app menu remains reachable while collapsed. Secondary footer actions can
 +        // disappear so the compact rail does not retain expanded hitboxes.
 +        mFooter.setVisibility(View.VISIBLE);
++        mFooter.setOrientation(expanded ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
++        mFooter.setGravity(expanded ? Gravity.START : Gravity.CENTER_HORIZONTAL);
 +        if (mExtensionsToolbarHost != null) {
 +            mExtensionsToolbarHost.setVisibility(expanded ? mExtensionsToolbarOriginalVisibility : View.GONE);
 +        }
@@ -5528,6 +5784,7 @@ new file mode 100644
 +        // animation frame; Chromium continues animating the reserved width and viewport.
 +        if (!paletteChanged) return;
 +        int foreground = ArcDesktopPolicy.foreground(surface);
++        mNewTabIcon.setTint(foreground);
 +        mColumn.setBackgroundColor(surface);
 +        styleInteraction(mNewTabRow, foreground, ArcDesktopPolicy.selection(surface));
 +        for (int i = 0; i < mNavigationControls.getChildCount(); i++) {
@@ -5549,6 +5806,19 @@ new file mode 100644
 +    private int reservedLeftWidth() {
 +        Integer width = mReservedLeftWidth.get();
 +        return Math.max(0, width == null ? 0 : width);
++    }
++
++    private void updateNewTabRow(boolean expanded) {
++        mNewTabRow.setVisibility(View.VISIBLE);
++        CharSequence label = expanded ? mActivity.getString(R.string.arc_new_tab) : "";
++        if (!TextUtils.equals(mNewTabRow.getText(), label)) mNewTabRow.setText(label);
++        mNewTabRow.setCompoundDrawablesRelative(mNewTabIcon, null, null, null);
++        mNewTabRow.setCompoundDrawablePadding(expanded ? dp(8) : 0);
++        int padding = expanded ? dp(12) : Math.max(0, (mRail.getWidth() - dp(24)) / 2);
++        mNewTabRow.setPadding(padding, 0, padding, 0);
++        mNewTabRow.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
++        mNewTabRow.setEnabled(mNativeNewTabButton.isEnabled());
++        mNativeNewTabButton.setVisibility(View.GONE);
 +    }
 +
 +    private int arcClipLeftForView(View view) {
@@ -5579,15 +5849,21 @@ new file mode 100644
 +        mClippedSurface.removeOnAttachStateChangeListener(mSurfaceAttachStateListener);
 +        mClippedSurface.setOutlineProvider(mClippedSurfaceOriginalOutlineProvider);
 +        mClippedSurface.setClipToOutline(mClippedSurfaceOriginalClipToOutline);
++        mClippedSurface.setClipBounds(mClippedSurfaceOriginalClipBounds);
 +        mClippedSurface.invalidateOutline();
 +        mClippedSurface = null;
 +        mClippedSurfaceOriginalOutlineProvider = null;
++        mClippedSurfaceOriginalClipBounds = null;
 +    }
 +
 +    private void applyActiveSurfaceClip() {
 +        View activeSurface = mCompositorViewHolder.getActiveSurfaceView();
 +        if (activeSurface == mClippedSurface) {
-+            if (activeSurface != null) activeSurface.invalidateOutline();
++            if (activeSurface != null) {
++                activeSurface.setClipBounds(new Rect(arcClipLeftForView(activeSurface), 0,
++                        activeSurface.getWidth(), activeSurface.getHeight()));
++                activeSurface.invalidateOutline();
++            }
 +            return;
 +        }
 +        restoreClippedSurface();
@@ -5595,9 +5871,12 @@ new file mode 100644
 +        mClippedSurface = activeSurface;
 +        mClippedSurfaceOriginalOutlineProvider = activeSurface.getOutlineProvider();
 +        mClippedSurfaceOriginalClipToOutline = activeSurface.getClipToOutline();
++        mClippedSurfaceOriginalClipBounds = activeSurface.getClipBounds();
 +        activeSurface.addOnAttachStateChangeListener(mSurfaceAttachStateListener);
 +        activeSurface.setOutlineProvider(mArcContentOutlineProvider);
 +        activeSurface.setClipToOutline(true);
++        activeSurface.setClipBounds(new Rect(arcClipLeftForView(activeSurface), 0,
++                activeSurface.getWidth(), activeSurface.getHeight()));
 +        activeSurface.invalidateOutline();
 +    }
 +
@@ -5635,6 +5914,11 @@ new file mode 100644
 +                mCompositorViewHolder.setLayoutParams(margins);
 +            }
 +        }
++        // A rectangular bound also constrains SurfaceView's hole punch. Outline-only clipping
++        // can leave pixels exposed in the gap when its asymmetric corner path is composed.
++        mCompositorViewHolder.setClipBounds(new Rect(
++                Math.min(reservedLeftWidth(), mCompositorViewHolder.getWidth()), 0,
++                mCompositorViewHolder.getWidth(), mCompositorViewHolder.getHeight()));
 +        mCompositorViewHolder.invalidateOutline();
 +        applyActiveSurfaceClip();
 +
@@ -5660,6 +5944,7 @@ new file mode 100644
 +        restoreClippedSurface();
 +        mCompositorViewHolder.setOutlineProvider(mOriginalContentOutlineProvider);
 +        mCompositorViewHolder.setClipToOutline(mOriginalContentClipToOutline);
++        mCompositorViewHolder.setClipBounds(mOriginalContentClipBounds);
 +        mCompositorViewHolder.invalidateOutline();
 +        ViewGroup.LayoutParams raw = mCompositorViewHolder.getLayoutParams();
 +        if (raw instanceof ViewGroup.MarginLayoutParams) {
@@ -5801,6 +6086,11 @@ new file mode 100644
 +        mPreferences.unregisterOnSharedPreferenceChangeListener(mPreferenceListener);
 +        mRail.removeOnLayoutChangeListener(mLayoutListener);
 +        if (mColorDialog != null) mColorDialog.dismiss();
++        if (mAboutDialog != null) mAboutDialog.dismiss();
++        View locationBar = mLocationBarHost.findViewById(R.id.location_bar);
++        if (locationBar instanceof LocationBarLayout) {
++            ((LocationBarLayout) locationBar).setArcSurfaceColor(null);
++        }
 +        restoreFrameGeometry();
 +        setArcToolbarCompositionActive(false);
 +        mIcons.destroy();
@@ -6944,6 +7234,62 @@ new file mode 100644
 +    public void destroy() {
 +        mDestroyed = true;
 +        mUncommittedTabs.clear();
++    }
++}
+diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcAboutDialogTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcAboutDialogTest.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcAboutDialogTest.java
+@@ -0,0 +1,51 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++import static org.junit.Assert.*;
++import static org.robolectric.Shadows.shadowOf;
++
++import android.app.Activity;
++import android.app.AlertDialog;
++import android.content.pm.PackageInfo;
++import android.widget.ImageView;
++import android.widget.TextView;
++
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.robolectric.Robolectric;
++import org.robolectric.RobolectricTestRunner;
++import org.robolectric.annotation.Config;
++import org.robolectric.annotation.GraphicsMode;
++import org.robolectric.annotation.SQLiteMode;
++
++@RunWith(RobolectricTestRunner.class)
++@Config(manifest = Config.NONE, sdk = {29, 36})
++@GraphicsMode(GraphicsMode.Mode.LEGACY)
++@SQLiteMode(SQLiteMode.Mode.LEGACY)
++public class ArcAboutDialogTest {
++    @Test public void showsInstalledVersionAndApplicationIcon() {
++        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
++        AlertDialog dialog = null;
++        try {
++            PackageInfo info = new PackageInfo();
++            info.packageName = activity.getPackageName();
++            info.applicationInfo = activity.getApplicationInfo();
++            info.versionName = "9.8.7";
++            info.setLongVersionCode(987);
++            shadowOf(activity.getPackageManager()).installPackage(info);
++            dialog = ArcAboutDialog.show(activity, "Acerca de Archium", "Versión %1$s (%2$d)");
++            TextView version = dialog.findViewById(android.R.id.content)
++                    .getRootView().findViewWithTag("arc-about-version");
++            ImageView logo = dialog.findViewById(android.R.id.content)
++                    .getRootView().findViewWithTag("arc-about-logo");
++            assertEquals("Versión 9.8.7 (987)", version.getText().toString());
++            assertNotNull(logo.getDrawable());
++            assertTrue(dialog.isShowing());
++        } finally {
++            if (dialog != null) dialog.dismiss();
++            activity.finish();
++        }
 +    }
 +}
 diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCollectionsFocusTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCollectionsFocusTest.java

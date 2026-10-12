@@ -2004,6 +2004,7 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
         View toolbarHairline = mActivity.findViewById(R.id.toolbar_hairline);
 
         var toolbarCoordinator = mToolbarManager.getTopToolbarCoordinator();
+        mToolbarManager.setArcToolbarSuppressed(suppressed);
         if (suppressed) {
             mArcToolbarOriginalVisibility = toolbarView.getVisibility();
             if (toolbarHairline != null) {

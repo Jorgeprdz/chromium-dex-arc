@@ -204,6 +204,7 @@ compile_slice chrome_junit_tests
 runner="$PWD/out/Archium/bin/run_chrome_junit_tests"
 [[ -x "$runner" ]] || die 'Real Robolectric runner absent.'
 for suite in \
+    'org.chromium.chrome.browser.arc.ArcAboutDialogTest.*' \
     'org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearanceTest.*' \
     'org.chromium.chrome.browser.arc.ArcColorPickerTest.*' \
     'org.chromium.chrome.browser.arc.ArcCompactOmniboxTest.*' \

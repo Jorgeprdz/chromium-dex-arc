@@ -1523,3 +1523,67 @@ publicado guarda nombres y hashes sin publicar su contenido.
 No se han verificado aquí cold start, sugerencias de autocomplete ni frame pacing.
 Los PASS específicos de esta sesión no convierten la aceptación completa de Android
 ni la paridad visual R3 en PASS mientras persistan los defectos anteriores.
+
+## 2026-10-12 — Corrección de defectos físicos y Acerca de Archium
+
+HEAD_START `9e56a8d817320ad09b0815bc5aa49a0558ecb5e1`. El usuario autoriza reparar,
+lanzar build incremental y continuar hasta instalar. Se usa un solo agente, logo
+aprobado existente, versión real de PackageManager y ningún cambio de contraseñas.
+Registro de gates: [next-build-preflight.json](evidence/2026-10-12-sidebar-fixes/next-build-preflight.json).
+
+La barra superior se trata mediante la señal de supresión del overlay de ToolbarManager,
+combinada con XR y auto-hide por anchura; GONE y retirar TopControlsStacker no bastaban.
+Regresión JVM ejecuta la expresión de producción: mask=4 falla antes (exit 1) y los
+8 estados booleanos pasan después (exit 0). Se conservan las señales existentes.
+
+La omnibox conserva drawables nativos, focus ring y hover, tintando fondos normales
+y popup hacia la superficie Arc. El tinte combina 35% del fondo Chrome y 65% del
+marco para mantener las familias de tonos claro/oscuro. Se restaura al dejar Arc.
+La inspección detectó antes de CI que LocationBarTablet no es pública; se expone
+el hook en LocationBarLayout, con comportamiento original en teléfono.
+Hay dos regresiones nuevas en LocationBarTabletUnitTest, bloqueantes dentro del run.
+
+El + compacto utiliza ic_add_24dp nativo con padding centrado; deja de depender del
+glifo del TextView. Los mosaicos favoritos usan activeTabSurface y mantienen el
+favicon sin filtro. Holder y SurfaceView reciben un clip rectangular además del
+outline; los límites originales se restituyen. La hipótesis de hole punch todavía
+necesita confirmación física posterior al build. No se han empleado APIs ocultas.
+
+Acerca de Archium se abre con un botón informativo en el footer; muestra el icono
+real de aplicación y versionName/versionCode, y libera su diálogo al destruir el
+coordinator. La prueba del diálogo pasa en API29/36 (2 ejecuciones); un mutante que
+usa «R4» como versión falla en ambos perfiles. El nuevo test se registra en GN y
+en ambos puntos de ejecución bloqueante de Robolectric, sin skips.
+
+Pruebas locales acotadas: frame 8/0, shell 6/0, about 2/0. Se ejecutan Android
+views/drawables reales con adaptadores explícitos de Chromium. No equivalen al
+runner completo de Chromium ni prueban SurfaceFlinger. Las negativas previas
+detectaron falta de clip, drawable ausente, mosaico sin distinción y color ignorado.
+
+La primera suite host completa dio 244 tests, 3 fallos, 0 skips (exit 1): inventario
+de suites sin About y dos tests AAPT2 sin ARCHIUM_TEST_ANDROID_JAR. Se añade About
+al inventario esperado, sin debilitar la comparación, y se repite con Android37.0
+y aapt2 37.0.0 reales. No se lanzó CI con ese gate rojo.
+
+Patch regenerado dos veces; aplicación completa sobre archivos originales del pin
+y comparación de todos los hashes modificados: PASS. Es un árbol de referencia
+acotado, no una compilación GN de Chromium. Bash, compileall, actionlint 1.7.7 y
+diff-check pasaron. La aplicación y recursos del checkout completo quedan bloqueantes
+tras restore, así como Java real, Robolectric y enlace nativo.
+
+Checkpoint compatible más reciente: archium-checkpoint-38275213327-1, source
+3c75be2c5fd0aff4a9616e218498886895f088ba; 4 grupos, 26,506,123,626 bytes.
+Expira el 26 de octubre. Lectura autorizada, metadata y manifest: PASS; lectura
+remota acotada 5,381 bytes; SHA256 de manifest
+1771b7a6bda7be8c0b76bcb30cd04c0bc7202ec7a93f624a6245f29574e75004.
+No se descarga el checkpoint localmente. El workflow mide bytes/inodos reales
+antes de transferir y valida todos los fragmentos en S1; ese resultado sigue pendiente.
+No hay clean fallback ni eliminación de fuentes/outputs compatibles.
+
+Host final: 244 passed / 0 failed / 0 skipped, 561.765 s, exit 0. Los tres perfiles
+GN reales y las dos regresiones AAPT2 con SDK37.0 pasan. El último manifest se
+comparó con cada fuente; aplicaciones/hashes de patch completos coherentes.
+La incorporación de Objects.requireNonNull en el drawable conocido evita
+desreferenciar un Drawable nullable; no cambia el recurso nativo elegido.
+Los diagnósticos de tar/HTTP de fixtures negativas son esperados; no se ocultan
+como un supuesto stdout sin advertencias.
