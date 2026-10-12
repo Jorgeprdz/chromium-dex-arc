@@ -1335,3 +1335,71 @@ Los commits se agrupan en foco, colecciones y paleta/compacto. Cada snapshot
 del índice regenera su patch/manifest mediante el generador oficial; el working
 tree validado permanece congelado. Solo se publica el HEAD final completo y
 solo ese SHA puede despacharse. No se realizan ediciones manuales del patch.
+
+### Dispatch y handoff observados — run 38302845518
+
+Tres commits temáticos probados y publicados, push exit 0 sin force:
+
+- [Foco ee09fb5](https://github.com/Jorgeprdz/chromium-dex-arc/commit/ee09fb57738ed911579f790fac5cf6a0ae85896d).
+- [Colecciones 0b90997](https://github.com/Jorgeprdz/chromium-dex-arc/commit/0b90997f454a80d67ae6f55949018d245d3ae23a).
+- [Paleta/compacto 109c9c5](https://github.com/Jorgeprdz/chromium-dex-arc/commit/109c9c5b8d30416e8122a8f17ef43c3832a5c7ad).
+
+Generación oficial de cada snapshot del índice: 111 / 111 / 113 archivos,
+patch y manifest coherentes en cada commit. Working tree probado sin cambios
+durante el agrupamiento. HEAD remoto vuelve a comprobarse antes del push.
+`feat/arc-desktop` remoto `51e5ed429661727156ab2534caac99a82ee9264b` y `main`
+`6274c653bbe3992403a89b1531d0c1f91646bf6d` permanecen intactos.
+Triggers inspeccionados: el push a recovery no dispara compilación pesada.
+
+`gh workflow run 374835814 --repo Jorgeprdz/chromium-dex-arc --ref
+assistant/archium-r4-recovery -f expected_sha=109c9c5b8d30416e8122a8f17ef43c3832a5c7ad
+-f source_checkpoint=archium-checkpoint-38275213327-1
+-f source_commit=3c75be2c5fd0aff4a9616e218498886895f088ba
+-f source_run_id=38275213327`: **exit 0**, un solo dispatch, 2026-10-12T20:13:52Z.
+Run real [38302845518](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38302845518), SHA exacto verificado por API.
+Authorize PASS; preflight en progreso, actividad observada Build genuine GN
+at Chromium DEPS pin. Ningún otro run estaba activo antes de despachar.
+No se presume PASS de preflight remoto, restore, JNI, recursos o APK futuros.
+
+Monitor nativo abierto y observado en **sesión Termux #4**, PID **29885**,
+cmdline exacta con RUN/SHA; pantalla real con separadores coloreados, bold e
+itálica. Refresco de 600 s, elapsed y 0/6 fases verificadas, ETA N/D. Antes de
+publicarse logs, muestra explícitamente eventos API; después usa log auténtico
+con tres líneas/primer error real. Descarga e instala solo ante SUCCESS del
+SHA fijado y verificación de la APK; un fallo no instala nada. Las sesiones
+#1/#2/#3 se conservan. `bash /data/data/com.termux/files/home/archium-r4-monitor-termux.sh`
+y `./m4` apuntan a este run. Este registro posterior solo modifica documentación;
+el SHA probado y usado por CI sigue siendo `109c9c5b8d30416e8122a8f17ef43c3832a5c7ad`.
+Se entrega el monitor y se detiene trabajo automático según petición del usuario.
+
+Estado del **código despachado**, a la entrega (no resultado final del run):
+
+```text
+REPO=Jorgeprdz/chromium-dex-arc
+BRANCH=assistant/archium-r4-recovery
+PROTECTED_BRANCH=feat/arc-desktop UNTOUCHED
+HEAD_START=7da34209c78510ae13e128765c6eb21bde955c88
+HEAD_FINAL=109c9c5b8d30416e8122a8f17ef43c3832a5c7ad (HEAD final de código antes del dispatch)
+CHROMIUM_PIN=cfd94726b7b5fb48aedcc32662f2f3fbdbadec35
+P0_DEX_DISPLAY=UNVERIFIED (integración nueva programada; detección previa observada)
+P0_JAVA_ASSERT=PASS (ejecución JVM host de debug/release, alcance acotado)
+AAPT2_REAL_RESOURCES=PENDING (S2 del nuevo run; fixture aislada PASS)
+GN_MEDIA_3_CASES=PASS
+PATCH_REPRODUCIBILITY=PASS
+CHECKPOINT_SOURCE=archium-checkpoint-38275213327-1
+CHECKPOINT_INTEGRITY=PASS (fuente validada en 38285899318; transferencia nueva pendiente S1)
+DISK_PREFLIGHT=FAIL (local; runner PENDING_S0 antes de descarga)
+HOST_TESTS=PASS (243 passed / 0 failed / 0 skipped)
+ROBOLECTRIC=NOT_EXECUTED (Chrome completo nuevo; probes reales locales 62 PASS)
+JNI_LINK=NOT_EXECUTED
+COMMITS=ee09fb57738ed911579f790fac5cf6a0ae85896d,0b90997f454a80d67ae6f55949018d245d3ae23a,109c9c5b8d30416e8122a8f17ef43c3832a5c7ad
+PUSH=PASS
+WORKFLOW_RUN=38302845518 https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38302845518
+BUILD_STAGE=S0
+BUILD=INCOMPLETE (en curso)
+APK_PACKAGE=NONE
+APK_SHA256=NONE
+APK_ARTIFACT=NONE
+ANDROID_RUNTIME=NOT_EXECUTED
+BLOCKERS=NONE observado nuevo; gates nativos/recursos/disco de runner pendientes y bloqueantes
+```

@@ -1,0 +1,53 @@
+{
+  "recorded_utc": "2026-10-12T20:17:59.336527+00:00",
+  "run": 38302845518,
+  "url": "https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38302845518",
+  "source_sha": "109c9c5b8d30416e8122a8f17ef43c3832a5c7ad",
+  "branch": "assistant/archium-r4-recovery",
+  "checkpoint": "archium-checkpoint-38275213327-1",
+  "checkpoint_source_sha": "3c75be2c5fd0aff4a9616e218498886895f088ba",
+  "monitor_pid": 29885,
+  "termux_session": 4,
+  "interval_seconds": 600,
+  "observed_stage": "S0",
+  "observed_activity": "Build genuine GN at Chromium DEPS pin",
+  "new_apk": "NONE",
+  "android_runtime_new_candidate": "NOT_EXECUTED",
+  "previous_installed_apk_android_runtime": "FAIL",
+  "host_tests": {
+    "passed": 243,
+    "failed": 0,
+    "skipped": 0
+  },
+  "commits": [
+    {
+      "sha": "ee09fb57738ed911579f790fac5cf6a0ae85896d",
+      "message": "fix(omnibox): bound sidebar focus expansion to actual holder ancestry",
+      "generated_hashes": {
+        "patches/archium-desktop.patch": "f321af3ead2368989b1e8edaf061a99f56eb4e57dbe70295153721377c08a1dc",
+        "patches/upstream-files.json": "e8da3b29c620c4c9c0e0989f6200780f82dfaf1e4390a2dd6761ee53221335c0"
+      },
+      "url": "https://github.com/Jorgeprdz/chromium-dex-arc/commit/ee09fb57738ed911579f790fac5cf6a0ae85896d"
+    },
+    {
+      "sha": "0b90997f454a80d67ae6f55949018d245d3ae23a",
+      "message": "fix(sidebar): size collections to content and delete without losing tabs",
+      "generated_hashes": {
+        "patches/archium-desktop.patch": "795062b89906f16893d245de8e0b08ae1929a074bed71b66ac0532c433218fff",
+        "patches/upstream-files.json": "c55496bce210421834abe56918d4133cf2627b1b6f07dde2d78cb19beb6745fa"
+      },
+      "url": "https://github.com/Jorgeprdz/chromium-dex-arc/commit/0b90997f454a80d67ae6f55949018d245d3ae23a"
+    },
+    {
+      "sha": "109c9c5b8d30416e8122a8f17ef43c3832a5c7ad",
+      "message": "fix(arc): apply window palette and preserve native compact omnibox",
+      "generated_hashes": {
+        "patches/archium-desktop.patch": "29470240438f48e3bbf03f8e0b1d40eb7420896e070231d1ba93cd6ae2711fdf",
+        "patches/upstream-files.json": "517fe16669d4f7dbfca314efc905f85619d02f78ccfa01112775895cf36e75b6"
+      },
+      "url": "https://github.com/Jorgeprdz/chromium-dex-arc/commit/109c9c5b8d30416e8122a8f17ef43c3832a5c7ad"
+    }
+  ],
+  "monitor_install_policy": "Only SUCCESS of this exact SHA plus APK, Portal, package, ARM64, checksum and signature verification; install -r preserves app data",
+  "automatic_work": "STOP_AFTER_HANDOFF_REQUESTED"
+}
