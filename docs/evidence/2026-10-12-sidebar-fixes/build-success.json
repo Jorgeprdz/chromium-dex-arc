@@ -1,0 +1,49 @@
+{
+  "recorded_utc": "2026-10-12T21:40:24.815940+00:00",
+  "run": 38302845518,
+  "run_url": "https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38302845518",
+  "source_sha": "109c9c5b8d30416e8122a8f17ef43c3832a5c7ad",
+  "conclusion": "success",
+  "created_at": "2026-10-12T20:13:52Z",
+  "updated_at": "2026-10-12T21:15:42Z",
+  "artifact": {
+    "id": 11773513326,
+    "bytes": 154881489,
+    "digest": "sha256:379091b54cc1c43e2d7fc2f3f5bd109ed4f7ab3091ce3beda4b5d8591e5380aa",
+    "expires_at": "2026-10-19T21:14:32Z",
+    "url": "https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38302845518/artifacts/11773513326"
+  },
+  "installed": {
+    "run": 38302845518,
+    "source_sha": "109c9c5b8d30416e8122a8f17ef43c3832a5c7ad",
+    "apk_sha256": "75983bf7af3d6a6fb039a2a91a6263aa59ef8a764f60d5e3333691739f344ff9",
+    "apk_bytes": 366977536,
+    "installed_apk_sha256": "75983bf7af3d6a6fb039a2a91a6263aa59ef8a764f60d5e3333691739f344ff9",
+    "installed_matches_artifact": "PASS",
+    "android_runtime": "NOT_EXECUTED"
+  },
+  "authentic_build_log_sha256": "fa3a3c1638d75afd18ec63ded0093c66bd2f1ed7db50df8ca156d7c47a6f2ddb",
+  "host_suite_ci": {
+    "passed": 243,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 215.594
+  },
+  "chromium_robolectric": {
+    "passed_executions": 2322,
+    "failed_markers": 0,
+    "skipped_markers": 0,
+    "note": "Includes early/final suite repetitions; not unique test count"
+  },
+  "gates": {
+    "DISK_PREFLIGHT": "PASS",
+    "CHECKPOINT_RESTORE": "PASS",
+    "JNI_LINK": "PASS",
+    "ROBOLECTRIC": "PASS",
+    "APK_SIGNATURE_V2": "PASS",
+    "APK_ARM64_ELF": "PASS",
+    "PORTAL_APK": "PASS",
+    "ARTIFACT_METADATA": "PASS",
+    "ANDROID_RUNTIME": "NOT_EXECUTED"
+  }
+}

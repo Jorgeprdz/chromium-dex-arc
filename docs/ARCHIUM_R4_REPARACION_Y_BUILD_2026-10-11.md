@@ -1403,3 +1403,53 @@ APK_ARTIFACT=NONE
 ANDROID_RUNTIME=NOT_EXECUTED
 BLOCKERS=NONE observado nuevo; gates nativos/recursos/disco de runner pendientes y bloqueantes
 ```
+
+## 2026-10-12 — Run 38302845518 SUCCESS, APK verificada e instalada
+
+Usuario entrega pantalla del monitor con SUCCESS / 6 de 6 fases / instalación
+installed. Se comprueba de nuevo por API: authorize, preflight y build SUCCESS,
+SHA fuente exacto `109c9c5b8d30416e8122a8f17ef43c3832a5c7ad`. No se despacha otro workflow ni se abre
+el navegador automáticamente. [Run real](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38302845518).
+
+Log auténtico descargado del job 114991500347, 10138838 bytes. Evidencia:
+S0 DISK_PREFLIGHT PASS, 114592133120 bytes libres / 18963627 inodos;
+restore del checkpoint fuente PASS; host CI 243/0/0, 215.594 s;
+Robolectric temprano y final PASS, 2322 ejecuciones OK (incluye repetición de
+suites, no tests únicos), cero marcadores FAILED/SKIPPED. Las suites nuevas
+ArcCompactOmniboxTest y LocationBarTabletUnitTest ejecutan casos reales del
+runner Chromium, incluidas las regresiones de foco/ancestry y visibilidad.
+JNI_LINK_PASS PASS a las 21:03:47 UTC; libchrome real enlazada y símbolos
+payments verificados. Gate final Portal PASS, firma APK v2 válida y metadata
+remota del artifact PASS. Los gates del script son fatales y preceden la
+publicación; no se trasladan estados de un mock a estos resultados.
+
+[Artifact APK](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38302845518/artifacts/11773513326): ID 11773513326,
+154881489 bytes, expira 2026-10-19T21:14:32Z.
+Digest ZIP metadata remoto `sha256:379091b54cc1c43e2d7fc2f3f5bd109ed4f7ab3091ce3beda4b5d8591e5380aa` (no se repite su descarga).
+APK local 366977536 bytes, paquete `app.archium.android`, SHA256:
+
+```text
+75983bf7af3d6a6fb039a2a91a6263aa59ef8a764f60d5e3333691739f344ff9
+```
+
+El monitor verificó manifest/Portal, firma/checksum y realizó instalación -r.
+Se vuelve a calcular SHA256 de la APK descargada y del base.apk instalado:
+**idénticos**, exit 0. ZIP contiene ocho bibliotecas exclusivamente arm64-v8a;
+se leen sus headers ELF y se verifica clase 64 bits/machine AArch64 (183), PASS.
+No se reinstala por segunda vez ni se borran datos. Registro verificable en
+[build-success.json](evidence/2026-10-12-sidebar-fixes/build-success.json).
+
+BUILD=PASS; APK_VERIFIED=PASS; PUSH=PASS; ROBOLECTRIC=PASS; JNI_LINK=PASS;
+GN_MEDIA_3_CASES=PASS; AAPT2_REAL_RESOURCES=PASS; PATCH_REPRODUCIBILITY=PASS;
+CHECKPOINT_INTEGRITY=PASS; DISK_PREFLIGHT del runner=PASS;
+APK_PACKAGE=app.archium.android; APK_ARTIFACT=https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38302845518/artifacts/11773513326;
+ANDROID_RUNTIME=NOT_EXECUTED para esta nueva APK. La instalación no prueba
+que desapareció el crash ni valida la fluidez/colores/geometría en DeX.
+Se conserva el checkpoint remoto fuente; este run exitoso publica solo la APK.
+Contraseñas propias continúan DEPRECATED. Feat/main no se modifican.
+
+Siguiente aceptación manual: conectar DeX, enfocar/editar la omnibox varias
+veces, comprobar sugerencias y navegación; expandir/colapsar la sidebar;
+preview/aplicar/cancelar colores y contrastes; mosaicos y eliminación con
+confirmación de carpetas/espacios. Eliminar espacios/carpetas solo si el
+usuario decide probarlo: no se realizan acciones sobre sus datos aquí.
