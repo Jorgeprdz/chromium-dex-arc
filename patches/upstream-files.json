@@ -1,6 +1,7 @@
 {
   "revision": "cfd94726b7b5fb48aedcc32662f2f3fbdbadec35",
   "originals": {
+    "chrome/android/aapt2.config": "bef6fb84d20ee92cca00731a4a1dfbd33f50c5c5777430028699b2ab40f6c572",
     "chrome/android/chrome_java_resources.gni": "850858efadb5d9d107ed0088b0c5c185149c2e011806ab11087c77af3d9ae217",
     "chrome/android/chrome_java_sources.gni": "30ef96fa909faf5f8409bf35e5cd6e81ec9499301f63c27d3824c0760d9e55bd",
     "chrome/android/features/tab_ui/java/res/values/dimens.xml": "fd109acbf1628e2f86777604a0c38b15e755702cc75e368c658493e995c3fbe1",
@@ -105,6 +106,7 @@
     "components/password_manager/core/browser/password_store/password_store_interface.cc": null
   },
   "modified": {
+    "chrome/android/aapt2.config": "d700a0fa53ff419ce58280136cc7bf85ea85eb0ff83f8618058e22be61c24bc0",
     "chrome/android/chrome_java_resources.gni": "c4ce973725968badfa1486af494f70f21946d90b576fd033c19699a2502c179c",
     "chrome/android/chrome_java_sources.gni": "ba4d62286b68f384890a9f141c3c25a009ec45bede5961f2093305f9fe082fcf",
     "chrome/android/features/tab_ui/java/res/values/dimens.xml": "28df17073fd1a88fb4a658d918a8ac92d654e67d2f239d7428b50cff6b4e4670",
@@ -208,5 +210,5 @@
     "components/password_manager/core/browser/password_store/password_store_backend.cc": "45764d4ad0e05acc5a216944a5a6763212f6c17e71bf689e9c973f12fb5c87d8",
     "components/password_manager/core/browser/password_store/password_store_interface.cc": "7e9dd5813ce8ece459ec66abdd3306028b7b3d6bbae048664872a34d8d097268"
   },
-  "patch_sha256": "e757f5723d2f199a658c50039355009af217b118da977c4a34f0a012bc93aa66"
+  "patch_sha256": "69d23d6f75c8b1c73a5577c9927b88710b622657c8214c935b201200a631dac9"
 }
