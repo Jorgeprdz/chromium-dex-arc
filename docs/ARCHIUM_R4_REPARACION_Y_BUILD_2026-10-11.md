@@ -1,3 +1,30 @@
+## Dispatch probado y monitor en sesión nueva: 38210970891 (2026-10-12 06:06–06:09 UTC)
+
+Commits temáticos, commit/push exit 0:
+
+- [9b3f75a95bf629c537a59a8f2752bc88b45e2773](https://github.com/Jorgeprdz/chromium-dex-arc/commit/9b3f75a95bf629c537a59a8f2752bc88b45e2773): excepción de alias monocromo real, originales verificados y patch reproducible.
+- [82b20b0b92a49da9efaf3bd87181deedf6516dcb](https://github.com/Jorgeprdz/chromium-dex-arc/commit/82b20b0b92a49da9efaf3bd87181deedf6516dcb): fixture y gate temprano de optimización release, regresiones y registro forense.
+
+Código probado/publicado/run SHA **82b20b0b92a49da9efaf3bd87181deedf6516dcb**. Suite host **235 passed / 0 failed / 0 skipped**, 714.845 s, exit 0. Ref remoto comparado antes de push y otra vez antes de dispatch; SHA tomado directamente de `git rev-parse HEAD`. Fuente SHA tomado de API del run fuente y confrontado con el manifest validado. Consultas Actions `status=in_progress` y `status=queued`, **ambas vacías**, exit 0 antes de dispatch. Workflow manual real 374835814, inputs y concurrency conservados; no build pesado por push. Protegido/main comprobados otra vez después de lanzar, mismos hashes de la sección siguiente.
+
+Comando real, exit 0 (variables obtenidas de Git/API, no SHA copiado manualmente):
+
+```bash
+archium_dispatch_sha=$(git rev-parse HEAD)
+archium_checkpoint_run=38203819481
+archium_checkpoint_sha=$(gh api "repos/Jorgeprdz/chromium-dex-arc/actions/runs/$archium_checkpoint_run" --jq '.head_sha')
+gh workflow run 374835814 --repo Jorgeprdz/chromium-dex-arc \
+  --ref assistant/archium-r4-recovery -f expected_sha="$archium_dispatch_sha" \
+  -f source_checkpoint="archium-checkpoint-$archium_checkpoint_run-1" \
+  -f source_commit="$archium_checkpoint_sha" -f source_run_id="$archium_checkpoint_run"
+```
+
+[Run **38210970891**](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38210970891), creado **2026-10-12T06:06:50Z**, head_sha exacto **82b20b0b92a49da9efaf3bd87181deedf6516dcb**, evento `workflow_dispatch`. [Authorize 114684824020](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38210970891/job/114684824020) **SUCCESS**. [Preflight 114684854171](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38210970891/job/114684854171) **IN_PROGRESS**, actividad observada `Build genuine GN at Chromium DEPS pin`, a 06:08:25 UTC. S1–S5 nuevos todavía no ejecutados, ninguna APK nueva verificada/publicada/instalada.
+
+Monitor configurado solo para este RUN/SHA. Nueva sesión nativa **#4** de NewTermux comprobada antes de escribir `./m4`; no se escribió en la sesión Codex #1. Proceso real **PID 5373**, `/usr/bin/python3 /workspace/macdesk-maintenance/archium-r4-monitor.py --run 38210970891 --sha 82b20b0b92a49da9efaf3bd87181deedf6516dcb`. Pantalla y estado `/workspace/.archium-install/38210970891/screen.txt` verificados: EN CURSO, elapsed 00:01:35, 0/6 fases verificadas, ETA N/D, eventos API diferenciados de logs todavía no publicados. Refresco 600 s, líneas continuas ASCII, colores, bold/italic, últimas tres líneas/eventos; solo SUCCESS con APK/manifest/ABI/Portal/firma/hash/report válidos permite descarga e instalación. Se usó pantalla nativa lógica 0 tras comprobar que DeX no estaba conectado; otras sesiones conservadas. Agente se detiene para seguimiento manual a petición del usuario; monitor y run continúan. Este commit posterior documenta el evento sin cambiar el código fijado en GITHUB_SHA.
+
+**FASE=S0; SHA=82b20b0b92a49da9efaf3bd87181deedf6516dcb; RUN=38210970891; GATE=HOST_LOCAL_PASS/AUTHORIZE_PASS/CI_PREFLIGHT_RUNNING; CHECKPOINT=38203819481-1 REMOTE_PRESERVED; DISCO_CI=PENDING_S0; ERRORES_NUEVOS=NONE_OBSERVED; SIGUIENTE=S0→S1→RELEASE_RESOURCE_PROBE→S2/S3/S4/S5.** Build **INCOMPLETE**, APK artefacto/hash NONE, Android runtime NOT_EXECUTED. No se garantiza ausencia de fallos desconocidos. Contraseñas propias DEPRECATED.
+
 ## Run 38203819481 FAILED en S4: optimización de nombres no cubierta (2026-10-12)
 
 HEAD inicial de esta reparación: `a904041dead58f4ebbd639a41cc99b66652e8876`. Rama `assistant/archium-r4-recovery`; protegido `feat/arc-desktop` = `51e5ed429661727156ab2534caac99a82ee9264b`, main = `6274c653bbe3992403a89b1531d0c1f91646bf6d`, comprobados contra remoto y sin cambios. PRs abiertos: ninguno. No runs activos al comenzar la revisión; no escrituras concurrentes observadas. Contraseñas propias siguen **DEPRECATED**, config false; identidad visual aprobada intacta.
