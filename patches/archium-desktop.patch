@@ -1845,6 +1845,334 @@ diff --git a/chrome/browser/sync/sync_service_factory.cc b/chrome/browser/sync/s
    builder.SetPrefService(profile->GetPrefs());
    builder.SetPrefServiceSyncable(PrefServiceSyncableFromProfile(profile));
    builder.SetTabGroupSyncService(GetTabGroupSyncService(profile));
+diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java
+--- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java
++++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java
+@@ -727,9 +727,13 @@
+             int additionalWidth =
+                     isPopoverMode ? mPopoverAdditionalWidth : mLocationBarTabletFuseboxPopupInset;
+             // Determine available headroom above toolbar (stored in mPositionArray[1]).
+-            int availableTopHeadroomPx = expansionPx;
+-            if (mContainerView != null && mHolder.getParent() instanceof View holderParent) {
+-                ViewUtils.getRelativeLayoutPosition(mContainerView, holderParent, mPositionArray);
++            View expansionContainer = getExpansionContainer();
++            int availableTopHeadroomPx = mContainerView == null ? expansionPx : 0;
++            if (mContainerView != null
++                    && mHolder.getParent() instanceof View holderParent
++                    && isAncestorOf(expansionContainer, holderParent)) {
++                ViewUtils.getRelativeLayoutPosition(
++                        expansionContainer, holderParent, mPositionArray);
+                 availableTopHeadroomPx = Math.max(0, mPositionArray[1]);
+             }
+             int topMarginExpansion = Math.min(expansionPx, availableTopHeadroomPx);
+@@ -845,18 +849,44 @@
+         }
+     }
+
++    /**
++     * Returns the bounds that actually contain the holder. Arc reparents the entire holder into
++     * its sidebar header, leaving the configured toolbar container in a sibling branch. Passing
++     * that stale container to ViewUtils would walk past the decor view into ViewRootImpl.
++     */
++    private View getExpansionContainer() {
++        if (mHolder == null) return getRootView();
++        if (mContainerView != null && isAncestorOf(mContainerView, mHolder)) {
++            return mContainerView;
++        }
++        if (mContainerView == null && isAncestorOf(getRootView(), mHolder)) {
++            return getRootView();
++        }
++        // Use local header bounds for siblings, foreign windows and transient reparenting. A
++        // detached holder has only its own measured bounds; never cast a non-View parent.
++        return mHolder.getParent() instanceof View holderParent ? holderParent : mHolder;
++    }
++
++    private static boolean isAncestorOf(View ancestor, View view) {
++        while (view != ancestor) {
++            if (!(view.getParent() instanceof View parent)) return false;
++            view = parent;
++        }
++        return true;
++    }
++
+     private void setMarginsForAvailableWidth(
+             MarginLayoutParams layoutParams, int minHorizontalExpansionPx, boolean isPopoverMode) {
+         Resources resources = getResources();
+         int screenWidthDp = resources.getConfiguration().screenWidthDp;
+
+-        ViewUtils.getRelativeLayoutPosition(
+-                mContainerView != null ? mContainerView : getRootView(), mHolder, mPositionArray);
++        View expansionContainer = getExpansionContainer();
++        ViewUtils.getRelativeLayoutPosition(expansionContainer, mHolder, mPositionArray);
+
+         int availableWidth =
+-                mContainerView != null
+-                        ? mContainerView.getMeasuredWidth()
+-                        : DisplayUtil.dpToPx(mWindowAndroid.getDisplay(), screenWidthDp);
++                mContainerView == null && expansionContainer == getRootView()
++                        ? DisplayUtil.dpToPx(mWindowAndroid.getDisplay(), screenWidthDp)
++                        : expansionContainer.getMeasuredWidth();
+         int unexpandedWidth =
+                 mHolder.getMeasuredWidth() + layoutParams.leftMargin + layoutParams.rightMargin;
+         int unexpandedLeft = mPositionArray[0] - layoutParams.leftMargin;
+@@ -996,9 +1026,8 @@
+      * falling back to the window width before the container has been laid out.
+      */
+     private @Px int getAvailableContainerWidth() {
+-        if (mContainerView != null && mContainerView.getWidth() > 0) {
+-            return mContainerView.getWidth();
+-        }
++        View container = getExpansionContainer();
++        if (container.getWidth() > 0) return container.getWidth();
+         return getResources().getDisplayMetrics().widthPixels;
+     }
+
+diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTabletUnitTest.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTabletUnitTest.java
+--- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTabletUnitTest.java
++++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTabletUnitTest.java
+@@ -12,11 +12,14 @@
+ import static org.junit.Assert.assertTrue;
+ import static org.mockito.Mockito.doReturn;
+ import static org.mockito.Mockito.lenient;
++import static org.robolectric.Shadows.shadowOf;
+
+ import android.app.Activity;
++import android.app.Dialog;
+ import android.content.Context;
+ import android.graphics.drawable.GradientDrawable;
+ import android.graphics.drawable.LayerDrawable;
++import android.os.Looper;
+ import android.view.Gravity;
+ import android.view.InputDevice;
+ import android.view.MotionEvent;
+@@ -31,6 +34,7 @@
+
+ import androidx.annotation.ColorInt;
+
++import org.junit.After;
+ import org.junit.Before;
+ import org.junit.Rule;
+ import org.junit.Test;
+@@ -41,6 +45,7 @@
+ import org.mockito.quality.Strictness;
+ import org.robolectric.Robolectric;
+ import org.robolectric.RuntimeEnvironment;
++import org.robolectric.android.controller.ActivityController;
+ import org.robolectric.annotation.Config;
+ import org.robolectric.shadows.ShadowLooper;
+ import org.robolectric.shadows.ShadowToast;
+@@ -991,7 +996,9 @@
+
+     @Test
+     public void isTooNarrowForExpandedActivationChip_atThreshold() {
+-        View container = new View(mActivity);
++        LinearLayout container = new LinearLayout(mActivity);
++        ((ViewGroup) mHolderView.getParent()).removeView(mHolderView);
++        container.addView(mHolderView);
+         container.layout(0, 0, mLocationBarTablet.mMinWidthForExpandedActivationChip, 100);
+         mLocationBarTablet.setHolderAndContainer(mHolderView, container);
+
+@@ -1000,7 +1007,9 @@
+
+     @Test
+     public void isTooNarrowForExpandedActivationChip_aboveThreshold() {
+-        View container = new View(mActivity);
++        LinearLayout container = new LinearLayout(mActivity);
++        ((ViewGroup) mHolderView.getParent()).removeView(mHolderView);
++        container.addView(mHolderView);
+         container.layout(0, 0, mLocationBarTablet.mMinWidthForExpandedActivationChip + 1, 100);
+         mLocationBarTablet.setHolderAndContainer(mHolderView, container);
+
+@@ -1078,8 +1087,188 @@
+         assertEquals(0f, urlBar.getTranslationX(), MathUtils.EPSILON);
+     }
+
++    // Arc moves the complete holder into a sidebar sibling of the toolbar. These regressions
++    // attach a genuine Android window so a mistaken ancestor walk reaches ViewRootImpl.
++    // BEGIN ARC HOLDER FOCUS REGRESSIONS
++    private ActivityController<Activity> mArcActivityController;
++
++    @After
++    public void tearDownArcSidebarWindow() {
++        if (mArcActivityController == null) return;
++        shadowOf(Looper.getMainLooper()).idle();
++        mArcActivityController.pause().stop().destroy();
++        shadowOf(Looper.getMainLooper()).idle();
++    }
++
++    @Test
++    @EnableFeatures(OmniboxFeatureList.OMNIBOX_MULTIMODAL_INPUT)
++    @Config(qualifiers = "w800dp-xhdpi")
++    public void arcSidebarFocusExpandsWithinActualHeader() {
++        LinearLayout header = setupArcSidebarHierarchy();
++        UrlBar urlBar = mLocationBarTablet.findViewById(R.id.url_bar);
++        urlBar.setFocusableInTouchMode(true);
++        header.setFocusableInTouchMode(true);
++        assertTrue(header.requestFocus());
++        // Feed the focus-derived fusebox state at the observer boundary used by the coordinator.
++        urlBar.setFocusChangeCallback(
++                info -> mLocationBarTablet.onFuseboxStateChanged(
++                        info.hasFocus ? FuseboxState.EXPANDED : FuseboxState.DISABLED));
++
++        assertTrue(urlBar.requestFocus());
++        assertTrue(urlBar.hasFocus());
++        assertArcHeaderExpansion();
++        assertTrue(header.requestFocus());
++        assertFalse(urlBar.hasFocus());
++        LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) mHolderView.getLayoutParams();
++        assertEquals(0, params.leftMargin);
++        assertEquals(0, params.rightMargin);
++        assertEquals(0, params.topMargin);
++        assertEquals(0f, mHolderView.getTranslationZ(), MathUtils.EPSILON);
++        assertTrue(header.getClipChildren());
++    }
++
++    @Test
++    @EnableFeatures(OmniboxFeatureList.OMNIBOX_MULTIMODAL_INPUT)
++    @Config(qualifiers = "w800dp-xhdpi")
++    public void arcSidebarCompactUsesActualHeaderBounds() {
++        setupArcSidebarHierarchy();
++        mLocationBarTablet.onFuseboxStateChanged(FuseboxState.COMPACT);
++        assertArcHeaderExpansion();
++    }
++
++    @Test
++    @EnableFeatures(OmniboxFeatureList.OMNIBOX_MULTIMODAL_INPUT)
++    @Config(qualifiers = "w800dp-xhdpi")
++    public void arcSidebarForeignWindowContainerUsesActualHeader() {
++        LinearLayout header = setupArcSidebarHierarchy();
++        Activity activity = (Activity) header.getContext();
++        Dialog dialog = new Dialog(activity);
++        FrameLayout foreignContainer = new FrameLayout(activity);
++        dialog.setContentView(foreignContainer);
++        try {
++            dialog.show();
++            shadowOf(Looper.getMainLooper()).idle();
++            assertNotNull(foreignContainer.getWindowToken());
++            assertTrue(foreignContainer.getWindowToken() != mHolderView.getWindowToken());
++            // Showing the dialog drains pending layout work; restore the explicit fixture bounds.
++            header.layout(40, 80, 340, 280);
++            measureHolder(280);
++            mHolderView.layout(10, 40, 290, 140);
++            mLocationBarTablet.setHolderAndContainer(mHolderView, foreignContainer);
++            mLocationBarTablet.onFuseboxStateChanged(FuseboxState.EXPANDED);
++            assertArcHeaderExpansion();
++        } finally {
++            dialog.dismiss();
++            shadowOf(Looper.getMainLooper()).idle();
++        }
++    }
++
++    @Test
++    @EnableFeatures(OmniboxFeatureList.OMNIBOX_MULTIMODAL_INPUT)
++    @Config(qualifiers = "w800dp-xhdpi")
++    public void arcSidebarDetachedHolderDoesNotUseStaleContainer() {
++        LinearLayout header = setupArcSidebarHierarchy();
++        header.removeView(mHolderView);
++        assertNull(mHolderView.getParent());
++        mLocationBarTablet.onFuseboxStateChanged(FuseboxState.EXPANDED);
++        LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) mHolderView.getLayoutParams();
++        // A detached holder has only its own measured bounds, with no external headroom.
++        assertEquals(0, params.leftMargin);
++        assertEquals(0, params.rightMargin);
++        assertEquals(0, params.topMargin);
++    }
++
++    @Test
++    @EnableFeatures(OmniboxFeatureList.OMNIBOX_MULTIMODAL_INPUT)
++    @Config(qualifiers = "w800dp-xhdpi")
++    public void nativeNullContainerRetainsWindowExpansion() {
++        LinearLayout header = setupArcSidebarHierarchy();
++        mLocationBarTablet.setHolderAndContainer(mHolderView, null);
++        mLocationBarTablet.onFuseboxStateChanged(FuseboxState.EXPANDED);
++        LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) mHolderView.getLayoutParams();
++        // Null retains Chromium's window-width contract, unlike an explicitly stale container.
++        assertTrue(params.leftMargin < 0);
++        assertTrue(params.rightMargin < 0);
++        assertEquals(-mLocationBarTablet.getResources().getDimensionPixelSize(
++                R.dimen.location_bar_tablet_fusebox_popup_inset), params.topMargin);
++        assertFalse(header.getClipChildren());
++    }
++
++    @Test
++    @EnableFeatures(OmniboxFeatureList.OMNIBOX_MULTIMODAL_INPUT)
++    @Config(qualifiers = "w800dp-xhdpi")
++    public void nativeContainerKeepsRelativeLayoutAndHeadroom() {
++        LinearLayout header = setupArcSidebarHierarchy();
++        FrameLayout container = (FrameLayout) header.getParent();
++        container.measure(MeasureSpec.makeMeasureSpec(1600, MeasureSpec.EXACTLY),
++                MeasureSpec.makeMeasureSpec(1000, MeasureSpec.EXACTLY));
++        container.layout(0, 0, 1600, 1000);
++        header.layout(100, 80, 400, 280);
++        measureHolder(280);
++        mHolderView.layout(10, 40, 290, 140);
++        mLocationBarTablet.setHolderAndContainer(mHolderView, container);
++        mLocationBarTablet.onFuseboxStateChanged(FuseboxState.EXPANDED);
++        LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) mHolderView.getLayoutParams();
++        assertEquals(-110, params.leftMargin);
++        assertEquals(-618, params.rightMargin);
++        assertEquals(-mLocationBarTablet.getResources().getDimensionPixelSize(
++                R.dimen.location_bar_tablet_fusebox_popup_inset), params.topMargin);
++    }
++
++    @Test
++    @Config(qualifiers = "w800dp-xhdpi")
++    public void arcSidebarActivationChipUsesActualHeaderWidth() {
++        LinearLayout header = setupArcSidebarHierarchy();
++        int threshold = mLocationBarTablet.mMinWidthForExpandedActivationChip;
++        header.layout(0, 0, threshold, 200);
++        assertTrue(mLocationBarTablet.isTooNarrowForExpandedActivationChip());
++        header.layout(0, 0, threshold + 1, 200);
++        assertFalse(mLocationBarTablet.isTooNarrowForExpandedActivationChip());
++    }
++
++    private LinearLayout setupArcSidebarHierarchy() {
++        mArcActivityController = Robolectric.buildActivity(Activity.class).setup();
++        Activity attachedActivity = mArcActivityController.get();
++        attachedActivity.setTheme(R.style.Theme_BrowserUI_DayNight);
++        FrameLayout root = new FrameLayout(attachedActivity);
++        LinearLayout originalToolbar = new LinearLayout(attachedActivity);
++        LinearLayout header = new LinearLayout(attachedActivity);
++        header.setOrientation(LinearLayout.VERTICAL);
++        root.addView(originalToolbar, new FrameLayout.LayoutParams(1000, 100));
++        root.addView(header, new FrameLayout.LayoutParams(300, 200));
++        ((ViewGroup) mHolderView.getParent()).removeView(mHolderView);
++        originalToolbar.addView(mHolderView, new LinearLayout.LayoutParams(280, 100));
++        mLocationBarTablet.setHolderAndContainer(mHolderView, originalToolbar);
++        originalToolbar.removeView(mHolderView);
++        header.addView(mHolderView, new LinearLayout.LayoutParams(280, 100));
++        attachedActivity.setContentView(root);
++        root.measure(MeasureSpec.makeMeasureSpec(1600, MeasureSpec.EXACTLY),
++                MeasureSpec.makeMeasureSpec(1000, MeasureSpec.EXACTLY));
++        root.layout(0, 0, 1600, 1000);
++        originalToolbar.layout(500, 0, 1500, 100);
++        header.layout(40, 80, 340, 280);
++        measureHolder(280);
++        mHolderView.layout(10, 40, 290, 140);
++        assertNotNull(mHolderView.getWindowToken());
++        return header;
++    }
++
++    private void assertArcHeaderExpansion() {
++        LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) mHolderView.getLayoutParams();
++        // 280px holder at x=10 in a 300px header: at most 10px expansion on either side.
++        assertEquals(-10, params.leftMargin);
++        assertEquals(-10, params.rightMargin);
++        assertEquals(0, params.topMargin);
++        assertEquals(1f, mHolderView.getTranslationZ(), MathUtils.EPSILON);
++        assertFalse(((ViewGroup) mHolderView.getParent()).getClipChildren());
++    }
++    // END ARC HOLDER FOCUS REGRESSIONS
++
+     private void setupContainerAndMeasure(int containerWidth, int prefocusWidth, int leftPosition) {
+-        mContainerView = new View(mActivity);
++        LinearLayout container = new LinearLayout(mActivity);
++        ((ViewGroup) mHolderView.getParent()).removeView(mHolderView);
++        container.addView(mHolderView, new LinearLayout.LayoutParams(prefocusWidth, 100));
++        mContainerView = container;
+         mContainerView.measure(
+                 MeasureSpec.makeMeasureSpec(containerWidth, MeasureSpec.EXACTLY),
+                 MeasureSpec.makeMeasureSpec(100, MeasureSpec.EXACTLY));
 diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImpl.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImpl.java
 --- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImpl.java
 +++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImpl.java
