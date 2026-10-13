@@ -1,4 +1,4 @@
-name: Archium R4 recovery incremental build
+name: Archium R5 Arc experience incremental build
 on:
   workflow_dispatch:
     inputs:
@@ -34,7 +34,7 @@ jobs:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
         run: |
           set -euo pipefail
-          test "$GITHUB_REF_NAME" = assistant/archium-r4-recovery
+          test "$GITHUB_REF_NAME" = assistant/archium-r5-arc-experience
           test "$EXPECTED_SHA" = "$GITHUB_SHA"
           [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
       - name: Reject concurrent native workflow from historical branches
@@ -42,7 +42,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          gh api "repos/$GITHUB_REPOSITORY/actions/workflows/baseline-build.yml/runs?per_page=100" > "$RUNNER_TEMP/native-runs.json"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs?per_page=100" > "$RUNNER_TEMP/native-runs.json"
           python3 - "$RUNNER_TEMP/native-runs.json" <<'PY'
           import json, os, sys
           active = [r['id'] for r in json.load(open(sys.argv[1]))['workflow_runs']
@@ -53,10 +53,10 @@ jobs:
           PY
   preflight:
     needs: authorize
-    uses: ./.github/workflows/archium-recovery-preflight.yml
+    uses: ./.github/workflows/archium-r5-preflight.yml
   build:
     needs: preflight
-    uses: ./.github/workflows/archium-recovery-stage.yml
+    uses: ./.github/workflows/archium-r5-stage.yml
     with:
       expected_sha: ${{ inputs.expected_sha }}
       source_checkpoint: ${{ inputs.source_checkpoint }}

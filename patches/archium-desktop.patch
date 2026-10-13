@@ -22,7 +22,7 @@ diff --git a/chrome/android/chrome_java_resources.gni b/chrome/android/chrome_ja
 diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java_sources.gni
 --- a/chrome/android/chrome_java_sources.gni
 +++ b/chrome/android/chrome_java_sources.gni
-@@ -5,6 +5,22 @@
+@@ -5,6 +5,24 @@
  import("//content/public/common/features.gni")
 
  chrome_java_sources = [
@@ -38,6 +38,8 @@ diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java
 +  "java/src/org/chromium/chrome/browser/arc/ArcColorDraft.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcColorPicker.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcCompactOmnibox.java",
++  "java/src/org/chromium/chrome/browser/arc/ArcCommandBar.java",
++  "java/src/org/chromium/chrome/browser/arc/ArcOmniboxPlacement.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcFrameDispatch.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcNavigationControls.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java",
@@ -800,6 +802,27 @@ diff --git a/chrome/android/java/res_chromium_base/values/channel_constants.xml 
 +    <string name="search_widget_title" translatable="false">Archium search</string>
 +    <string name="quick_action_search_widget_title" translatable="false">Archium quick action search</string>
  </resources>
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
+@@ -4438,6 +4438,8 @@
+         final Tab currentTab = getActivityTab();
+         boolean currentTabIsNtp = isTabNtp(currentTab);
+         if (id == R.id.new_tab_menu_id) {
++            if (mRootUiCoordinator instanceof TabbedRootUiCoordinator tabbedRoot
++                    && tabbedRoot.openArcCommandBar()) return true;
+             if (!mTabModelSelector.isTabStateInitialized()) {
+                 RecordUserAction.record("MobileMenuNewTab.BeforeTabRestore");
+             }
+@@ -5618,6 +5620,8 @@
+
+     @Override
+     public boolean dispatchKeyEvent(KeyEvent event) {
++        if (mRootUiCoordinator instanceof TabbedRootUiCoordinator tabbedRoot
++                && tabbedRoot.dispatchArcKeyEvent(event)) return true;
+         Boolean result =
+                 KeyboardShortcuts.dispatchKeyEvent(
+                         event,
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
 --- a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
@@ -1002,7 +1025,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
      private void updateTopControlsHeight() {
          updateTopControlsHeight(/* allowAnimations= */ true);
      }
-@@ -2473,34 +2526,70 @@
+@@ -2473,35 +2526,81 @@
          }
 
          if (VerticalTabUtils.isVerticalTabsEligible(mActivity)) {
@@ -1094,9 +1117,20 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
 +                            mTabModelSelectorSupplier.asNonNull().get().isIncognitoSelected()),
 +                    () -> mActivityTabProvider.get());
              if (mToolbarManager != null) {
++                mArcDesktopCoordinator.configureCommands(
++                        () -> assumeNonNull(mToolbarManager).getOmniboxStub().beginInput(
++                                new org.chromium.components.omnibox.AutocompleteInput(
++                                        org.chromium.components.omnibox.OmniboxFocusReason.MENU_OR_KEYBOARD_ACTION)
++                                        .setUserText("")),
++                        () -> assumeNonNull(mToolbarManager).getOmniboxStub().endInput(),
++                        () -> assumeNonNull(mToolbarManager).getOmniboxStub().focusAndSelectAllText(
++                                org.chromium.components.omnibox.OmniboxFocusReason.MENU_OR_KEYBOARD_ACTION),
++                        () -> SettingsNavigationFactory.createSettingsNavigation().startSettings(
++                                mActivity, org.chromium.chrome.browser.settings.MainSettings.class));
                  mToolbarManager.setVerticalTabsAutoHiddenSupplier(
                          mVerticalTabsSideUiCoordinator.getIsAutoHiddenSupplier());
-@@ -2600,7 +2689,14 @@
+             }
+@@ -2600,7 +2699,14 @@
                              var transitionCoord =
                                      assumeNonNull(mToolbarManager)
                                              .getTabStripTransitionCoordinator();
@@ -1112,7 +1146,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
                          } else {
                              assumeNonNull(mVerticalTabsSideUiCoordinator)
                                      .setVisible(/* show= */ false, /* suppressAnimations= */ false);
-@@ -2679,9 +2775,11 @@
+@@ -2679,9 +2785,11 @@
      private void onVerticalTabsActiveChanged(boolean active) {
          var transitionCoordinator =
                  assumeNonNull(mToolbarManager).getTabStripTransitionCoordinator();
@@ -1125,7 +1159,22 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
          if (active) {
              transitionCoordinator.suppressTabStrip(true);
          } else {
-@@ -3429,8 +3527,12 @@
+@@ -3177,6 +3285,14 @@
+         createBookmarkBarIfNecessary();
+     }
+
++    public boolean dispatchArcKeyEvent(android.view.KeyEvent event) {
++        return mArcDesktopCoordinator != null && mArcDesktopCoordinator.dispatchKeyEvent(event);
++    }
++
++    public boolean openArcCommandBar() {
++        return mArcDesktopCoordinator != null && mArcDesktopCoordinator.openCommandBar();
++    }
++
+     // MenuOrKeyboardActionHandler implementation
+     @Override
+     public boolean handleMenuOrKeyboardAction(int id, boolean fromMenu) {
+@@ -3429,8 +3545,12 @@
       * activated.
       */
      public BooleanSupplier canActivateTabLayoutToggleMenu() {
@@ -1164,7 +1213,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 diff --git a/chrome/android/junit/BUILD.gn b/chrome/android/junit/BUILD.gn
 --- a/chrome/android/junit/BUILD.gn
 +++ b/chrome/android/junit/BUILD.gn
-@@ -431,6 +431,15 @@
+@@ -431,6 +431,17 @@
    # down.
    robolectric_library("chrome_junit_tests_org.chromium.chrome.browser") {
      sources = [
@@ -1173,6 +1222,8 @@ diff --git a/chrome/android/junit/BUILD.gn b/chrome/android/junit/BUILD.gn
 +      "src/org/chromium/chrome/browser/arc/ArcCompactOmniboxTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcFrameDispatchTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcNavigationControlsTest.java",
++      "src/org/chromium/chrome/browser/arc/ArcCommandBarTest.java",
++      "src/org/chromium/chrome/browser/arc/ArcOmniboxPlacementTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcCollectionsFocusTest.java",
 +      "src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearanceTest.java",
 +      "src/org/chromium/chrome/browser/toolbar/top/ArcToolbarReparentingTest.java",
@@ -1180,7 +1231,7 @@ diff --git a/chrome/android/junit/BUILD.gn b/chrome/android/junit/BUILD.gn
        "//chrome/android/java/src/org/chromium/chrome/browser/bottombar/BottomBarAppMenuUpdateBadgeControllerUnitTest.java",
        "//chrome/android/java/src/org/chromium/chrome/browser/bottombar/BottomBarContainerCoordinatorUnitTest.java",
        "src/org/chromium/chrome/browser/BrowserExitReasonTrackerUnitTest.java",
-@@ -463,6 +472,7 @@
+@@ -463,6 +474,7 @@
      ]
 
      deps = [
@@ -1875,16 +1926,140 @@ diff --git a/chrome/browser/sync/sync_service_factory.cc b/chrome/browser/sync/s
 diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarLayout.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarLayout.java
 --- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarLayout.java
 +++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarLayout.java
-@@ -231,6 +231,9 @@
+@@ -231,6 +231,39 @@
          mDeleteButton.setBackgroundResource(resourceId);
      }
 
 +    /** Optional window palette; phone layouts retain their native appearance. */
 +    public void setArcSurfaceColor(@Nullable Integer color) {}
 +
++    private @Nullable android.graphics.Rect mArcCommandResults;
++    private boolean mArcCommandActions;
++    private @Nullable Runnable mArcBeforeCommandNavigation;
++    private @Nullable Runnable mArcCommandInputEnd;
++
++    /** Optional desktop shell bounds; no extra editor/autocomplete state is created. */
++    public void setArcCommandBar(@Nullable android.graphics.Rect results, boolean actions,
++            @Nullable Runnable beforeNavigation, @Nullable Runnable inputEnd) {
++        if (java.util.Objects.equals(mArcCommandResults, results) && mArcCommandActions == actions) return;
++        mArcCommandResults = results == null ? null : new android.graphics.Rect(results);
++        mArcCommandActions = actions;
++        mArcBeforeCommandNavigation = results == null ? null : beforeNavigation;
++        mArcCommandInputEnd = results == null ? null : inputEnd;
++        requestLayout();
++    }
++
++    public @Nullable android.graphics.Rect getArcCommandResults() { return mArcCommandResults; }
++    public boolean isArcCommandActions() { return mArcCommandActions; }
++    public void finishArcCommandNavigation() {
++        Runnable before = mArcBeforeCommandNavigation;
++        if (before != null) before.run();
++    }
++    public boolean closeArcCommandBarForInputEnd() {
++        Runnable close = mArcCommandInputEnd;
++        mArcCommandInputEnd = null;
++        if (close == null) return false;
++        close.run();
++        return true;
++    }
++
      /* package */ void updateVisualsForState(@BrandedColorScheme int brandedColorScheme) {
          updateActivationChipVisuals(brandedColorScheme);
      }
+diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarMediator.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarMediator.java
+--- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarMediator.java
++++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarMediator.java
+@@ -1135,6 +1135,27 @@
+     @Override
+     public void loadUrl(OmniboxLoadUrlParams omniboxLoadUrlParams) {
+         try (TraceEvent e = TraceEvent.scoped("LocationBarMediator.loadUrl")) {
++            if (mLocationBarLayout.getArcCommandResults() != null) {
++                if (mLocationBarLayout.isArcCommandActions()) {
++                    mLocationBarLayout.finishArcCommandNavigation();
++                    return;
++                }
++                // Input has been resolved by the profile's native autocomplete engine. Preserve
++                // POST, headers, transitions and callbacks; create a tab only at confirmation.
++                OmniboxLoadUrlParams.Builder commandLoad = new OmniboxLoadUrlParams.Builder(
++                        omniboxLoadUrlParams.url, omniboxLoadUrlParams.transitionType)
++                        .setInputStartTimestamp(omniboxLoadUrlParams.inputStartTimestamp)
++                        .setOpenInNewTab(true)
++                        .setOpenInNewWindow(omniboxLoadUrlParams.openInNewWindow)
++                        .setOpenInBackground(omniboxLoadUrlParams.openInBackground)
++                        .setPostData(omniboxLoadUrlParams.postData)
++                        .setExtraHeaders(omniboxLoadUrlParams.extraHeaders);
++                if (omniboxLoadUrlParams.callback != null) {
++                    commandLoad.setAutocompleteLoadCallback(omniboxLoadUrlParams.callback);
++                }
++                omniboxLoadUrlParams = commandLoad.build();
++                mLocationBarLayout.finishArcCommandNavigation();
++            }
+             // The code of the rest of this class ensures that this can't be called until the native
+             // side is initialized
+             assert mNativeInitialized : "Loading URL before native side initialized";
+@@ -3170,6 +3191,9 @@
+      */
+     @Override
+     public void endInput() {
++        // Gesture Back, native tab switching and native cancellation share the same lifecycle.
++        // The callback clears itself before closing; its nested endInput does the native work once.
++        if (mLocationBarLayout.closeArcCommandBarForInputEnd()) return;
+         mUrlFocusedWithoutAnimations = false;
+         if (mAutocompleteCoordinator == null || mCurrentInput == null || mIsReparenting) return;
+
+diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarMediatorUnitTest.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarMediatorUnitTest.java
+--- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarMediatorUnitTest.java
++++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarMediatorUnitTest.java
+@@ -1126,6 +1126,49 @@
+     }
+
+     @Test
++    public void testArcCommandResolvedLoadCreatesNewTabAndPreservesNativeParameters() {
++        mMediator.onFinishNativeInitialization();
++        when(mLocationBarLayout.getArcCommandResults()).thenReturn(new Rect(100, 100, 800, 400));
++        byte[] post = new byte[] {1, 2, 3};
++        org.chromium.chrome.browser.omnibox.suggestions.AutocompleteDelegate.AutocompleteLoadCallback callback =
++                mock(org.chromium.chrome.browser.omnibox.suggestions.AutocompleteDelegate.AutocompleteLoadCallback.class);
++        OmniboxLoadUrlParams original = new OmniboxLoadUrlParams.Builder(TEST_URL, PageTransition.TYPED)
++                .setInputStartTimestamp(123).setPostData(post)
++                .setExtraHeaders(java.util.Map.of("Content-Type", "application/octet-stream"))
++                .setAutocompleteLoadCallback(callback).build();
++        mMediator.loadUrl(original);
++        verify(mLocationBarLayout).finishArcCommandNavigation();
++        verify(mNavigator).loadUrl(mOmniboxLoadUrlParamsCaptor.capture());
++        OmniboxLoadUrlParams delivered = mOmniboxLoadUrlParamsCaptor.getValue();
++        assertTrue(delivered.openInNewTab);
++        assertFalse(original.openInNewTab);
++        assertEquals(original.url, delivered.url);
++        assertEquals(original.transitionType, delivered.transitionType);
++        assertEquals(original.inputStartTimestamp, delivered.inputStartTimestamp);
++        assertTrue(post == delivered.postData);
++        assertEquals(original.extraHeaders, delivered.extraHeaders);
++        assertTrue(callback == delivered.callback);
++    }
++
++    @Test
++    public void testArcCommandActionsNeverLoadAnAutocompleteUrl() {
++        mMediator.onFinishNativeInitialization();
++        when(mLocationBarLayout.getArcCommandResults()).thenReturn(new Rect(100, 100, 800, 400));
++        when(mLocationBarLayout.isArcCommandActions()).thenReturn(true);
++        mMediator.loadUrl(new OmniboxLoadUrlParams.Builder(TEST_URL, PageTransition.TYPED).build());
++        verify(mLocationBarLayout).finishArcCommandNavigation();
++        verify(mNavigator, never()).loadUrl(any());
++    }
++
++    @Test
++    public void testArcCommandNativeInputEndDelegatesToTheCloseTransaction() {
++        when(mLocationBarLayout.closeArcCommandBarForInputEnd()).thenReturn(true);
++        mMediator.endInput();
++        verify(mLocationBarLayout).closeArcCommandBarForInputEnd();
++        verify(mNavigator, never()).loadUrl(any());
++    }
++
++    @Test
+     public void testLoadUrl_navigatorDidNotConsumeLoad_focusesCurrentTab() {
+         mMediator.onFinishNativeInitialization();
+         when(mNavigator.loadUrl(any())).thenReturn(true);
 diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java
 --- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java
 +++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java
@@ -2379,6 +2554,33 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
              int targetWidth = mAlignmentViewTargetWidthSupplier.get();
              width = targetWidth + 2 * sideSpacing;
              int leftOffset = mAlignmentViewLeftOffsetSupplier.get();
+@@ -434,6 +454,26 @@
+             height = Math.min(windowSpace, contentSpace) - top;
+         }
+
++        View commandLocation = mAlignmentView.findViewById(R.id.location_bar);
++        if (commandLocation instanceof LocationBarLayout locationBar
++                && locationBar.getArcCommandResults() != null) {
++            android.graphics.Rect command = locationBar.getArcCommandResults();
++            android.widget.TextView editor = locationBar.findViewById(R.id.url_bar);
++            if (locationBar.isArcCommandActions() || (editor != null && editor.getText().length() == 0)) {
++                // Actions share the real editor but have their own command rows, never stale
++                // native search suggestions overlapping a selected command.
++                width = 0; height = 0;
++            } else if (contentView != null && locationBar.isAttachedToWindow()
++                    && contentView.getRootView() == locationBar.getRootView()) {
++                int[] contentInWindow = new int[2]; contentView.getLocationInWindow(contentInWindow);
++                left = command.left - contentInWindow[0];
++                top = command.top - contentInWindow[1] - contentView.getPaddingTop();
++                width = command.width();
++                height = Math.max(0, Math.min(command.height(), Math.min(windowSpace, contentSpace) - top));
++                paddingLeft = 0; paddingRight = 0; paddingBottom = 0;
++            } else { width = 0; height = 0; }
++        }
++
+         // TODO(pnoland@, https://crbug.com/40257117): avoid pushing changes that are identical to
+         // the previous alignment value.
+         OmniboxAlignment omniboxAlignment =
 diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImplUnitTest.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImplUnitTest.java
 --- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImplUnitTest.java
 +++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImplUnitTest.java
@@ -3796,7 +3998,7 @@ diff --git a/chrome/android/java/res/values/arc_strings.xml b/chrome/android/jav
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/res/values/arc_strings.xml
-@@ -0,0 +1,53 @@
+@@ -0,0 +1,63 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<resources>
 +    <string name="arc_about">Acerca de Archium</string>
@@ -3808,7 +4010,17 @@ new file mode 100644
 +    <string name="arc_color_format">Introduce un color como #336699</string>
 +    <string name="arc_google_login">Iniciar sesión en la web de Google</string>
 +    <string name="arc_autofill">Autocompletado de Android</string>
-+    <string name="arc_interface">Interfaz de Archium</string>
++    <string name="arc_interface">Apariencia de Archium</string>
++    <string name="arc_address_bar_position">Posición de la barra de direcciones</string>
++    <string name="arc_address_sidebar">Barra lateral</string>
++    <string name="arc_address_top">Sobre la página</string>
++    <string name="arc_command_placeholder">Buscar o introducir URL…</string>
++    <string name="arc_command_actions">Acciones  Tab</string>
++    <string name="arc_command_switch_tab">Cambiar a pestaña</string>
++    <string name="arc_command_open">Abrir…</string>
++    <string name="arc_command_settings">Ajustes</string>
++    <string name="arc_command_toggle_sidebar">Mostrar/ocultar barra lateral</string>
++    <string name="arc_command_space">Cambiar Space</string>
 +    <string name="arc_interface_auto">Automática según la ventana</string>
 +    <string name="arc_interface_arc">Arc</string>
 +    <string name="arc_interface_mobile">Móvil</string>
@@ -3911,7 +4123,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAppearan
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAppearanceDialog.java
-@@ -0,0 +1,42 @@
+@@ -0,0 +1,56 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -3951,7 +4163,21 @@ new file mode 100644
 +                            onChanged.run();
 +                        })
 +                .setNegativeButton(android.R.string.cancel, null)
++                .setNeutralButton(R.string.arc_address_bar_position, (dialog, which) ->
++                        createAddressBarPosition(context, onChanged).show())
 +                .create();
++    }
++
++    public static AlertDialog createAddressBarPosition(Context context, Runnable onChanged) {
++        CharSequence[] choices = {context.getString(R.string.arc_address_sidebar),
++                context.getString(R.string.arc_address_top)};
++        return new AlertDialog.Builder(context).setTitle(R.string.arc_address_bar_position)
++                .setSingleChoiceItems(choices, ArcDesktopAppearance.getAddressBarPosition(context),
++                        (dialog, which) -> {
++                            ArcDesktopAppearance.setAddressBarPosition(context, which);
++                            dialog.dismiss(); onChanged.run();
++                        })
++                .setNegativeButton(android.R.string.cancel, null).create();
 +    }
 +}
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsController.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsController.java
@@ -4788,6 +5014,372 @@ new file mode 100644
 +        mDialog.dismiss();
 +    }
 +}
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCommandBar.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCommandBar.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCommandBar.java
+@@ -0,0 +1,361 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++import android.animation.Animator;
++import android.animation.AnimatorListenerAdapter;
++import android.animation.ValueAnimator;
++import android.app.Activity;
++import android.graphics.Rect;
++import android.graphics.drawable.Drawable;
++import android.graphics.drawable.GradientDrawable;
++import android.graphics.drawable.StateListDrawable;
++import android.text.Editable;
++import android.text.TextWatcher;
++import android.view.Gravity;
++import android.view.KeyEvent;
++import android.view.View;
++import android.view.ViewGroup;
++import android.widget.EditText;
++import android.widget.FrameLayout;
++import android.widget.ImageView;
++import android.widget.LinearLayout;
++import android.widget.ScrollView;
++import android.widget.TextView;
++
++import java.util.ArrayList;
++import java.util.List;
++import java.util.Locale;
++import java.util.function.Function;
++import java.util.function.Supplier;
++
++/** Desktop commands around the one Chromium editor; owns neither history nor input resolution. */
++public final class ArcCommandBar {
++    public enum State { CLOSED, OPENING, OPEN, CLOSING }
++    public static final class Result {
++        public final String title, subtitle, action;
++        public final Drawable icon;
++        public final Runnable activate;
++        public Result(String title, String subtitle, String action, Drawable icon, Runnable activate) {
++            this.title = title; this.subtitle = subtitle; this.action = action;
++            this.icon = icon; this.activate = activate;
++        }
++    }
++
++    private final Activity mActivity;
++    private final ViewGroup mRoot;
++    private final View mHolder;
++    private final EditText mEditor;
++    private final ArcOmniboxPlacement mPlacement;
++    private final Supplier<Rect> mViewport;
++    private final Runnable mBeginInput, mEndInput, mRestore;
++    private final Function<Boolean, List<Result>> mResults;
++    private final String mPlaceholder, mActionsLabel;
++    private final FrameLayout mOverlay;
++    private final LinearLayout mPanel, mHeader, mRows;
++    private final ScrollView mScroll;
++    private final View mDivider;
++    private final TextView mHint;
++    private final GradientDrawable mSurface = new GradientDrawable();
++    private final TextWatcher mTextWatcher = new TextWatcher() {
++        @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
++        @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
++            if (isShowing() && mState != State.CLOSING) rebuildResults();
++        }
++        @Override public void afterTextChanged(Editable e) {}
++    };
++    private final View.OnLayoutChangeListener mLayoutListener =
++            (v, l, t, r, b, ol, ot, or, ob) -> resize();
++    private final android.view.ViewTreeObserver.OnGlobalLayoutListener mGlobalLayout =
++            this::onGlobalLayout;
++    private State mState = State.CLOSED;
++    private boolean mActions, mDestroyed;
++    private int mSelected = -1;
++    private int mForeground, mSelection;
++    private List<Result> mVisible = List.of();
++    private ValueAnimator mAnimator;
++    private TextView mProxy;
++    private Rect mOrigin = new Rect();
++    private Rect mLastVisibleFrame = new Rect();
++    private Rect mLastViewport = new Rect();
++    private CharSequence mOriginalHint;
++    private View mPreviousFocus;
++    private Runnable mBoundsChanged = () -> {};
++
++    public ArcCommandBar(Activity activity, ViewGroup root, View holder, EditText editor,
++            ArcOmniboxPlacement placement, Supplier<Rect> viewport, Runnable beginInput,
++            Runnable endInput, Runnable restore, Function<Boolean, List<Result>> results,
++            String placeholder, String actionsLabel) {
++        mActivity = activity; mRoot = root; mHolder = holder; mEditor = editor;
++        mPlacement = placement; mViewport = viewport; mBeginInput = beginInput;
++        mEndInput = endInput; mRestore = restore; mResults = results;
++        mPlaceholder = placeholder; mActionsLabel = actionsLabel;
++        mOverlay = new FrameLayout(activity);
++        mOverlay.setBackgroundColor(0x22000000);
++        mOverlay.setOnClickListener(v -> close(true, null));
++        mPanel = new LinearLayout(activity); mPanel.setOrientation(LinearLayout.VERTICAL);
++        mPanel.setPadding(dp(8), dp(4), dp(8), dp(8));
++        mSurface.setCornerRadius(dp(12)); mPanel.setBackground(mSurface);
++        mPanel.setElevation(dp(12)); mPanel.setClickable(true);
++        mPanel.setAccessibilityPaneTitle(placeholder);
++        mHeader = new LinearLayout(activity); mHeader.setGravity(Gravity.CENTER_VERTICAL);
++        mHint = new TextView(activity); mHint.setText(actionsLabel); mHint.setTextSize(12);
++        mHint.setPadding(dp(8), 0, dp(8), 0); mHint.setFocusable(true);
++        mHint.setOnClickListener(v -> toggleActions());
++        mHeader.addView(mHint);
++        mPanel.addView(mHeader, new LinearLayout.LayoutParams(-1, dp(56)));
++        mDivider = new View(activity);
++        mPanel.addView(mDivider, new LinearLayout.LayoutParams(-1, dp(1)));
++        mScroll = new ScrollView(activity); mScroll.setFillViewport(false);
++        mRows = new LinearLayout(activity); mRows.setOrientation(LinearLayout.VERTICAL);
++        mScroll.addView(mRows);
++        mPanel.addView(mScroll, new LinearLayout.LayoutParams(-1, 0, 1));
++        mOverlay.addView(mPanel);
++    }
++
++    private int dp(int value) {
++        return Math.round(value * mActivity.getResources().getDisplayMetrics().density);
++    }
++    private void onGlobalLayout() {
++        if (!isShowing()) return;
++        Rect visible = new Rect(); mRoot.getWindowVisibleDisplayFrame(visible);
++        if (!visible.equals(mLastVisibleFrame) || !mViewport.get().equals(mLastViewport)) resize();
++        else mBoundsChanged.run();
++    }
++    public boolean isShowing() { return mState != State.CLOSED; }
++    public boolean isActions() { return isShowing() && mActions; }
++    public void setBoundsChangedListener(Runnable listener) { mBoundsChanged = listener; }
++
++    public void setAppearance(int surface, int foreground, int selection) {
++        mSurface.setColor(surface); mSurface.setStroke(dp(1), (foreground & 0xffffff) | 0x33000000);
++        mForeground = foreground; mSelection = selection;
++        mHint.setTextColor(foreground); mDivider.setBackgroundColor((foreground & 0xffffff) | 0x22000000);
++        if (isShowing()) rebuildResults();
++    }
++
++    public void open(boolean actions) {
++        if (mDestroyed) return;
++        if (isShowing()) {
++            if (mState == State.CLOSING) { finishAnimationForTesting(); open(actions); }
++            return;
++        }
++        mActions = actions; mState = State.OPENING;
++        mPreviousFocus = mRoot.findFocus(); mOriginalHint = mEditor.getHint();
++        mOrigin = boundsInRoot(mHolder);
++        mRoot.addView(mOverlay, new ViewGroup.LayoutParams(-1, -1));
++        mRoot.addOnLayoutChangeListener(mLayoutListener);
++        mOverlay.getViewTreeObserver().addOnGlobalLayoutListener(mGlobalLayout);
++        mPlacement.move(mHeader, new LinearLayout.LayoutParams(0, -1, 1));
++        mHeader.removeView(mHolder); mHeader.addView(mHolder, 0, new LinearLayout.LayoutParams(0, -1, 1));
++        mEditor.setHint(mPlaceholder); mEditor.addTextChangedListener(mTextWatcher);
++        resize();
++        mBeginInput.run(); rebuildResults();
++        mProxy = new TextView(mActivity); mProxy.setText(mOriginalHint);
++        mProxy.setTextColor(mForeground); mProxy.setGravity(Gravity.CENTER_VERTICAL);
++        mProxy.setPadding(dp(12), 0, dp(12), 0); mProxy.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
++        mProxy.setClickable(false); mProxy.setFocusable(false);
++        GradientDrawable proxySurface = new GradientDrawable(); proxySurface.setColor(mSurface.getColor());
++        mProxy.setBackground(proxySurface); mOverlay.addView(mProxy);
++        animate(mOrigin, panelBounds(), true, null);
++    }
++
++    /** Called before native resolved navigation; restore hierarchy before a Tab/WebContents changes. */
++    public void commitNativeNavigation() {
++        if (mActions) {
++            if (mSelected >= 0 && mSelected < mVisible.size()) close(false, mVisible.get(mSelected).activate);
++            return;
++        }
++        close(false, null);
++    }
++
++    public void close(boolean animated, Runnable after) {
++        if (mState == State.CLOSED) return;
++        if (mState == State.CLOSING) {
++            if (!animated) { cancelAnimator(); finishClose(after); }
++            return;
++        }
++        cancelAnimator(); mState = State.CLOSING;
++        if (animated && ValueAnimator.areAnimatorsEnabled()) {
++            animate(panelBounds(), mOrigin, false, after);
++        } else {
++            finishClose(after);
++        }
++    }
++
++    private void finishClose(Runnable after) {
++        mEditor.removeTextChangedListener(mTextWatcher);
++        mState = State.CLOSED;
++        mBoundsChanged.run();
++        mEndInput.run(); mEditor.setHint(mOriginalHint);
++        mRestore.run(); mRoot.removeOnLayoutChangeListener(mLayoutListener);
++        if (mOverlay.getViewTreeObserver().isAlive()) {
++            mOverlay.getViewTreeObserver().removeOnGlobalLayoutListener(mGlobalLayout);
++        }
++        mRoot.removeView(mOverlay); removeProxy();
++        mRows.removeAllViews(); mVisible = List.of(); mSelected = -1;
++        if (after != null) after.run();
++        else if (mPreviousFocus != null && mPreviousFocus != mEditor && mPreviousFocus.isAttachedToWindow()) {
++            mPreviousFocus.requestFocus();
++        }
++        mPreviousFocus = null; mBoundsChanged.run();
++    }
++
++    public void resize() {
++        if (!isShowing()) return;
++        Rect viewport = mViewport.get();
++        Rect visibleWindow = new Rect(); mRoot.getWindowVisibleDisplayFrame(visibleWindow);
++        mLastVisibleFrame.set(visibleWindow); mLastViewport.set(viewport);
++        // getWindowVisibleDisplayFrame uses screen coordinates, unlike omnibox/viewport bounds.
++        int[] rootLocation = new int[2]; mRoot.getLocationOnScreen(rootLocation);
++        visibleWindow.offset(-rootLocation[0], -rootLocation[1]);
++        if (!visibleWindow.isEmpty()) viewport.intersect(visibleWindow);
++        int margin = dp(16);
++        int width = Math.max(1, Math.min(dp(760), viewport.width() - 2 * margin));
++        int height = Math.max(1, Math.min(dp(360), viewport.height() - 2 * margin));
++        FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(width, height, Gravity.LEFT | Gravity.TOP);
++        lp.leftMargin = viewport.left + Math.max(0, (viewport.width() - width) / 2);
++        lp.topMargin = viewport.top + Math.min(dp(48), Math.max(0, (viewport.height() - height) / 3));
++        mPanel.setLayoutParams(lp); mBoundsChanged.run();
++        // A resize finishes an opening transaction at current safe bounds, not stale bounds.
++        if (mAnimator != null && mState == State.OPENING) finishAnimationForTesting();
++    }
++
++    private Rect panelBounds() {
++        FrameLayout.LayoutParams lp = (FrameLayout.LayoutParams) mPanel.getLayoutParams();
++        return new Rect(lp.leftMargin, lp.topMargin, lp.leftMargin + lp.width, lp.topMargin + lp.height);
++    }
++    public Rect resultsBoundsInWindow() {
++        Rect rect = panelBounds(); int[] location = new int[2]; mRoot.getLocationInWindow(location);
++        rect.offset(location[0], location[1]); rect.top += dp(61); return rect;
++    }
++    private Rect boundsInRoot(View view) {
++        if (view.getRootView() != mRoot.getRootView()) return new Rect();
++        int[] location = new int[2], root = new int[2];
++        view.getLocationInWindow(location); mRoot.getLocationInWindow(root);
++        return new Rect(location[0] - root[0], location[1] - root[1],
++                location[0] - root[0] + view.getWidth(), location[1] - root[1] + view.getHeight());
++    }
++
++    private void animate(Rect from, Rect to, boolean opening, Runnable after) {
++        if (!ValueAnimator.areAnimatorsEnabled() || from.isEmpty() || to.isEmpty()) {
++            if (opening) finishOpen(); else finishClose(after); return;
++        }
++        mAnimator = ValueAnimator.ofFloat(0, 1); mAnimator.setDuration(200);
++        mAnimator.addUpdateListener(animation -> {
++            float progress = (float) animation.getAnimatedValue();
++            if (mProxy != null) {
++                FrameLayout.LayoutParams p = new FrameLayout.LayoutParams(
++                        Math.round(from.width() + (to.width() - from.width()) * progress),
++                        Math.round(from.height() + (to.height() - from.height()) * progress), Gravity.LEFT | Gravity.TOP);
++                p.leftMargin = Math.round(from.left + (to.left - from.left) * progress);
++                p.topMargin = Math.round(from.top + (to.top - from.top) * progress);
++                mProxy.setLayoutParams(p);
++                ((GradientDrawable) mProxy.getBackground()).setCornerRadius(dp(12) * progress);
++                mProxy.setElevation(dp(12) * progress); mProxy.setAlpha(1 - progress);
++            }
++            float alpha = opening ? progress : 1 - progress;
++            mPanel.setAlpha(alpha); mHeader.setAlpha(alpha);
++            mDivider.setAlpha(Math.max(0, (alpha - .2f) / .8f));
++            mScroll.setAlpha(Math.max(0, (alpha - .35f) / .65f));
++        });
++        mAnimator.addListener(new AnimatorListenerAdapter() {
++            @Override public void onAnimationEnd(Animator animation) {
++                mAnimator = null;
++                if (opening) finishOpen(); else finishClose(after);
++            }
++        }); mAnimator.start();
++    }
++    private void finishOpen() {
++        mState = State.OPEN; removeProxy();
++        mPanel.setAlpha(1); mHeader.setAlpha(1); mDivider.setAlpha(1); mScroll.setAlpha(1);
++    }
++    private void removeProxy() {
++        if (mProxy != null) {mOverlay.removeView(mProxy); mProxy = null;}
++    }
++    private void cancelAnimator() {
++        if (mAnimator != null) {mAnimator.removeAllListeners(); mAnimator.cancel(); mAnimator = null;}
++    }
++
++    private void toggleActions() {
++        mActions = !mActions; mHint.setText(mActions ? "← " + mActionsLabel : mActionsLabel);
++        rebuildResults(); mBoundsChanged.run(); mEditor.requestFocus();
++    }
++    private void rebuildResults() {
++        String query = mEditor.getText().toString().toLowerCase(Locale.ROOT).trim();
++        mVisible = new ArrayList<>();
++        for (Result result : mResults.apply(mActions)) {
++            if (query.isEmpty() || (mActions && (result.title + " " + result.subtitle).toLowerCase(Locale.ROOT).contains(query))) {
++                mVisible.add(result);
++            }
++        }
++        mSelected = query.isEmpty() || mActions ? (mVisible.isEmpty() ? -1 : 0) : -1;
++        mRows.removeAllViews();
++        for (int i = 0; i < mVisible.size(); i++) {
++            Result result = mVisible.get(i); int index = i;
++            LinearLayout row = new LinearLayout(mActivity); row.setGravity(Gravity.CENTER_VERTICAL);
++            row.setPadding(dp(12), dp(6), dp(12), dp(6)); row.setFocusable(true);
++            row.setContentDescription(result.title + ", " + result.subtitle + ", " + result.action);
++            ImageView icon = new ImageView(mActivity);
++            if (result.icon != null) icon.setImageDrawable(result.icon);
++            else icon.setImageResource(android.R.drawable.ic_menu_search);
++            row.addView(icon, new LinearLayout.LayoutParams(dp(24), dp(24)));
++            LinearLayout text = new LinearLayout(mActivity); text.setOrientation(LinearLayout.VERTICAL);
++            text.setPadding(dp(12), 0, dp(8), 0);
++            TextView title = label(result.title, 14); title.setSingleLine(true);
++            text.addView(title);
++            if (!result.subtitle.isEmpty()) {TextView subtitle = label(result.subtitle, 11); subtitle.setSingleLine(true); text.addView(subtitle);}
++            row.addView(text, new LinearLayout.LayoutParams(0, -2, 1));
++            TextView action = label(result.action, 11); action.setSingleLine(true); row.addView(action);
++            row.setOnClickListener(v -> close(false, result.activate));
++            row.setOnHoverListener((v, event) -> { if (event.getActionMasked() == android.view.MotionEvent.ACTION_HOVER_ENTER) select(index); return false; });
++            row.setOnFocusChangeListener((v, focus) -> {if (focus) select(index);});
++            mRows.addView(row, new LinearLayout.LayoutParams(-1, dp(52)));
++        }
++        select(mSelected);
++        mBoundsChanged.run();
++    }
++    private TextView label(String value, int size) {
++        TextView view = new TextView(mActivity); view.setText(value); view.setTextSize(size);
++        view.setTextColor(mForeground); return view;
++    }
++    private void select(int selected) {
++        mSelected = selected;
++        for (int i = 0; i < mRows.getChildCount(); i++) {
++            View row = mRows.getChildAt(i); GradientDrawable active = new GradientDrawable();
++            active.setColor(mSelection); active.setCornerRadius(dp(6));
++            StateListDrawable states = new StateListDrawable();
++            states.addState(new int[] {android.R.attr.state_selected}, active);
++            states.addState(new int[] {android.R.attr.state_hovered}, active);
++            states.addState(new int[] {android.R.attr.state_focused}, active);
++            states.addState(new int[] {}, new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
++            row.setBackground(states); row.setSelected(i == selected);
++        }
++        if (selected >= 0 && selected < mRows.getChildCount()) {
++            View row = mRows.getChildAt(selected); mScroll.smoothScrollTo(0, row.getTop());
++        }
++    }
++    public boolean dispatchKeyEvent(KeyEvent event) {
++        if (!isShowing() || event.isCtrlPressed() || event.isMetaPressed()) return false;
++        int key = event.getKeyCode();
++        boolean handled = key == KeyEvent.KEYCODE_ESCAPE || key == KeyEvent.KEYCODE_BACK || key == KeyEvent.KEYCODE_TAB
++                || ((key == KeyEvent.KEYCODE_DPAD_UP || key == KeyEvent.KEYCODE_DPAD_DOWN) && !mVisible.isEmpty())
++                || ((key == KeyEvent.KEYCODE_ENTER || key == KeyEvent.KEYCODE_NUMPAD_ENTER) && (mSelected >= 0 || mActions));
++        if (!handled) return false;
++        if (event.getAction() != KeyEvent.ACTION_DOWN || event.getRepeatCount() > 0) return true;
++        if (key == KeyEvent.KEYCODE_ESCAPE || key == KeyEvent.KEYCODE_BACK) close(true, null);
++        else if (key == KeyEvent.KEYCODE_TAB) toggleActions();
++        else if (key == KeyEvent.KEYCODE_DPAD_DOWN) select((mSelected + 1) % mVisible.size());
++        else if (key == KeyEvent.KEYCODE_DPAD_UP) select((mSelected + mVisible.size() - 1) % mVisible.size());
++        else if (mSelected >= 0 && mSelected < mVisible.size()) close(false, mVisible.get(mSelected).activate);
++        return true;
++    }
++    public void destroy() {
++        if (mDestroyed) return;
++        cancelAnimator(); if (isShowing()) {mState = State.OPEN; close(false, null);}
++        mDestroyed = true;
++    }
++    LinearLayout panelForTesting() { return mPanel; }
++    boolean actionsForTesting() { return mActions; }
++    void finishAnimationForTesting() { if (mAnimator != null) mAnimator.end(); }
++}
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCompactOmnibox.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCompactOmnibox.java
 new file mode 100644
 --- /dev/null
@@ -5006,7 +5598,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopC
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
-@@ -0,0 +1,1093 @@
+@@ -0,0 +1,1250 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -5031,6 +5623,8 @@ new file mode 100644
 +import android.view.Gravity;
 +import android.view.ViewOutlineProvider;
 +import android.view.ViewGroup;
++import android.view.KeyEvent;
++import android.widget.EditText;
 +import android.widget.Button;
 +import android.widget.ImageButton;
 +import android.widget.LinearLayout;
@@ -5048,9 +5642,12 @@ new file mode 100644
 +import java.util.function.Consumer;
 +import java.util.function.Supplier;
 +import java.util.Objects;
++import java.util.ArrayList;
++import java.util.List;
 +import org.chromium.chrome.browser.tab.Tab;
 +import org.chromium.chrome.browser.tabmodel.TabCreator;
 +import org.chromium.chrome.browser.tabmodel.TabModel;
++import org.chromium.chrome.browser.tab.TabSelectionType;
 +import org.chromium.chrome.browser.tabmodel.IncognitoStateProvider;
 +import org.chromium.chrome.browser.tabmodel.IncognitoStateProvider.IncognitoStateObserver;
 +
@@ -5092,6 +5689,10 @@ new file mode 100644
 +    private final LinearLayout mFooter;
 +    private final ImageButton mAppearanceButton;
 +    private final ArcCompactOmnibox mCompactOmnibox;
++    private final ArcOmniboxPlacement mOmniboxPlacement;
++    private ArcCommandBar mCommandBar;
++    private Runnable mFocusAddressBar;
++    private Runnable mOpenSettings;
 +    private final View mLocationBarHost;
 +    private final ViewGroup mLocationBarOriginalParent;
 +    private final int mLocationBarOriginalIndex;
@@ -5170,7 +5771,12 @@ new file mode 100644
 +        mCurrentModel = currentModel;
 +        mCurrentCreator = currentCreator;
 +        mCurrentTab = currentTab;
-+        mIncognitoObserver = incognito -> { if (!mDestroyed) { rebindCollections(); applyAppearance(); } };
++        mIncognitoObserver = incognito -> {
++            if (!mDestroyed) {
++                if (mCommandBar != null) mCommandBar.close(false, null);
++                rebindCollections(); applyAppearance();
++            }
++        };
 +        mIcons = new LargeIconBridge(profile);
 +        mPreferences = ArcDesktopAppearance.preferences(activity);
 +        mOriginalRailBackground = rail.getBackground();
@@ -5269,6 +5875,7 @@ new file mode 100644
 +        mCollapseButtonOriginalIndex = mCollapseButtonOriginalParent.indexOfChild(mCollapseButton);
 +        mCollapseButtonOriginalLayoutParams = mCollapseButton.getLayoutParams();
 +        mLocationBarHost = locationBarHost;
++        mOmniboxPlacement = new ArcOmniboxPlacement(locationBarHost);
 +        mCompactOmnibox = new ArcCompactOmnibox(locationBarHost);
 +        mLocationBarOriginalParent = (ViewGroup) mLocationBarHost.getParent();
 +        mLocationBarOriginalIndex = mLocationBarOriginalParent.indexOfChild(mLocationBarHost);
@@ -5341,6 +5948,10 @@ new file mode 100644
 +        appearanceButton.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
 +        appearanceButton.setPadding(dp(10), dp(10), dp(10), dp(10));
 +        appearanceButton.setOnClickListener(v -> showColorPicker());
++        appearanceButton.setOnLongClickListener(v -> {
++            ArcAppearanceDialog.createAddressBarPosition(mActivity, this::applyAppearance).show();
++            return true;
++        });
 +        appearanceButton.setTooltipText(activity.getString(R.string.arc_frame_color));
 +        bookmarksButton.setText("☆\n" + activity.getString(R.string.arc_bookmarks));
 +        bookmarksButton.setTextSize(10);
@@ -5369,7 +5980,7 @@ new file mode 100644
 +        mNewTabRow.setPadding(dp(12), 0, dp(12), 0);
 +        mNewTabRow.setOnClickListener(v -> {
 +            if (!mDestroyed && mNativeNewTabButton.isEnabled()) {
-+                mNativeNewTabButton.performClick();
++                openCommandBar();
 +            }
 +        });
 +        mColumn.addView(mNewTabRow, new LinearLayout.LayoutParams(-1, dp(44)));
@@ -5504,7 +6115,9 @@ new file mode 100644
 +                                    mActivity, mIncognitoStateProvider.isIncognitoSelected()),
 +                            false);
 +                }
-+            } else if (ArcDesktopAppearance.UI_MODE_KEY.equals(key)) {
++            } else if (ArcDesktopAppearance.UI_MODE_KEY.equals(key)
++                    || ArcDesktopAppearance.ADDRESS_BAR_POSITION_KEY.equals(key)) {
++                if (mCommandBar != null) mCommandBar.close(false, null);
 +                // AUTO/ARC/MOBILE can change while this coordinator still exists. Re-evaluate the
 +                // shell synchronously so ToolbarTablet is never left suppressed in MOBILE.
 +                refreshNativeRows(mNativeTabs);
@@ -5516,6 +6129,127 @@ new file mode 100644
 +        rail.addOnLayoutChangeListener(mLayoutListener);
 +        mIncognitoStateProvider.addIncognitoStateObserverAndTrigger(mIncognitoObserver);
 +        applyAppearance();
++    }
++
++    /** Installed once by TabbedRootUiCoordinator after its native omnibox is initialized. */
++    public void configureCommands(Runnable beginInput, Runnable endInput,
++            Runnable focusAddressBar, Runnable openSettings) {
++        if (mCommandBar != null || mDestroyed) return;
++        mFocusAddressBar = focusAddressBar; mOpenSettings = openSettings;
++        View url = mLocationBarHost.findViewById(R.id.url_bar);
++        if (!(mFrameRoot instanceof ViewGroup) || !(url instanceof EditText)) return;
++        mCommandBar = new ArcCommandBar(mActivity, (ViewGroup) mFrameRoot, mLocationBarHost,
++                (EditText) url, mOmniboxPlacement, this::commandViewport,
++                beginInput, endInput, this::applyAddressBarPosition, this::commandResults,
++                mActivity.getString(R.string.arc_command_placeholder),
++                mActivity.getString(R.string.arc_command_actions));
++        mCommandBar.setBoundsChangedListener(() -> {
++            View location = mLocationBarHost.findViewById(R.id.location_bar);
++            if (location instanceof LocationBarLayout bar) {
++                bar.setArcCommandBar(mCommandBar.isShowing() ? mCommandBar.resultsBoundsInWindow() : null,
++                        mCommandBar.isActions(), mCommandBar::commitNativeNavigation,
++                        () -> mCommandBar.close(false, null));
++            }
++            // The native suggestion container shares this coordinator root. Keep native results
++            // above the temporary command surface, retaining its original security/navigation UI.
++            View dropdown = mActivity.findViewById(R.id.omnibox_suggestions_dropdown);
++            if (mCommandBar.isShowing() && dropdown != null) {
++                View container = dropdown;
++                while (container.getParent() instanceof View && container.getParent() != mFrameRoot) {
++                    container = (View) container.getParent();
++                }
++                if (container.getParent() == mFrameRoot) {
++                    ViewGroup root = (ViewGroup) mFrameRoot;
++                    if (root.indexOfChild(container) != root.getChildCount() - 1) container.bringToFront();
++                }
++            }
++        });
++        mPaletteInitialized = false;
++        applyAppearance();
++    }
++
++    private Rect commandViewport() {
++        int[] content = new int[2], root = new int[2];
++        mCompositorViewHolder.getLocationInWindow(content); mFrameRoot.getLocationInWindow(root);
++        return new Rect(content[0] - root[0] + reservedLeftWidth(), content[1] - root[1],
++                content[0] - root[0] + mCompositorViewHolder.getWidth(),
++                content[1] - root[1] + mCompositorViewHolder.getHeight());
++    }
++
++    private List<ArcCommandBar.Result> commandResults(boolean actions) {
++        List<ArcCommandBar.Result> results = new ArrayList<>();
++        TabModel model = mCurrentModel.get();
++        if (model == null || model.getProfile() == null || model.getProfile().shutdownStarted()) return results;
++        if (actions) {
++            results.add(new ArcCommandBar.Result(mActivity.getString(R.string.arc_command_settings), "", "",
++                    mActivity.getDrawable(android.R.drawable.ic_menu_preferences), mOpenSettings));
++            results.add(new ArcCommandBar.Result(mActivity.getString(R.string.arc_command_toggle_sidebar), "", "",
++                    mActivity.getDrawable(android.R.drawable.ic_menu_view), () -> mCollapseButton.performClick()));
++            ArcCollectionsController collections = mCollections;
++            if (collections != null) for (ArcSidebarState.Space space : collections.state().spaces()) {
++                results.add(new ArcCommandBar.Result(space.name, mActivity.getString(R.string.arc_command_space), "",
++                        mActivity.getDrawable(android.R.drawable.ic_menu_agenda), () -> {
++                            if (!mDestroyed && mCurrentModel.get() == model && mCollections == collections) {
++                                collections.selectSpace(space.id);
++                            }
++                        }));
++            }
++            return results;
++        }
++        for (int i = 0; i < model.getCount(); i++) {
++            Tab tab = model.getTabAt(i);
++            if (tab == null || tab.isDestroyed()) continue;
++            int id = tab.getId();
++            results.add(new ArcCommandBar.Result(tab.getTitle(), tab.getUrl().getSpec(),
++                    mActivity.getString(R.string.arc_command_switch_tab),
++                    mActivity.getDrawable(android.R.drawable.ic_menu_view), () -> {
++                        if (mDestroyed || mCurrentModel.get() != model) return;
++                        for (int j = 0; j < model.getCount(); j++) {
++                            Tab candidate = model.getTabAt(j);
++                            if (candidate != null && !candidate.isDestroyed() && candidate.getId() == id) {
++                                model.setIndex(j, TabSelectionType.FROM_USER); return;
++                            }
++                        }
++                    }));
++        }
++        return results;
++    }
++
++    public boolean openCommandBar() {
++        if (mDestroyed || !ArcDesktopAppearance.isDesktopWindow(mActivity) || mCommandBar == null) return false;
++        mCompactOmnibox.restore(); mCommandBar.open(false); return true;
++    }
++
++    public boolean dispatchKeyEvent(KeyEvent event) {
++        if (mDestroyed || !ArcDesktopAppearance.isDesktopWindow(mActivity)) return false;
++        if ((event.isCtrlPressed() || event.isMetaPressed()) && !event.isAltPressed() && !event.isShiftPressed()) {
++            if (event.getKeyCode() == KeyEvent.KEYCODE_T) {
++                if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) return openCommandBar();
++                return mCommandBar != null;
++            }
++            if (event.getKeyCode() == KeyEvent.KEYCODE_L && mFocusAddressBar != null) {
++                if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
++                    if (mCommandBar != null) mCommandBar.close(false, null);
++                    if (ArcDesktopAppearance.getAddressBarPosition(mActivity) == ArcDesktopAppearance.ADDRESS_SIDEBAR
++                            && !ArcDesktopPolicy.showFullControls(mRail.getWidth(), mRail.getHeight(),
++                                    mActivity.getResources().getDisplayMetrics().density)) {
++                        mCollapseButton.performClick();
++                    }
++                    mFocusAddressBar.run();
++                }
++                return true;
++            }
++        }
++        return mCommandBar != null && mCommandBar.dispatchKeyEvent(event);
++    }
++
++    private void applyAddressBarPosition() {
++        if (mCommandBar != null && mCommandBar.isShowing()) return;
++        boolean desktop = !mDestroyed && ArcDesktopAppearance.isDesktopWindow(mActivity);
++        boolean top = desktop && ArcDesktopAppearance.getAddressBarPosition(mActivity) == ArcDesktopAppearance.ADDRESS_TOP;
++        if (!desktop || top) mOmniboxPlacement.restore();
++        else mOmniboxPlacement.move(mHeader, 1, arcLocationBarLayoutParams());
++        mSetToolbarSuppressed.accept(desktop && !top);
 +    }
 +
 +    private LinearLayout column() {
@@ -5717,6 +6451,8 @@ new file mode 100644
 +        boolean desktop = ArcDesktopAppearance.isDesktopWindow(mActivity);
 +        boolean incognito = mIncognitoStateProvider.isIncognitoSelected();
 +        setArcToolbarCompositionActive(desktop);
++        if (!desktop && mCommandBar != null) mCommandBar.close(false, null);
++        applyAddressBarPosition();
 +        int surface = frameSurface(incognito);
 +        boolean paletteChanged = !mPaletteInitialized || mPaletteDesktop != desktop
 +                || mPaletteIncognito != incognito || mPaletteSurface != surface;
@@ -5762,9 +6498,20 @@ new file mode 100644
 +        // paths never target a GONE omnibox. Secondary Arc controls are restored on expansion.
 +        mHeader.setVisibility(View.VISIBLE);
 +        mNavigationRow.setVisibility(View.VISIBLE);
-+        mNavigationControls.setVisibility(expanded ? View.VISIBLE : View.GONE);
++        mNavigationControls.setVisibility(View.VISIBLE);
++        mNavigationState.setExpanded(expanded);
++        mNavigationRow.setOrientation(expanded ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
++        mNavigationRow.setGravity(expanded ? Gravity.START : Gravity.CENTER_HORIZONTAL);
++        ViewGroup.LayoutParams navigationLayout = mNavigationRow.getLayoutParams();
++        int navigationHeight = dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP) * (expanded ? 1 : 2);
++        if (navigationLayout.height != navigationHeight) {
++            navigationLayout.height = navigationHeight;
++            mNavigationRow.setLayoutParams(navigationLayout);
++        }
 +        mHeaderActions.setVisibility(expanded ? View.VISIBLE : View.GONE);
-+        mCompactOmnibox.setCompact(!expanded);
++        boolean commandOpen = mCommandBar != null && mCommandBar.isShowing();
++        mCompactOmnibox.setCompact(!expanded && !commandOpen
++                && ArcDesktopAppearance.getAddressBarPosition(mActivity) == ArcDesktopAppearance.ADDRESS_SIDEBAR);
 +        updateNewTabRow(expanded);
 +        // The native app menu remains reachable while collapsed. Secondary footer actions can
 +        // disappear so the compact rail does not retain expanded hitboxes.
@@ -5785,6 +6532,7 @@ new file mode 100644
 +        // animation frame; Chromium continues animating the reserved width and viewport.
 +        if (!paletteChanged) return;
 +        int foreground = ArcDesktopPolicy.foreground(surface);
++        if (mCommandBar != null) mCommandBar.setAppearance(surface, foreground, ArcDesktopPolicy.selection(surface));
 +        mNewTabIcon.setTint(foreground);
 +        mColumn.setBackgroundColor(surface);
 +        styleInteraction(mNewTabRow, foreground, ArcDesktopPolicy.selection(surface));
@@ -6076,6 +6824,7 @@ new file mode 100644
 +    public void destroy() {
 +        if (mDestroyed) return;
 +        mDestroyed = true;
++        if (mCommandBar != null) mCommandBar.destroy();
 +        mFrameDispatch.destroy();
 +        mCompactOmnibox.destroy();
 +        ArcDesktopAppearance.setPreviewColor(mActivity, null);
@@ -6575,13 +7324,14 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcNavigati
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcNavigationControls.java
-@@ -0,0 +1,75 @@
+@@ -0,0 +1,101 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
 +package org.chromium.chrome.browser.arc;
 +
 +import android.widget.ImageButton;
++import android.view.View;
 +
 +import org.chromium.chrome.browser.tab.Tab;
 +import org.chromium.chrome.browser.tab.TabObserver;
@@ -6614,6 +7364,31 @@ new file mode 100644
 +        mBack = back;
 +        mForward = forward;
 +        mReload = reload;
++        mBack.setOnClickListener(v -> {
++            Tab tab = selected();
++            if (tab != null && tab.canGoBack()) tab.goBack();
++        });
++        mForward.setOnClickListener(v -> {
++            Tab tab = selected();
++            if (tab != null && tab.canGoForward()) tab.goForward();
++        });
++        mReload.setOnClickListener(v -> {
++            Tab tab = selected();
++            if (tab != null) tab.reload();
++        });
++    }
++
++    private Tab selected() {
++        if (mDestroyed) return null;
++        Tab tab = mCurrent.get();
++        return tab == null || tab.isDestroyed() ? null : tab;
++    }
++
++    /** A disabled Back still occupies a reachable, labelled compact navigation row. */
++    public void setExpanded(boolean expanded) {
++        mBack.setVisibility(View.VISIBLE);
++        mForward.setVisibility(expanded ? View.VISIBLE : View.GONE);
++        mReload.setVisibility(expanded ? View.VISIBLE : View.GONE);
 +    }
 +
 +    private void changed(Tab tab) {
@@ -6649,6 +7424,64 @@ new file mode 100644
 +        mDestroyed = true;
 +        detach();
 +        update(null);
++    }
++}
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcOmniboxPlacement.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcOmniboxPlacement.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcOmniboxPlacement.java
+@@ -0,0 +1,53 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++import android.view.View;
++import android.view.ViewGroup;
++import android.widget.EditText;
++
++/** Transfers the native holder as a unit, keeping LocationBarTablet's direct parent intact. */
++public final class ArcOmniboxPlacement {
++    private final View mHolder;
++    private final ViewGroup mOriginalParent;
++    private final int mOriginalIndex;
++    private final ViewGroup.LayoutParams mOriginalParams;
++
++    public ArcOmniboxPlacement(View holder) {
++        if (!(holder.getParent() instanceof ViewGroup)) {
++            throw new IllegalArgumentException("Native omnibox holder must have a parent");
++        }
++        mHolder = holder;
++        mOriginalParent = (ViewGroup) holder.getParent();
++        mOriginalIndex = mOriginalParent.indexOfChild(holder);
++        mOriginalParams = holder.getLayoutParams();
++    }
++
++    public void move(ViewGroup destination, ViewGroup.LayoutParams params) {
++        move(destination, destination.getChildCount(), params);
++    }
++
++    public void move(ViewGroup destination, int index, ViewGroup.LayoutParams params) {
++        if (mHolder.getParent() == destination) return;
++        transfer(destination, Math.min(index, destination.getChildCount()), params);
++    }
++
++    public void restore() {
++        if (mHolder.getParent() == mOriginalParent) return;
++        transfer(mOriginalParent, Math.min(mOriginalIndex, mOriginalParent.getChildCount()), mOriginalParams);
++    }
++
++    private void transfer(ViewGroup parent, int index, ViewGroup.LayoutParams params) {
++        View focused = mHolder.findFocus();
++        int start = focused instanceof EditText editor ? editor.getSelectionStart() : -1;
++        int end = focused instanceof EditText editor ? editor.getSelectionEnd() : -1;
++        if (mHolder.getParent() instanceof ViewGroup previous) previous.removeView(mHolder);
++        parent.addView(mHolder, index, params);
++        // Native input listeners remain installed. Never copy text to another editor.
++        if (focused != null) focused.requestFocus();
++        if (focused instanceof EditText editor && start >= 0 && end >= 0) {
++            editor.setSelection(Math.min(start, editor.length()), Math.min(end, editor.length()));
++        }
 +    }
 +}
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarProfiles.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarProfiles.java
@@ -7646,6 +8479,123 @@ new file mode 100644
 +        assertEquals(195, ((SeekBar) tagged("arc-color-rgb:2")).getProgress());
 +    }
 +}
+diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCommandBarTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCommandBarTest.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCommandBarTest.java
+@@ -0,0 +1,112 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++import static org.junit.Assert.*;
++import android.app.Activity;
++import android.animation.ValueAnimator;
++import android.graphics.Rect;
++import android.view.KeyEvent;
++import android.widget.EditText;
++import android.widget.FrameLayout;
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.robolectric.Robolectric;
++import org.robolectric.RobolectricTestRunner;
++import org.robolectric.annotation.Config;
++import org.robolectric.annotation.GraphicsMode;
++import org.robolectric.annotation.SQLiteMode;
++import java.util.List;
++import java.util.concurrent.atomic.AtomicInteger;
++
++@RunWith(RobolectricTestRunner.class)
++@Config(manifest = Config.NONE, sdk = {30, 36})
++@GraphicsMode(GraphicsMode.Mode.LEGACY)
++@SQLiteMode(SQLiteMode.Mode.LEGACY)
++public class ArcCommandBarTest {
++    private static class Fixture {
++        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
++        FrameLayout root = new FrameLayout(activity), original = new FrameLayout(activity);
++        FrameLayout holder = new FrameLayout(activity);
++        EditText editor = new EditText(activity);
++        AtomicInteger commits = new AtomicInteger(), sessions = new AtomicInteger();
++        ArcOmniboxPlacement placement;
++        ArcCommandBar bar;
++        Fixture() {
++            root.addView(original); original.addView(holder); holder.addView(editor);
++            activity.setContentView(root); root.layout(0, 0, 1000, 800); holder.layout(10, 10, 220, 54);
++            placement = new ArcOmniboxPlacement(holder);
++            bar = new ArcCommandBar(activity, root, holder, editor, placement,
++                    () -> new Rect(260, 0, 1000, 800),
++                    () -> {sessions.incrementAndGet(); editor.requestFocus(); editor.setText("");},
++                    () -> {editor.clearFocus(); sessions.decrementAndGet();}, placement::restore,
++                    actions -> List.of(new ArcCommandBar.Result("Tab title", "https://example.com/", "Switch", null, commits::incrementAndGet)),
++                    "Search or enter URL…", "Actions  Tab");
++            bar.setAppearance(0xffeeeeee, 0xff111111, 0xffbbccdd);
++        }
++        void finish() {bar.destroy(); activity.finish();}
++    }
++    @Test public void openingAndEscapeCreateNoTabAndRestoreUniqueEditor() {
++        Fixture f = new Fixture();
++        f.bar.open(false); assertTrue(f.bar.isShowing()); assertEquals(0, f.commits.get());
++        assertSame(f.holder, f.editor.getParent());
++        assertEquals(3, f.bar.panelForTesting().getChildCount());
++        f.bar.open(false); assertEquals(1, f.sessions.get());
++        assertTrue(f.bar.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ESCAPE)));
++        f.bar.finishAnimationForTesting(); assertFalse(f.bar.isShowing());
++        assertSame(f.original, f.holder.getParent()); assertEquals(0, f.commits.get());
++        assertEquals(0, f.sessions.get()); f.finish();
++    }
++    @Test public void tabActionsAndEnterCommitExactlyOnce() {
++        Fixture f = new Fixture(); f.bar.open(false); f.bar.finishAnimationForTesting();
++        f.bar.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_TAB));
++        assertTrue(f.bar.actionsForTesting());
++        f.bar.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER));
++        f.bar.finishAnimationForTesting(); assertEquals(1, f.commits.get());
++        assertFalse(f.bar.isShowing()); assertEquals(0, f.sessions.get()); f.finish();
++    }
++    @Test public void typedEnterAndArrowsFallThroughToNativeAutocomplete() {
++        Fixture f = new Fixture(); f.bar.open(false); f.bar.finishAnimationForTesting();
++        f.editor.setText("example");
++        assertFalse(f.bar.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER)));
++        assertFalse(f.bar.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_DPAD_DOWN)));
++        assertFalse(f.bar.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER)));
++        f.bar.commitNativeNavigation(); assertEquals(0, f.commits.get()); f.finish();
++    }
++    @Test public void resizeDuringOpeningAndDestroyReleaseHolderAndCallbacks() {
++        Fixture f = new Fixture(); f.bar.open(false);
++        f.root.layout(0, 0, 650, 480); f.bar.resize();
++        f.bar.destroy(); assertSame(f.original, f.holder.getParent());
++        assertFalse(f.bar.isShowing()); assertEquals(0, f.sessions.get());
++        f.bar.destroy(); assertEquals(0, f.sessions.get()); f.activity.finish();
++    }
++    @Test public void unmatchedActionCannotFallThroughHardwareOrImeIntoWebNavigation() {
++        Fixture f = new Fixture(); f.bar.open(true); f.bar.finishAnimationForTesting();
++        f.editor.setText("does not match a command");
++        assertTrue(f.bar.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ENTER)));
++        f.bar.commitNativeNavigation(); assertTrue(f.bar.isShowing()); assertEquals(0, f.commits.get());
++        f.finish();
++    }
++    @Test public void nativeConfirmationInterruptsClosingAndRestoresBeforeNavigation() {
++        Fixture f = new Fixture(); f.bar.open(false); f.bar.finishAnimationForTesting();
++        f.bar.close(true, null); f.bar.commitNativeNavigation();
++        assertFalse(f.bar.isShowing()); assertSame(f.original, f.holder.getParent());
++        assertEquals(0, f.sessions.get()); f.finish();
++    }
++    @Test public void rtlPanelAndSuggestionsUseTheSamePhysicalWindowCoordinates() {
++        Fixture f = new Fixture();
++        f.activity.getApplicationInfo().flags |= android.content.pm.ApplicationInfo.FLAG_SUPPORTS_RTL;
++        f.activity.getApplicationInfo().targetSdkVersion = 36;
++        f.root.setLayoutDirection(android.view.View.LAYOUT_DIRECTION_RTL);
++        f.bar.open(false); f.bar.finishAnimationForTesting();
++        f.root.measure(android.view.View.MeasureSpec.makeMeasureSpec(1000, android.view.View.MeasureSpec.EXACTLY),
++                android.view.View.MeasureSpec.makeMeasureSpec(800, android.view.View.MeasureSpec.EXACTLY));
++        f.root.layout(0, 0, 1000, 800);
++        assertEquals(android.view.View.LAYOUT_DIRECTION_RTL,
++                ((android.view.View) f.bar.panelForTesting().getParent()).getLayoutDirection());
++        int[] panel = new int[2]; f.bar.panelForTesting().getLocationInWindow(panel);
++        assertEquals(panel[0], f.bar.resultsBoundsInWindow().left);
++        f.finish();
++    }
++}
 diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCompactOmniboxTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCompactOmniboxTest.java
 new file mode 100644
 --- /dev/null
@@ -8057,7 +9007,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcNavigat
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcNavigationControlsTest.java
-@@ -0,0 +1,93 @@
+@@ -0,0 +1,115 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -8068,6 +9018,7 @@ new file mode 100644
 +
 +import android.app.Activity;
 +import android.widget.ImageButton;
++import android.view.View;
 +
 +import org.junit.Test;
 +import org.junit.runner.RunWith;
@@ -8089,6 +9040,27 @@ new file mode 100644
 +@GraphicsMode(GraphicsMode.Mode.LEGACY)
 +@SQLiteMode(SQLiteMode.Mode.LEGACY)
 +public class ArcNavigationControlsTest {
++    @Test
++    public void collapsedBackRemainsVisibleAndDispatchesToSelectedNativeTab() {
++        Tab tab = mock(Tab.class);
++        ImageButton[] buttons = buttons();
++        ArcNavigationControls controls = new ArcNavigationControls(() -> tab, buttons[0], buttons[1], buttons[2]);
++        controls.setExpanded(false);
++        controls.refresh();
++        assertEquals(View.VISIBLE, buttons[0].getVisibility());
++        assertFalse(buttons[0].isEnabled());
++        assertEquals(View.GONE, buttons[1].getVisibility());
++        assertEquals(View.GONE, buttons[2].getVisibility());
++        when(tab.canGoBack()).thenReturn(true);
++        controls.refresh();
++        buttons[0].performClick();
++        verify(tab).goBack();
++        controls.setExpanded(true);
++        for (ImageButton button : buttons) assertEquals(View.VISIBLE, button.getVisibility());
++        controls.destroy();
++        buttons[0].performClick();
++        verify(tab, times(1)).goBack();
++    }
 +    private ImageButton[] buttons() {
 +        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
 +        return new ImageButton[] {new ImageButton(activity), new ImageButton(activity), new ImageButton(activity)};
@@ -8149,6 +9121,76 @@ new file mode 100644
 +        controls.refresh();
 +        for (ImageButton button : buttons) assertFalse(button.isEnabled());
 +        verify(tab, times(1)).addObserver(listener.getValue());
++    }
++}
+diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcOmniboxPlacementTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcOmniboxPlacementTest.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcOmniboxPlacementTest.java
+@@ -0,0 +1,65 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++import static org.junit.Assert.*;
++import android.app.Activity;
++import android.view.ViewGroup;
++import android.widget.EditText;
++import android.widget.FrameLayout;
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.robolectric.Robolectric;
++import org.robolectric.RobolectricTestRunner;
++import org.robolectric.annotation.Config;
++import org.robolectric.annotation.GraphicsMode;
++import org.robolectric.annotation.SQLiteMode;
++
++@RunWith(RobolectricTestRunner.class)
++@Config(manifest = Config.NONE, sdk = {30, 36})
++@GraphicsMode(GraphicsMode.Mode.LEGACY)
++@SQLiteMode(SQLiteMode.Mode.LEGACY)
++public class ArcOmniboxPlacementTest {
++    @Test public void transfersSameHolderPreservingDirectParentTextAndSelection() {
++        Activity a = Robolectric.buildActivity(Activity.class).setup().get();
++        FrameLayout root = new FrameLayout(a), top = new FrameLayout(a), side = new FrameLayout(a);
++        FrameLayout holder = new FrameLayout(a);
++        EditText editor = new EditText(a);
++        holder.addView(editor); top.addView(holder); root.addView(top); root.addView(side); a.setContentView(root);
++        editor.setText("https://example.com/form"); editor.requestFocus(); editor.setSelection(9);
++        ArcOmniboxPlacement placement = new ArcOmniboxPlacement(holder);
++        for (int i = 0; i < 8; i++) {
++            placement.move(side, new FrameLayout.LayoutParams(-1, 44));
++            assertSame(holder, editor.getParent()); assertSame(side, holder.getParent());
++            placement.restore();
++            assertSame(top, holder.getParent()); assertSame(holder, editor.getParent());
++            assertEquals("https://example.com/form", editor.getText().toString());
++            assertEquals(9, editor.getSelectionStart());
++        }
++        assertEquals(1, top.getChildCount()); assertEquals(0, side.getChildCount());
++        assertTrue(editor.hasFocus());
++        placement.restore(); a.finish();
++    }
++    @Test public void noOpMoveDoesNotDetachOrReplaceParameters() {
++        Activity a = Robolectric.buildActivity(Activity.class).setup().get();
++        FrameLayout top = new FrameLayout(a), holder = new FrameLayout(a);
++        ViewGroup.LayoutParams original = new FrameLayout.LayoutParams(180, 44);
++        top.addView(holder, original);
++        ArcOmniboxPlacement placement = new ArcOmniboxPlacement(holder);
++        placement.move(top, new FrameLayout.LayoutParams(999, 99));
++        assertSame(original, holder.getLayoutParams());
++        placement.restore(); assertSame(original, holder.getLayoutParams()); a.finish();
++    }
++    @Test public void sidebarRestorationKeepsAddressBetweenNavigationAndCollections() {
++        Activity a = Robolectric.buildActivity(Activity.class).setup().get();
++        FrameLayout top = new FrameLayout(a), sidebar = new FrameLayout(a), holder = new FrameLayout(a);
++        top.addView(holder); sidebar.addView(new FrameLayout(a)); sidebar.addView(new FrameLayout(a));
++        ArcOmniboxPlacement placement = new ArcOmniboxPlacement(holder);
++        placement.move(sidebar, 1, new FrameLayout.LayoutParams(200, 44));
++        assertSame(holder, sidebar.getChildAt(1));
++        placement.restore(); placement.move(sidebar, 1, new FrameLayout.LayoutParams(200, 44));
++        assertSame(holder, sidebar.getChildAt(1)); assertEquals(3, sidebar.getChildCount());
++        a.finish();
 +    }
 +}
 diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/ArcTabSelectionTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/ArcTabSelectionTest.java
@@ -8357,7 +9399,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/ui/vertical_ta
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearanceTest.java
-@@ -0,0 +1,153 @@
+@@ -0,0 +1,165 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -8391,6 +9433,18 @@ new file mode 100644
 +@GraphicsMode(GraphicsMode.Mode.LEGACY)
 +@SQLiteMode(SQLiteMode.Mode.LEGACY)
 +public class ArcDesktopAppearanceTest {
++    @Test
++    public void addressPositionDefaultsToSidebarAndSurvivesActivityRecreation() {
++        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
++        ArcDesktopAppearance.preferences(activity).edit().remove(ArcDesktopAppearance.ADDRESS_BAR_POSITION_KEY).commit();
++        assertEquals(ArcDesktopAppearance.ADDRESS_SIDEBAR, ArcDesktopAppearance.getAddressBarPosition(activity));
++        ArcDesktopAppearance.setAddressBarPosition(activity, ArcDesktopAppearance.ADDRESS_TOP);
++        Activity other = Robolectric.buildActivity(Activity.class).setup().get();
++        assertEquals(ArcDesktopAppearance.ADDRESS_TOP, ArcDesktopAppearance.getAddressBarPosition(other));
++        ArcDesktopAppearance.setAddressBarPosition(other, ArcDesktopAppearance.ADDRESS_SIDEBAR);
++        assertEquals(ArcDesktopAppearance.ADDRESS_SIDEBAR, ArcDesktopAppearance.getAddressBarPosition(activity));
++        activity.finish(); other.finish();
++    }
 +    private Activity windowActivity(Activity activity) {
 +        Activity window = spy(activity);
 +        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
@@ -12600,7 +13654,7 @@ diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrom
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java
-@@ -0,0 +1,123 @@
+@@ -0,0 +1,138 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -12624,12 +13678,27 @@ new file mode 100644
 +public final class ArcDesktopAppearance {
 +    public static final String COLOR_KEY = "frame_color";
 +    public static final String UI_MODE_KEY = "ui_mode";
++    public static final String ADDRESS_BAR_POSITION_KEY = "address_bar_position";
++    public static final int ADDRESS_SIDEBAR = 0;
++    public static final int ADDRESS_TOP = 1;
 +    public static final int DEFAULT_COLOR = 0xff53657b;
 +
 +    // UI-thread only. A draft belongs to its Activity, never another window or saved profile.
 +    private static final WeakHashMap<Context, Integer> PREVIEW_COLORS = new WeakHashMap<>();
 +
 +    private ArcDesktopAppearance() {}
++
++    public static int getAddressBarPosition(Context context) {
++        return preferences(context).getInt(ADDRESS_BAR_POSITION_KEY, ADDRESS_SIDEBAR) == ADDRESS_TOP
++                ? ADDRESS_TOP : ADDRESS_SIDEBAR;
++    }
++
++    public static void setAddressBarPosition(Context context, int position) {
++        if (position != ADDRESS_SIDEBAR && position != ADDRESS_TOP) {
++            throw new IllegalArgumentException("Invalid address bar position");
++        }
++        preferences(context).edit().putInt(ADDRESS_BAR_POSITION_KEY, position).apply();
++    }
 +
 +    private static Context visualContext(Context context) {
 +        while (!(context instanceof Activity) && context instanceof ContextWrapper wrapper) {

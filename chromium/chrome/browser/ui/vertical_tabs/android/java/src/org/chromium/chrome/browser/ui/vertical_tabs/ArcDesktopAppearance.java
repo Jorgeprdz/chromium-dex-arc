@@ -21,12 +21,27 @@ import org.chromium.chrome.browser.desktop_policy.ArchiumWindowMetrics;
 public final class ArcDesktopAppearance {
     public static final String COLOR_KEY = "frame_color";
     public static final String UI_MODE_KEY = "ui_mode";
+    public static final String ADDRESS_BAR_POSITION_KEY = "address_bar_position";
+    public static final int ADDRESS_SIDEBAR = 0;
+    public static final int ADDRESS_TOP = 1;
     public static final int DEFAULT_COLOR = 0xff53657b;
 
     // UI-thread only. A draft belongs to its Activity, never another window or saved profile.
     private static final WeakHashMap<Context, Integer> PREVIEW_COLORS = new WeakHashMap<>();
 
     private ArcDesktopAppearance() {}
+
+    public static int getAddressBarPosition(Context context) {
+        return preferences(context).getInt(ADDRESS_BAR_POSITION_KEY, ADDRESS_SIDEBAR) == ADDRESS_TOP
+                ? ADDRESS_TOP : ADDRESS_SIDEBAR;
+    }
+
+    public static void setAddressBarPosition(Context context, int position) {
+        if (position != ADDRESS_SIDEBAR && position != ADDRESS_TOP) {
+            throw new IllegalArgumentException("Invalid address bar position");
+        }
+        preferences(context).edit().putInt(ADDRESS_BAR_POSITION_KEY, position).apply();
+    }
 
     private static Context visualContext(Context context) {
         while (!(context instanceof Activity) && context instanceof ContextWrapper wrapper) {

@@ -2591,6 +2591,16 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
                             mTabModelSelectorSupplier.asNonNull().get().isIncognitoSelected()),
                     () -> mActivityTabProvider.get());
             if (mToolbarManager != null) {
+                mArcDesktopCoordinator.configureCommands(
+                        () -> assumeNonNull(mToolbarManager).getOmniboxStub().beginInput(
+                                new org.chromium.components.omnibox.AutocompleteInput(
+                                        org.chromium.components.omnibox.OmniboxFocusReason.MENU_OR_KEYBOARD_ACTION)
+                                        .setUserText("")),
+                        () -> assumeNonNull(mToolbarManager).getOmniboxStub().endInput(),
+                        () -> assumeNonNull(mToolbarManager).getOmniboxStub().focusAndSelectAllText(
+                                org.chromium.components.omnibox.OmniboxFocusReason.MENU_OR_KEYBOARD_ACTION),
+                        () -> SettingsNavigationFactory.createSettingsNavigation().startSettings(
+                                mActivity, org.chromium.chrome.browser.settings.MainSettings.class));
                 mToolbarManager.setVerticalTabsAutoHiddenSupplier(
                         mVerticalTabsSideUiCoordinator.getIsAutoHiddenSupplier());
             }
@@ -3273,6 +3283,14 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
 
     /* package */ void initializeBookmarkBarCoordinatorForTesting() {
         createBookmarkBarIfNecessary();
+    }
+
+    public boolean dispatchArcKeyEvent(android.view.KeyEvent event) {
+        return mArcDesktopCoordinator != null && mArcDesktopCoordinator.dispatchKeyEvent(event);
+    }
+
+    public boolean openArcCommandBar() {
+        return mArcDesktopCoordinator != null && mArcDesktopCoordinator.openCommandBar();
     }
 
     // MenuOrKeyboardActionHandler implementation

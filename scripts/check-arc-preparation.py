@@ -55,7 +55,7 @@ def synthetic_chromium_r(values_xml: Path) -> str:
     id_names = (
         'toolbar', 'desktop_window_spacer', 'location_bar',
         'location_bar_holder', 'collapse_button', 'menu_button_wrapper',
-        'extensions_toolbar_container', 'coordinator', 'new_tab_button',
+        'extensions_toolbar_container', 'coordinator', 'new_tab_button', 'omnibox_suggestions_dropdown',
         'location_bar_status', 'location_bar_status_icon', 'url_bar', 'focus_thief',
     )
 
@@ -208,6 +208,8 @@ def main():
             'org.chromium.chrome.browser.omnibox.LocationBarLayout': '''public class LocationBarLayout extends android.widget.FrameLayout {
                 public LocationBarLayout(android.content.Context c){super(c);}
                 public void setArcSurfaceColor(Integer color){}
+                public void setArcCommandBar(android.graphics.Rect bounds,boolean actions,Runnable beforeNavigation,Runnable inputEnd){}
+
             }''',
             # Minimal type contracts from cfd94726's CompositorViewHolder,
             # TouchEventObserver and NullableObservableSupplier. Stub bodies are

@@ -37,6 +37,20 @@ public final class ArcAppearanceDialog {
                             onChanged.run();
                         })
                 .setNegativeButton(android.R.string.cancel, null)
+                .setNeutralButton(R.string.arc_address_bar_position, (dialog, which) ->
+                        createAddressBarPosition(context, onChanged).show())
                 .create();
+    }
+
+    public static AlertDialog createAddressBarPosition(Context context, Runnable onChanged) {
+        CharSequence[] choices = {context.getString(R.string.arc_address_sidebar),
+                context.getString(R.string.arc_address_top)};
+        return new AlertDialog.Builder(context).setTitle(R.string.arc_address_bar_position)
+                .setSingleChoiceItems(choices, ArcDesktopAppearance.getAddressBarPosition(context),
+                        (dialog, which) -> {
+                            ArcDesktopAppearance.setAddressBarPosition(context, which);
+                            dialog.dismiss(); onChanged.run();
+                        })
+                .setNegativeButton(android.R.string.cancel, null).create();
     }
 }

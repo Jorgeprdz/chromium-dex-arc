@@ -234,6 +234,36 @@ public class LocationBarLayout extends ConstraintLayout {
     /** Optional window palette; phone layouts retain their native appearance. */
     public void setArcSurfaceColor(@Nullable Integer color) {}
 
+    private @Nullable android.graphics.Rect mArcCommandResults;
+    private boolean mArcCommandActions;
+    private @Nullable Runnable mArcBeforeCommandNavigation;
+    private @Nullable Runnable mArcCommandInputEnd;
+
+    /** Optional desktop shell bounds; no extra editor/autocomplete state is created. */
+    public void setArcCommandBar(@Nullable android.graphics.Rect results, boolean actions,
+            @Nullable Runnable beforeNavigation, @Nullable Runnable inputEnd) {
+        if (java.util.Objects.equals(mArcCommandResults, results) && mArcCommandActions == actions) return;
+        mArcCommandResults = results == null ? null : new android.graphics.Rect(results);
+        mArcCommandActions = actions;
+        mArcBeforeCommandNavigation = results == null ? null : beforeNavigation;
+        mArcCommandInputEnd = results == null ? null : inputEnd;
+        requestLayout();
+    }
+
+    public @Nullable android.graphics.Rect getArcCommandResults() { return mArcCommandResults; }
+    public boolean isArcCommandActions() { return mArcCommandActions; }
+    public void finishArcCommandNavigation() {
+        Runnable before = mArcBeforeCommandNavigation;
+        if (before != null) before.run();
+    }
+    public boolean closeArcCommandBarForInputEnd() {
+        Runnable close = mArcCommandInputEnd;
+        mArcCommandInputEnd = null;
+        if (close == null) return false;
+        close.run();
+        return true;
+    }
+
     /* package */ void updateVisualsForState(@BrandedColorScheme int brandedColorScheme) {
         updateActivationChipVisuals(brandedColorScheme);
     }

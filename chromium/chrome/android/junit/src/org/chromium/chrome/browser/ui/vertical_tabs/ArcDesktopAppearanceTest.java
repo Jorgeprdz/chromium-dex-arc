@@ -31,6 +31,18 @@ import org.robolectric.shadows.ShadowDisplayManager;
 @GraphicsMode(GraphicsMode.Mode.LEGACY)
 @SQLiteMode(SQLiteMode.Mode.LEGACY)
 public class ArcDesktopAppearanceTest {
+    @Test
+    public void addressPositionDefaultsToSidebarAndSurvivesActivityRecreation() {
+        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
+        ArcDesktopAppearance.preferences(activity).edit().remove(ArcDesktopAppearance.ADDRESS_BAR_POSITION_KEY).commit();
+        assertEquals(ArcDesktopAppearance.ADDRESS_SIDEBAR, ArcDesktopAppearance.getAddressBarPosition(activity));
+        ArcDesktopAppearance.setAddressBarPosition(activity, ArcDesktopAppearance.ADDRESS_TOP);
+        Activity other = Robolectric.buildActivity(Activity.class).setup().get();
+        assertEquals(ArcDesktopAppearance.ADDRESS_TOP, ArcDesktopAppearance.getAddressBarPosition(other));
+        ArcDesktopAppearance.setAddressBarPosition(other, ArcDesktopAppearance.ADDRESS_SIDEBAR);
+        assertEquals(ArcDesktopAppearance.ADDRESS_SIDEBAR, ArcDesktopAppearance.getAddressBarPosition(activity));
+        activity.finish(); other.finish();
+    }
     private Activity windowActivity(Activity activity) {
         Activity window = spy(activity);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
