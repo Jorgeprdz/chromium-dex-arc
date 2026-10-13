@@ -65,5 +65,9 @@
   "known_bugs": [
     "Small white wedge at lower sidebar/content junction",
     "Compact tab/omnibox icon presentation needs refinement"
-  ]
+  ],
+  "public_documentation_language": "English",
+  "release_notes_language": "English",
+  "repository_description": "A Chromium-based desktop browser for Android, with a collapsible sidebar and customizable colors. ARM64 preview for Samsung DeX.",
+  "english_metadata_verified_utc": "2026-10-13T01:44:22.235264+00:00"
 }

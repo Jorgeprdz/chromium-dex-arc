@@ -1,39 +1,39 @@
-# Archium en Samsung DeX
+# Archium on Samsung DeX
 
-[← Portada](../README.md) · [Descargar e instalar](INSTALL_ARCHIUM.md)
+[← README](../README.md) · [Download and install](INSTALL_ARCHIUM.md)
 
-Cinco capturas reales del APK **157.0.8086.0**, tomadas en un Samsung SM-S931B con Android 16 y una pantalla DeX de 1920 × 1080. Son PNG directos de `adb screencap`, sin retoques ni reconstrucciones de interfaz. Se minimizaron las otras ventanas antes de capturar.
+Five actual screenshots of APK **157.0.8086.0**, captured on a Samsung SM-S931B running Android 16 with a 1920 × 1080 DeX display. These are direct PNGs from `adb screencap`, without retouching or reconstructed UI. Other windows were minimized before capture. The app and example page are shown in Spanish.
 
-El contenido de navegación mostrado es el artículo público [Aurora polar, Wikipedia](https://es.wikipedia.org/wiki/Aurora_polar). Los créditos del artículo y de sus imágenes están disponibles en esa página. El fondo y la barra de tareas pertenecen al escritorio del dispositivo, no a Archium.
+The visible browsing content is the public [Aurora polar article on Wikipedia](https://es.wikipedia.org/wiki/Aurora_polar). Article and image credits are available on that page. The wallpaper and taskbar belong to the device's desktop, not Archium.
 
-## Sidebar abierta
+## Expanded sidebar
 
-Pestañas a la izquierda, accesos superiores, omnibox integrada y el botón Nueva pestaña.
+Tabs on the left, favorite shortcuts, an integrated omnibox and the New Tab button.
 
-![Archium con la sidebar abierta](screenshots/r4-157.0.8086.0/sidebar-open.png)
+![Archium with its sidebar expanded](screenshots/r4-157.0.8086.0/sidebar-open.png)
 
-## Sidebar colapsada
+## Collapsed sidebar
 
-El visor gana anchura y conserva el botón **+**. La captura también muestra los detalles de iconos que todavía se están afinando.
+The viewport becomes wider while retaining the **+** button. The screenshot also shows the compact icons still being refined.
 
-![Archium con la sidebar colapsada](screenshots/r4-157.0.8086.0/sidebar-collapsed.png)
+![Archium with its sidebar collapsed](screenshots/r4-157.0.8086.0/sidebar-collapsed.png)
 
-## Selector de colores
+## Color picker
 
-Ocho presets, entrada HEX, controles RGB y acciones para restablecer, cancelar o aceptar.
+Eight presets, HEX input, RGB controls and actions to reset, cancel or apply.
 
-![Selector de colores de Archium](screenshots/r4-157.0.8086.0/color-picker.png)
+![Archium color picker](screenshots/r4-157.0.8086.0/color-picker.png)
 
-## Vista previa coral
+## Coral preview
 
-El tono se refleja en el marco y la omnibox mientras el diálogo sigue abierto. Se canceló la selección después de capturar para conservar el azul original del usuario.
+The frame and omnibox reflect the selected color while the dialog stays open. This preview was canceled after capture to preserve the user's original blue.
 
-![Vista previa coral](screenshots/r4-157.0.8086.0/color-preview.png)
+![Coral live preview](screenshots/r4-157.0.8086.0/color-preview.png)
 
-## Acerca de Archium
+## About Archium
 
-El icono real de aplicación y la versión instalada: **157.0.8086.0 (808600074)**.
+The actual application icon and installed version: **157.0.8086.0 (808600074)**.
 
-![Diálogo Acerca de Archium](screenshots/r4-157.0.8086.0/about.png)
+![About Archium dialog](screenshots/r4-157.0.8086.0/about.png)
 
-[Manifest de captura, hashes y observaciones](screenshots/r4-157.0.8086.0/capture-manifest.json). Estas observaciones concretas no sustituyen una aceptación completa en dispositivo. La pequeña cuña clara inferior sigue visible; esta publicación es una preview.
+[Capture manifest, hashes and observations](screenshots/r4-157.0.8086.0/capture-manifest.json). These specific observations do not replace full device acceptance. The small light wedge at the lower junction remains visible; this publication is a preview.
