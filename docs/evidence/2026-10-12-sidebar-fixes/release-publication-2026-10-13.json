@@ -1,0 +1,69 @@
+{
+  "id": 411141125,
+  "tag_name": "archium-r4-157.0.8086.0-preview",
+  "html_url": "https://github.com/Jorgeprdz/chromium-dex-arc/releases/tag/archium-r4-157.0.8086.0-preview",
+  "draft": false,
+  "prerelease": true,
+  "target_commitish": "39b1bcbfa6cd8f51e0b66a7eccdb9e586d8d78b3",
+  "published_at": "2026-10-13T01:28:42Z",
+  "assets": [
+    {
+      "id": 635506780,
+      "name": "Archium-for-Android-arm64.apk",
+      "size": 366979888,
+      "digest": "sha256:05a097adb97802d81bb97e65b46dbca2c60e559adcc53990d492d92c831eede6",
+      "browser_download_url": "https://github.com/Jorgeprdz/chromium-dex-arc/releases/download/archium-r4-157.0.8086.0-preview/Archium-for-Android-arm64.apk"
+    },
+    {
+      "id": 635506781,
+      "name": "BUILD_REPORT.json",
+      "size": 333,
+      "digest": "sha256:0608a30f9332968f146b5079cb5988d1f5bd8fe14a263fdb8ae061040edaa53e",
+      "browser_download_url": "https://github.com/Jorgeprdz/chromium-dex-arc/releases/download/archium-r4-157.0.8086.0-preview/BUILD_REPORT.json"
+    },
+    {
+      "id": 635506787,
+      "name": "SHA256SUMS",
+      "size": 96,
+      "digest": "sha256:ec3c1c556dcaeeeb5b4e549c73c8c2634449c610deb701355e0891ba227c7137",
+      "browser_download_url": "https://github.com/Jorgeprdz/chromium-dex-arc/releases/download/archium-r4-157.0.8086.0-preview/SHA256SUMS"
+    }
+  ],
+  "public_verification": {
+    "public_download": "PASS",
+    "HTTP_HEAD": 200,
+    "bytes": 366979888,
+    "tag_source_sha": "39b1bcbfa6cd8f51e0b66a7eccdb9e586d8d78b3",
+    "main_readme": "PASS"
+  },
+  "documentation_main_initial": {
+    "source_docs_commit": "455b2aff3e94526348ed64ba42087e21394c58dc",
+    "main_parent": "6274c653bbe3992403a89b1531d0c1f91646bf6d",
+    "main_docs_commit": "e9054965c9b257e515342828b25058cbc6618aee",
+    "paths": [
+      "README.md",
+      "assets/branding/archium/README.md",
+      "assets/branding/archium/archium-dark-128.png",
+      "docs/INSTALL_ARCHIUM.md",
+      "docs/PROJECT_GUIDE.md",
+      "docs/SCREENSHOTS.md",
+      "docs/evidence/2026-10-12-sidebar-fixes/build-38322756782-final.json",
+      "docs/screenshots/r4-157.0.8086.0/about.png",
+      "docs/screenshots/r4-157.0.8086.0/capture-manifest.json",
+      "docs/screenshots/r4-157.0.8086.0/color-picker.png",
+      "docs/screenshots/r4-157.0.8086.0/color-preview.png",
+      "docs/screenshots/r4-157.0.8086.0/sidebar-collapsed.png",
+      "docs/screenshots/r4-157.0.8086.0/sidebar-open.png"
+    ],
+    "scripts_and_workflows": "UNCHANGED",
+    "protected_branch": "UNTOUCHED"
+  },
+  "user_authorized_main_documentation": true,
+  "screenshots": 5,
+  "capture_manifest": "docs/screenshots/r4-157.0.8086.0/capture-manifest.json",
+  "build_started_for_publication": false,
+  "known_bugs": [
+    "Small white wedge at lower sidebar/content junction",
+    "Compact tab/omnibox icon presentation needs refinement"
+  ]
+}
