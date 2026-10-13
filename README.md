@@ -1,240 +1,102 @@
+<div align="center">
+
+<img src="assets/branding/archium/archium-dark-128.png" width="96" alt="Logo Archium Portal">
+
 # Archium
 
-**A Chromium-based Android browser experiment focused on tablet and desktop-class use, with an Arc for Mac-inspired interface and a local-first password system.**
+### Tu navegador. Tu espacio.
 
-> [!IMPORTANT]
-> Archium is **under active development**. The current repository contains implementation work, build tooling, tests and design documentation, but the new integrated APK described below is not yet considered functionally accepted.
+Una experiencia con sidebar y colores a tu medida, basada en Chromium y pensada para Android de escritorio.
 
-## What is Archium?
+![Preview R4](https://img.shields.io/badge/R4-preview-8B5CF6)
+![Versión](https://img.shields.io/badge/versión-157.0.8086.0-5865F2)
+![Android](https://img.shields.io/badge/Android-10%2B-3DDC84?logo=android&logoColor=white)
+![Arquitectura](https://img.shields.io/badge/ABI-ARM64-475569)
 
-Archium starts from **Chromium 157** and explores what a serious desktop-style browser can look like on Android when the browser adapts to the **current window**, not to a specific manufacturer, display ID or desktop mode.
+**[⬇ Descargar Archium para Android](https://github.com/Jorgeprdz/chromium-dex-arc/releases/download/archium-r4-157.0.8086.0-preview/Archium-for-Android-arm64.apk)**
 
-The project has two immediate goals:
+[Notas de la release](https://github.com/Jorgeprdz/chromium-dex-arc/releases/tag/archium-r4-157.0.8086.0-preview) · [Instalación](docs/INSTALL_ARCHIUM.md) · [Galería](docs/SCREENSHOTS.md) · [Reportar un problema](https://github.com/Jorgeprdz/chromium-dex-arc/issues/new)
 
-1. Build a real **Arc for Mac-inspired browser interface** on top of Chromium's existing tab, omnibox, navigation and profile models.
-2. Provide a **local password vault** for Android using Chromium's PasswordManager/PasswordStore architecture, with encryption backed by Android Keystore and CSV import/export.
+</div>
 
-The intention is not to paint a desktop skin over a mobile browser. Archium aims to reuse Chromium's native browser behavior wherever possible and only replace or extend the layers that need to be different.
+![Archium en Samsung DeX con la sidebar abierta](docs/screenshots/r4-157.0.8086.0/sidebar-open.png)
 
-## Contributors wanted
+**Captura real de Archium 157.0.8086.0 en Samsung DeX, Android 16.** Las imágenes muestran el APK publicado, sin recrear ni retocar la interfaz.
 
-Archium is looking for collaborators who want to help build a **Chrome + Arc experience designed for Android desktop environments**.
+## Más espacio para navegar
 
-The goal is a browser that feels at home when Android is used like a computer: **Samsung DeX, Android Desktop Mode, Googlebook-style environments, tablets, freeform windows and external displays**—while still remaining a real Chromium browser underneath.
+| Tu navegación, a la izquierda | Tu estilo, en toda la ventana |
+| --- | --- |
+| Sidebar con pestañas, accesos favoritos, espacios y carpetas. La pestaña activa se distingue con una cápsula clara. | Ocho colores predefinidos, entrada HEX y controles RGB. Puedes previsualizar un tono, aplicarlo o cancelar. |
+| Colapsa la sidebar para ampliar el visor; el botón **+** sigue a mano. | El marco y los fondos de la omnibox combinan con el color elegido. |
 
-Areas where contributions are especially welcome:
+Archium conserva la navegación y los modelos de pestañas de Chromium. Su interfaz de escritorio está pensada para usar un monitor, teclado y ratón, con identidad visual **Archium Portal**.
 
-- Chromium Android / Android Desktop internals;
-- Java, C++, JNI, GN and Ninja;
-- browser UI, compositor and window-management work;
-- Arc-inspired sidebar, tabs, Spaces and interaction design;
-- keyboard and mouse behavior;
-- extensions on Android Desktop;
-- local password management and Android Keystore;
-- tablet, DeX, Desktop Mode, Googlebook and external-display testing;
-- build infrastructure, reproducible patches and CI.
+## Míralo en acción
 
-We are not looking to make a WebView wrapper or a visual mock-up. The challenge is to make Chromium itself deliver a convincing desktop browsing experience on Android.
+<table>
+  <tr>
+    <td width="50%"><strong>Sidebar compacta</strong><br><img src="docs/screenshots/r4-157.0.8086.0/sidebar-collapsed.png" alt="Sidebar colapsada con Nueva pestaña visible" width="100%"></td>
+    <td width="50%"><strong>Colores a tu medida</strong><br><img src="docs/screenshots/r4-157.0.8086.0/color-picker.png" alt="Selector de ocho colores, HEX y RGB de Archium" width="100%"></td>
+  </tr>
+  <tr>
+    <td><strong>Vista previa antes de aplicar</strong><br><img src="docs/screenshots/r4-157.0.8086.0/color-preview.png" alt="Vista previa coral en el marco y la omnibox" width="100%"></td>
+    <td><strong>Acerca de Archium</strong><br><img src="docs/screenshots/r4-157.0.8086.0/about.png" alt="Diálogo Acerca de Archium con logo y versión instalada" width="100%"></td>
+  </tr>
+</table>
 
-If that sounds interesting, **issues, testing, code review, implementation help and pull requests are welcome**.
+[Abrir la galería a tamaño completo →](docs/SCREENSHOTS.md)
 
-## Base
+## Descargar e instalar
 
-- **Chromium:** 157.0.8086.0
-- **Pinned revision:** `cfd94726b7b5fb48aedcc32662f2f3fbdbadec35`
-- **Android package:** `app.archium.android`
-- **Current implementation branch:** `feat/arc-desktop`
-- **Target:** Android phones, tablets, Samsung DeX, Android Desktop Mode, Googlebook-style environments, freeform windows and external displays
-- **Root / Shizuku / ADB at runtime:** not required
+1. Descarga el [APK ARM64](https://github.com/Jorgeprdz/chromium-dex-arc/releases/download/archium-r4-157.0.8086.0-preview/Archium-for-Android-arm64.apk).
+2. Ábrelo desde **Archivos** y permite la instalación desde esa app si Android lo solicita.
+3. Abre Archium. Para la experiencia mostrada, conecta Samsung DeX a un monitor.
 
-Archium preserves Chromium's underlying navigation, profiles, tabs, incognito model and extension infrastructure instead of recreating them in a WebView.
+**Requisitos del APK:** Android 10 o superior y procesador ARM64. Las capturas y la prueba de escritorio se hicieron en Samsung DeX con Android 16; otros entornos Android Desktop todavía necesitan validación.
 
-## Arc-inspired desktop interface
+| Descarga publicada | Valor |
+| --- | --- |
+| Versión | `157.0.8086.0` — preview R4 |
+| Paquete | `app.archium.android` |
+| ABI | `arm64-v8a` |
+| APK | 366,979,888 bytes, aproximadamente 350 MiB |
+| Build | [38322756782 — SUCCESS](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38322756782) |
 
-The desktop UI is designed around a left sidebar and a real browser viewport rather than a traditional mobile toolbar stretched across a large screen.
+<details>
+<summary><strong>Verificar la descarga</strong></summary>
 
-Planned and in-progress behavior includes:
+La release incluye `SHA256SUMS` y el `BUILD_REPORT.json` original. El APK publicado conserva la firma y los bytes del build verificado e instalado.
 
-- navigation controls and address/search integrated into the sidebar;
-- Favorites backed by real browser actions;
-- persistent pinned entries and folders;
-- local Spaces;
-- real open tabs connected to Chromium's `TabModel`;
-- native tab creation, selection, closing and restoration;
-- a collapsible and resizable sidebar;
-- keyboard focus and mouse interaction;
-- rounded web-content geometry implemented through the real viewport/compositor path rather than decorative masks;
-- light, dark and customizable frame themes that do **not** tint webpages;
-- explicit appearance modes: **Auto / Arc / Mobile**.
+```text
+05a097adb97802d81bb97e65b46dbca2c60e559adcc53990d492d92c831eede6  Archium-for-Android-arm64.apk
+```
 
-The interface is inspired by **Arc for Mac**, but Archium is an independent project and is not affiliated with The Browser Company.
+```bash
+sha256sum -c SHA256SUMS
+```
 
-## Local passwords
+Consulta la [guía de instalación y verificación](docs/INSTALL_ARCHIUM.md).
 
-Archium's current password work is intentionally **local-first** and does not depend on Google Sync.
+</details>
 
-The design keeps Chromium's existing PasswordManager matching, save/update prompts and fill behavior while adding an Android-compatible local backend.
+## Estado de esta preview
 
-### Security model
+El build pasó los gates de recursos reales, iconos Portal, firma, Robolectric y enlace JNI. Después se observó navegación, colapso de sidebar, vista previa de colores y el diálogo Acerca de en el dispositivo.
 
-- local `LoginDatabase`-based storage;
-- random data-encryption key;
-- key protected by **Android Keystore**;
-- fail-closed behavior if encryption is unavailable;
-- no hard-coded encryption key;
-- no plaintext fallback;
-- no personal password CSV in tests;
-- incognito does not create normal-profile password records.
+Todavía hay detalles visuales por afinar en la unión inferior entre sidebar y visor y en algunos iconos del modo compacto. La aceptación completa en dispositivo sigue pendiente; esta versión se publica como **preview**. La función propia de contraseñas permanece **deprecated**.
 
-### Planned user features
+[Estado y evidencia del build](docs/evidence/2026-10-12-sidebar-fixes/build-38322756782-final.json) · [Registro de capturas y observaciones](docs/screenshots/r4-157.0.8086.0/capture-manifest.json)
 
-- save and update passwords from real login flows;
-- autofill using Chromium's origin matching;
-- native password-management screen;
-- search, edit and delete;
-- authenticated reveal/copy where supported;
-- CSV import with preview and duplicate handling;
-- atomic import/rollback behavior;
-- CSV export through Android's Storage Access Framework.
+## Desarrollo y documentación
 
-Google Sync, passkeys and Google Wallet are **not** dependencies of the local vault.
+El [código de Archium está en assistant/archium-r4-recovery](https://github.com/Jorgeprdz/chromium-dex-arc/tree/assistant/archium-r4-recovery): parches, fuentes modificadas y herramientas. `main` publica esta portada y la documentación; no incorpora los cambios del navegador. El APK se compila incrementalmente desde un checkpoint compatible.
 
-## Adaptive desktop behavior
+- [Guía del repositorio](docs/PROJECT_GUIDE.md): estructura, build y estado actual.
+- [Reparación R4 y registro verificable](https://github.com/Jorgeprdz/chromium-dex-arc/blob/assistant/archium-r4-recovery/docs/ARCHIUM_R4_REPARACION_Y_BUILD_2026-10-11.md).
+- [Identidad y recursos Archium Portal](assets/branding/archium/README.md).
+- [Desktop Engine R1](https://github.com/Jorgeprdz/chromium-dex-arc/blob/assistant/archium-r4-recovery/docs/ARCHIUM_DESKTOP_ENGINE_R1_PERFORMANCE_RENDERING_2026-10-12.md): roadmap pendiente, sin promesas de rendimiento ya alcanzado.
 
-Archium is being structured around the **current window width**, not the physical device category.
+La preview usa Chromium `cfd94726b7b5fb48aedcc32662f2f3fbdbadec35`; su código corresponde al commit `39b1bcbfa6cd8f51e0b66a7eccdb9e586d8d78b3`.
 
-| Window width | Class | Intended behavior |
-| --- | --- | --- |
-| **< 600 dp** | Compact | Mobile UI/site by default |
-| **600–839 dp** | Tablet | Arc-eligible UI and desktop-site behavior |
-| **>= 840 dp** | Desktop | Desktop-class Archium behavior |
-
-The thresholds reuse the AndroidX/Chromium window-size model where available.
-
-The desktop policy is designed to respond to split screen, freeform resize, rotation and display changes without treating Samsung DeX—or any other OEM desktop mode—as a requirement.
-
-> The deeper automatic desktop-site/UA, zoom and additional keyboard/mouse layer are staged separately from the current Arc + local-password integration run.
-
-## Keyboard and mouse
-
-Archium prefers Chromium's existing input routes instead of duplicating them.
-
-The project is designed to preserve or verify native behavior for shortcuts such as:
-
-`Ctrl+L`, `Ctrl+T`, `Ctrl+W`, `Ctrl+Shift+T`, tab switching, navigation shortcuts, reload/hard reload and browser pages such as history/downloads.
-
-Additional desktop integration includes:
-
-- Arc sidebar toggle;
-- middle-click tab closing through the real tab model;
-- middle-click links opening background tabs;
-- modifier-click dispositions;
-- mouse Back/Forward buttons;
-- `Ctrl+wheel` through Chromium's native zoom path.
-
-Fake fullscreen, synthetic web events and JavaScript-based browser controls are deliberately avoided.
-
-## Current implementation status
-
-Archium distinguishes **code prepared**, **tests passed**, **compiled integration** and **accepted runtime behavior**. A green unit test is not treated as proof that the final browser feature works.
-
-### Already validated in preparation
-
-- Android Keystore behavior exercised on a physical Android device;
-- persistence/durability regression coverage for the local key material;
-- synthetic CSV parser/writer test coverage;
-- window-classification and appearance-policy checks;
-- reproducible sparse-patch/hash verification;
-- preparation and incremental-build routing tests;
-- persistent Arc sidebar data model work for Spaces/Favorites/pinned entries.
-
-### Still pending before acceptance
-
-- full native C++/JNI/GN compilation of the local password backend;
-- real browser save/update/fill validation;
-- visible password manager + authentication + SAF wiring;
-- complete Arc sidebar integration with Chromium's live `TabModel`;
-- compositor/viewport acceptance for the Arc frame;
-- final integrated APK build;
-- update-signature verification;
-- end-to-end testing after install;
-- final visual comparison against Arc for Mac references.
-
-In short: **the architecture and a meaningful amount of implementation exist, but the integrated build still has to prove them together.**
-
-## Build strategy
-
-Chromium is expensive to build, so Archium uses a strict incremental-build strategy.
-
-The workflow is designed to:
-
-1. restore a known previous checkpoint only when its revision, commit, paths and hashes match;
-2. transition from the old pinned patch to the new one;
-3. regenerate GN when build inputs change;
-4. let Ninja invalidate and rebuild only the affected targets;
-5. preserve new checkpoints between stages;
-6. build targeted native/Java tests before the final APK;
-7. never call a pending build a successful delivery.
-
-The existing app/profile is not deleted simply to work around an APK signing mismatch.
-
-## Project principles
-
-Archium follows a few rules that are intentionally boring—and important:
-
-- **Use Chromium's real models.** Tabs, navigation, passwords, profiles and extensions should remain browser features, not simulations.
-- **No fake controls.** If a button exists, it should operate a real browser action.
-- **No WebView replacement.** Archium remains a Chromium browser fork.
-- **No OEM lock-in.** Samsung DeX is a test environment, not a dependency.
-- **No destructive shortcuts.** Build/install problems are not solved by wiping the user's browser profile.
-- **No secret leakage.** Passwords, personal CSV contents and signing keys do not belong in logs, CI artifacts or the repository.
-- **No success by implication.** A successful build does not automatically mean visual or functional acceptance.
-
-## Roadmap
-
-The current sequence is intentionally narrow:
-
-**Now**
-
-- finish Arc UI integration;
-- finish local password/CSV integration;
-- compile targeted native tests;
-- produce and verify the integrated APK;
-- run end-to-end validation.
-
-**Next**
-
-- adaptive Request Desktop Site behavior;
-- desktop/mobile UA policy driven by current window;
-- native page zoom persistence and Arc exposure;
-- additional keyboard and mouse integration;
-- broader tablet/freeform/external-display validation.
-
-**Later / research**
-
-- Google Sync feasibility as a separate experiment;
-- additional desktop-browser capabilities only after the core build is stable.
-
-## Why no Google Sync right now?
-
-Chromium contains the Sync machinery, but a third-party Android Chromium fork does not automatically receive Chrome's Google authentication, authorization, password backend or encryption-key infrastructure.
-
-Archium therefore treats Google Sync as a separate research problem rather than blocking the browser on a feature that cannot currently be guaranteed.
-
-Local passwords are designed to work independently.
-
-## Documentation
-
-The repository's `docs/` directory contains the implementation notes, design decisions, validation results and build strategy used to keep the project reproducible.
-
-The original visual direction is documented in [`docs/design.md`](docs/design.md). Newer implementation documents supersede older assumptions where the project has evolved.
-
-## Development status disclaimer
-
-Archium is experimental software. Until an integrated APK has completed compilation and runtime acceptance, screenshots, renders, tests and design documents should be treated as development evidence—not as proof that every described feature is available in a released build.
-
-## Credits
-
-Archium is built from the open-source **Chromium** project.
-
-Its desktop interface takes visual and interaction inspiration from **Arc for Mac**. Arc and The Browser Company are trademarks/products of their respective owners. Archium is not affiliated with or endorsed by Google, Chromium, Arc or The Browser Company.
+¿Encontraste algo? [Abre un issue](https://github.com/Jorgeprdz/chromium-dex-arc/issues/new) con tu modelo, versión de Android, modo de escritorio y pasos para reproducirlo. Las capturas sin datos personales ayudan a entender el problema.
