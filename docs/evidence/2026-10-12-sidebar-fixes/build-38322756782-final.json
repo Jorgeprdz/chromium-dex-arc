@@ -1,0 +1,50 @@
+{
+  "run": 38322756782,
+  "source_sha": "39b1bcbfa6cd8f51e0b66a7eccdb9e586d8d78b3",
+  "installation": "PASS",
+  "installed_apk_sha256": "05a097adb97802d81bb97e65b46dbca2c60e559adcc53990d492d92c831eede6",
+  "artifact_apk_sha256": "05a097adb97802d81bb97e65b46dbca2c60e559adcc53990d492d92c831eede6",
+  "bytes": 366979888,
+  "package": "package: name='app.archium.android' versionCode='808600074' versionName='157.0.8086.0' platformBuildVersionName='17' platformBuildVersionCode='37' compileSdkVersion='37' compileSdkVersionCodename='17'",
+  "abi": "native-code: 'arm64-v8a'",
+  "runtime_dex": "NOT_EXECUTED",
+  "created_utc": "2026-10-13T01:08:17.404581+00:00",
+  "repo": "Jorgeprdz/chromium-dex-arc",
+  "branch": "assistant/archium-r4-recovery",
+  "run_url": "https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38322756782",
+  "artifact_id": 11780994923,
+  "artifact_url": "https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38322756782/artifacts/11780994923",
+  "artifact_zip_bytes": 154881336,
+  "build": "PASS",
+  "APK_VERIFIED": "PASS",
+  "ROBOLECTRIC_PASS": "PASS",
+  "JNI_LINK_PASS": "PASS",
+  "AAPT2_REAL_RESOURCES": "PASS",
+  "GN_MEDIA_3_CASES": "PASS",
+  "host_preflight": {
+    "tests": 245,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 188.105
+  },
+  "host_restored": {
+    "tests": 245,
+    "failed": 0,
+    "skipped": 0,
+    "seconds": 153.669
+  },
+  "checkpoint_source": "archium-checkpoint-38275213327-1",
+  "checkpoint_integrity": "PASS",
+  "disk_preflight": {
+    "status": "PASS",
+    "available_bytes": 114591092736,
+    "available_inodes": 18963612
+  },
+  "password_feature": "DEPRECATED",
+  "android_runtime": "NOT_EXECUTED",
+  "production_release": "NOT_DECLARED",
+  "about_tests": "PASS: actual Chromium runner API29/36, early and final suites",
+  "protected_branch_sha": "51e5ed429661727156ab2534caac99a82ee9264b",
+  "main_sha": "6274c653bbe3992403a89b1531d0c1f91646bf6d",
+  "build_log_sha256": "32e6f2023c86d4e5abe2b541d72e96c3b9ed6104d7ba8d3a068584526a9e126a"
+}

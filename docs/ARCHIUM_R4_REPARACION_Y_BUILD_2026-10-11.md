@@ -1641,3 +1641,36 @@ Doble generación: patch 121256adbdb0ff92319465c8239a2e02086b505c42829e63f216211
 manifest 456bcfadeb7f9df2b2f74ec186a2dd484d167da582e109072e3a4c7fae1093dd.
 Metadata remota reconsultada: 4 grupos válidos no expirados, 26,506,123,626 bytes.
 El checkpoint remoto permanece disponible; no se ha descargado localmente.
+
+## 2026-10-13 — Build incremental verificado e instalado
+
+[Run 38322756782](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38322756782):
+SUCCESS, 57 min 48 s. Código del APK: 39b1bcbfa6cd8f51e0b66a7eccdb9e586d8d78b3.
+El primer run barato fallido permanece registrado; este cierre no lo convierte en PASS.
+[Datos verificables](evidence/2026-10-12-sidebar-fixes/build-38322756782-final.json).
+
+S0: host 245/0/0, 188.105 s; GN real y javac aislado PASS. Gate de disco
+23:42:15Z: 114,591,092,736 bytes y 18,963,612 inodos disponibles.
+S1: checkpoint descargado una vez, restore y transición PASS. No clean build.
+S2–S3: host restaurado 245/0/0, 153.669 s. Recursos fusionados, manifest y
+optimización reales AAPT2 PASS (log línea 3210). Acerca de pasó en API29/36
+en suites temprana y final (5594/5609 y 38297/38312). Robolectric final PASS
+(línea 85540); enlace libchrome y símbolos JNI reales PASS (38277).
+S4: APK Portal, paquete app.archium.android, ABI arm64-v8a y firma verificados.
+S5: [artifact 11780994923](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38322756782/artifacts/11780994923),
+154,881,336 bytes comprimidos, no expirado al comprobarlo. APK: 366,979,888 bytes.
+Versión 157.0.8086.0, versionCode 808600074. SHA256:
+05a097adb97802d81bb97e65b46dbca2c60e559adcc53990d492d92c831eede6.
+
+El monitor registró installed a las 00:35:43Z. Verificación posterior por ADB
+de base.apk: mismo SHA256 que el archivo descargado (exit 0). Se conservaron
+los datos de aplicación. No se lanzó otro run al reanudar tras la pausa.
+feat/arc-desktop y main mantienen sus hashes protegidos. Contraseñas sigue
+DEPRECATED y sus tests de función están OUT_OF_SCOPE, como declara el reporte
+del APK. Los tests nativos de Chromium no acreditan aceptación física en DeX.
+
+ANDROID_RUNTIME=NOT_EXECUTED para este APK. La revisión visual de barra superior,
+triángulo inferior, color de omnibox, + compacto y diálogo en el dispositivo
+queda pendiente de prueba manual; no se declara stable ni listo para producción.
+Este commit de cierre contiene únicamente documentación y evidencia curada;
+no cambia el SHA de código con el que se produjo el APK.
