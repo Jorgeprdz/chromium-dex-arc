@@ -17,35 +17,35 @@
   "images": [
     {
       "file": "sidebar-open.png",
-      "caption": "Sidebar abierta y navegación en Wikipedia",
+      "caption": "Expanded sidebar and navigation on Wikipedia",
       "sha256": "037c30747307a9e776007fa48efaefdb53bdb591b94d90f03b9d8b23265257f3",
       "bytes": 1434131,
       "captured_utc": "2026-10-13T01:16:08.415991+00:00"
     },
     {
       "file": "sidebar-collapsed.png",
-      "caption": "Sidebar colapsada con Nueva pestaña visible",
+      "caption": "Collapsed sidebar with New Tab visible",
       "sha256": "8afe30a12978d5b60226c37405741b0318ec60a415335ae3519baace3910d75e",
       "bytes": 1439021,
       "captured_utc": "2026-10-13T01:15:36.411991+00:00"
     },
     {
       "file": "color-picker.png",
-      "caption": "Selector de ocho presets, HEX y RGB",
+      "caption": "Eight presets, HEX and RGB controls",
       "sha256": "02301868895c8a01d98d21998dfdd6908fd08a80cfa46fd841d39df1d2449839",
       "bytes": 1279975,
       "captured_utc": "2026-10-13T01:14:29.023991+00:00"
     },
     {
       "file": "color-preview.png",
-      "caption": "Vista previa coral sin guardar preferencias",
+      "caption": "Unsaved coral live preview",
       "sha256": "ee4fe5ea35cc76411ade993da8bc11fe9c6ef953e5fceba1bd8eb0768dbb40b3",
       "bytes": 1280477,
       "captured_utc": "2026-10-13T01:15:04.947991+00:00"
     },
     {
       "file": "about.png",
-      "caption": "Logo Portal y versión instalada real",
+      "caption": "Portal logo and actual installed version",
       "sha256": "e7b98ae98dfa0fc330814d404db29022b957d2dd66194f9160fab3e91884f78d",
       "bytes": 1338002,
       "captured_utc": "2026-10-13T01:15:22.811991+00:00"
@@ -61,5 +61,6 @@
     "These captures do not establish complete Android runtime acceptance or production readiness",
     "Small white wedge at the lower sidebar/content junction remains visible",
     "Compact tab and omnibox icon presentation still needs refinement"
-  ]
+  ],
+  "ui_language": "Spanish"
 }

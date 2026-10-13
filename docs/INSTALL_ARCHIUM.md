@@ -1,47 +1,49 @@
-# Instalar Archium
+# Install Archium
 
-[← Portada](../README.md) · [Ver capturas](SCREENSHOTS.md)
+[← README](../README.md) · [Screenshots](SCREENSHOTS.md)
 
-## Descarga
+## Download
 
-La [preview R4 — 157.0.8086.0](https://github.com/Jorgeprdz/chromium-dex-arc/releases/tag/archium-r4-157.0.8086.0-preview) incluye el APK ARM64, su checksum y el reporte original del build.
+The [R4 preview — 157.0.8086.0](https://github.com/Jorgeprdz/chromium-dex-arc/releases/tag/archium-r4-157.0.8086.0-preview) includes the ARM64 APK, checksum and original build report.
 
-**[Descargar Archium-for-Android-arm64.apk](https://github.com/Jorgeprdz/chromium-dex-arc/releases/download/archium-r4-157.0.8086.0-preview/Archium-for-Android-arm64.apk)**
+**[Download Archium-for-Android-arm64.apk](https://github.com/Jorgeprdz/chromium-dex-arc/releases/download/archium-r4-157.0.8086.0-preview/Archium-for-Android-arm64.apk)**
 
-Requiere Android 10 o superior y ARM64. El paquete es `app.archium.android`. Las capturas se hicieron en un Samsung SM-S931B con Android 16 y DeX; no acreditan compatibilidad ya probada con todos los modos de escritorio de otros fabricantes.
+Requires Android 10 or later and ARM64. The package is `app.archium.android`. Screenshots were taken on a Samsung SM-S931B running Android 16 with DeX; they do not establish tested compatibility with every other manufacturer's desktop mode.
 
-## Instalación y actualización
+## Install or update
 
-1. Descarga el APK y ábrelo desde Archivos o Descargas.
-2. Si Android lo solicita, permite instalar aplicaciones desde esa app.
-3. Instala y abre Archium. Si tienes esta misma línea de builds firmada, Android puede ofrecer actualizarla conservando sus datos.
-4. Conecta DeX a un monitor para usar la interfaz de escritorio mostrada en la galería.
+1. Download the APK and open it in Files or Downloads.
+2. Allow installation from that app if Android asks.
+3. Install and launch Archium. Android may offer to update an existing build from the same signing lineage while keeping its data.
+4. Connect DeX to a monitor for the desktop interface shown in the gallery.
 
-Si Android rechaza una actualización por firma, conserva la aplicación instalada y reporta el mensaje. No borres sus datos para intentar solucionarlo.
+If Android rejects an update because of a signature mismatch, preserve the installed app and report the message. Do not erase its data to work around it.
 
-## Primera exploración
+## Explore the interface
 
-- Usa **Nueva pestaña**; con la sidebar compacta, usa **+**.
-- El control superior de la sidebar alterna entre abierta y colapsada.
-- La esfera multicolor abre **Color del navegador**: ocho presets, HEX y RGB. **Cancelar** descarta la vista previa; **Aceptar** guarda el color.
-- El botón informativo del footer abre **Acerca de Archium**, con el logo Portal y la versión instalada.
+- Use **New Tab**, or **+** when the sidebar is compact.
+- The upper sidebar control switches between expanded and collapsed modes.
+- The multicolor sphere opens the browser color picker: eight presets, HEX and RGB. **Cancel** discards the preview; **OK** saves your color.
+- The information button in the footer opens **About Archium**, showing the Portal logo and installed version.
 
-## Comprobar el archivo
+The captured interface is in Spanish: Nueva pestaña, Color del navegador, Cancelar, Aceptar and Acerca de Archium.
 
-Descarga `SHA256SUMS` de la misma release junto al APK. En una terminal con `sha256sum`:
+## Verify the file
+
+Download `SHA256SUMS` from the same release alongside the APK. In a terminal with `sha256sum`:
 
 ```bash
 sha256sum -c SHA256SUMS
 ```
 
-Resultado esperado: `Archium-for-Android-arm64.apk: OK`.
+Expected output: `Archium-for-Android-arm64.apk: OK`.
 
 ```text
 05a097adb97802d81bb97e65b46dbca2c60e559adcc53990d492d92c831eede6
 ```
 
-Datos de esta descarga: versión `157.0.8086.0`, versionCode `808600074`, ABI `arm64-v8a`, 366,979,888 bytes. Se publica el archivo original del [run 38322756782](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38322756782), sin recompilar ni volver a firmar.
+Download details: version `157.0.8086.0`, versionCode `808600074`, ABI `arm64-v8a`, 366,979,888 bytes. This is the original file from [run 38322756782](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38322756782), without rebuilding or re-signing.
 
-## Estado
+## Status
 
-Esta versión es una preview. Hay detalles visuales pendientes en el borde inferior y los iconos del modo compacto. La función propia de contraseñas está deprecated. Para reportar un problema, incluye modelo, Android, modo de escritorio, pasos y una captura sin datos personales.
+This is a preview. Lower-edge geometry and compact icons still need refinement. Archium's custom password feature is deprecated. When reporting an issue, include your device, Android version, desktop mode, reproduction steps and a screenshot without personal data.

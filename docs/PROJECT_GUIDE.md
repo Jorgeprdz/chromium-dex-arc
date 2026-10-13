@@ -1,51 +1,51 @@
-# Guía del repositorio
+# Repository guide
 
-[← Portada](../README.md) · [Instalación](INSTALL_ARCHIUM.md) · [Galería](SCREENSHOTS.md)
+[← README](../README.md) · [Installation](INSTALL_ARCHIUM.md) · [Screenshots](SCREENSHOTS.md)
 
-## Qué se publica
+## Published build
 
-Archium R4 preview `157.0.8086.0`, paquete `app.archium.android`, ARM64. La release conserva el APK firmado del [run 38322756782](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38322756782), con `SHA256SUMS` y `BUILD_REPORT.json` originales. El código compilado es `39b1bcbfa6cd8f51e0b66a7eccdb9e586d8d78b3` y el pin Chromium es `cfd94726b7b5fb48aedcc32662f2f3fbdbadec35`.
+Archium R4 preview `157.0.8086.0`, package `app.archium.android`, ARM64. The release preserves the signed APK from [run 38322756782](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38322756782), with its original `SHA256SUMS` and `BUILD_REPORT.json`. The compiled source is `39b1bcbfa6cd8f51e0b66a7eccdb9e586d8d78b3`; the Chromium pin is `cfd94726b7b5fb48aedcc32662f2f3fbdbadec35`.
 
-## Ramas
+## Branches
 
-| Rama | Uso |
+| Branch | Purpose |
 | --- | --- |
-| `main` | Portada y documentación pública de descarga; conserva su código previo. |
-| `assistant/archium-r4-recovery` | Código y herramientas del build actual, más esta documentación. |
-| `assistant/archium-r3-visual-fixes` | Historia R3/R4 anterior a la recuperación. |
-| `feat/arc-desktop` | Respaldo protegido, sin modificar: `51e5ed429661727156ab2534caac99a82ee9264b`. |
+| `main` | Public download landing page and documentation; its previous browser/build code is preserved. |
+| `assistant/archium-r4-recovery` | Current build sources and tools, plus this documentation. |
+| `assistant/archium-r3-visual-fixes` | R3/R4 history before recovery. |
+| `feat/arc-desktop` | Untouched protected backup: `51e5ed429661727156ab2534caac99a82ee9264b`. |
 
-**[Explorar las fuentes actuales](https://github.com/Jorgeprdz/chromium-dex-arc/tree/assistant/archium-r4-recovery).** Los documentos anteriores de preparación describen estados históricos; no reemplazan este estado de descarga.
+**[Browse current sources](https://github.com/Jorgeprdz/chromium-dex-arc/tree/assistant/archium-r4-recovery).** Earlier preparation documents describe historical states; they do not supersede this published download status.
 
-## Estructura del código
+## Source layout
 
-Las rutas siguientes corresponden a la rama de código, no a una promesa de que `main` contiene un checkout completo de Chromium.
+These paths refer to the source branch. `main` does not contain a complete Chromium checkout.
 
-| Ruta | Contenido |
+| Path | Contents |
 | --- | --- |
-| `chromium/` | Nuevos archivos Java, tests y recursos de Archium. |
-| `.source-reference/` | Originales del pin, para comparar y aplicar el patch. |
-| `.source-modified/` | Ediciones mínimas sobre Chromium. |
-| `patches/` | Patch generado y manifest de hashes. |
-| `config/archium-args.gn` | Configuración GN del navegador. |
-| `scripts/` | Generación, gates, transición, checkpoints y verificación del APK. |
-| `tests/` | Suite host y fixtures con su alcance de prueba declarado. |
-| `docs/` | Instalación, capturas, evidencia, auditorías y planes. |
-| `assets/branding/archium/` | Identidad Portal aprobada. |
+| `chromium/` | New Archium Java files, tests and resources. |
+| `.source-reference/` | Pinned originals used to compare and apply the patch. |
+| `.source-modified/` | Minimal edits to Chromium. |
+| `patches/` | Generated patch and hash manifest. |
+| `config/archium-args.gn` | Browser GN configuration. |
+| `scripts/` | Generation, gates, transitions, checkpoints and APK verification. |
+| `tests/` | Host suite and fixtures with explicit test scope. |
+| `docs/` | Installation, screenshots, evidence, audits and plans. |
+| `assets/branding/archium/` | Approved Portal identity. |
 
-## Build actual
+## Current build process
 
-En la rama de código, `baseline-build.yml` se lanza por `workflow_dispatch` con un SHA exacto y un checkpoint compatible. Ejecuta preflight barato, capacidad e integridad, restore único, transición preservando mtimes, gates reales, enlaces incrementales y APK. No hay fallback a un build limpio.
+On the source branch, `baseline-build.yml` uses `workflow_dispatch` with an exact SHA and compatible checkpoint. It runs cheap preflight, capacity and integrity checks, one restore, an mtime-preserving transition, real gates, incremental links and APK generation. There is no clean-build fallback.
 
-El run publicado restauró `archium-checkpoint-38275213327-1`, de `3c75be2c5fd0aff4a9616e218498886895f088ba`. El workflow mantuvo slices de 75 minutos, máximo dos, y detiene la publicación si un gate falla. No se disparó otro build para preparar esta documentación ni la release.
+The published run restored `archium-checkpoint-38275213327-1` from `3c75be2c5fd0aff4a9616e218498886895f088ba`. The workflow retained 75-minute slices, at most two, and blocks publication when a gate fails. No new build was dispatched to prepare the documentation or release.
 
-El patch se regenera con `scripts/generate-arc-patch.py`; no se edita manualmente. Python y contratos sintéticos no acreditan Robolectric, recursos finales ni JNI: el build publicado ejecutó esos gates reales después del restore.
+Regenerate the patch with `scripts/generate-arc-patch.py`; do not edit it manually. Python and synthetic contracts do not establish Robolectric, final resources or JNI results: the published build executed those real gates after restore.
 
-## Estado y seguimiento
+## Evidence and follow-up
 
-- [Evidencia del build y de la instalación](evidence/2026-10-12-sidebar-fixes/build-38322756782-final.json).
-- [Observaciones físicas al capturar](screenshots/r4-157.0.8086.0/capture-manifest.json).
-- [Registro forense y reparación R4](https://github.com/Jorgeprdz/chromium-dex-arc/blob/assistant/archium-r4-recovery/docs/ARCHIUM_R4_REPARACION_Y_BUILD_2026-10-11.md).
-- [Desktop Engine R1: roadmap pendiente](https://github.com/Jorgeprdz/chromium-dex-arc/blob/assistant/archium-r4-recovery/docs/ARCHIUM_DESKTOP_ENGINE_R1_PERFORMANCE_RENDERING_2026-10-12.md).
+- [Build and installation evidence](evidence/2026-10-12-sidebar-fixes/build-38322756782-final.json).
+- [Physical observations during capture](screenshots/r4-157.0.8086.0/capture-manifest.json).
+- [R4 forensic repair log (Spanish)](https://github.com/Jorgeprdz/chromium-dex-arc/blob/assistant/archium-r4-recovery/docs/ARCHIUM_R4_REPARACION_Y_BUILD_2026-10-11.md).
+- [Desktop Engine R1 roadmap (Spanish)](https://github.com/Jorgeprdz/chromium-dex-arc/blob/assistant/archium-r4-recovery/docs/ARCHIUM_DESKTOP_ENGINE_R1_PERFORMANCE_RENDERING_2026-10-12.md).
 
-La navegación, el selector, Acerca de y el colapso se observaron en DeX. La geometría inferior, algunos iconos compactos y la aceptación completa siguen pendientes. Contraseñas permanece deprecated; no se reactivó con la release.
+Navigation, color controls, About and sidebar toggling were observed on DeX. Lower-edge geometry, some compact icons and full acceptance remain pending. Archium's custom password feature remains deprecated.

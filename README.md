@@ -1,72 +1,72 @@
 <div align="center">
 
-<img src="assets/branding/archium/archium-dark-128.png" width="96" alt="Logo Archium Portal">
+<img src="assets/branding/archium/archium-dark-128.png" width="96" alt="Archium Portal logo">
 
 # Archium
 
-### Tu navegador. Tu espacio.
+### Your browser. Your space.
 
-Una experiencia con sidebar y colores a tu medida, basada en Chromium y pensada para Android de escritorio.
+A Chromium-based browser with a collapsible sidebar and customizable colors, built for Android desktop environments.
 
-![Preview R4](https://img.shields.io/badge/R4-preview-8B5CF6)
-![Versión](https://img.shields.io/badge/versión-157.0.8086.0-5865F2)
+![R4 Preview](https://img.shields.io/badge/R4-preview-8B5CF6)
+![Version](https://img.shields.io/badge/version-157.0.8086.0-5865F2)
 ![Android](https://img.shields.io/badge/Android-10%2B-3DDC84?logo=android&logoColor=white)
-![Arquitectura](https://img.shields.io/badge/ABI-ARM64-475569)
+![Architecture](https://img.shields.io/badge/ABI-ARM64-475569)
 
-**[⬇ Descargar Archium para Android](https://github.com/Jorgeprdz/chromium-dex-arc/releases/download/archium-r4-157.0.8086.0-preview/Archium-for-Android-arm64.apk)**
+**[⬇ Download Archium for Android](https://github.com/Jorgeprdz/chromium-dex-arc/releases/download/archium-r4-157.0.8086.0-preview/Archium-for-Android-arm64.apk)**
 
-[Notas de la release](https://github.com/Jorgeprdz/chromium-dex-arc/releases/tag/archium-r4-157.0.8086.0-preview) · [Instalación](docs/INSTALL_ARCHIUM.md) · [Galería](docs/SCREENSHOTS.md) · [Contribuir](CONTRIBUTING.md)
+[Release notes](https://github.com/Jorgeprdz/chromium-dex-arc/releases/tag/archium-r4-157.0.8086.0-preview) · [Installation](docs/INSTALL_ARCHIUM.md) · [Screenshots](docs/SCREENSHOTS.md) · [Contribute](CONTRIBUTING.md)
 
 </div>
 
-![Archium en Samsung DeX con la sidebar abierta](docs/screenshots/r4-157.0.8086.0/sidebar-open.png)
+![Archium running on Samsung DeX with the sidebar expanded](docs/screenshots/r4-157.0.8086.0/sidebar-open.png)
 
-**Captura real de Archium 157.0.8086.0 en Samsung DeX, Android 16.** Las imágenes muestran el APK publicado, sin recrear ni retocar la interfaz.
+**An actual screenshot of Archium 157.0.8086.0 on Samsung DeX, Android 16.** Screenshots show the published APK without retouching or recreating its interface. The captured UI is in Spanish.
 
-## Más espacio para navegar
+## More room for the web
 
-| Tu navegación, a la izquierda | Tu estilo, en toda la ventana |
+| Navigation at your side | Make it yours |
 | --- | --- |
-| Sidebar con pestañas, accesos favoritos, espacios y carpetas. La pestaña activa se distingue con una cápsula clara. | Ocho colores predefinidos, entrada HEX y controles RGB. Puedes previsualizar un tono, aplicarlo o cancelar. |
-| Colapsa la sidebar para ampliar el visor; el botón **+** sigue a mano. | El marco y los fondos de la omnibox combinan con el color elegido. |
+| A sidebar for tabs, favorite shortcuts, spaces and folders. A light capsule highlights the active tab. | Eight color presets, HEX input and RGB controls. Preview a color before applying it, or cancel to keep your current theme. |
+| Collapse the sidebar to expand the page while keeping the **+** button within reach. | The window frame and native omnibox backgrounds respond to your chosen color. |
 
-Archium conserva la navegación y los modelos de pestañas de Chromium. Su interfaz de escritorio está pensada para usar un monitor, teclado y ratón, con identidad visual **Archium Portal**.
+Archium retains Chromium's navigation and tab models. Its desktop interface is designed for a monitor, keyboard and mouse, with the **Archium Portal** visual identity.
 
-## Míralo en acción
+## See it in action
 
 <table>
   <tr>
-    <td width="50%"><strong>Sidebar compacta</strong><br><img src="docs/screenshots/r4-157.0.8086.0/sidebar-collapsed.png" alt="Sidebar colapsada con Nueva pestaña visible" width="100%"></td>
-    <td width="50%"><strong>Colores a tu medida</strong><br><img src="docs/screenshots/r4-157.0.8086.0/color-picker.png" alt="Selector de ocho colores, HEX y RGB de Archium" width="100%"></td>
+    <td width="50%"><strong>Compact sidebar</strong><br><img src="docs/screenshots/r4-157.0.8086.0/sidebar-collapsed.png" alt="Collapsed sidebar with the New Tab button visible" width="100%"></td>
+    <td width="50%"><strong>Your colors</strong><br><img src="docs/screenshots/r4-157.0.8086.0/color-picker.png" alt="Archium color picker with eight presets, HEX and RGB" width="100%"></td>
   </tr>
   <tr>
-    <td><strong>Vista previa antes de aplicar</strong><br><img src="docs/screenshots/r4-157.0.8086.0/color-preview.png" alt="Vista previa coral en el marco y la omnibox" width="100%"></td>
-    <td><strong>Acerca de Archium</strong><br><img src="docs/screenshots/r4-157.0.8086.0/about.png" alt="Diálogo Acerca de Archium con logo y versión instalada" width="100%"></td>
+    <td><strong>Preview before applying</strong><br><img src="docs/screenshots/r4-157.0.8086.0/color-preview.png" alt="Coral live preview on the frame and omnibox" width="100%"></td>
+    <td><strong>About Archium</strong><br><img src="docs/screenshots/r4-157.0.8086.0/about.png" alt="About dialog with the Portal logo and installed version" width="100%"></td>
   </tr>
 </table>
 
-[Abrir la galería a tamaño completo →](docs/SCREENSHOTS.md)
+[Open the full-size gallery →](docs/SCREENSHOTS.md)
 
-## Descargar e instalar
+## Download and install
 
-1. Descarga el [APK ARM64](https://github.com/Jorgeprdz/chromium-dex-arc/releases/download/archium-r4-157.0.8086.0-preview/Archium-for-Android-arm64.apk).
-2. Ábrelo desde **Archivos** y permite la instalación desde esa app si Android lo solicita.
-3. Abre Archium. Para la experiencia mostrada, conecta Samsung DeX a un monitor.
+1. Download the [ARM64 APK](https://github.com/Jorgeprdz/chromium-dex-arc/releases/download/archium-r4-157.0.8086.0-preview/Archium-for-Android-arm64.apk).
+2. Open it in **Files** and allow installation from that app if Android asks.
+3. Launch Archium. Connect Samsung DeX to a monitor for the desktop experience shown above.
 
-**Requisitos del APK:** Android 10 o superior y procesador ARM64. Las capturas y la prueba de escritorio se hicieron en Samsung DeX con Android 16; otros entornos Android Desktop todavía necesitan validación.
+**APK requirements:** Android 10 or later and an ARM64 processor. Desktop checks and screenshots were performed on Samsung DeX with Android 16. Other Android desktop environments still require device validation.
 
-| Descarga publicada | Valor |
+| Published download | Value |
 | --- | --- |
-| Versión | `157.0.8086.0` — preview R4 |
-| Paquete | `app.archium.android` |
+| Version | `157.0.8086.0` — R4 preview |
+| Package | `app.archium.android` |
 | ABI | `arm64-v8a` |
-| APK | 366,979,888 bytes, aproximadamente 350 MiB |
+| APK size | 366,979,888 bytes, approximately 350 MiB |
 | Build | [38322756782 — SUCCESS](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38322756782) |
 
 <details>
-<summary><strong>Verificar la descarga</strong></summary>
+<summary><strong>Verify your download</strong></summary>
 
-La release incluye `SHA256SUMS` y el `BUILD_REPORT.json` original. El APK publicado conserva la firma y los bytes del build verificado e instalado.
+The release includes `SHA256SUMS` and the original `BUILD_REPORT.json`. The published APK retains the signature and bytes of the verified, installed build.
 
 ```text
 05a097adb97802d81bb97e65b46dbca2c60e559adcc53990d492d92c831eede6  Archium-for-Android-arm64.apk
@@ -76,60 +76,58 @@ La release incluye `SHA256SUMS` y el `BUILD_REPORT.json` original. El APK public
 sha256sum -c SHA256SUMS
 ```
 
-Consulta la [guía de instalación y verificación](docs/INSTALL_ARCHIUM.md).
+See the [installation and verification guide](docs/INSTALL_ARCHIUM.md).
 
 </details>
 
-## Estado de esta preview
+## Preview status
 
-El build pasó los gates de recursos reales, iconos Portal, firma, Robolectric y enlace JNI. Después se observó navegación, colapso de sidebar, vista previa de colores y el diálogo Acerca de en el dispositivo.
+The build passed real resource, Portal icon, signature, Robolectric and JNI link gates. Navigation, sidebar toggling, color preview and the About dialog were subsequently observed on the device.
 
-La aceptación completa en dispositivo sigue pendiente; esta versión se publica como **preview**. La función propia de contraseñas permanece **deprecated**.
+Full device acceptance remains pending. This version is published as a **preview**. Archium's custom password feature remains **deprecated**.
 
-[Estado y evidencia del build](docs/evidence/2026-10-12-sidebar-fixes/build-38322756782-final.json) · [Registro de capturas y observaciones](docs/screenshots/r4-157.0.8086.0/capture-manifest.json)
+[Build and installation evidence](docs/evidence/2026-10-12-sidebar-fixes/build-38322756782-final.json) · [Capture manifest and observations](docs/screenshots/r4-157.0.8086.0/capture-manifest.json)
 
-## Known Bugs · Problemas conocidos
+## Known Bugs
 
-Estos detalles se observaron en el APK publicado sobre Samsung DeX. Se conservan visibles en las capturas.
+These visual issues were observed in the published APK on Samsung DeX and remain visible in the screenshots.
 
-| Área | Comportamiento observado |
+| Area | Observed behavior |
 | --- | --- |
-| Borde inferior | Persiste una pequeña cuña clara en la unión de la sidebar con el visor. |
-| Modo compacto | La presentación de algunos iconos de pestaña y de la omnibox necesita ajustes; el botón **+** sí permanece visible. |
+| Lower edge | A small light wedge remains at the junction between the sidebar and page viewport. |
+| Compact mode | Some tab and omnibox icons still need presentation refinements. The **+** button remains visible. |
 
-No se observó un crash durante esta sesión de capturas al navegar, abrir el selector, alternar la sidebar o consultar Acerca de. Eso no sustituye una prueba completa de estabilidad. [Reporta un problema reproducible](https://github.com/Jorgeprdz/chromium-dex-arc/issues/new).
+No crash was observed during this capture session while navigating, opening the color picker, toggling the sidebar or viewing About. This does not replace complete stability testing. [Report a reproducible issue](https://github.com/Jorgeprdz/chromium-dex-arc/issues/new).
 
-## To-do · Próximos pasos
+## To-do
 
-- [ ] Corregir la cuña inferior y afinar los iconos del modo compacto.
-- [ ] Completar la aceptación en dispositivo: arranque, sugerencias de la omnibox, navegación, redimensionado y cambios de foco.
-- [ ] Validar otros entornos Android Desktop en dispositivos reales.
-- [ ] Medir rendimiento, memoria y renderizado según el roadmap Desktop Engine R1 antes de anunciar mejoras.
-- [ ] Ampliar pruebas, traducciones y documentación con aportes de la comunidad.
+- [ ] Fix the lower-edge wedge and refine compact-mode icons.
+- [ ] Complete device acceptance: startup, omnibox suggestions, navigation, resizing and focus changes.
+- [ ] Validate additional Android desktop environments on real devices.
+- [ ] Measure performance, memory and rendering against the Desktop Engine R1 roadmap before claiming improvements.
+- [ ] Expand tests, translations and documentation with community contributions.
 
-## Contributors Required · Buscamos colaboradores
+## Contributors Required
 
-¿Te interesa construir un navegador para Android de escritorio? Estos son los aportes que más ayudan ahora:
+Interested in building a browser for Android desktops? These contributions would help most right now:
 
-| Perfil | Dónde puedes ayudar |
+| Background | Where you can help |
 | --- | --- |
-| Android / Java / Chromium | Geometría de la ventana, sidebar, omnibox y accesibilidad. |
-| QA en DeX y otros escritorios | Reproducciones, pruebas con teclado/ratón y validación en distintos dispositivos. |
-| GN / Ninja / GitHub Actions | Gates reproducibles y recuperación incremental con checkpoints. |
-| Rendimiento y renderizado | Mediciones y diagnóstico del roadmap Desktop Engine R1. |
-| Documentación y traducción | Guías claras, capturas y revisión de textos. |
+| Android / Java / Chromium | Window geometry, sidebar, omnibox and accessibility. |
+| DeX and desktop QA | Reproductions, keyboard/mouse testing and device coverage. |
+| GN / Ninja / GitHub Actions | Reproducible gates and incremental checkpoint recovery. |
+| Performance and rendering | Measurements and diagnosis for the Desktop Engine R1 roadmap. |
+| Documentation and translation | Installation guides, screenshots and clear user-facing text. |
 
-**[Cómo contribuir →](CONTRIBUTING.md)** · [Proponer una mejora o reportar un bug](https://github.com/Jorgeprdz/chromium-dex-arc/issues/new)
+**[How to contribute →](CONTRIBUTING.md)** · [Suggest an improvement or report a bug](https://github.com/Jorgeprdz/chromium-dex-arc/issues/new)
 
-## Desarrollo y documentación
+## Development and documentation
 
-El [código de Archium está en assistant/archium-r4-recovery](https://github.com/Jorgeprdz/chromium-dex-arc/tree/assistant/archium-r4-recovery): parches, fuentes modificadas y herramientas. `main` publica esta portada y la documentación; no incorpora los cambios del navegador. El APK se compila incrementalmente desde un checkpoint compatible.
+The [current source branch is assistant/archium-r4-recovery](https://github.com/Jorgeprdz/chromium-dex-arc/tree/assistant/archium-r4-recovery), containing patches, modified sources and tools. `main` publishes this landing page and documentation while retaining its previous browser/build code. The APK is built incrementally from a compatible checkpoint.
 
-- [Guía del repositorio](docs/PROJECT_GUIDE.md): estructura, build y estado actual.
-- [Reparación R4 y registro verificable](https://github.com/Jorgeprdz/chromium-dex-arc/blob/assistant/archium-r4-recovery/docs/ARCHIUM_R4_REPARACION_Y_BUILD_2026-10-11.md).
-- [Identidad y recursos Archium Portal](assets/branding/archium/README.md).
-- [Desktop Engine R1](https://github.com/Jorgeprdz/chromium-dex-arc/blob/assistant/archium-r4-recovery/docs/ARCHIUM_DESKTOP_ENGINE_R1_PERFORMANCE_RENDERING_2026-10-12.md): roadmap pendiente, sin promesas de rendimiento ya alcanzado.
+- [Repository guide](docs/PROJECT_GUIDE.md): layout, build process and current status.
+- [R4 forensic repair log (Spanish)](https://github.com/Jorgeprdz/chromium-dex-arc/blob/assistant/archium-r4-recovery/docs/ARCHIUM_R4_REPARACION_Y_BUILD_2026-10-11.md).
+- [Archium Portal identity and resources](assets/branding/archium/README.md).
+- [Desktop Engine R1 roadmap (Spanish)](https://github.com/Jorgeprdz/chromium-dex-arc/blob/assistant/archium-r4-recovery/docs/ARCHIUM_DESKTOP_ENGINE_R1_PERFORMANCE_RENDERING_2026-10-12.md): planned work, not achieved performance claims.
 
-La preview usa Chromium `cfd94726b7b5fb48aedcc32662f2f3fbdbadec35`; su código corresponde al commit `39b1bcbfa6cd8f51e0b66a7eccdb9e586d8d78b3`.
-
-¿Encontraste algo? [Abre un issue](https://github.com/Jorgeprdz/chromium-dex-arc/issues/new) con tu modelo, versión de Android, modo de escritorio y pasos para reproducirlo. Las capturas sin datos personales ayudan a entender el problema.
+This preview uses Chromium `cfd94726b7b5fb48aedcc32662f2f3fbdbadec35`; the APK source commit is `39b1bcbfa6cd8f51e0b66a7eccdb9e586d8d78b3`.

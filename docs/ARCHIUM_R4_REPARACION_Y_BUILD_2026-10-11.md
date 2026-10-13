@@ -1705,3 +1705,8 @@ originales: tamaños y digests SHA256 remotos coinciden con todos los archivos l
 HEAD de descarga pública: HTTP 200 y Content-Length 366979888. README público en
 main también verificado. Ningún nuevo build se lanzó por esta publicación.
 [Evidencia de publicación](evidence/2026-10-12-sidebar-fixes/release-publication-2026-10-13.json).
+
+
+### English public documentation — 2026-10-13T01:44:54.823845+00:00
+
+User requested English public descriptions. Translated the README, contribution/installation/repository/screenshot guides and capture captions. Updated existing release 411141125 notes and repository description in English through GitHub API (exit 0). Verification: 34 local documentation links, five original PNG SHA256 hashes, seven unchanged source/build trees, and three unchanged release asset IDs/sizes/digests; all passed (exit 0). `git diff --check` passed (exit 0). No build, re-signing or device installation was performed. Two observed visual issues remain documented. Main receives documentation only; the protected backup remains 51e5ed429661727156ab2534caac99a82ee9264b.

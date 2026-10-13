@@ -1,31 +1,31 @@
-# Contribuir a Archium
+# Contributing to Archium
 
-Gracias por ayudar a mejorar la experiencia de Android de escritorio. Puedes aportar pruebas en dispositivo, documentación, traducciones o cambios de código.
+Help improve Android desktop browsing through device testing, documentation, translations or code.
 
-[← Portada](README.md) · [Guía del repositorio](docs/PROJECT_GUIDE.md) · [Problemas conocidos](README.md#known-bugs--problemas-conocidos)
+[← README](README.md) · [Repository guide](docs/PROJECT_GUIDE.md) · [Known bugs](README.md#known-bugs)
 
-## Antes de empezar
+## Before you start
 
-Consulta los bugs y pendientes de la portada. Para un cambio grande, abre primero un issue con el problema, el comportamiento esperado y un alcance pequeño. La preview actual está basada en el build 38322756782; la rama con fuentes y herramientas es `assistant/archium-r4-recovery`.
+Read the README's known bugs and to-do list. For a substantial change, open an issue describing the problem, expected behavior and a small scope first. The current preview comes from build 38322756782; its source and tools live on `assistant/archium-r4-recovery`.
 
-## Reportar un bug
+## Report a bug
 
-Incluye versión de Archium, modelo, Android, modo de escritorio, pasos reproducibles y resultado esperado frente al observado. Una captura o log sin cuentas, conversaciones, tokens ni otros datos personales ayuda a comprobarlo. Indica si sucede con la sidebar abierta o colapsada.
+Include your Archium version, device model, Android version, desktop mode, reproducible steps, expected behavior and actual result. Screenshots or logs help, but remove accounts, conversations, tokens and other personal data. Mention whether the sidebar was expanded or collapsed.
 
-## Proponer código
+## Submit code
 
-1. Trabaja desde la [rama de código actual](https://github.com/Jorgeprdz/chromium-dex-arc/tree/assistant/archium-r4-recovery).
-2. Mantén el diff centrado en una causa reproducible y añade una regresión apropiada cuando corresponda.
-3. Si modificas fuentes del overlay o `.source-modified`, regenera el patch con `scripts/generate-arc-patch.py` y comprueba que sea reproducible.
-4. Explica qué probaste, sus exit codes y qué quedó pendiente. Los mocks y tests host no acreditan ejecución nativa ni aceptación en dispositivo.
-5. Envía el PR hacia `assistant/archium-r4-recovery`. No hagas cambios ni merges sobre `feat/arc-desktop`, que es el respaldo protegido.
+1. Start from the [current source branch](https://github.com/Jorgeprdz/chromium-dex-arc/tree/assistant/archium-r4-recovery).
+2. Keep the diff focused on a reproducible cause and add an appropriate regression test where needed.
+3. When changing overlay or `.source-modified` sources, regenerate the patch with `scripts/generate-arc-patch.py` and verify reproducibility.
+4. Explain what you tested, the exit codes and what remains unverified. Mocks and host tests do not establish native execution or device acceptance.
+5. Target your PR at `assistant/archium-r4-recovery`. Do not change or merge into `feat/arc-desktop`, the protected backup branch.
 
-Los builds de Chromium consumen recursos considerables. Coordina con el mantenedor el dispatch fijado a un SHA y el checkpoint compatible. Preserva los outputs y caches válidos; no conviertas una restauración fallida en un build limpio ni desactives gates para obtener PASS.
+Chromium builds consume substantial resources. Coordinate a SHA-pinned workflow dispatch and compatible checkpoint with the maintainer. Preserve valid outputs and caches; never turn a failed restore into a clean build or disable gates to get a PASS.
 
-## Documentación y pruebas físicas
+## Documentation and device testing
 
-También son útiles guías de instalación, revisión de textos, traducciones y pruebas sobre DeX u otros entornos Android Desktop. Usa capturas reales, identifica el APK probado y distingue un resultado observado de una hipótesis. El contenido de ejemplo debe permitir compartir la imagen sin exponer datos privados.
+Installation guides, text reviews, translations and tests on DeX or other Android desktops are welcome. Use actual screenshots, identify the tested APK and distinguish observations from hypotheses. Choose example content that can be shared without exposing personal information.
 
-## Prioridades actuales
+## Current priorities
 
-Geometría inferior, iconos compactos, aceptación de la omnibox y cambios de foco, compatibilidad en dispositivos reales y mediciones del Desktop Engine R1. La función propia de contraseñas sigue deprecated; esta preview no la reactiva.
+Lower-edge geometry, compact icons, omnibox and focus acceptance, real-device compatibility and Desktop Engine R1 measurements. Archium's custom password feature remains deprecated; this preview does not reactivate it.
