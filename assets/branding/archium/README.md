@@ -25,4 +25,6 @@ python -m pip install cairosvg
 python scripts/export-archium-icons.py
 ```
 
-The exporter is deterministic. This commit **adds artwork**; it does not change the currently built APK icon, AndroidManifest, app ID, build configuration, or the protected `feat/arc-desktop` branch. Integrating the assets into Chromium's resource pipeline is a separate step.
+The exporter is deterministic. The assets were initially introduced separately from APK integration. R4 now verifies Portal's compiled resources, adaptive layers and aliases in the actual Chromium resource pipeline and APK; see the [published preview](https://github.com/Jorgeprdz/chromium-dex-arc/releases/tag/archium-r4-157.0.8086.0-preview).
+
+The complete asset set and exporter live on the [current code branch](https://github.com/Jorgeprdz/chromium-dex-arc/tree/assistant/archium-r4-recovery/assets/branding/archium). The public documentation uses the existing approved logo; it does not redesign or recolor the brand. The protected `feat/arc-desktop` branch is unchanged.
