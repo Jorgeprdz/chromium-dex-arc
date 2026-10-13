@@ -1674,3 +1674,34 @@ triángulo inferior, color de omnibox, + compacto y diálogo en el dispositivo
 queda pendiente de prueba manual; no se declara stable ni listo para producción.
 Este commit de cierre contiene únicamente documentación y evidencia curada;
 no cambia el SHA de código con el que se produjo el APK.
+
+## 2026-10-13 — Portada, capturas y release pública
+
+El usuario autoriza publicar la documentación también en main; sólo se copian
+README, guías, evidencia curada, cinco PNG y el logo aprobado. Scripts y workflows
+de main conservan sus árboles originales; feat/arc-desktop no se modifica.
+La primera publicación de documentación en main es e9054965c9b257e515342828b25058cbc6618aee,
+con padre 6274c653bbe3992403a89b1531d0c1f91646bf6d. Las fuentes de Archium continúan
+en assistant/archium-r4-recovery. No hay merge de código ni force-push.
+
+Se despeja DeX minimizando ventanas, sin cerrar apps ni borrar datos. El display
+lógico actual es 21 (19 ya no existe); el intento sobre 19 fue rechazado y se
+consultó el display real antes de continuar. Cinco capturas nativas 1920x1080,
+6,771,606 bytes totales, sin retoques: sidebar abierta/colapsada, selector, preview
+coral y Acerca de. Las capturas iniciales con ventanas ajenas quedan fuera de Git.
+[Manifest y hashes](screenshots/r4-157.0.8086.0/capture-manifest.json).
+
+Observado en el dispositivo: nueva pestaña, navegación con omnibox, colapso y
+reapertura, + visible, preview coral sobre marco/omnibox, cancelación que restaura
+#4487E5, logo Portal y versión instalada en Acerca de. No se observó crash en
+esta sesión; no equivale a aceptación completa. Persisten cuña clara inferior y
+detalles de iconos compactos; README incluye Known Bugs, To-do y Contributors Required.
+
+[Release pública](https://github.com/Jorgeprdz/chromium-dex-arc/releases/tag/archium-r4-157.0.8086.0-preview),
+ID 411141125, publicada 2026-10-13T01:28:42Z, prerelease=true, draft=false.
+Tag fijado exactamente a 39b1bcbfa6cd8f51e0b66a7eccdb9e586d8d78b3. No se marca
+stable/latest, no se recompila ni se vuelve a firmar. APK, SHA256SUMS y BUILD_REPORT
+originales: tamaños y digests SHA256 remotos coinciden con todos los archivos locales.
+HEAD de descarga pública: HTTP 200 y Content-Length 366979888. README público en
+main también verificado. Ningún nuevo build se lanzó por esta publicación.
+[Evidencia de publicación](evidence/2026-10-12-sidebar-fixes/release-publication-2026-10-13.json).

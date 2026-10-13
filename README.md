@@ -15,7 +15,7 @@ Una experiencia con sidebar y colores a tu medida, basada en Chromium y pensada 
 
 **[⬇ Descargar Archium para Android](https://github.com/Jorgeprdz/chromium-dex-arc/releases/download/archium-r4-157.0.8086.0-preview/Archium-for-Android-arm64.apk)**
 
-[Notas de la release](https://github.com/Jorgeprdz/chromium-dex-arc/releases/tag/archium-r4-157.0.8086.0-preview) · [Instalación](docs/INSTALL_ARCHIUM.md) · [Galería](docs/SCREENSHOTS.md) · [Reportar un problema](https://github.com/Jorgeprdz/chromium-dex-arc/issues/new)
+[Notas de la release](https://github.com/Jorgeprdz/chromium-dex-arc/releases/tag/archium-r4-157.0.8086.0-preview) · [Instalación](docs/INSTALL_ARCHIUM.md) · [Galería](docs/SCREENSHOTS.md) · [Contribuir](CONTRIBUTING.md)
 
 </div>
 
@@ -84,9 +84,42 @@ Consulta la [guía de instalación y verificación](docs/INSTALL_ARCHIUM.md).
 
 El build pasó los gates de recursos reales, iconos Portal, firma, Robolectric y enlace JNI. Después se observó navegación, colapso de sidebar, vista previa de colores y el diálogo Acerca de en el dispositivo.
 
-Todavía hay detalles visuales por afinar en la unión inferior entre sidebar y visor y en algunos iconos del modo compacto. La aceptación completa en dispositivo sigue pendiente; esta versión se publica como **preview**. La función propia de contraseñas permanece **deprecated**.
+La aceptación completa en dispositivo sigue pendiente; esta versión se publica como **preview**. La función propia de contraseñas permanece **deprecated**.
 
 [Estado y evidencia del build](docs/evidence/2026-10-12-sidebar-fixes/build-38322756782-final.json) · [Registro de capturas y observaciones](docs/screenshots/r4-157.0.8086.0/capture-manifest.json)
+
+## Known Bugs · Problemas conocidos
+
+Estos detalles se observaron en el APK publicado sobre Samsung DeX. Se conservan visibles en las capturas.
+
+| Área | Comportamiento observado |
+| --- | --- |
+| Borde inferior | Persiste una pequeña cuña clara en la unión de la sidebar con el visor. |
+| Modo compacto | La presentación de algunos iconos de pestaña y de la omnibox necesita ajustes; el botón **+** sí permanece visible. |
+
+No se observó un crash durante esta sesión de capturas al navegar, abrir el selector, alternar la sidebar o consultar Acerca de. Eso no sustituye una prueba completa de estabilidad. [Reporta un problema reproducible](https://github.com/Jorgeprdz/chromium-dex-arc/issues/new).
+
+## To-do · Próximos pasos
+
+- [ ] Corregir la cuña inferior y afinar los iconos del modo compacto.
+- [ ] Completar la aceptación en dispositivo: arranque, sugerencias de la omnibox, navegación, redimensionado y cambios de foco.
+- [ ] Validar otros entornos Android Desktop en dispositivos reales.
+- [ ] Medir rendimiento, memoria y renderizado según el roadmap Desktop Engine R1 antes de anunciar mejoras.
+- [ ] Ampliar pruebas, traducciones y documentación con aportes de la comunidad.
+
+## Contributors Required · Buscamos colaboradores
+
+¿Te interesa construir un navegador para Android de escritorio? Estos son los aportes que más ayudan ahora:
+
+| Perfil | Dónde puedes ayudar |
+| --- | --- |
+| Android / Java / Chromium | Geometría de la ventana, sidebar, omnibox y accesibilidad. |
+| QA en DeX y otros escritorios | Reproducciones, pruebas con teclado/ratón y validación en distintos dispositivos. |
+| GN / Ninja / GitHub Actions | Gates reproducibles y recuperación incremental con checkpoints. |
+| Rendimiento y renderizado | Mediciones y diagnóstico del roadmap Desktop Engine R1. |
+| Documentación y traducción | Guías claras, capturas y revisión de textos. |
+
+**[Cómo contribuir →](CONTRIBUTING.md)** · [Proponer una mejora o reportar un bug](https://github.com/Jorgeprdz/chromium-dex-arc/issues/new)
 
 ## Desarrollo y documentación
 
