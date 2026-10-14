@@ -90,3 +90,28 @@ fixture now copies the actual snapshot field declarations instead of adapting
 their types. These targeted checks are additional to the 280-test host run.
 Native browser-controls reservation, security, profile isolation, renderer,
 GPU configuration, signing, session persistence and Chromium pin are retained.
+
+
+## Native gate failure and fixture repair
+
+Actions [38511423805](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/38511423805)
+compiled the native test target and merged resources, then failed the command
+alignment fixture. The full `OmniboxSuggestionsDropdownEmbedderImplUnitTest`
+suite ran 51 SDK29/37 executions: 47 passed and the two new LTR/RTL command
+methods failed on both SDKs before their coordinate assertions. See
+[native RED evidence](evidence/2026-10-14-native-command-theme/native-gate-red.txt).
+
+`checkArcCommandCoordinates` constructed the real `LocationBarLayout` with a
+generic Activity context. Its AppCompat theme did not resolve a dimension in
+the native location-bar XML; `TypedArray.getLayoutDimension` threw during
+inflation. The helper now wraps its holder and bar context in
+`Theme_BrowserUI_DayNight`, matching `LocationBarMediatorUnitTest`. The rest of
+the suite retains its original context. No production code, coordinate/action
+assertions, gate filters, SDKs, Chromium pin or signing were changed.
+
+The preserved checkpoint `archium-checkpoint-38511423805-1` contains 25 parts
+in four complete, unexpired groups and is pinned to source `0abfc9f`. Metadata
+and bounded manifest validation passed; the next CI runner still must verify
+capacity, all downloaded bytes and genuine native GREEN before producing an
+APK. Host/probe success alone does not establish that this fixture repair
+passes the full native suite or corrected-APK runtime acceptance.

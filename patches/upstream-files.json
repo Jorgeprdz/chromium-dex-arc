@@ -167,7 +167,7 @@
     "chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java": "0783624ac3bea182ad99a9af96a7ecc14a5c5d54206bbfee44f733a91f9d54b3",
     "chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTabletUnitTest.java": "a62f59d14bf7e05e53b0dbb4a0e8643c7453d1523a7397520f1c5ed7e3426801",
     "chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImpl.java": "e4599e59289d3f9793684ab45fd345e7303a8c890ebe8093320f9ff4e9db6ace",
-    "chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImplUnitTest.java": "47a93cf6d34dab7c61ee05c5a196e003c024bef3a543bb387315cf2b0e12a2a0",
+    "chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImplUnitTest.java": "6f0037715cbb7bccca137c9114d3a2c794d1b7976d89c68a3506a9113e0b8358",
     "chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarLayout.java": "be715af66bda4ece6b20bd3fc239141453d88912becce9aa7aacd4a5541f9931",
     "chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java": "f3b7aef4e7328b9c1712a7b570abc7e3a89d88d92dd53ba509bd551203927087",
     "chrome/browser/ui/vertical_tabs/BUILD.gn": "58d53b2edaa42bbcd2eff10be6d914263d7eb53b916f0f744b3fff5040882966",
@@ -252,5 +252,5 @@
     "components/password_manager/core/browser/password_store/password_store_backend.cc": "45764d4ad0e05acc5a216944a5a6763212f6c17e71bf689e9c973f12fb5c87d8",
     "components/password_manager/core/browser/password_store/password_store_interface.cc": "7e9dd5813ce8ece459ec66abdd3306028b7b3d6bbae048664872a34d8d097268"
   },
-  "patch_sha256": "c884fdccc81f9cc461a82c880bb5a85fc6fa54fadc88a7517a4d10d4fc87b254"
+  "patch_sha256": "6a1b12d28496227f648a2e700633e808ba61aa7fb299aa20f28e119b79d75cc4"
 }

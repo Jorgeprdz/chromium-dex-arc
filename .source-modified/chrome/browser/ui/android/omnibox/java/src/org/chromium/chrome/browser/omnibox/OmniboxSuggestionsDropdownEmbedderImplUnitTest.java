@@ -21,6 +21,7 @@ import android.content.pm.ApplicationInfo;
 import android.content.res.Configuration;
 import android.graphics.Insets;
 import android.os.Build;
+import android.view.ContextThemeWrapper;
 import android.view.View;
 import android.view.View.MeasureSpec;
 import android.view.WindowInsets;
@@ -183,8 +184,9 @@ public class OmniboxSuggestionsDropdownEmbedderImplUnitTest {
     }
 
     private void checkArcCommandCoordinates(boolean rtl) {
-        FrameLayout holder = new FrameLayout(mContext);
-        LocationBarLayout bar = new LocationBarLayout(mContext, null);
+        Context browserContext = new ContextThemeWrapper(mContext, R.style.Theme_BrowserUI_DayNight);
+        FrameLayout holder = new FrameLayout(browserContext);
+        LocationBarLayout bar = new LocationBarLayout(browserContext, null);
         bar.setId(R.id.location_bar);
         ((android.widget.TextView) bar.findViewById(R.id.url_bar)).setText("query");
         holder.addView(bar);

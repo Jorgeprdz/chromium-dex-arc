@@ -2758,7 +2758,15 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
 diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImplUnitTest.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImplUnitTest.java
 --- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImplUnitTest.java
 +++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImplUnitTest.java
-@@ -44,6 +44,7 @@
+@@ -21,6 +21,7 @@
+ import android.content.res.Configuration;
+ import android.graphics.Insets;
+ import android.os.Build;
++import android.view.ContextThemeWrapper;
+ import android.view.View;
+ import android.view.View.MeasureSpec;
+ import android.view.WindowInsets;
+@@ -44,6 +45,7 @@
  import org.chromium.base.test.util.Features.DisableFeatures;
  import org.chromium.base.test.util.Features.EnableFeatures;
  import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider.ControlsPosition;
@@ -2766,7 +2774,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
  import org.chromium.chrome.browser.layouts.LayoutType;
  import org.chromium.chrome.browser.omnibox.fusebox.FuseboxCoordinator.FuseboxLayoutMode;
  import org.chromium.chrome.browser.omnibox.fusebox.FuseboxCoordinator.FuseboxState;
-@@ -170,6 +171,48 @@
+@@ -170,6 +172,49 @@
      }
 
      @Test
@@ -2782,8 +2790,9 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
 +    }
 +
 +    private void checkArcCommandCoordinates(boolean rtl) {
-+        FrameLayout holder = new FrameLayout(mContext);
-+        LocationBarLayout bar = new LocationBarLayout(mContext, null);
++        Context browserContext = new ContextThemeWrapper(mContext, R.style.Theme_BrowserUI_DayNight);
++        FrameLayout holder = new FrameLayout(browserContext);
++        LocationBarLayout bar = new LocationBarLayout(browserContext, null);
 +        bar.setId(R.id.location_bar);
 +        ((android.widget.TextView) bar.findViewById(R.id.url_bar)).setText("query");
 +        holder.addView(bar);
@@ -2815,7 +2824,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
      public void testWindowAttachment() {
          // TopInsetProvider observer should be added during construction.
          verify(mTopInsetProvider).addObserver(any(TopInsetProvider.Observer.class));
-@@ -193,6 +236,40 @@
+@@ -193,6 +238,40 @@
          mImpl.onDetachedFromWindow();
          mAnchorView.layout(0, ANCHOR_TOP + 3, ANCHOR_WIDTH, ANCHOR_TOP + 3 + ANCHOR_HEIGHT);
          verify(mAlignmentChanged, never()).onResult(any());

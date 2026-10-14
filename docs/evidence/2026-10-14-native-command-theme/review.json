@@ -1,0 +1,9 @@
+{
+  "scope": "helper theme fix and generated patch only",
+  "base_sha": "0abfc9f03e34c23762190365ccb0cf6f9e5c3260",
+  "critical": [],
+  "important": [],
+  "minor": [],
+  "native_green": "PENDING_CI",
+  "finding": "Browser ContextThemeWrapper reaches LayoutInflater; geometry assertions and gate filters intact."
+}

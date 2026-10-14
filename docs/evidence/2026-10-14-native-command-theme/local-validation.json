@@ -1,0 +1,25 @@
+{
+  "base_sha": "0abfc9f03e34c23762190365ccb0cf6f9e5c3260",
+  "full_local_run": {
+    "tests": 282,
+    "pass": 280,
+    "failures": [
+      "test_pinned_upstream_config_reproduces_missing_themed_alias (test_portal_optimized_alias.OptimizedAliasTest.test_pinned_upstream_config_reproduces_missing_themed_alias)",
+      "test_real_aapt2_shortened_alias_and_foreign_manifest_rejection (test_portal_optimized_alias.OptimizedAliasTest.test_real_aapt2_shortened_alias_and_foreign_manifest_rejection)"
+    ],
+    "cause": "ARCHIUM_TEST_AAPT2 and ARCHIUM_TEST_ANDROID_JAR were not exported in this recovered session"
+  },
+  "focused_rerun": {
+    "tests": 2,
+    "result": "PASS",
+    "ARCHIUM_TEST_AAPT2": "/opt/android-sdk/build-tools/37.0.0/aapt2",
+    "ARCHIUM_TEST_ANDROID_JAR": "/opt/android-sdk/platforms/android-36/android.jar"
+  },
+  "preparation": "PASS",
+  "aapt2_fixture": "PASS_18_resources",
+  "patch_idempotence": "PASS",
+  "actionlint": "PASS",
+  "review": "NO_FINDINGS",
+  "native_sdk29_37": "PENDING_NEW_CI",
+  "apk": "PENDING_NEW_CI"
+}
