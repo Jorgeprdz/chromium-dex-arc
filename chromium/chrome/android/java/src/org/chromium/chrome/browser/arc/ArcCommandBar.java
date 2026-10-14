@@ -216,7 +216,11 @@ public final class ArcCommandBar {
         FrameLayout.LayoutParams lp = new FrameLayout.LayoutParams(width, height, Gravity.LEFT | Gravity.TOP);
         lp.leftMargin = viewport.left + Math.max(0, (viewport.width() - width) / 2);
         lp.topMargin = viewport.top + Math.min(dp(48), Math.max(0, (viewport.height() - height) / 3));
-        mPanel.setLayoutParams(lp); mBoundsChanged.run();
+        FrameLayout.LayoutParams previous = (FrameLayout.LayoutParams) mPanel.getLayoutParams();
+        if (previous == null || previous.width != lp.width || previous.height != lp.height
+                || previous.leftMargin != lp.leftMargin || previous.topMargin != lp.topMargin
+                || previous.gravity != lp.gravity) mPanel.setLayoutParams(lp);
+        mBoundsChanged.run();
         // A resize finishes an opening transaction at current safe bounds, not stale bounds.
         if (mAnimator != null && mState == State.OPENING) finishAnimationForTesting();
     }

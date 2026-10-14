@@ -109,4 +109,15 @@ public class ArcCommandBarTest {
         assertEquals(panel[0], f.bar.resultsBoundsInWindow().left);
         f.finish();
     }
+    @Test public void unchangedViewportDoesNotRequestAnotherPanelLayout() {
+        Fixture f = new Fixture(); f.bar.open(false); f.bar.finishAnimationForTesting();
+        android.view.View panel = f.bar.panelForTesting();
+        panel.measure(android.view.View.MeasureSpec.makeMeasureSpec(700, android.view.View.MeasureSpec.EXACTLY),
+                android.view.View.MeasureSpec.makeMeasureSpec(360, android.view.View.MeasureSpec.EXACTLY));
+        panel.layout(300, 48, 1000, 408);
+        assertFalse(panel.isLayoutRequested());
+        f.bar.resize();
+        assertFalse("Stable insets/viewport must not schedule perpetual layout", panel.isLayoutRequested());
+        f.finish();
+    }
 }

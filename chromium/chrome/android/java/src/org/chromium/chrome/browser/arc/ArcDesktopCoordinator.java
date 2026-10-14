@@ -92,6 +92,7 @@ public final class ArcDesktopCoordinator {
     private ArcCommandBar mCommandBar;
     private Runnable mFocusAddressBar;
     private Runnable mOpenSettings;
+    private Runnable mEndAddressInput = () -> {};
     private final View mLocationBarHost;
     private final ViewGroup mLocationBarOriginalParent;
     private final int mLocationBarOriginalIndex;
@@ -524,7 +525,10 @@ public final class ArcDesktopCoordinator {
             }
         };
         mPreferences.registerOnSharedPreferenceChangeListener(mPreferenceListener);
-        mLayoutListener = (v, l, t, r, b, ol, ot, or, ob) -> { rebindCollections(); applyAppearance(); };
+        mLayoutListener = (v, l, t, r, b, ol, ot, or, ob) -> {
+            if (l == ol && t == ot && r == or && b == ob) return;
+            rebindCollections(); applyAppearance();
+        };
         rail.addOnLayoutChangeListener(mLayoutListener);
         mIncognitoStateProvider.addIncognitoStateObserverAndTrigger(mIncognitoObserver);
         applyAppearance();
@@ -535,6 +539,7 @@ public final class ArcDesktopCoordinator {
             Runnable focusAddressBar, Runnable openSettings) {
         if (mCommandBar != null || mDestroyed) return;
         mFocusAddressBar = focusAddressBar; mOpenSettings = openSettings;
+        mEndAddressInput = endInput;
         View url = mLocationBarHost.findViewById(R.id.url_bar);
         if (!(mFrameRoot instanceof ViewGroup) || !(url instanceof EditText)) return;
         mCommandBar = new ArcCommandBar(mActivity, (ViewGroup) mFrameRoot, mLocationBarHost,
@@ -542,8 +547,10 @@ public final class ArcDesktopCoordinator {
                 beginInput, endInput, this::applyAddressBarPosition, this::commandResults,
                 mActivity.getString(R.string.arc_command_placeholder),
                 mActivity.getString(R.string.arc_command_actions));
+        // Capture the native instance once. Fusebox can temporarily move it outside its holder;
+        // a fresh descendant lookup on close would leave its command bridge and input alive.
+        View location = mLocationBarHost.findViewById(R.id.location_bar);
         mCommandBar.setBoundsChangedListener(() -> {
-            View location = mLocationBarHost.findViewById(R.id.location_bar);
             if (location instanceof LocationBarLayout bar) {
                 bar.setArcCommandBar(mCommandBar.isShowing() ? mCommandBar.resultsBoundsInWindow() : null,
                         mCommandBar.isActions(), mCommandBar::commitNativeNavigation,
@@ -616,6 +623,8 @@ public final class ArcDesktopCoordinator {
 
     public boolean openCommandBar() {
         if (mDestroyed || !ArcDesktopAppearance.isDesktopWindow(mActivity) || mCommandBar == null) return false;
+        // Restore a native Ctrl+L popover before moving its holder to the command header.
+        if (!mCommandBar.isShowing()) mEndAddressInput.run();
         mCompactOmnibox.restore(); mCommandBar.open(false); return true;
     }
 

@@ -1169,6 +1169,19 @@ public class LocationBarMediatorUnitTest {
     }
 
     @Test
+    public void testArcCommandNewSessionStartsEmptyOnDesktop() {
+        OmniboxCapabilities.setHasDesktopExperienceForTesting(true);
+        when(mLocationBarLayout.getArcCommandResults()).thenReturn(new Rect(100, 100, 800, 400));
+        beginInput(new AutocompleteInput(OmniboxFocusReason.MENU_OR_KEYBOARD_ACTION).setUserText(""));
+        assertEquals("", mSessionState.getAutocompleteInput().getUserText());
+        assertEquals("", mSessionState.getAutocompleteInput().getInitialUserText());
+        assertNull(mSessionState.getAutocompleteInput().getPreviewMatchUrl());
+        mSessionState.getAutocompleteInput().setUserText("draft");
+        mMediator.beginOrResumeInput(false);
+        assertEquals("draft", mSessionState.getAutocompleteInput().getUserText());
+    }
+
+    @Test
     public void testLoadUrl_navigatorDidNotConsumeLoad_focusesCurrentTab() {
         mMediator.onFinishNativeInitialization();
         when(mNavigator.loadUrl(any())).thenReturn(true);
@@ -3732,6 +3745,19 @@ public class LocationBarMediatorUnitTest {
         assertFalse(mMediator.isParentedToSuggestionsContainer());
         mMediator.handleUrlFocusAnimation(/* hasFocus= */ false);
         assertFalse(mMediator.isParentedToSuggestionsContainer());
+    }
+
+    @Test
+    public void testArcCommandSuggestionsDoNotReparentTheNativeEditorOutOfItsHeader() {
+        mMediator.onFinishNativeInitialization();
+        mProfileSupplier.set(mProfile);
+        mFuseboxLayoutModeSupplier.set(FuseboxLayoutMode.SUGGESTIONS_POPOVER);
+        when(mLocationBarLayout.getArcCommandResults()).thenReturn(new Rect(200, 100, 900, 400));
+        mSessionState.getAutocompleteInput().setDisplayState(DisplayState.SUGGESTIONS);
+        mMediator.handleUrlFocusAnimation(true);
+        assertFalse(mMediator.isParentedToSuggestionsContainer());
+        verify(mUrlCoordinator, never()).startReparenting();
+        verify(mSuggestionsContainer, never()).addView(any(), anyInt(), any(ViewGroup.LayoutParams.class));
     }
 
     @Test

@@ -466,7 +466,14 @@ class OmniboxSuggestionsDropdownEmbedderImpl
             } else if (contentView != null && locationBar.isAttachedToWindow()
                     && contentView.getRootView() == locationBar.getRootView()) {
                 int[] contentInWindow = new int[2]; contentView.getLocationInWindow(contentInWindow);
-                left = command.left - contentInWindow[0];
+                // The native container already has the Side UI/anchor horizontal offset. Its
+                // translation is anchor-relative, whereas its top margin is content-relative.
+                int[] anchorInWindow = new int[2]; mAnchorView.getLocationInWindow(anchorInWindow);
+                int containerLeft = anchorInWindow[0];
+                if (mAnchorView.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL) {
+                    containerLeft += mAnchorView.getMeasuredWidth() - command.width();
+                }
+                left = command.left - containerLeft;
                 top = command.top - contentInWindow[1] - contentView.getPaddingTop();
                 width = command.width();
                 height = Math.max(0, Math.min(command.height(), Math.min(windowSpace, contentSpace) - top));

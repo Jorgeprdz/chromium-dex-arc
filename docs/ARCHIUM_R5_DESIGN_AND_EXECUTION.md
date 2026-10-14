@@ -86,6 +86,12 @@ Performance, Googlebook OS and Motorola remain NOT_RUN without measurements.
 
 ## Scope and pending acceptance
 
+Subsequent installed-APK failures and repair evidence are recorded in
+[R5 runtime repair](ARCHIUM_R5_RUNTIME_FIXES_2026-10-14.md). The later user
+instruction authorizing monitor installation supersedes the original
+no-install restriction below. Successful build/installation is distinct from
+runtime acceptance; DeX visual regressions were reproduced on the installed R5.
+
 Site Control retains Chromium's real site identity/permissions control beside
 its omnibox and installed-extension container. RDS/zoom remain native app menu
 functions; screenshot action is not exposed. A custom combined Site Control

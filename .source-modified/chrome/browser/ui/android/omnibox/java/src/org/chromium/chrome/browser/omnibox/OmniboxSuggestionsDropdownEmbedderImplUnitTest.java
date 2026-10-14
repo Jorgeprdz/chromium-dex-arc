@@ -44,6 +44,7 @@ import org.chromium.base.test.BaseRobolectricTestRunner;
 import org.chromium.base.test.util.Features.DisableFeatures;
 import org.chromium.base.test.util.Features.EnableFeatures;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider.ControlsPosition;
+import org.chromium.chrome.R;
 import org.chromium.chrome.browser.layouts.LayoutType;
 import org.chromium.chrome.browser.omnibox.fusebox.FuseboxCoordinator.FuseboxLayoutMode;
 import org.chromium.chrome.browser.omnibox.fusebox.FuseboxCoordinator.FuseboxState;
@@ -167,6 +168,48 @@ public class OmniboxSuggestionsDropdownEmbedderImplUnitTest {
         view.setTop(top);
         view.setRight(left + width);
         view.setBottom(top + height);
+    }
+
+    @Test
+    @Config(qualifiers = "ldltr-sw600dp")
+    public void testArcCommandSuggestionsAccountForSideUiOffset() {
+        checkArcCommandCoordinates(false);
+    }
+
+    @Test
+    @Config(qualifiers = "ldrtl-sw600dp")
+    public void testArcCommandSuggestionsAccountForSideUiOffsetRtl() {
+        checkArcCommandCoordinates(true);
+    }
+
+    private void checkArcCommandCoordinates(boolean rtl) {
+        FrameLayout holder = new FrameLayout(mContext);
+        LocationBarLayout bar = new LocationBarLayout(mContext, null);
+        bar.setId(R.id.location_bar);
+        ((android.widget.TextView) bar.findViewById(R.id.url_bar)).setText("query");
+        holder.addView(bar);
+        mContentView.addView(holder);
+        setBounds(mContentView, 0, 0, 1216, 1000);
+        setBounds(mAnchorView, 216, 31, 1000, 80);
+        setBounds(holder, 400, 90, 600, 56);
+        mAnchorView.setLayoutDirection(rtl ? View.LAYOUT_DIRECTION_RTL : View.LAYOUT_DIRECTION_LTR);
+        mFuseboxLayoutModeSupplier.set(FuseboxLayoutMode.SUGGESTIONS_POPOVER);
+        bar.setArcCommandBar(new android.graphics.Rect(500, 120, 1100, 400), false, () -> {}, () -> {});
+        OmniboxSuggestionsDropdownEmbedderImpl embedder = new OmniboxSuggestionsDropdownEmbedderImpl(
+                mResourceProvider, mWindowAndroid, mAnchorView, holder, holder::getMeasuredWidth,
+                () -> 0, false, mContentView, () -> mControlsPosition, () -> 0,
+                () -> 0, mFuseboxStateSupplier, mFuseboxLayoutModeSupplier, mTopInsetProvider, () -> false);
+        embedder.recalculateOmniboxAlignment();
+        OmniboxAlignment alignment = embedder.getCurrentAlignment();
+        int[] anchor = new int[2]; mAnchorView.getLocationInWindow(anchor);
+        assertEquals(500, anchor[0] + (rtl ? mAnchorView.getMeasuredWidth() - alignment.width : 0) + alignment.left);
+        assertEquals(600, alignment.width);
+        assertEquals(280, alignment.height);
+        bar.setArcCommandBar(new android.graphics.Rect(500, 120, 1100, 400), true, () -> {}, () -> {});
+        embedder.recalculateOmniboxAlignment();
+        assertEquals(0, embedder.getCurrentAlignment().width);
+        assertEquals(0, embedder.getCurrentAlignment().height);
+        embedder.destroy();
     }
 
     @Test

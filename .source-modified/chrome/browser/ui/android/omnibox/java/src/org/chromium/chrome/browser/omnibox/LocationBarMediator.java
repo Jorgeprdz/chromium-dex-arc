@@ -1490,6 +1490,14 @@ public class LocationBarMediator
                 () -> {
                     if (mAutocompleteCoordinator == null || mCurrentInput == null) return;
 
+                    if (activateNewSession && mLocationBarLayout.getArcCommandResults() != null) {
+                        // Desktop session activation normally seeds an empty editor with the
+                        // current page URL. New-tab commands start empty; retained drafts and
+                        // normal Ctrl+L sessions continue to use Chromium's existing behavior.
+                        mCurrentInput.setInitialInput("", null).setUserText("");
+                        mCurrentInput.setPreviewMatchUrl(null);
+                    }
+
                     var editingTextSelection =
                             translateDisplaySelectionToEditing(
                                     displayTextSelection,
@@ -2660,7 +2668,10 @@ public class LocationBarMediator
         boolean shouldBeInPopover =
                 mCurrentInput != null
                         && mCurrentInput.getDisplayState() == DisplayState.SUGGESTIONS
-                        && isPopover;
+                        && isPopover
+                        // The command surface already hosts the one native editor. Reparenting
+                        // it a second time loses the header and leaves two competing geometries.
+                        && mLocationBarLayout.getArcCommandResults() == null;
 
         if (shouldBeInPopover && !isParentedToSuggestionsContainer()) {
             reparentToSuggestionsContainer();
