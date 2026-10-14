@@ -113,3 +113,46 @@ R4 signature reference (verified local published APK): certificate SHA256
 - Source checkpoint metadata: four unexpired groups, source SHA and Chromium
   revision match bounded authenticated manifest. Full byte integrity and CI
   capacity remain blocking S0/S1 checks, not local PASS claims.
+
+## Run 38483119466 — failed Java gate and correction, 2026-10-14
+
+The run for f9ba7e6 FAILED; no APK was published or installed. First authentic
+error at 2026-10-13 23:52:33 UTC: LocationBarLayout.java lines 237, 243 and
+253 placed TYPE_USE-only Nullable before android.graphics.Rect. javac rejects
+annotation of that qualifier. This was introduced by R5, not an SDK/network
+failure. The earlier adapter preflight substituted a handwritten stub for
+this API and therefore failed to detect the production declaration error.
+
+Timeline from job 115592975541: metadata/capacity passed 23:25:39; checkpoint
+download ended 23:33:45; restore/transition ended 23:44:37; complete restored
+host suite passed 23:49:40; real Chromium resources passed 23:51:25; Java
+failed 23:52:33. Quiescent checkpoint packing ended 00:11:12; four uploads
+completed before run conclusion 00:15:11. No Robolectric/JNI/APK PASS applies.
+
+Correction: import Rect and annotate that type directly. The new host
+regression reproduces all three javac errors with the delivered declarations
+and method bodies plus Chromium's exact TYPE_USE Nullable contract. It goes
+RED before the fix and GREEN after it; reverting to qualified nullable types
+remains a negative test. check-arc-preparation now compiles those real command
+declarations/bodies rather than the old command stub, under TYPE_USE-only
+Nullable. The superclass construction remains an explicit bounded adapter;
+this is not claimed as a complete Chromium compile.
+
+Fresh continuation checkpoint: archium-checkpoint-38483119466-1, source
+f9ba7e64263bf715a0b908bfc20477b92f6a9d3b, four unexpired groups with 25
+parts. Authenticated bounded manifest confirms the same Chromium revision
+cfd94726b7b5fb48aedcc32662f2f3fbdbadec35. Byte integrity remains blocking
+on restore. The next run uses this checkpoint and a new exact reviewed SHA.
+
+Focused local checks after correction: two real javac annotation regressions
+PASS, SDK/API preparation PASS, actionlint/diff/compileall/Bash PASS. The
+previous full host suite 278/278 remains historical; CI must execute all 280
+current host tests before downloading a checkpoint.
+
+Later user instruction: "el monitor debe instalar el apk". This explicitly
+authorizes automatic in-place installation by the Termux monitor after the
+exact run succeeds and metadata/report/checksum/ABI/signature are validated.
+It supersedes the initial no-automatic-install condition. The monitor compares
+the actual installed certificate and never uninstalls or clears browser data.
+Agent was paused while the first run continued; the failed-run report prompted
+this focused correction and continuation.

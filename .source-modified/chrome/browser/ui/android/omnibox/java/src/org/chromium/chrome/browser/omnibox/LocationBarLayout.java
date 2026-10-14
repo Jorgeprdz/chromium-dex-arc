@@ -7,6 +7,7 @@ package org.chromium.chrome.browser.omnibox;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.content.res.Resources;
+import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.os.Parcelable;
 import android.util.AttributeSet;
@@ -234,23 +235,23 @@ public class LocationBarLayout extends ConstraintLayout {
     /** Optional window palette; phone layouts retain their native appearance. */
     public void setArcSurfaceColor(@Nullable Integer color) {}
 
-    private @Nullable android.graphics.Rect mArcCommandResults;
+    private @Nullable Rect mArcCommandResults;
     private boolean mArcCommandActions;
     private @Nullable Runnable mArcBeforeCommandNavigation;
     private @Nullable Runnable mArcCommandInputEnd;
 
     /** Optional desktop shell bounds; no extra editor/autocomplete state is created. */
-    public void setArcCommandBar(@Nullable android.graphics.Rect results, boolean actions,
+    public void setArcCommandBar(@Nullable Rect results, boolean actions,
             @Nullable Runnable beforeNavigation, @Nullable Runnable inputEnd) {
         if (java.util.Objects.equals(mArcCommandResults, results) && mArcCommandActions == actions) return;
-        mArcCommandResults = results == null ? null : new android.graphics.Rect(results);
+        mArcCommandResults = results == null ? null : new Rect(results);
         mArcCommandActions = actions;
         mArcBeforeCommandNavigation = results == null ? null : beforeNavigation;
         mArcCommandInputEnd = results == null ? null : inputEnd;
         requestLayout();
     }
 
-    public @Nullable android.graphics.Rect getArcCommandResults() { return mArcCommandResults; }
+    public @Nullable Rect getArcCommandResults() { return mArcCommandResults; }
     public boolean isArcCommandActions() { return mArcCommandActions; }
     public void finishArcCommandNavigation() {
         Runnable before = mArcBeforeCommandNavigation;
