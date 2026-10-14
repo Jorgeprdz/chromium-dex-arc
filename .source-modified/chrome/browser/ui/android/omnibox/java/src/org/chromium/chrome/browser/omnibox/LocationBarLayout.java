@@ -235,6 +235,9 @@ public class LocationBarLayout extends ConstraintLayout {
     /** Optional window palette; phone layouts retain their native appearance. */
     public void setArcSurfaceColor(@Nullable Integer color) {}
 
+    /** Rectangular address row when the Arc shell places it above the page. */
+    public void setArcTopBar(boolean active) {}
+
     private @Nullable Rect mArcCommandResults;
     private boolean mArcCommandActions;
     private @Nullable Runnable mArcBeforeCommandNavigation;

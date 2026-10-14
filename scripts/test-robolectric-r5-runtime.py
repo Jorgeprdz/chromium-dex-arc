@@ -127,6 +127,11 @@ public class CommandRuntimeProbe {
         void align(LocationBarLayout locationBar) ALIGNMENT
     }
     static class Rail {
+        final View mRail;
+        final org.chromium.chrome.browser.arc.ArcFrameDispatch mAppearanceDispatch = new org.chromium.chrome.browser.arc.ArcFrameDispatch(() -> true);
+        boolean mDestroyed;
+        Rail(Activity a) {mRail=new View(a);a.setContentView(mRail);}
+        void scheduleAppearance() {mAppearanceDispatch.schedule(mRail, () -> {rebindCollections();applyAppearance();});}
         int refreshes;
         void rebindCollections(){refreshes++;} void applyAppearance(){refreshes++;}
         void onLayout(int l,int t,int r,int b,int ol,int ot,int or,int ob) RAIL_LAYOUT
@@ -135,8 +140,11 @@ public class CommandRuntimeProbe {
         int mBudget=-1;Budget(Activity a){super(a);}void setBudget(int pixels) BUDGET
     }
     @Test public void stableRailBoundsAndCollectionBudgetDoNotScheduleAnotherFrame() {
-        Rail rail=new Rail();rail.onLayout(0,0,216,800,0,0,216,800);assertEquals(0,rail.refreshes);
-        rail.onLayout(0,0,52,800,0,0,216,800);assertEquals(2,rail.refreshes);
+        Rail rail=new Rail(activity());rail.onLayout(0,0,216,800,0,0,216,800);assertEquals(0,rail.refreshes);
+        rail.onLayout(0,0,52,800,0,0,216,800);
+        assertEquals("Do not mutate navigation during a layout pass",0,rail.refreshes);
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
+        assertEquals(2,rail.refreshes);
     }
     @Test public void stableCollectionBudgetDoesNotInvalidateTheBrowser() {
         Activity a=Robolectric.buildActivity(Activity.class).setup().get();
@@ -208,7 +216,7 @@ public class CommandRuntimeProbe {
 }
 '''.replace('BRIDGE', bridge).replace('REPARENT', reparent).replace('ALIGNMENT', alignment).replace('INITIAL_INPUT', initial_input).replace('RAIL_LAYOUT', rail_layout).replace('BUDGET', budget).replace('omnibox_suggestions_dropdown=11;', 'omnibox_suggestions_dropdown=11,url_bar=12;').replace('Activity a=Robolectric.buildActivity(Activity.class).setup().get();', 'Activity a=activity();'))
     cp = args.classpath_file.read_text().strip()
-    subprocess.run([str(args.java_home / 'bin/javac'), '-cp', cp, '-d', str(classes), str(layout), str(nullable), str(fixture)], check=True)
+    subprocess.run([str(args.java_home / 'bin/javac'), '-cp', cp, '-d', str(classes), str(layout), str(arc / 'ArcFrameDispatch.java'), str(nullable), str(fixture)], check=True)
     result = subprocess.run([str(args.java_home / 'bin/java'), '-ea', '-Drobolectric.conscryptMode=OFF', '-Drobolectric.dependency.repo.url=https://repo.maven.apache.org/maven2', '-cp', str(classes) + ':' + cp, 'org.junit.runner.JUnitCore', 'CommandRuntimeProbe'])
     print('SCOPE=delivered_native_bridge_and_Fusebox_policy_bodies_NOT_APK_RUNTIME', flush=True)
     raise SystemExit(result.returncode)

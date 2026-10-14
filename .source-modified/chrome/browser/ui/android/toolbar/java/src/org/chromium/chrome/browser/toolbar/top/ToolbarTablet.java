@@ -137,6 +137,8 @@ public class ToolbarTablet extends ToolbarLayout {
     private final @Nullable ToolbarWidthConsumer[] mToolbarWidthConsumers =
             new ToolbarWidthConsumer[ToolbarComponentId.COUNT];
 
+    private int mArcExtensionsWidth = -1;
+    private boolean mAllocatingArcExtensions;
     private boolean mIsDestroyed;
     private boolean mShowingFusebox;
 
@@ -523,6 +525,29 @@ public class ToolbarTablet extends ToolbarLayout {
         }
     }
 
+    public void updateArcExtensionsWidth(int widthPx) {
+        mArcExtensionsWidth = Math.max(0, widthPx);
+        if (mIsDestroyed || mExtensionsToolbarCoordinator == null || mAllocatingArcExtensions) return;
+        @Nullable ToolbarWidthConsumer[] consumers = new ToolbarWidthConsumer[mToolbarWidthConsumers.length];
+        for (int id : new int[] {ToolbarComponentId.POPPED_EXTENSION_ACTION,
+                ToolbarComponentId.EXTENSIONS_MENU_BUTTON,
+                ToolbarComponentId.EXTENSIONS_REQUEST_ACCESS_BUTTON,
+                ToolbarComponentId.EXTENSION_ACTION_LIST}) {
+            consumers[id] = mToolbarWidthConsumers[id];
+        }
+        int unspecified = MeasureSpec.makeMeasureSpec(0, MeasureSpec.UNSPECIFIED);
+        mAllocatingArcExtensions = true;
+        try {
+            allocateAvailableToolbarWidth(consumers, mArcExtensionsWidth, unspecified, unspecified);
+        } finally {
+            mAllocatingArcExtensions = false;
+        }
+    }
+
+    public void clearArcExtensionsWidth() {
+        mArcExtensionsWidth = -1;
+    }
+
     @Override
     public void destroy() {
         mIsDestroyed = true;
@@ -587,6 +612,7 @@ public class ToolbarTablet extends ToolbarLayout {
                 Math.max(0, MeasureSpec.getSize(widthMeasureSpec) - getControlContainerMargin());
         allocateAvailableToolbarWidth(
                 mToolbarWidthConsumers, width, widthMeasureSpec, heightMeasureSpec);
+        if (mArcExtensionsWidth >= 0) updateArcExtensionsWidth(mArcExtensionsWidth);
 
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
     }
@@ -601,6 +627,10 @@ public class ToolbarTablet extends ToolbarLayout {
     public void onWidthConsumerVisibilityChanged() {
         assert !mIsDestroyed;
 
+        if (mArcExtensionsWidth >= 0) {
+            updateArcExtensionsWidth(mArcExtensionsWidth);
+            return;
+        }
         if (!ToolbarUtils.isToolbarTabletResizeRefactorEnabled()) return;
 
         // Re-allocate width to account for a change in a width consumer's visibility.

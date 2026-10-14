@@ -112,6 +112,7 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
     private int mTargetPopoverLeftOffset;
     private @BrandedColorScheme int mBrandedColorScheme = BrandedColorScheme.APP_DEFAULT;
     private boolean mShowFocusRing;
+    private boolean mArcTopBar;
     private @Nullable Integer mArcSurfaceColor;
     private @Nullable MarginLayoutParams mArcCommandOriginalChildParams;
     private int mArcCommandOriginalPaddingBottom;
@@ -540,6 +541,14 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
     }
 
     @Override
+    public void setArcTopBar(boolean active) {
+        if (mArcTopBar == active) return;
+        mArcTopBar = active;
+        updateLayoutAndBackground();
+        updateForegroundAndGlifAnimation();
+    }
+
+    @Override
     public void setArcCommandBar(@Nullable Rect results, boolean actions,
             @Nullable Runnable beforeNavigation, @Nullable Runnable inputEnd) {
         boolean wasCommand = getArcCommandResults() != null;
@@ -695,7 +704,7 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
             mGlifForegroundTarget = null;
         }
 
-        if (getArcCommandResults() != null) mIsGlifActive = false;
+        if (getArcCommandResults() != null || mArcTopBar) mIsGlifActive = false;
 
         if (mLayoutMode == FuseboxLayoutMode.SUGGESTIONS_POPOVER
                 && (mUrlCoordinator == null || !mUrlCoordinator.hasFocus())) {
@@ -723,7 +732,7 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
                 mGlifBorderDrawable.reset();
             }
 
-            if (getArcCommandResults() == null && mIsHovered
+            if (getArcCommandResults() == null && !mArcTopBar && mIsHovered
                     && (mLayoutMode != FuseboxLayoutMode.SUGGESTIONS_POPOVER
                             || !mUrlCoordinator.hasFocus())) {
                 setForeground(mHoverDrawable);
@@ -756,7 +765,7 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
                             + (mHolder == null ? null : mHolder.getLayoutParams());
             return;
         }
-        if (getArcCommandResults() == null) {
+        if (getArcCommandResults() == null && !mArcTopBar) {
             adjustVerticalTranslationForFuseboxState(mFuseboxState);
             updatePopoverAlignmentMargins();
         }
@@ -764,7 +773,7 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
         Resources resources = getResources();
         LinearLayout.LayoutParams parentParams =
                 (LinearLayout.LayoutParams) mHolder.getLayoutParams();
-        if (getArcCommandResults() != null) {
+        if (getArcCommandResults() != null || mArcTopBar) {
             // The panel supplies the rectangular surface, padding, focus boundary and shadow.
             // Keep the real native editor/status controls in its header without a nested pill
             // or Fusebox expansion altering the panel's geometry.

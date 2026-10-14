@@ -76,7 +76,7 @@ class ArcVisualStaticContractTest(unittest.TestCase):
         self.assertIn('activeSurface.setClipToOutline(true)', self.arc)
         self.assertIn('new TouchEventObserver()', self.arc)
         self.assertIn('mayInterceptTouchSequenceInWebContents()', self.arc)
-        self.assertIn('ArcDesktopPolicy.containsRoundedRectPoint', self.arc)
+        self.assertIn('ArcDesktopPolicy.containsArcContentPoint', self.arc)
         self.assertNotIn('Canvas', self.arc)
         self.assertNotIn('drawRoundRect', self.arc)
         self.assertNotIn('mCompositorViewHolder.setBackgroundColor', self.arc)

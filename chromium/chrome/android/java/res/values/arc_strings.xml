@@ -60,4 +60,9 @@
         <item>Azul</item>
     </string-array>
     <string name="arc_new_tab">Nueva pestaña</string>
+    <string name="arc_ui_font">Tipografía de la interfaz</string>
+    <string name="arc_ui_font_system">Sans serif</string>
+    <string name="arc_ui_font_medium">Sans serif media</string>
+    <string name="arc_ui_font_serif">Serif</string>
+    <string name="arc_ui_font_mono">Monoespaciada</string>
 </resources>

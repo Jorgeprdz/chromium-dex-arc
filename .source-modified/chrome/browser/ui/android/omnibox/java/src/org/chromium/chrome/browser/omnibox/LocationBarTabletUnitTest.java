@@ -1149,6 +1149,26 @@ public class LocationBarTabletUnitTest {
         assertEquals(280, mLocationBarTablet.getLayoutParams().width);
         assertEquals(100, mLocationBarTablet.getLayoutParams().height);
     }
+    @Test
+    public void arcTopBarIsRectangularAndStaysInsideItsNativeHolder() {
+        setupArcSidebarHierarchy();
+        mLocationBarTablet.setArcTopBar(true);
+        mLocationBarTablet.onFuseboxStateChanged(FuseboxState.EXPANDED);
+        LinearLayout.LayoutParams holder = (LinearLayout.LayoutParams) mHolderView.getLayoutParams();
+        assertEquals(0, holder.leftMargin);
+        assertEquals(0, holder.rightMargin);
+        assertEquals(0, holder.topMargin);
+        assertEquals(ViewGroup.LayoutParams.MATCH_PARENT, mLocationBarTablet.getLayoutParams().height);
+        assertEquals(0f, mHolderView.getTranslationZ(), 0f);
+        assertTrue(mLocationBarTablet.getBackground() instanceof android.graphics.drawable.ColorDrawable);
+        assertEquals(android.graphics.Color.TRANSPARENT,
+                ((android.graphics.drawable.ColorDrawable) mLocationBarTablet.getBackground()).getColor());
+        mLocationBarTablet.setArcTopBar(false);
+        mLocationBarTablet.onFuseboxStateChanged(FuseboxState.DISABLED);
+        assertTrue(mLocationBarTablet.getBackground() instanceof android.graphics.drawable.GradientDrawable
+                || mLocationBarTablet.getBackground() instanceof LocationBarBackgroundDrawable);
+    }
+
     private ActivityController<Activity> mArcActivityController;
 
     @After
@@ -1322,6 +1342,22 @@ public class LocationBarTabletUnitTest {
         assertFalse(((ViewGroup) mHolderView.getParent()).getClipChildren());
     }
     // END ARC HOLDER FOCUS REGRESSIONS
+
+    @Test
+    public void arcTopBarHoverKeepsRectangularSurface() {
+        setupArcSidebarHierarchy();
+        mLocationBarTablet.setArcTopBar(true);
+        UrlBar urlBar = mLocationBarTablet.findViewById(R.id.url_bar);
+        MotionEvent hover = MotionEvent.obtain(0, 0, MotionEvent.ACTION_HOVER_ENTER, 8, 8, 0);
+        hover.setSource(InputDevice.SOURCE_MOUSE);
+        try {
+            urlBar.dispatchGenericMotionEvent(hover);
+            assertNull(mLocationBarTablet.getForeground());
+        } finally {
+            hover.recycle();
+        }
+    }
+
 
     private void setupContainerAndMeasure(int containerWidth, int prefocusWidth, int leftPosition) {
         LinearLayout container = new LinearLayout(mActivity);

@@ -50,13 +50,16 @@ def main():
     source = (ROOT / ('.source-' + args.source_stage) / REL / 'LocationBarTablet.java').read_text()
     tests = (ROOT / '.source-modified' / REL / 'LocationBarTabletUnitTest.java').read_text()
     regressions = tests.split('    // BEGIN ARC HOLDER FOCUS REGRESSIONS\n')[1].split('    // END ARC HOLDER FOCUS REGRESSIONS')[0]
+    regressions = regressions.replace('\n                || mLocationBarTablet.getBackground() instanceof LocationBarBackgroundDrawable', '')
     regressions = re.sub(r'^    @EnableFeatures.*\n|^    @Config.*\n', '', regressions, flags=re.M)
     bodies = [method(source, name) for name in ('onFuseboxStateChanged', 'updateLayoutAndBackground', 'setMarginsForAvailableWidth', 'getAvailableContainerWidth', 'isTooNarrowForExpandedActivationChip')]
     if 'public void setArcCommandBar(' in source:
         bodies.append(method(source, 'setArcCommandBar'))
+    if 'public void setArcTopBar(' in source:
+        bodies.append(method(source, 'setArcTopBar'))
     native = native_definition((ROOT / '.source-modified' / REL / 'LocationBarLayout.java').read_text())
     native = native[native.index('    private @Nullable '):native.rfind('}')].replace('@Nullable ', '')
-    tablet_fields = '\n'.join(re.findall(r'^    private [^\n]+ mArcCommandOriginal[^\n]+;', source, re.M)).replace('@Nullable ', '')
+    tablet_fields = '\n'.join(re.findall(r'^    private [^\n]+ mArc(?:CommandOriginal|TopBar)[^\n]*;', source, re.M)).replace('@Nullable ', '')
     if 'private View getExpansionContainer(' in source:
         bodies += [method(source, name) for name in ('getExpansionContainer', 'isAncestorOf')]
         if args.unsafe_container_mutant:
@@ -153,6 +156,7 @@ __BODIES__
 }
 class BaseLayout extends FrameLayout {
     BaseLayout(Context c) { super(c); }
+    public void setArcTopBar(boolean active) {}
     public void onFuseboxStateChanged(int state) {}
 __NATIVE_COMMAND__
 }

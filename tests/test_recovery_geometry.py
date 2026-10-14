@@ -18,6 +18,7 @@ public class GeometryProbe {
   eq(ArcDesktopPolicy.collectionScrollBudgetPx(400,1f,0),0);
   eq(ArcDesktopPolicy.collectionScrollBudgetPx(800,0f,0),0);
   if(!ArcDesktopPolicy.containsArcContentPoint(0,99,0,0,100,100,16))throw new AssertionError("bottom left corner must be square");
+  if(!ArcDesktopPolicy.containsArcContentPoint(99,99,0,0,100,100,16))throw new AssertionError("lower crop has square corners and accepts input");
   if(ArcDesktopPolicy.containsArcContentPoint(0,0,0,0,100,100,16))throw new AssertionError("top left corner must remain round");
   if(ArcDesktopPolicy.containsArcContentPoint(99,0,0,0,100,100,16))throw new AssertionError("right corner must be round");
   if(ArcDesktopPolicy.containsArcContentPoint(100,50,0,0,100,100,16))throw new AssertionError("outside must reject");
