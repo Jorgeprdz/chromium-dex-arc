@@ -75,7 +75,7 @@ public final class ArcDesktopPolicy {
         return (int) Math.min(Math.round(240 * density), Math.max(0L, remaining));
     }
 
-    /** Preserve the rounded top corners and the square bottom-left sidebar junction. */
+    /** Match the rounded top and square lower crop used by SurfaceView. */
     public static boolean containsArcContentPoint(float x, float y,
             int left, int top, int right, int bottom, float radius) {
         if (right <= left || bottom <= top || x < left || x >= right || y < top || y >= bottom) {
@@ -83,7 +83,7 @@ public final class ArcDesktopPolicy {
         }
         float r = Math.max(0f, Math.min(radius,
                 Math.min((right - left) / 2f, (bottom - top) / 2f)));
-        if (x < left + r && y >= bottom - r) return true;
+        if (y >= bottom - r) return true;
         return containsRoundedRectPoint(x, y, left, top, right, bottom, r);
     }
 

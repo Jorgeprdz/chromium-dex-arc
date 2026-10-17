@@ -54,8 +54,8 @@ def synthetic_chromium_r(values_xml: Path) -> str:
     # Android views compiled by the isolated adapter gate.
     id_names = (
         'toolbar', 'desktop_window_spacer', 'location_bar',
-        'location_bar_holder', 'collapse_button', 'menu_button_wrapper',
-        'extensions_toolbar_container', 'coordinator', 'new_tab_button',
+        'control_container', 'location_bar_holder', 'collapse_button', 'menu_button_wrapper',
+        'extensions_toolbar_container', 'coordinator', 'new_tab_button', 'omnibox_suggestions_dropdown',
         'location_bar_status', 'location_bar_status_icon', 'url_bar', 'focus_thief',
     )
 
@@ -165,7 +165,7 @@ def main():
             'org.chromium.components.favicon.LargeIconBridge': 'public class LargeIconBridge { public interface LargeIconCallback { void onLargeIconAvailable(android.graphics.Bitmap icon, int color, boolean fallback, int type); } public LargeIconBridge(org.chromium.chrome.browser.profiles.Profile p){} public boolean getLargeIconForUrl(org.chromium.url.GURL url,int size,LargeIconCallback cb){return true;} public void destroy(){} }',
             'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabRailLayout': 'public class VerticalTabRailLayout extends android.view.View { public VerticalTabRailLayout(android.content.Context c){super(c);} public void setDesktopWindowSpacerHost(android.view.View v){} }',
             'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabListViewBinder': 'public class VerticalTabListViewBinder { public static void refreshArcAppearance(VerticalTabRailLayout v,boolean i){} }',
-            'org.chromium.chrome.browser.toolbar.top.ToolbarTablet': 'public class ToolbarTablet extends android.view.View { public ToolbarTablet(android.content.Context c){super(c);} public void onThemeColorChanged(int color,boolean animate){} }',
+            'org.chromium.chrome.browser.toolbar.top.ToolbarTablet': 'public class ToolbarTablet extends android.view.View { public ToolbarTablet(android.content.Context c){super(c);} public void onThemeColorChanged(int color,boolean animate){} public void updateArcExtensionsWidth(int width){} public void clearArcExtensionsWidth(){} }',
             'org.chromium.chrome.browser.lifecycle.ConfigurationChangedObserver': 'public interface ConfigurationChangedObserver { void onConfigurationChanged(android.content.res.Configuration c); }',
             'org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher': 'public interface ActivityLifecycleDispatcher { void register(ConfigurationChangedObserver o); void unregister(ConfigurationChangedObserver o); }',
             'androidx.recyclerview.widget.RecyclerView': 'public class RecyclerView extends android.view.ViewGroup { public RecyclerView(android.content.Context c){super(c);} public abstract static class Adapter<T> { public void notifyDataSetChanged(){} } public Adapter<?> getAdapter(){return null;} protected void onLayout(boolean c,int l,int t,int r,int b){} }',
@@ -202,19 +202,26 @@ def main():
              'vertical_tab_layout.xml').read_text())
         definitions['org.chromium.chrome.R'] = synthetic_chromium_r(
             ROOT / 'chromium/chrome/android/java/res/values/arc_strings.xml')
+        native_spec = importlib.util.spec_from_file_location(
+            'r5_native_command_api', ROOT / 'tests/test_r5_native_command_api.py')
+        native_module = importlib.util.module_from_spec(native_spec)
+        native_spec.loader.exec_module(native_module)
+        native_location_bar = (
+            checkout / 'chrome/browser/ui/android/omnibox/java/src/org/chromium/'
+            'chrome/browser/omnibox/LocationBarLayout.java').read_text()
         definitions.update({
             # Type-only adapter for the public base hook shipped in the same patch.
             # Actual color/focus behavior is verified separately with Android/Chromium tests.
-            'org.chromium.chrome.browser.omnibox.LocationBarLayout': '''public class LocationBarLayout extends android.widget.FrameLayout {
-                public LocationBarLayout(android.content.Context c){super(c);}
-                public void setArcSurfaceColor(Integer color){}
-            }''',
+            'org.chromium.chrome.browser.omnibox.LocationBarLayout':
+                    native_module.native_definition(native_location_bar).replace('\n}', '\npublic void setArcTopBar(boolean active) {}\n}'),
             # Minimal type contracts from cfd94726's CompositorViewHolder,
             # TouchEventObserver and NullableObservableSupplier. Stub bodies are
             # never used as evidence of compositor/touch/browser runtime behavior.
             'org.chromium.chrome.browser.compositor.CompositorViewHolder': '''public class CompositorViewHolder extends android.widget.FrameLayout {
                 public CompositorViewHolder(android.content.Context c, android.util.AttributeSet attrs){super(c, attrs);}
                 public android.view.View getActiveSurfaceView(){return null;}
+                public void setArcContentOffsetForRail(int width){}
+                public void beginArcRailViewportResize(int width){}
                 public void addTouchEventObserver(org.chromium.components.browser_ui.widget.TouchEventObserver o){}
                 public void removeTouchEventObserver(org.chromium.components.browser_ui.widget.TouchEventObserver o){}
             }''',
@@ -267,6 +274,11 @@ def main():
             definitions[name] = arc_module.DEFINITIONS[name]
         for annotation in ['Nullable', 'NullMarked', 'NullUnmarked']:
             definitions['org.chromium.build.annotations.' + annotation] = '@java.lang.annotation.Target({java.lang.annotation.ElementType.TYPE_USE,java.lang.annotation.ElementType.TYPE,java.lang.annotation.ElementType.METHOD,java.lang.annotation.ElementType.PACKAGE}) public @interface ' + annotation + ' {}'
+        # Nullable is strictly TYPE_USE in Chromium; declaration targets can mask javac errors.
+        definitions['org.chromium.build.annotations.Nullable'] = (
+            '@java.lang.annotation.Target(java.lang.annotation.ElementType.TYPE_USE) '
+            '@java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.CLASS) '
+            'public @interface Nullable {}')
         for name, body in definitions.items():
             file = stubs / (name.replace('.', '/') + '.java')
             file.parent.mkdir(parents=True, exist_ok=True)

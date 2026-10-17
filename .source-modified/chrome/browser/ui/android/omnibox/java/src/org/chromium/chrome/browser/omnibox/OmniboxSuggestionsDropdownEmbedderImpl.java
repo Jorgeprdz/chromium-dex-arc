@@ -454,6 +454,33 @@ class OmniboxSuggestionsDropdownEmbedderImpl
             height = Math.min(windowSpace, contentSpace) - top;
         }
 
+        View commandLocation = mAlignmentView.findViewById(R.id.location_bar);
+        if (commandLocation instanceof LocationBarLayout locationBar
+                && locationBar.getArcCommandResults() != null) {
+            android.graphics.Rect command = locationBar.getArcCommandResults();
+            android.widget.TextView editor = locationBar.findViewById(R.id.url_bar);
+            if (locationBar.isArcCommandActions() || (editor != null && editor.getText().length() == 0)) {
+                // Actions share the real editor but have their own command rows, never stale
+                // native search suggestions overlapping a selected command.
+                width = 0; height = 0;
+            } else if (contentView != null && locationBar.isAttachedToWindow()
+                    && contentView.getRootView() == locationBar.getRootView()) {
+                int[] contentInWindow = new int[2]; contentView.getLocationInWindow(contentInWindow);
+                // The native container already has the Side UI/anchor horizontal offset. Its
+                // translation is anchor-relative, whereas its top margin is content-relative.
+                int[] anchorInWindow = new int[2]; mAnchorView.getLocationInWindow(anchorInWindow);
+                int containerLeft = anchorInWindow[0];
+                if (mAnchorView.getLayoutDirection() == View.LAYOUT_DIRECTION_RTL) {
+                    containerLeft += mAnchorView.getMeasuredWidth() - command.width();
+                }
+                left = command.left - containerLeft;
+                top = command.top - contentInWindow[1] - contentView.getPaddingTop();
+                width = command.width();
+                height = Math.max(0, Math.min(command.height(), Math.min(windowSpace, contentSpace) - top));
+                paddingLeft = 0; paddingRight = 0; paddingBottom = 0;
+            } else { width = 0; height = 0; }
+        }
+
         // TODO(pnoland@, https://crbug.com/40257117): avoid pushing changes that are identical to
         // the previous alignment value.
         OmniboxAlignment omniboxAlignment =

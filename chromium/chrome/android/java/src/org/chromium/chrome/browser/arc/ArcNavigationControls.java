@@ -4,6 +4,7 @@
 package org.chromium.chrome.browser.arc;
 
 import android.widget.ImageButton;
+import android.view.View;
 
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab.TabObserver;
@@ -36,6 +37,31 @@ public final class ArcNavigationControls {
         mBack = back;
         mForward = forward;
         mReload = reload;
+        mBack.setOnClickListener(v -> {
+            Tab tab = selected();
+            if (tab != null && tab.canGoBack()) tab.goBack();
+        });
+        mForward.setOnClickListener(v -> {
+            Tab tab = selected();
+            if (tab != null && tab.canGoForward()) tab.goForward();
+        });
+        mReload.setOnClickListener(v -> {
+            Tab tab = selected();
+            if (tab != null) tab.reload();
+        });
+    }
+
+    private Tab selected() {
+        if (mDestroyed) return null;
+        Tab tab = mCurrent.get();
+        return tab == null || tab.isDestroyed() ? null : tab;
+    }
+
+    /** A disabled Back still occupies a reachable, labelled compact navigation row. */
+    public void setExpanded(boolean expanded) {
+        mBack.setVisibility(View.VISIBLE);
+        mForward.setVisibility(expanded ? View.VISIBLE : View.GONE);
+        mReload.setVisibility(expanded ? View.VISIBLE : View.GONE);
     }
 
     private void changed(Tab tab) {

@@ -8,6 +8,7 @@ import static org.mockito.Mockito.*;
 
 import android.app.Activity;
 import android.widget.ImageButton;
+import android.view.View;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -29,6 +30,27 @@ import java.util.concurrent.atomic.AtomicReference;
 @GraphicsMode(GraphicsMode.Mode.LEGACY)
 @SQLiteMode(SQLiteMode.Mode.LEGACY)
 public class ArcNavigationControlsTest {
+    @Test
+    public void collapsedBackRemainsVisibleAndDispatchesToSelectedNativeTab() {
+        Tab tab = mock(Tab.class);
+        ImageButton[] buttons = buttons();
+        ArcNavigationControls controls = new ArcNavigationControls(() -> tab, buttons[0], buttons[1], buttons[2]);
+        controls.setExpanded(false);
+        controls.refresh();
+        assertEquals(View.VISIBLE, buttons[0].getVisibility());
+        assertFalse(buttons[0].isEnabled());
+        assertEquals(View.GONE, buttons[1].getVisibility());
+        assertEquals(View.GONE, buttons[2].getVisibility());
+        when(tab.canGoBack()).thenReturn(true);
+        controls.refresh();
+        buttons[0].performClick();
+        verify(tab).goBack();
+        controls.setExpanded(true);
+        for (ImageButton button : buttons) assertEquals(View.VISIBLE, button.getVisibility());
+        controls.destroy();
+        buttons[0].performClick();
+        verify(tab, times(1)).goBack();
+    }
     private ImageButton[] buttons() {
         Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
         return new ImageButton[] {new ImageButton(activity), new ImageButton(activity), new ImageButton(activity)};

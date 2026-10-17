@@ -18,16 +18,37 @@ public final class ArcDesktopWindowObserver implements ConfigurationChangedObser
     private final boolean mDesktopAtCreation;
     private final SharedPreferences mPreferences;
     private final SharedPreferences.OnSharedPreferenceChangeListener mPreferenceListener;
+    private final Runnable mPrepareTransition;
+    private final Runnable mApplyUiFont;
+    private final android.view.ViewTreeObserver.OnGlobalLayoutListener mFontLayoutListener;
     private final Runnable mRecreateUi = this::recreateUiIfNeeded;
     private boolean mDestroyed;
     private boolean mRecreationScheduled;
 
     public ArcDesktopWindowObserver(Activity activity, ActivityLifecycleDispatcher dispatcher) {
+        this(activity, dispatcher, () -> {});
+    }
+
+    public ArcDesktopWindowObserver(Activity activity, ActivityLifecycleDispatcher dispatcher,
+            Runnable prepareTransition) {
+        this(activity, dispatcher, prepareTransition, () -> {});
+    }
+
+    public ArcDesktopWindowObserver(Activity activity, ActivityLifecycleDispatcher dispatcher,
+            Runnable prepareTransition, Runnable applyUiFont) {
+        mPrepareTransition = prepareTransition;
+        mApplyUiFont = applyUiFont;
         mActivity = activity;
         mDispatcher = dispatcher;
         mDesktopAtCreation = ArcDesktopAppearance.isDesktopWindow(activity);
         mPreferences = ArcDesktopAppearance.preferences(activity);
+        mFontLayoutListener = () -> {
+            if (mDestroyed) return;
+            mApplyUiFont.run();
+        };
+        mActivity.getWindow().getDecorView().getViewTreeObserver().addOnGlobalLayoutListener(mFontLayoutListener);
         mPreferenceListener = (preferences, key) -> {
+            if (ArcDesktopAppearance.UI_FONT_KEY.equals(key)) mFontLayoutListener.onGlobalLayout();
             if (ArcDesktopAppearance.UI_MODE_KEY.equals(key)) scheduleUiUpdate();
         };
         mPreferences.registerOnSharedPreferenceChangeListener(mPreferenceListener);
@@ -52,12 +73,14 @@ public final class ArcDesktopWindowObserver implements ConfigurationChangedObser
         if (mDestroyed || mActivity.isFinishing() || mActivity.isDestroyed()) return;
         if (mDesktopAtCreation == ArcDesktopAppearance.isDesktopWindow(mActivity)) return;
         // Use the existing Chromium Activity restoration path without mutating tab models.
+        mPrepareTransition.run();
         mActivity.recreate();
     }
 
     public void destroy() {
         if (mDestroyed) return;
         mDestroyed = true;
+        mActivity.getWindow().getDecorView().getViewTreeObserver().removeOnGlobalLayoutListener(mFontLayoutListener);
         mPreferences.unregisterOnSharedPreferenceChangeListener(mPreferenceListener);
         mActivity.getWindow().getDecorView().removeCallbacks(mRecreateUi);
         mDispatcher.unregister(this);

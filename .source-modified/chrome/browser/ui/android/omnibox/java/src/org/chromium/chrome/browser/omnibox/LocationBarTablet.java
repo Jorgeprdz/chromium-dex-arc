@@ -112,7 +112,10 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
     private int mTargetPopoverLeftOffset;
     private @BrandedColorScheme int mBrandedColorScheme = BrandedColorScheme.APP_DEFAULT;
     private boolean mShowFocusRing;
+    private boolean mArcTopBar;
     private @Nullable Integer mArcSurfaceColor;
+    private @Nullable MarginLayoutParams mArcCommandOriginalChildParams;
+    private int mArcCommandOriginalPaddingBottom;
     private boolean mIsHovered;
     private boolean mIsGlifActive;
     private boolean mStartGlifOnNextLayout;
@@ -537,6 +540,35 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
         updateVisualsForState(mBrandedColorScheme);
     }
 
+    @Override
+    public void setArcTopBar(boolean active) {
+        if (mArcTopBar == active) return;
+        mArcTopBar = active;
+        updateLayoutAndBackground();
+        updateForegroundAndGlifAnimation();
+    }
+
+    @Override
+    public void setArcCommandBar(@Nullable Rect results, boolean actions,
+            @Nullable Runnable beforeNavigation, @Nullable Runnable inputEnd) {
+        boolean wasCommand = getArcCommandResults() != null;
+        if (!wasCommand && results != null) {
+            if (getLayoutParams() instanceof FrameLayout.LayoutParams params) {
+                mArcCommandOriginalChildParams = new FrameLayout.LayoutParams(params);
+            }
+            mArcCommandOriginalPaddingBottom = getPaddingBottom();
+        }
+        super.setArcCommandBar(results, actions, beforeNavigation, inputEnd);
+        if (wasCommand && results == null) {
+            if (mArcCommandOriginalChildParams != null) {
+                setLayoutParams(mArcCommandOriginalChildParams);
+                mArcCommandOriginalChildParams = null;
+            }
+            setPadding(getPaddingLeft(), getPaddingTop(), getPaddingRight(), mArcCommandOriginalPaddingBottom);
+        }
+        if (wasCommand != (results != null)) updateLayoutAndBackground();
+    }
+
     private void updateBackgroundColor() {
         Context context = getContext();
         if (mShowFocusRing) {
@@ -672,6 +704,8 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
             mGlifForegroundTarget = null;
         }
 
+        if (getArcCommandResults() != null || mArcTopBar) mIsGlifActive = false;
+
         if (mLayoutMode == FuseboxLayoutMode.SUGGESTIONS_POPOVER
                 && (mUrlCoordinator == null || !mUrlCoordinator.hasFocus())) {
             mIsGlifActive = false;
@@ -698,7 +732,7 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
                 mGlifBorderDrawable.reset();
             }
 
-            if (mIsHovered
+            if (getArcCommandResults() == null && !mArcTopBar && mIsHovered
                     && (mLayoutMode != FuseboxLayoutMode.SUGGESTIONS_POPOVER
                             || !mUrlCoordinator.hasFocus())) {
                 setForeground(mHoverDrawable);
@@ -731,12 +765,35 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
                             + (mHolder == null ? null : mHolder.getLayoutParams());
             return;
         }
-        adjustVerticalTranslationForFuseboxState(mFuseboxState);
-        updatePopoverAlignmentMargins();
+        if (getArcCommandResults() == null && !mArcTopBar) {
+            adjustVerticalTranslationForFuseboxState(mFuseboxState);
+            updatePopoverAlignmentMargins();
+        }
         FrameLayout.LayoutParams layoutParams = (FrameLayout.LayoutParams) getLayoutParams();
         Resources resources = getResources();
         LinearLayout.LayoutParams parentParams =
                 (LinearLayout.LayoutParams) mHolder.getLayoutParams();
+        if (getArcCommandResults() != null || mArcTopBar) {
+            // The panel supplies the rectangular surface, padding, focus boundary and shadow.
+            // Keep the real native editor/status controls in its header without a nested pill
+            // or Fusebox expansion altering the panel's geometry.
+            parentParams.leftMargin = 0;
+            parentParams.rightMargin = 0;
+            parentParams.topMargin = 0;
+            parentParams.height = ViewGroup.LayoutParams.MATCH_PARENT;
+            parentParams.gravity = Gravity.CENTER_VERTICAL;
+            layoutParams.width = ViewGroup.LayoutParams.MATCH_PARENT;
+            layoutParams.height = ViewGroup.LayoutParams.MATCH_PARENT;
+            mTargetPopoverWidth = 0;
+            mTargetPopoverLeftOffset = 0;
+            setPadding(0, 0, 0, 0);
+            mHolder.setTranslationZ(NEUTRAL_Z_TRANSLATION);
+            setBackgroundColor(android.graphics.Color.TRANSPARENT);
+            setForeground(null);
+            setLayoutParams(layoutParams);
+            mHolder.setLayoutParams(parentParams);
+            return;
+        }
         boolean isPopoverMode = mLayoutMode == FuseboxLayoutMode.SUGGESTIONS_POPOVER;
         boolean isFuseboxActive =
                 (mFuseboxState == FuseboxState.COMPACT || mFuseboxState == FuseboxState.EXPANDED);

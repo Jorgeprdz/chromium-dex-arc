@@ -10,8 +10,11 @@ import argparse
 from pathlib import Path
 import re
 import subprocess
+import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'tests'))
+from test_r5_native_command_api import native_definition
 REL = Path('chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox')
 PACKAGE = 'org.chromium.chrome.browser.omnibox'
 
@@ -47,8 +50,16 @@ def main():
     source = (ROOT / ('.source-' + args.source_stage) / REL / 'LocationBarTablet.java').read_text()
     tests = (ROOT / '.source-modified' / REL / 'LocationBarTabletUnitTest.java').read_text()
     regressions = tests.split('    // BEGIN ARC HOLDER FOCUS REGRESSIONS\n')[1].split('    // END ARC HOLDER FOCUS REGRESSIONS')[0]
+    regressions = regressions.replace('\n                || mLocationBarTablet.getBackground() instanceof LocationBarBackgroundDrawable', '')
     regressions = re.sub(r'^    @EnableFeatures.*\n|^    @Config.*\n', '', regressions, flags=re.M)
     bodies = [method(source, name) for name in ('onFuseboxStateChanged', 'updateLayoutAndBackground', 'setMarginsForAvailableWidth', 'getAvailableContainerWidth', 'isTooNarrowForExpandedActivationChip')]
+    if 'public void setArcCommandBar(' in source:
+        bodies.append(method(source, 'setArcCommandBar'))
+    if 'public void setArcTopBar(' in source:
+        bodies.append(method(source, 'setArcTopBar'))
+    native = native_definition((ROOT / '.source-modified' / REL / 'LocationBarLayout.java').read_text())
+    native = native[native.index('    private @Nullable '):native.rfind('}')].replace('@Nullable ', '')
+    tablet_fields = '\n'.join(re.findall(r'^    private [^\n]+ mArc(?:CommandOriginal|TopBar)[^\n]*;', source, re.M)).replace('@Nullable ', '')
     if 'private View getExpansionContainer(' in source:
         bodies += [method(source, name) for name in ('getExpansionContainer', 'isAncestorOf')]
         if args.unsafe_container_mutant:
@@ -105,6 +116,7 @@ __MEASURE__
     production = '''package org.chromium.chrome.browser.omnibox;
 import android.content.Context;
 import android.content.res.Resources;
+import android.graphics.Rect;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.view.View;
@@ -122,6 +134,7 @@ class LocationBarTablet extends BaseLayout {
     int mFuseboxState, mLayoutMode, mTargetPopoverWidth, mTargetPopoverLeftOffset;
     boolean mIsReparentedToPopover, mShowFocusRing, mIsGlifActive;
     int mLocationBarTabletFuseboxPopupInset=16, mPopoverAdditionalWidth=16;
+__TABLET_FIELDS__
     ViewOutlineProvider mOutlineProvider;
     GradientDrawable mFocusedPopupDrawable=new GradientDrawable(), mLocationBarBackground=new GradientDrawable();
     int[] mPositionArray=new int[2];
@@ -143,7 +156,9 @@ __BODIES__
 }
 class BaseLayout extends FrameLayout {
     BaseLayout(Context c) { super(c); }
+    public void setArcTopBar(boolean active) {}
     public void onFuseboxStateChanged(int state) {}
+__NATIVE_COMMAND__
 }
 // Explicit Chrome UrlBar callback adapter. Focus itself is real Android EditText behavior.
 class UrlBar extends android.widget.EditText {
@@ -183,7 +198,7 @@ class R {
 }
 class ViewUtils {
 __VIEWUTILS__
-}'''.replace('__BODIES__', '\n'.join(bodies)).replace('__VIEWUTILS__', viewutils_methods)
+}'''.replace('__BODIES__', '\n'.join(bodies)).replace('__VIEWUTILS__', viewutils_methods).replace('__NATIVE_COMMAND__', native).replace('__TABLET_FIELDS__', tablet_fields)
     runner = '''package org.chromium.chrome.browser.omnibox;
 public class FocusFixtureRunner {
     public static void main(String[] args) {

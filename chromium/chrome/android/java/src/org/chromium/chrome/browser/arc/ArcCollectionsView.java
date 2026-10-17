@@ -57,7 +57,11 @@ public final class ArcCollectionsView extends LinearLayout {
     private final class BoundedScrollView extends ScrollView {
         private int mBudget = -1;
         BoundedScrollView(Activity activity) { super(activity); }
-        void setBudget(int pixels) { mBudget = Math.max(0, pixels); requestLayout(); }
+        void setBudget(int pixels) {
+            int budget = Math.max(0, pixels);
+            if (mBudget == budget) return;
+            mBudget = budget; requestLayout();
+        }
         @Override
         protected void onMeasure(int widthSpec, int heightSpec) {
             int cap = mBudget < 0 ? dp(112) : mBudget;

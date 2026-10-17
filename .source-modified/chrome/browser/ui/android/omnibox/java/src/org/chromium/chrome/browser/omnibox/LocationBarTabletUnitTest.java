@@ -1129,6 +1129,46 @@ public class LocationBarTabletUnitTest {
     // Arc moves the complete holder into a sidebar sibling of the toolbar. These regressions
     // attach a genuine Android window so a mistaken ancestor walk reaches ViewRootImpl.
     // BEGIN ARC HOLDER FOCUS REGRESSIONS
+
+    @Test
+    public void testArcCommandHeaderUsesPanelGeometryAndRestoresNativeBackground() {
+        mLocationBarTablet.setLayoutParams(new FrameLayout.LayoutParams(280, 100));
+        mHolderView.setLayoutParams(new LinearLayout.LayoutParams(0, 56, 1));
+        mLocationBarTablet.setArcCommandBar(new android.graphics.Rect(100, 100, 800, 400),
+                false, () -> {}, () -> {});
+        mLocationBarTablet.onFuseboxStateChanged(FuseboxState.COMPACT);
+        assertTrue(mLocationBarTablet.getBackground() instanceof android.graphics.drawable.ColorDrawable);
+        assertEquals(android.graphics.Color.TRANSPARENT,
+                ((android.graphics.drawable.ColorDrawable) mLocationBarTablet.getBackground()).getColor());
+        assertEquals(LayoutParams.MATCH_PARENT, mHolderView.getLayoutParams().height);
+        assertEquals(0, mLocationBarTablet.getPaddingTop());
+        mLocationBarTablet.setArcCommandBar(null, false, null, null);
+        mLocationBarTablet.onFuseboxStateChanged(FuseboxState.DISABLED);
+        assertFalse(mLocationBarTablet.getBackground() instanceof android.graphics.drawable.ColorDrawable);
+        assertNotEquals(LayoutParams.MATCH_PARENT, mHolderView.getLayoutParams().height);
+        assertEquals(280, mLocationBarTablet.getLayoutParams().width);
+        assertEquals(100, mLocationBarTablet.getLayoutParams().height);
+    }
+    @Test
+    public void arcTopBarIsRectangularAndStaysInsideItsNativeHolder() {
+        setupArcSidebarHierarchy();
+        mLocationBarTablet.setArcTopBar(true);
+        mLocationBarTablet.onFuseboxStateChanged(FuseboxState.EXPANDED);
+        LinearLayout.LayoutParams holder = (LinearLayout.LayoutParams) mHolderView.getLayoutParams();
+        assertEquals(0, holder.leftMargin);
+        assertEquals(0, holder.rightMargin);
+        assertEquals(0, holder.topMargin);
+        assertEquals(ViewGroup.LayoutParams.MATCH_PARENT, mLocationBarTablet.getLayoutParams().height);
+        assertEquals(0f, mHolderView.getTranslationZ(), 0f);
+        assertTrue(mLocationBarTablet.getBackground() instanceof android.graphics.drawable.ColorDrawable);
+        assertEquals(android.graphics.Color.TRANSPARENT,
+                ((android.graphics.drawable.ColorDrawable) mLocationBarTablet.getBackground()).getColor());
+        mLocationBarTablet.setArcTopBar(false);
+        mLocationBarTablet.onFuseboxStateChanged(FuseboxState.DISABLED);
+        assertTrue(mLocationBarTablet.getBackground() instanceof android.graphics.drawable.GradientDrawable
+                || mLocationBarTablet.getBackground() instanceof LocationBarBackgroundDrawable);
+    }
+
     private ActivityController<Activity> mArcActivityController;
 
     @After
@@ -1302,6 +1342,22 @@ public class LocationBarTabletUnitTest {
         assertFalse(((ViewGroup) mHolderView.getParent()).getClipChildren());
     }
     // END ARC HOLDER FOCUS REGRESSIONS
+
+    @Test
+    public void arcTopBarHoverKeepsRectangularSurface() {
+        setupArcSidebarHierarchy();
+        mLocationBarTablet.setArcTopBar(true);
+        UrlBar urlBar = mLocationBarTablet.findViewById(R.id.url_bar);
+        MotionEvent hover = MotionEvent.obtain(0, 0, MotionEvent.ACTION_HOVER_ENTER, 8, 8, 0);
+        hover.setSource(InputDevice.SOURCE_MOUSE);
+        try {
+            urlBar.dispatchGenericMotionEvent(hover);
+            assertNull(mLocationBarTablet.getForeground());
+        } finally {
+            hover.recycle();
+        }
+    }
+
 
     private void setupContainerAndMeasure(int containerWidth, int prefocusWidth, int leftPosition) {
         LinearLayout container = new LinearLayout(mActivity);

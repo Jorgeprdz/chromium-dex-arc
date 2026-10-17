@@ -488,7 +488,7 @@ elif name=='sudo' and args and args[0]=='timeout':
         self.assertIn('workflow_dispatch:',workflow)
         self.assertNotIn('push:',workflow)
         self.assertIn('needs: preflight',workflow)
-        self.assertIn('archium-recovery-stage.yml',workflow)
+        self.assertIn('archium-r5-stage.yml',workflow)
         self.assertNotIn('  stage2:',workflow)
         stage=(ROOT / '.github/workflows/archium-recovery-stage.yml').read_text()
         self.assertIn('ARCHIUM_SOURCE_COMMIT:',stage)

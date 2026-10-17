@@ -49,6 +49,8 @@ public final class ArchiumWindowMetricsTest extends Instrumentation {
             check((Integer) getMode.invoke(null, context) == 1, "Arc UI mode survives process restart");
             check(preferences.getInt("frame_color", 0) == 0xffd88474,
                     "frame preference survives process restart");
+            check((Integer) type.getMethod("getUiFont", Context.class).invoke(null, context) == 3,
+                    "UI font survives process restart");
             return;
         }
         preferences.edit().clear().putInt("frame_color", 0xffd88474).commit();
@@ -64,6 +66,21 @@ public final class ArchiumWindowMetricsTest extends Instrumentation {
         check((Integer) getMode.invoke(null, context) == 0, "unknown stored mode falls back to AUTO");
         check(preferences.getInt("frame_color", 0) == 0xffd88474, "mode keeps frame preference");
         setMode.invoke(null, context, 1);
+        type.getMethod("setUiFont", Context.class, int.class).invoke(null, context, 3);
+        runOnMainSync(() -> {
+            try {
+                android.widget.LinearLayout controls = new android.widget.LinearLayout(context);
+                android.widget.TextView title = new android.widget.TextView(context);
+                title.setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD);
+                controls.addView(title);
+                android.widget.TextView page = new android.widget.TextView(context);
+                android.graphics.Typeface pageFont = page.getTypeface();
+                type.getMethod("applyUiFont", android.view.View.class).invoke(null, controls);
+                check(title.getTypeface().equals(android.graphics.Typeface.create("monospace", android.graphics.Typeface.BOLD)),
+                        "Actual Android UI font preserves bold");
+                check(page.getTypeface() == pageFont, "UI font leaves page view unchanged");
+            } catch (Exception failure) { throw new AssertionError(failure); }
+        });
         check(preferences.edit().putInt("frame_color", 0xffd88474).commit(),
                 "flush synthetic preferences before process restart");
     }

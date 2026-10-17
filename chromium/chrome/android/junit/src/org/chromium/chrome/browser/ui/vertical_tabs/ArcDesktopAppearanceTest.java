@@ -31,6 +31,40 @@ import org.robolectric.shadows.ShadowDisplayManager;
 @GraphicsMode(GraphicsMode.Mode.LEGACY)
 @SQLiteMode(SQLiteMode.Mode.LEGACY)
 public class ArcDesktopAppearanceTest {
+    @Test
+    public void addressPositionDefaultsToSidebarAndSurvivesActivityRecreation() {
+        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
+        ArcDesktopAppearance.preferences(activity).edit().remove(ArcDesktopAppearance.ADDRESS_BAR_POSITION_KEY).commit();
+        assertEquals(ArcDesktopAppearance.ADDRESS_SIDEBAR, ArcDesktopAppearance.getAddressBarPosition(activity));
+        ArcDesktopAppearance.setAddressBarPosition(activity, ArcDesktopAppearance.ADDRESS_TOP);
+        Activity other = Robolectric.buildActivity(Activity.class).setup().get();
+        assertEquals(ArcDesktopAppearance.ADDRESS_TOP, ArcDesktopAppearance.getAddressBarPosition(other));
+        ArcDesktopAppearance.setAddressBarPosition(other, ArcDesktopAppearance.ADDRESS_SIDEBAR);
+        assertEquals(ArcDesktopAppearance.ADDRESS_SIDEBAR, ArcDesktopAppearance.getAddressBarPosition(activity));
+        activity.finish(); other.finish();
+    }
+    @Test
+    public void uiFontPersistsAndPreservesBoldWithoutChangingSiblingPageText() {
+        Activity a = Robolectric.buildActivity(Activity.class).setup().get();
+        ArcDesktopAppearance.preferences(a).edit().remove(ArcDesktopAppearance.UI_FONT_KEY).commit();
+        assertEquals(0, ArcDesktopAppearance.getUiFont(a));
+        android.widget.LinearLayout controls = new android.widget.LinearLayout(a);
+        android.widget.TextView title = new android.widget.TextView(a);
+        title.setTypeface(android.graphics.Typeface.DEFAULT, android.graphics.Typeface.BOLD);
+        controls.addView(title);
+        android.widget.TextView page = new android.widget.TextView(a);
+        android.graphics.Typeface pageFont = page.getTypeface();
+        ArcDesktopAppearance.setUiFont(a, 3);
+        ArcDesktopAppearance.applyUiFont(controls);
+        assertEquals(android.graphics.Typeface.create("monospace", android.graphics.Typeface.BOLD), title.getTypeface());
+        assertSame(pageFont, page.getTypeface());
+        Activity other = Robolectric.buildActivity(Activity.class).setup().get();
+        assertEquals(3, ArcDesktopAppearance.getUiFont(other));
+        ArcDesktopAppearance.preferences(a).edit().putInt(ArcDesktopAppearance.UI_FONT_KEY, 90).commit();
+        assertEquals(0, ArcDesktopAppearance.getUiFont(a));
+        a.finish(); other.finish();
+    }
+
     private Activity windowActivity(Activity activity) {
         Activity window = spy(activity);
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

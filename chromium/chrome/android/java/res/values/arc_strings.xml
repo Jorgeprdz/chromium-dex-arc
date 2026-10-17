@@ -9,7 +9,17 @@
     <string name="arc_color_format">Introduce un color como #336699</string>
     <string name="arc_google_login">Iniciar sesión en la web de Google</string>
     <string name="arc_autofill">Autocompletado de Android</string>
-    <string name="arc_interface">Interfaz de Archium</string>
+    <string name="arc_interface">Apariencia de Archium</string>
+    <string name="arc_address_bar_position">Posición de la barra de direcciones</string>
+    <string name="arc_address_sidebar">Barra lateral</string>
+    <string name="arc_address_top">Sobre la página</string>
+    <string name="arc_command_placeholder">Buscar o introducir URL…</string>
+    <string name="arc_command_actions">Acciones  Tab</string>
+    <string name="arc_command_switch_tab">Cambiar a pestaña</string>
+    <string name="arc_command_open">Abrir…</string>
+    <string name="arc_command_settings">Ajustes</string>
+    <string name="arc_command_toggle_sidebar">Mostrar/ocultar barra lateral</string>
+    <string name="arc_command_space">Cambiar Space</string>
     <string name="arc_interface_auto">Automática según la ventana</string>
     <string name="arc_interface_arc">Arc</string>
     <string name="arc_interface_mobile">Móvil</string>
@@ -50,4 +60,9 @@
         <item>Azul</item>
     </string-array>
     <string name="arc_new_tab">Nueva pestaña</string>
+    <string name="arc_ui_font">Tipografía de la interfaz</string>
+    <string name="arc_ui_font_system">Sans serif</string>
+    <string name="arc_ui_font_medium">Sans serif media</string>
+    <string name="arc_ui_font_serif">Serif</string>
+    <string name="arc_ui_font_mono">Monoespaciada</string>
 </resources>
