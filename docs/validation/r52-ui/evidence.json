@@ -1,0 +1,137 @@
+{
+  "implementation_sha": "0ab6204c9e785ef4d6ce1da456070f0a24f476fe",
+  "branch": "assistant/archium-r5-2-ui-fixes",
+  "device_runtime": "PENDING_NEW_APK",
+  "qemu": "QEMU_ABI_BLOCKED",
+  "build_dispatched": false,
+  "supervisor_modified": false,
+  "scope": "source_methods_and_consumer_branches_real_Robolectric_shadows_explicit_Chromium_adapters_not_APK_GPU",
+  "logs": {
+    "sidebar-red": {
+      "sha256": "315546144a6ebb6f173796bc6954330b8f204dd3ae51292f2078003e0de5de52",
+      "junit": [],
+      "python": [],
+      "failure_summary": [
+        "Tests run: 12,  Failures: 8"
+      ]
+    },
+    "shrink-red": {
+      "sha256": "8459b0fe0328f909f87f93c993623efe07a446d7138825bc9d617f889fa33564",
+      "junit": [],
+      "python": [],
+      "failure_summary": [
+        "Tests run: 14,  Failures: 2"
+      ]
+    },
+    "collections-red": {
+      "sha256": "4cc129e63af9a930f555a9a01d7d862fc418495940524b31c4a93926baa5dd19",
+      "junit": [],
+      "python": [],
+      "failure_summary": [
+        "Tests run: 16,  Failures: 2"
+      ]
+    },
+    "density-red": {
+      "sha256": "4ea6a4b067b22a112e969c95d1ace6123b31c477a0d8e56d83e7f71969ad174d",
+      "junit": [],
+      "python": [],
+      "failure_summary": [
+        "Tests run: 18,  Failures: 2"
+      ]
+    },
+    "sidebar-verified-green": {
+      "sha256": "3719bf38abfd2f3f9b630bfe6792954392a6c4b773248198867e9fe5a929c43d",
+      "junit": [
+        "18"
+      ],
+      "python": [],
+      "failure_summary": []
+    },
+    "dialog-green": {
+      "sha256": "cfce98794e1fc3bfc876cee80f54f9883bbf977a4ebe4ce48dc00e1e79de9fc2",
+      "junit": [
+        "18"
+      ],
+      "python": [],
+      "failure_summary": []
+    },
+    "transitions-final": {
+      "sha256": "0b041e93779559e694d311977b3d4d2041e8f4b9fd8fda0df17d72606c082ac0",
+      "junit": [
+        "12"
+      ],
+      "python": [],
+      "failure_summary": []
+    },
+    "frame-final": {
+      "sha256": "511f50bfebfed9e81e7aece59cc22c870c2eac1a3657c7e3858b51168f3c049f",
+      "junit": [
+        "10"
+      ],
+      "python": [],
+      "failure_summary": []
+    },
+    "extensions-final": {
+      "sha256": "22deed2db4befd5af84b54756a7d23432d31121ed5d0ccd67a018dad57444aa5",
+      "junit": [
+        "2"
+      ],
+      "python": [],
+      "failure_summary": []
+    },
+    "shell-final": {
+      "sha256": "fddd0318f55cc9320d0536c65317c21b20a8bbcf7879c8d793ee097ce0398949",
+      "junit": [
+        "6"
+      ],
+      "python": [],
+      "failure_summary": []
+    },
+    "preparation-verified": {
+      "sha256": "050c098e8acbfc238844571a956bfafa1d9b8c06e8f80bb9e5b1ce9ff88e6d34",
+      "junit": [],
+      "python": [
+        "5"
+      ],
+      "failure_summary": []
+    },
+    "static-contracts": {
+      "sha256": "4b15ffafc18859db763ba2ac5b0aff6618177f75bf5ae329f4a197c409269f30",
+      "junit": [],
+      "python": [
+        "10"
+      ],
+      "failure_summary": []
+    },
+    "checkpoint-transition": {
+      "sha256": "ed800182730e0f3307b621634744c05c5f6df95a859cb7e9e5a42dd1e1bcd86b",
+      "junit": [],
+      "python": [
+        "17"
+      ],
+      "failure_summary": []
+    },
+    "tab-identity": {
+      "sha256": "785dc9004ab79245af084b1aadad054190bfa8d26768122b88b3e0cf41890f35",
+      "junit": [],
+      "python": [
+        "4"
+      ],
+      "failure_summary": []
+    },
+    "toolbar-regression": {
+      "sha256": "2c9255969f3636a6ee032a19dacc1a4fe81409db323ee180315aee8561536332",
+      "junit": [],
+      "python": [
+        "6"
+      ],
+      "failure_summary": []
+    },
+    "sessions-green": {
+      "sha256": "69f5be88fe8ab43b492c246f72350c3134240d465a81dacfe8e9a77aec4c230e",
+      "junit": [],
+      "python": [],
+      "failure_summary": []
+    }
+  }
+}

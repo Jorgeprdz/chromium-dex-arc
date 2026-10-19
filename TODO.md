@@ -1,13 +1,17 @@
 # Archium — TODO pendiente para Codex (2026-10-17)
 
-**Estado:** PENDIENTE / BACKLOG. Documento de seguimiento, no equivale a reparación implementada ni a prueba superada.
+**Estado:** IMPLEMENTACIÓN LOCAL + PENDIENTES DE VALIDACIÓN. Una casilla completada indica únicamente el alcance descrito; pruebas host/Robolectric no equivalen a aceptación visual de una APK.
 
 **Repositorio:** `Jorgeprdz/chromium-dex-arc`  
 **Rama de trabajo de este TODO:** `assistant/archium-r5-arc-experience`  
+**Rama candidata de correcciones:** `assistant/archium-r5-2-ui-fixes` (aislada; rama base sin modificar).
 **Entorno observado:** Samsung Galaxy S25, Android, Archium; validar tanto modo teléfono como Samsung DeX.  
 **Motor de referencia documentado:** Chromium 157.0.8086.0 (confirmar pin y HEAD efectivos antes de trabajar).  
 
 > **Orden:** estabilidad/renderizado primero; después pulido estético. Evitar un build pesado antes de aislar causas y probar cambios pequeños. No modificar `main` ni `feat/arc-desktop` durante el diagnóstico sin autorización.
+
+**Alcance vigente autorizado:** correcciones de diálogos e interfaz fuera de Amazon.
+Amazon conserva su bloqueo; no se reabre su investigación ni se autoriza un build por esta actualización.
 
 ## P0 — R5.1: estabilidad del contenido, compositor y ventanas
 
@@ -27,6 +31,9 @@
 
 **Aceptación:** mensaje y acciones visibles y operables, restauración del foco y retiro del oscurecimiento tras cerrar. Verificar móvil y escritorio, con teclado/mouse y toque.
 
+- [x] ~~Corregir el gate del presenter cuando el stack activo de browser controls está ausente~~ — fix `5184755`, 18 pruebas locales PASS; incluido en la rama candidata y su parche.
+- [ ] Integrar en una APK mediante build incremental autorizado y verificar visibilidad, apertura/cierre/cancelación y foco en Galaxy. **P0-02 no está cerrado en la APK instalada.**
+
 ### [ ] P0-03 — Desaparece el contenido web y solo queda la title bar
 
 **Reproducción reportada:** ocasionalmente desaparece toda la zona del sitio y permanece únicamente la barra superior/título de Archium.
@@ -35,12 +42,15 @@
 
 **Aceptación:** superficie y pestaña recuperables en transiciones, resize y cambios de foco sin perder navegación/estado/formularios. Capturar logs del proceso y del compositor; no afirmar causa sin evidencia.
 
+- [x] ~~Corregir el recorte vacío/obsoleto de Surface tras resize~~ — corrección parcial anterior con regresiones locales; no cierra todos los escenarios de P0-03.
+- [ ] Completar aceptación física de minimizar/restaurar, resize y cambio teléfono↔DeX. Se conserva el PASS previo del usuario de recuperación entre apps/pestañas, sin presentarlo como una prueba nueva.
+
 ### [ ] P0-04 — Causa raíz, pruebas y entrega segura
 
-- [ ] Registrar HEAD, APK/build instalado, versiones de Android, forma de ventana y condiciones de reproducción.
-- [ ] Montar una página determinista con imágenes, tipografías, scroll, transform/sticky/fixed, canvas, `alert/confirm/prompt` y `<dialog>`.
+- [x] ~~Registrar HEAD, APK/build instalado, versiones de Android y condiciones~~ — informes R5.2–R5.2E; cada ejecución nueva deberá confirmar de nuevo su binario.
+- [x] ~~Preparar páginas deterministas y preservar el HTML original de diálogos~~ — fixtures y diagnósticos existentes; su disponibilidad no significa que todas las pruebas hayan pasado.
 - [ ] Comparar teléfono / DeX, ventanas estrechas / maximizadas, pestañas normal / incógnito; realizar scroll, abrir/cerrar popup, resize, minimizar/restaurar y volver a foco.
-- [ ] Recolectar logs/trazas (GPU, renderer, compositor y Android WindowManager) eliminando tokens, cuentas y contenido privado.
+- [x] ~~Recolectar logs/trazas y conservar evidencia privada con resúmenes depurados~~ — límites de atribución y capturas excluidas documentados; causa gráfica no demostrada.
 - [ ] Mostrar RED antes del fix y GREEN después con pruebas relevantes; tests host no sustituyen validación visual de APK real.
 - [ ] Arreglar mínimamente el componente responsable, sin workarounds globales ni cambios visuales ajenos.
 - [ ] Usar build incremental **solo después** de diagnóstico, preflight, SHA exacto, gates y checkpoint compatible; solicitar aprobación antes de despachar el workflow.
@@ -50,11 +60,17 @@
 ## P1 — R5.2: pulido visual acordado el 16-oct-2026
 
 - [ ] **Sidebar comprimida:** revisar ancho útil, aire entre pestañas, iconos y controles, especialmente en modo compacto y ventanas estrechas.
+  - [x] ~~Evitar que la falta de altura de colecciones compacte la navegación de un rail ancho~~ — regresión local 216×500 y separación de presupuestos.
+  - [x] ~~Centrar «+» según su fila real e insets, también durante colapso con bounds antiguos~~ — implementación local; falta aceptación con APK.
 - [ ] **Jerarquía y consistencia visual:** homologar radios, espaciados, hover, foco, contraste y estado de pestaña seleccionada; evitar densidad excesiva.
+  - [x] ~~Retirar hover/pressed/foco visual de controles Arc deshabilitados~~ — feedback preservado en controles habilitados; pruebas de drawables locales.
 - [ ] **Contenido web aparentemente pequeño:** medir viewport CSS, device scale, zoom, RDS/UA Client Hints y `text autosizing` antes de cambiar escalas; respetar elección del usuario y evitar zoom forzado.
 - [ ] **Controles de ventana:** mejorar visibilidad, contraste, hit targets y alineación sin tapar contenido ni interferir con controles nativos de Android/DeX.
 - [ ] **Expandir/contraer sidebar:** pulir animación, reflow, controles y persistencia, sin saltos de viewport ni recreación de pestañas.
 - [ ] **Zona inferior/footer:** alinear iconos/acciones, espacios, clipping y remanentes visuales del borde inferior (incluida la cuña previamente reportada cuando corresponda).
+  - [x] ~~Asignar ancho de extensiones descontando el menú nativo medido y los insets~~ — no asumir menú de 44dp; actualización tras layout.
+  - [x] ~~Redondear por separado los dos botones del footer con densidad fraccionaria~~ — reserva correcta de 232px a densidad 2.625, en lugar de 231px.
+  - [ ] Validar footer, carga asíncrona de extensiones y cuña inferior en APK real; el arreglo de ancho no demuestra resuelto el recorte de Surface.
 
 **Decisiones visuales a preservar:** color durazno aprobado, identidad Arc/Archium Portal, pestañas verticales, estética ligera. No añadir sombras pesadas, bordes excesivos ni cristal/blur costoso sin soporte comprobado. Conservar navegación real de Chromium, bookmarks, perfiles y extensiones.
 
@@ -196,3 +212,30 @@ Sin nuevos runs, integración del fix nativo ni cambios de flags/checkpoints.
 
 [Decisión final y punto de cierre](docs/validation/R5_2_FINAL_GO_NO_GO.md).
 **No continuar automáticamente ni abrir otra fase. Esperar decisión del usuario.**
+
+## Correcciones autorizadas de interfaz — posteriores al NO-GO de Amazon
+
+El usuario autorizó continuar con fixes fuera de Amazon y actualizar este TODO.
+Implementación **0ab6204c9e785ef4d6ce1da456070f0a24f476fe**, en la rama candidata;
+no se modificaron la rama base, el arreglo de identidad/reordenamiento de pestañas
+ni los tres archivos del fix de diálogos 5184755.
+
+- [x] ~~Implementar navegación responsive, presupuesto de footer y centrado de fila compacta~~ — cambios mínimos en ArcDesktopCoordinator.
+- [x] ~~Añadir regresiones de colecciones sin altura, bounds antiguos y densidad fraccionaria~~ — RED observado y GREEN final: 18 casos nuevos en SDK30/36.
+- [x] ~~Verificar las regresiones locales del lote~~ — 66 casos Robolectric y 37 comprobaciones Python enfocadas; alcance y adaptadores en el informe.
+- [x] ~~Regenerar y comprobar el parche de 128 archivos y compilación aislada Android API37~~ — originales y pin intactos; no equivale a build Chromium/GN/JNI.
+- [x] ~~Verificar estado/store/acciones/sesión en límites nativos sintéticos~~ — no acredita persistencia de perfiles reales tras reiniciar el navegador.
+
+### Pendientes nuevos o precisados
+
+- [ ] Compilación incremental del candidato, sólo tras autorización y validación del checkpoint real compatible. **No se despachó ningún run.**
+- [ ] APK con fix nativo de diálogos: alert/confirm/prompt visibles, cancelación, retorno de valores, recuperación de foco y lifecycle de ventanas.
+- [ ] Validar en Galaxy el footer tras medir/cargar el menú y extensiones, a distintas densidades; comprobar que los listeners no dejan trabajo tras destroy.
+- [ ] Aceptación física de sidebar ancha/baja, compacta, hover y colapso repetido; preservar selección y WebContents.
+- [ ] Completar el pulido visual restante de filas, espaciados y controles de ventana; las correcciones localizadas no cierran todo P1.
+- [ ] Calibrar viewport/escalado con evidencia y respetando el zoom nativo elegido por el usuario; no se aplicó zoom forzado.
+- [ ] Verificar marcadores y descargas reales, apertura del archivo y persistencia completa de sesiones tras cierre/reinicio; no sustituirlo por confirms del HTML.
+- [ ] Cerrar P0-03 y la cuña inferior con evidencia del dispositivo; se conserva el arreglo parcial de clipping.
+- [ ] QEMU_ABI_BLOCKED y aceptación GPU/DeX pendientes. Amazon continúa UNRESOLVED_GRAPHICS_BLOCKER y fuera de este lote.
+
+[Implementación, RED/GREEN y límites de validación](docs/validation/R5_2_UI_FIXES.md).
