@@ -223,3 +223,22 @@ Official execution references: [Codex non-interactive mode](https://developers.o
 - New native build/checkpoint restore and QEMU execution are pending the exact
   dispatched run. Real device/DeX and installation remain unverified. Runtime
   dispatch/heartbeat records hold the live run identity without changing its SHA.
+
+## Preflight repair after run 39208550652
+
+The run stopped in the host suite before checkpoint restoration: the legacy caller
+contract test still required `needs: preflight`, while the reviewed caller requires
+`[authorize, preflight]`. The test now checks both prerequisites, their result
+conditions and authenticated continuation. No native compilation ran.
+
+A second regression caused the supervisor to classify the quoted workflow inside
+an AssertionError as infrastructure failure. Classification now excludes assertion
+payloads from infrastructure keyword matching, while separate infrastructure
+diagnostics still block repair. Both failures were reproduced RED, then GREEN;
+the saved actual event now classifies as REPAIR. The source checkpoint, Chromium
+pin, toolchain and GN args are unchanged. Relaunch preserves original run and
+repair budgets; full byte restoration remains a CI gate.
+
+Repair validation: full host suite **320 tests PASS** (755.158 seconds), workflow
+lint PASS, Python compilation PASS, Android API preparation PASS. These are host
+and isolated resource checks, not evidence of a new APK or GPU runtime acceptance.

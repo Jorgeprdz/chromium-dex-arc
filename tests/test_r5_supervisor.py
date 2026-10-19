@@ -18,6 +18,11 @@ class SupervisorTests(unittest.TestCase):
   self.assertEqual(m.classify('java.lang.NullPointerException in Robolectric suite')[0],'REPAIR')
   self.assertEqual(m.classify('FAILED (failures=1)')[0],'REPAIR')
   self.assertEqual(m.classify('unknown technical outcome')[0],'BLOCKED')
+ def test_assertion_quoted_workflow_does_not_mask_technical_failure(self):
+  m=self.module()
+  failure="FAIL: test_workflow_exposes_source_identity_once_and_has_no_clean_continuation\nAssertionError: 'needs: preflight' not found in 'checkpoint source authorization signature expired'\nFAILED (failures=1)"
+  self.assertEqual(m.classify(failure)[0],'REPAIR')
+  self.assertEqual(m.classify(failure+'\nHTTP 403 Bad credentials')[0],'BLOCKED')
  def test_wrong_or_missing_thread_is_rejected(self):
   m=self.module()
   self.assertTrue(m.verify_thread_events([{'type':'thread.started','thread_id':'exact'},{'type':'turn.completed'}],'exact'))

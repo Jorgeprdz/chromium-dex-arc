@@ -21,7 +21,10 @@ monitor=importlib.util.module_from_spec(spec);spec.loader.exec_module(monitor)
 def classify(text):
     blocked=r'Checkpoint (groups|part|source|artifact)|Incompatible checkpoint|checkpoint.*(missing|truncated|mismatch|corrupt|expired|differs)|STALLED|SHA256SUMS|BLOCKED_CHECKPOINT|QEMU_ABI_BLOCKED|No space left|Insufficient (disk|free inodes)|quota|billing|HTTP (401|403)|Bad credentials|expired|signature|certificate|authorization|permission denied'
     technical=r'FAILURES!!!|FAILED \(|FAIL:|java\.lang\.\w+(Exception|Error)|error:|undefined reference|unresolved.*JNI|AssertionError|FAILED:|Robolectric.*fail|javac.*fail|test.*FAIL|RESOURCE.*FAIL|PRODUCT_REGRESSION|crash.*reproduc'
-    if re.search(blocked,text,re.I): return 'BLOCKED','INFRASTRUCTURE_OR_AUTHORIZATION'
+    # Assertion payloads can quote entire workflows, including infrastructure terms.
+    # Classify real infrastructure diagnostics on other lines, not quoted source.
+    diagnostics='\n'.join(line for line in text.splitlines() if 'AssertionError:' not in line)
+    if re.search(blocked,diagnostics,re.I): return 'BLOCKED','INFRASTRUCTURE_OR_AUTHORIZATION'
     lines=[line for line in text.splitlines() if re.search(technical,line,re.I)]
     if not lines: return 'BLOCKED','UNCLASSIFIED_FAILURE'
     key=re.sub(r'\b[0-9a-f]{8,40}\b|\d+','N',lines[0])
