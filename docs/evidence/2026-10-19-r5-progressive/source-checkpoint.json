@@ -1,0 +1,134 @@
+{
+  "schema": 1,
+  "workspace": "/home/runner/work/_temp/chromium-archium",
+  "commit": "0abfc9f03e34c23762190365ccb0cf6f9e5c3260",
+  "revision": "cfd94726b7b5fb48aedcc32662f2f3fbdbadec35",
+  "tag": "archium-checkpoint-38511423805-1",
+  "parts": [
+    {
+      "name": "checkpoint-0000.tar.gz.part",
+      "bytes": 1073741824,
+      "sha256": "111733f0a9ebddbf84790c04a59e5e4b89987ce2777f97304eeb36ab5fe1a1f5"
+    },
+    {
+      "name": "checkpoint-0001.tar.gz.part",
+      "bytes": 1073741824,
+      "sha256": "140f80ab9afeb413d383f7e346fdf5c2e3fdbd8e503b7f5fb0d76923bba26df5"
+    },
+    {
+      "name": "checkpoint-0002.tar.gz.part",
+      "bytes": 1073741824,
+      "sha256": "96165b63bc0fbc1180a4fad91401088e7b29749f33c4429f2b6e700abe30d294"
+    },
+    {
+      "name": "checkpoint-0003.tar.gz.part",
+      "bytes": 1073741824,
+      "sha256": "d496a30364373173f9bda86196221af5849762512cbff213719b7660ca46f2e7"
+    },
+    {
+      "name": "checkpoint-0004.tar.gz.part",
+      "bytes": 1073741824,
+      "sha256": "834bfc85b6ab7a2b5cf954651227ccb1c4d54f99ba2098a327fdb47721f132af"
+    },
+    {
+      "name": "checkpoint-0005.tar.gz.part",
+      "bytes": 1073741824,
+      "sha256": "837bbd49fbf9c755196d188702389f2a0d5a846f01a627278920157984878bf8"
+    },
+    {
+      "name": "checkpoint-0006.tar.gz.part",
+      "bytes": 1073741824,
+      "sha256": "e97e2c8f4b02ec90ccbf6abd92569dc078d2f78e3e51ee3bc3c1be7d29a7f8c9"
+    },
+    {
+      "name": "checkpoint-0007.tar.gz.part",
+      "bytes": 1073741824,
+      "sha256": "0ff18a33502c38515756bfa59e1d3de332847a9006bf5370014f07851417cc10"
+    },
+    {
+      "name": "checkpoint-0008.tar.gz.part",
+      "bytes": 1073741824,
+      "sha256": "8c5ef6ed7ce9460f6953f3cc09aab35545471a275d3a66f1a6a59782219337c5"
+    },
+    {
+      "name": "checkpoint-0009.tar.gz.part",
+      "bytes": 1073741824,
+      "sha256": "8d02bc9098bf250f0d31246dfb44994785da67625183e49e2e0f3f5b825b17ee"
+    },
+    {
+      "name": "checkpoint-0010.tar.gz.part",
+      "bytes": 1073741824,
+      "sha256": "b39e8d0f34561c6e7b68dd119286592e684046d41366ec133eeb203f3246adb1"
+    },
+    {
+      "name": "checkpoint-0011.tar.gz.part",
+      "bytes": 1073741824,
+      "sha256": "07a4d2ec181cf4e65ad7e63da7ac453a9a7253aee182be5dd2e9f4cfa680f648"
+    },
+    {
+      "name": "checkpoint-0012.tar.gz.part",
+      "bytes": 1073741824,
+      "sha256": "faf6a3b6366be7a097696b86f884b61832ed94b6e0030a050a5526b4cba9ff08"
+    },
+    {
+      "name": "checkpoint-0013.tar.gz.part",
+      "bytes": 1073741824,
+      "sha256": "94c2307055169d070d6ef038b2358810a4d326d180ff01c89be975741e119e22"
+    },
+    {
+      "name": "checkpoint-0014.tar.gz.part",
+      "bytes": 1073741824,
+      "sha256": "26ed974f572a33c3fcdf6f4240b2b4a132f48f3d2f5520c5c6499de0217f6cd3"
+    },
+    {
+      "name": "checkpoint-0015.tar.gz.part",
+      "bytes": 1073741824,
+      "sha256": "de1880cdce17ed33373e6051e5c70a03c3a95a9d6a293717751ee7644a1cd469"
+    },
+    {
+      "name": "checkpoint-0016.tar.gz.part",
+      "bytes": 1073741824,
+      "sha256": "02c4cd47212d073c01453e582ef7d6fe197162d108efd323da75574219f381f2"
+    },
+    {
+      "name": "checkpoint-0017.tar.gz.part",
+      "bytes": 1073741824,
+      "sha256": "67e4dd14b9f2d2b56a4fd411dc590a03a0a5b2cc9b03e0d43755c707a4391810"
+    },
+    {
+      "name": "checkpoint-0018.tar.gz.part",
+      "bytes": 1073741824,
+      "sha256": "57930c60e2978c26acc7567e29a1f46377e77072436e2b9dc4be50dfee55402c"
+    },
+    {
+      "name": "checkpoint-0019.tar.gz.part",
+      "bytes": 1073741824,
+      "sha256": "c6b37038d4ca51324bec9b7d59b1f0d63e20c631ffcab032cb402ec48b243cba"
+    },
+    {
+      "name": "checkpoint-0020.tar.gz.part",
+      "bytes": 1073741824,
+      "sha256": "fbb9de292fec2a21f94b94ed3eb6d5fdc8ed9496acfe3367965652204a8b3344"
+    },
+    {
+      "name": "checkpoint-0021.tar.gz.part",
+      "bytes": 1073741824,
+      "sha256": "ea4c6a5114b245b918f7822961447448207217216e5bc5cf4fc4f57b6e0b705b"
+    },
+    {
+      "name": "checkpoint-0022.tar.gz.part",
+      "bytes": 1073741824,
+      "sha256": "89275581123d56ba3bd5e03f5e5427cce63ac12da9b9c60a335e874ca2342726"
+    },
+    {
+      "name": "checkpoint-0023.tar.gz.part",
+      "bytes": 1073741824,
+      "sha256": "4037a22b94817935c0e3e4ce39b09ce121190029e6943dc43e5d5a8637284a2e"
+    },
+    {
+      "name": "checkpoint-0024.tar.gz.part",
+      "bytes": 738433212,
+      "sha256": "e406e8504b6aaedda57bb809adf95894dfe602ae15f7eaa9705754e5cee3c402"
+    }
+  ]
+}

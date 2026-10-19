@@ -1,7 +1,18 @@
 name: Archium R5 Arc experience incremental build
+run-name: Archium R5 ${{ inputs.dispatch_id }}
 on:
   workflow_dispatch:
     inputs:
+      dispatch_id:
+        description: Unique monitor dispatch nonce
+        required: false
+        default: manual
+        type: string
+      skip_preflight:
+        description: Reuse same-source preflight only with a verified controlled checkpoint
+        required: false
+        default: false
+        type: boolean
       expected_sha:
         description: Exact reviewed recovery SHA
         required: true
@@ -51,14 +62,40 @@ jobs:
           if active:
               raise SystemExit('Concurrent native run rejected: ' + str(active))
           PY
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        if: inputs.skip_preflight
+        with:
+          persist-credentials: false
+      - name: Authenticate exact same-source continuation
+        if: inputs.skip_preflight
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EXPECTED_SHA: ${{ inputs.expected_sha }}
+          SOURCE_COMMIT: ${{ inputs.source_commit }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          SOURCE_CHECKPOINT: ${{ inputs.source_checkpoint }}
+        run: |
+          set -euo pipefail
+          test "$SOURCE_COMMIT" = "$EXPECTED_SHA"
+          [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]
+          gh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" --name Archium-R5-stage-receipt --dir "$RUNNER_TEMP/continuation"
+          python3 scripts/check-r5-continuation.py --receipt "$RUNNER_TEMP/continuation/stage-receipt.json" --expected-sha "$EXPECTED_SHA" --source-checkpoint "$SOURCE_CHECKPOINT" --source-run-id "$SOURCE_RUN_ID"
   preflight:
     needs: authorize
+    if: ${{ !inputs.skip_preflight }}
     uses: ./.github/workflows/archium-r5-preflight.yml
   build:
-    needs: preflight
+    needs: [authorize, preflight]
+    if: ${{ always() && needs.authorize.result == 'success' && (needs.preflight.result == 'success' || needs.preflight.result == 'skipped') }}
     uses: ./.github/workflows/archium-r5-stage.yml
     with:
       expected_sha: ${{ inputs.expected_sha }}
       source_checkpoint: ${{ inputs.source_checkpoint }}
       source_commit: ${{ inputs.source_commit }}
       source_run_id: ${{ inputs.source_run_id }}
+  qemu:
+    needs: build
+    if: ${{ needs.build.result == 'success' }}
+    uses: ./.github/workflows/archium-r5-qemu.yml
+    with:
+      expected_sha: ${{ inputs.expected_sha }}

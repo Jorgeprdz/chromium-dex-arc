@@ -1,0 +1,21 @@
+test_only_same_source_successfully_packed_controlled_incomplete_can_skip (test_r5_continuation.ContinuationTest.test_only_same_source_successfully_packed_controlled_incomplete_can_skip) ... ERROR
+
+======================================================================
+ERROR: test_only_same_source_successfully_packed_controlled_incomplete_can_skip (test_r5_continuation.ContinuationTest.test_only_same_source_successfully_packed_controlled_incomplete_can_skip)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/Archium-R5/tests/test_r5_continuation.py", line 9, in test_only_same_source_successfully_packed_controlled_incomplete_can_skip
+    m=self.module();r=dict(schema=1,outcome='BUILD_INCOMPLETE',expected_sha='a'*40,run_id='42',new_checkpoint='archium-checkpoint-42-1',new_checkpoint_commit='a'*40,exit_code=0,recoverable=True,checkpoint_verified=True,pack_verified=True)
+      ^^^^^^^^^^^^^
+  File "/workspace/Archium-R5/tests/test_r5_continuation.py", line 7, in module
+    s=importlib.util.spec_from_file_location('continue_r5',ROOT/'scripts/check-r5-continuation.py');m=importlib.util.module_from_spec(s);s.loader.exec_module(m);return m
+                                                                                                                                         ^^^^^^^^^^^^^^^^^^^^^^^
+  File "<frozen importlib._bootstrap_external>", line 936, in exec_module
+  File "<frozen importlib._bootstrap_external>", line 1073, in get_code
+  File "<frozen importlib._bootstrap_external>", line 1130, in get_data
+FileNotFoundError: [Errno 2] No such file or directory: '/workspace/Archium-R5/scripts/check-r5-continuation.py'
+
+----------------------------------------------------------------------
+Ran 1 test in 0.002s
+
+FAILED (errors=1)

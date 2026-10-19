@@ -1,0 +1,45 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Archium R5 deterministic compositor probe</title>
+<style>
+:root{font:16px system-ui;color:#182024;background:#fff4ed}body{margin:0}
+header{position:sticky;top:0;background:#ffd4b6;padding:12px;z-index:2}
+button{font:inherit;margin:4px;padding:10px}#metrics{white-space:pre-wrap;font:12px monospace}
+main{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:16px;padding:16px}
+article{background:white;border:2px solid #293c59;padding:10px;min-height:180px}
+img{width:100%;height:100px;object-fit:contain}article:nth-child(3n){transform:translateZ(0)}
+article:nth-child(5n){contain:paint}#fixed{position:fixed;right:8px;bottom:8px;background:#182024;color:white;padding:8px}
+dialog{background:white;color:black;border:3px solid #293c59}dialog::backdrop{background:#0008}
+</style>
+<header>ARCHIUM R5 — deterministic probe
+<div><button id="alert">alert</button><button id="confirm">confirm</button><button id="prompt">prompt</button><button id="dialog">HTML dialog</button><button id="scroll">Scroll cycle</button><button id="touch">Touch 0</button></div>
+<output id="metrics"></output></header>
+<main></main><div id="fixed">fixed / glyphs ÁÉ ñ 0123456789</div>
+<dialog><p>HTML dialog visible</p><form method="dialog"><button>Close / restore focus</button></form></dialog>
+<script>
+'use strict';
+const $=s=>document.querySelector(s), state={scrollCycles:0,touches:0,dialogResult:'none'};
+function metrics(){
+ const v=visualViewport;
+ $('#metrics').textContent=JSON.stringify({...state,innerWidth,innerHeight,dpr:devicePixelRatio,
+  visualWidth:v?.width,visualHeight:v?.height,scale:v?.scale,scrollY,
+  visibility:document.visibilityState,focus:document.hasFocus()},null,1);
+}
+const svg='<svg xmlns="http://www.w3.org/2000/svg" width="240" height="100"><rect width="240" height="100" fill="#ffd4b6"/><path d="M0 0L240 100M240 0L0 100" stroke="#293c59" stroke-width="3"/><circle cx="120" cy="50" r="32" fill="#4c8470"/><text x="8" y="90" font-size="16">IMAGE / 0123456789</text></svg>';
+for(let i=0;i<80;i++){
+ const card=document.createElement('article');
+ card.innerHTML='<strong>Tile '+String(i).padStart(3,'0')+' — ÁÉ ñ</strong><p>Repeated text / scroll / raster 0123456789</p>';
+ const img=new Image();img.src='data:image/svg+xml,'+encodeURIComponent(svg);card.append(img);
+ if(i%7===0){const c=document.createElement('canvas');c.width=240;c.height=60;const x=c.getContext('2d');x.fillStyle='#293c59';x.fillRect(0,0,240,60);x.fillStyle='white';x.font='20px monospace';x.fillText('CANVAS '+i,8,38);card.append(c)}
+ $('main').append(card);
+}
+$('#alert').onclick=()=>{alert('Archium R5 — JavaScript alert visible');state.dialogResult='alert closed';metrics()};
+$('#confirm').onclick=()=>{state.dialogResult='confirm '+confirm('Archium R5 — confirm visible');metrics()};
+$('#prompt').onclick=()=>{state.dialogResult=prompt('Archium R5 — prompt visible','fixture');metrics()};
+$('#dialog').onclick=()=>$('dialog').showModal();
+$('#touch').onclick=()=>{$('#touch').textContent='Touch '+(++state.touches);metrics()};
+$('#scroll').onclick=()=>{let step=0;function tick(){scrollTo(0,(step%2?0:document.documentElement.scrollHeight));metrics();if(++step<12)setTimeout(tick,300);else{state.scrollCycles++;metrics()}}tick()};
+addEventListener('resize',metrics);addEventListener('scroll',metrics,{passive:true});
+addEventListener('focus',metrics);document.addEventListener('visibilitychange',metrics);metrics();
+</script>

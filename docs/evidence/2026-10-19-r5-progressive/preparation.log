@@ -1,0 +1,30 @@
+Pinned patch: all 125 files applied and hashes matched
+ArchiumWindowClass: boundaries, reversible resize and repeated layout passed
+ArcDesktopPolicy: policy, palette and rounded-content contract cases defined
+ArcSidebarState: identity, Spaces, restore authority, closed pins, folders, roundtrip and invalid operations passed
+ArcSidebarStore: restart, draft isolation, failed write, private memory and damaged state passed
+ArcTabActions: reopen/select/close, native failure, failed metadata retry and lifecycle passed (command boundary simulated)
+ArcCollectionsController: native pin/select/unpin, stable conversion, Spaces/folders, reopen and failures passed (command boundary simulated)
+ArchiumAutofillPolicy: provider routing tests passed
+ArchiumPasswordCsv: 39 synthetic cases passed
+New Android adapters: isolated SDK API compilation passed (dependency contracts stubbed)
+NullAccountManagerDelegate: unavailable account operation reported without exception
+PASS: password settings lifecycle/import summary (synthetic Android/dialog/JNI boundaries)
+PASS two-windows
+PASS pending-undo
+PASS pending-unknown
+PASS partial-restore
+PASS incomplete-selector
+PASS archive-custom
+PASS profile-isolation
+PASS uncertain-profile
+PASS local-unregistered
+PASS authority-unavailable
+PASS destroyed-callbacks
+ArcNativeTabSession: production adapter/state/store/actions passed at synthetic native boundaries
+.....
+----------------------------------------------------------------------
+Ran 5 tests in 1.897s
+
+OK
+Full Chromium build/native tests and browser password/Arc/adaptive/input acceptance remain pending

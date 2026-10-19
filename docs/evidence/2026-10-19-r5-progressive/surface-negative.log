@@ -1,0 +1,39 @@
+Note: .test-build/surface-negative/SurfaceClipProbe.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+JUnit version 4.13.2
+.E.E.E.E
+Time: 10.087
+There were 4 failures:
+1) surfaceResizeUpdatesCropAndReplacementRemovesListener[30](SurfaceClipProbe)
+java.lang.AssertionError: expected:<Rect(52, 0 - 400, 600)> but was:<Rect(0, 0 - 348, 600)>
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.failNotEquals(Assert.java:835)
+	at org.junit.Assert.assertEquals(Assert.java:120)
+	at org.junit.Assert.assertEquals(Assert.java:146)
+	at SurfaceClipProbe.surfaceResizeUpdatesCropAndReplacementRemovesListener(SurfaceClipProbe.java:125)
+2) initiallyEmptySurfaceRecoversWithoutHolderResize[30](SurfaceClipProbe)
+java.lang.AssertionError: Surface grew but stale empty clip still hides WebContents expected:<Rect(52, 0 - 400, 600)> but was:<Rect(0, 0 - 0, 0)>
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.failNotEquals(Assert.java:835)
+	at org.junit.Assert.assertEquals(Assert.java:120)
+	at SurfaceClipProbe.initiallyEmptySurfaceRecoversWithoutHolderResize(SurfaceClipProbe.java:115)
+3) surfaceResizeUpdatesCropAndReplacementRemovesListener(SurfaceClipProbe)
+java.lang.AssertionError: expected:<Rect(52, 0 - 400, 600)> but was:<Rect(0, 0 - 348, 600)>
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.failNotEquals(Assert.java:835)
+	at org.junit.Assert.assertEquals(Assert.java:120)
+	at org.junit.Assert.assertEquals(Assert.java:146)
+	at SurfaceClipProbe.surfaceResizeUpdatesCropAndReplacementRemovesListener(SurfaceClipProbe.java:125)
+	Suppressed: org.robolectric.android.internal.AndroidTestEnvironment$UnExecutedRunnablesException: Main looper has queued unexecuted runnables. This might be the cause of the test failure. You might need a shadowOf(Looper.getMainLooper()).idle() call.
+4) initiallyEmptySurfaceRecoversWithoutHolderResize(SurfaceClipProbe)
+java.lang.AssertionError: Surface grew but stale empty clip still hides WebContents expected:<Rect(52, 0 - 400, 600)> but was:<Rect(0, 0 - 0, 0)>
+	at org.junit.Assert.fail(Assert.java:89)
+	at org.junit.Assert.failNotEquals(Assert.java:835)
+	at org.junit.Assert.assertEquals(Assert.java:120)
+	at SurfaceClipProbe.initiallyEmptySurfaceRecoversWithoutHolderResize(SurfaceClipProbe.java:115)
+	Suppressed: org.robolectric.android.internal.AndroidTestEnvironment$UnExecutedRunnablesException: Main looper has queued unexecuted runnables. This might be the cause of the test failure. You might need a shadowOf(Looper.getMainLooper()).idle() call.
+
+FAILURES!!!
+Tests run: 4,  Failures: 4
+
+SCOPE=delivered_clip_lifecycle_Robolectric_NOT_GPU_OR_APK_RUNTIME

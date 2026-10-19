@@ -6087,7 +6087,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopC
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
-@@ -0,0 +1,1318 @@
+@@ -0,0 +1,1322 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -7145,6 +7145,7 @@ new file mode 100644
 +    private void restoreClippedSurface() {
 +        if (mClippedSurface == null) return;
 +        mClippedSurface.removeOnAttachStateChangeListener(mSurfaceAttachStateListener);
++        mClippedSurface.removeOnLayoutChangeListener(mContentLayoutListener);
 +        mClippedSurface.setOutlineProvider(mClippedSurfaceOriginalOutlineProvider);
 +        mClippedSurface.setClipToOutline(mClippedSurfaceOriginalClipToOutline);
 +        mClippedSurface.setClipBounds(mClippedSurfaceOriginalClipBounds);
@@ -7171,6 +7172,9 @@ new file mode 100644
 +        mClippedSurfaceOriginalClipToOutline = activeSurface.getClipToOutline();
 +        mClippedSurfaceOriginalClipBounds = activeSurface.getClipBounds();
 +        activeSurface.addOnAttachStateChangeListener(mSurfaceAttachStateListener);
++        // The surface can acquire its size after the holder's layout, or resize
++        // independently on recreation. Refresh an initially empty/stale crop then.
++        activeSurface.addOnLayoutChangeListener(mContentLayoutListener);
 +        activeSurface.setOutlineProvider(mArcContentOutlineProvider);
 +        activeSurface.setClipToOutline(true);
 +        activeSurface.setClipBounds(new Rect(arcClipLeftForView(activeSurface), 0,

@@ -75,6 +75,18 @@ jobs:
       - name: S2-S4 blocking gates and incremental build
         id: compile
         run: bash scripts/build-archium-r5.sh --work
+      - name: Record genuine failure if no native receipt exists
+        if: always()
+        run: |
+          python3 scripts/r5-stage-receipt.py --out "$RUNNER_TEMP/chromium-archium/checkout/src/out/Archium" --receipt "$RUNNER_TEMP/stage-receipt.json" --exit-code 1 --only-if-absent
+      - name: Publish exact stage receipt
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Archium-R5-stage-receipt
+          path: ${{ runner.temp }}/stage-receipt.json
+          if-no-files-found: error
+          retention-days: 14
       - name: Preserve checkpoint group 00
         if: always() && steps.compile.outputs.saved_group_00 == 'true'
         uses: actions/upload-artifact@v4

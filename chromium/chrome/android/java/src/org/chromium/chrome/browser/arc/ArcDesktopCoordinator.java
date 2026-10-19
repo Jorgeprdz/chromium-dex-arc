@@ -1055,6 +1055,7 @@ public final class ArcDesktopCoordinator {
     private void restoreClippedSurface() {
         if (mClippedSurface == null) return;
         mClippedSurface.removeOnAttachStateChangeListener(mSurfaceAttachStateListener);
+        mClippedSurface.removeOnLayoutChangeListener(mContentLayoutListener);
         mClippedSurface.setOutlineProvider(mClippedSurfaceOriginalOutlineProvider);
         mClippedSurface.setClipToOutline(mClippedSurfaceOriginalClipToOutline);
         mClippedSurface.setClipBounds(mClippedSurfaceOriginalClipBounds);
@@ -1081,6 +1082,9 @@ public final class ArcDesktopCoordinator {
         mClippedSurfaceOriginalClipToOutline = activeSurface.getClipToOutline();
         mClippedSurfaceOriginalClipBounds = activeSurface.getClipBounds();
         activeSurface.addOnAttachStateChangeListener(mSurfaceAttachStateListener);
+        // The surface can acquire its size after the holder's layout, or resize
+        // independently on recreation. Refresh an initially empty/stale crop then.
+        activeSurface.addOnLayoutChangeListener(mContentLayoutListener);
         activeSurface.setOutlineProvider(mArcContentOutlineProvider);
         activeSurface.setClipToOutline(true);
         activeSurface.setClipBounds(new Rect(arcClipLeftForView(activeSurface), 0,

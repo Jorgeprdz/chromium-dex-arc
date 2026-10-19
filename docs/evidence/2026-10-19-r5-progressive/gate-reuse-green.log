@@ -1,0 +1,6 @@
+test_same_source_continuation_reuses_completed_host_and_robolectric_gates (test_r5_build_routing.R5BuildRoutingTests.test_same_source_continuation_reuses_completed_host_and_robolectric_gates) ... ok
+
+----------------------------------------------------------------------
+Ran 1 test in 12.321s
+
+OK

@@ -1,0 +1,18 @@
+test_apk_requires_hash_report_signature_package_and_exclusive_abi (test_r5_monitor.MonitorTests.test_apk_requires_hash_report_signature_package_and_exclusive_abi) ... ok
+test_bounds_and_stall (test_r5_monitor.MonitorTests.test_bounds_and_stall) ... ok
+test_controlled_incomplete_failure_requires_successful_compiler_and_uploads (test_r5_monitor.MonitorTests.test_controlled_incomplete_failure_requires_successful_compiler_and_uploads) ... ok
+test_deadline_uses_poll_start_not_finish (test_r5_monitor.MonitorTests.test_deadline_uses_poll_start_not_finish) ... ok
+test_dispatch_intent_persisted_before_network_and_not_repeated (test_r5_monitor.MonitorTests.test_dispatch_intent_persisted_before_network_and_not_repeated) ... ok
+test_duplicate_lock_refused_and_state_atomic (test_r5_monitor.MonitorTests.test_duplicate_lock_refused_and_state_atomic) ... ok
+test_failed_github_run_never_downloads_or_installs (test_r5_monitor.MonitorTests.test_failed_github_run_never_downloads_or_installs) ... ok
+test_failure_is_never_recoverable (test_r5_monitor.MonitorTests.test_failure_is_never_recoverable) ... ok
+test_incomplete_requires_exit_zero_and_exact_identity (test_r5_monitor.MonitorTests.test_incomplete_requires_exit_zero_and_exact_identity) ... ok
+test_manifest_count_is_exact (test_r5_monitor.MonitorTests.test_manifest_count_is_exact) ... ok
+test_nonce_recovers_only_exact_run (test_r5_monitor.MonitorTests.test_nonce_recovers_only_exact_run) ... ok
+test_qemu_identity_and_failure (test_r5_monitor.MonitorTests.test_qemu_identity_and_failure) ... ok
+test_repair_dispatch_preserves_older_checkpoint_tuple_and_reruns_preflight (test_r5_monitor.MonitorTests.test_repair_dispatch_preserves_older_checkpoint_tuple_and_reruns_preflight) ... ok
+
+----------------------------------------------------------------------
+Ran 13 tests in 0.071s
+
+OK

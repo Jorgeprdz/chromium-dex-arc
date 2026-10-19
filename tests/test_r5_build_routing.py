@@ -18,7 +18,7 @@ elif name=='python3' and args and args[0].endswith('archium-checkpoint.py'):
  if os.environ.get('RESTORE_EXIT'):sys.exit(int(os.environ['RESTORE_EXIT']))
  w=pathlib.Path(args[2]);s=w/'checkout/src';(s/'out/Archium/apks').mkdir(parents=True)
  (s/'out/Archium/apks/ChromePublic.apk').write_bytes(b'synthetic routing artifact, not APK')
- (s/'out/Archium/args.gn').write_text('previous GN args')
+ (s/'out/Archium/args.gn').write_text('incompatible GN args' if os.environ.get('BAD_ARGS') else (pathlib.Path(os.environ['GITHUB_WORKSPACE'])/'config/archium-args.gn').read_text())
  (s/'out/Archium/build.ninja').write_text('build libchrome: phony\n')
  (s/'LICENSE').write_text('synthetic routing license')
  (s/'build').mkdir();(s/'build/install-build-deps.sh').write_text('#!/bin/sh\nexit 0\n');(s/'build/install-build-deps.sh').chmod(0o755)
@@ -107,11 +107,30 @@ class R5BuildRoutingTests(unittest.TestCase):
  def test_split_steps_restore_only_once(self):
   r=self.build('--prepare');self.assertEqual(r.returncode,0,r.stderr);self.assertEqual(self.targets(),[])
   r=self.build('--work');self.assertEqual(r.returncode,0,r.stdout+r.stderr);self.assertEqual(sum('restore' in c for c in self.calls()),1)
+ def test_same_source_continuation_reuses_completed_host_and_robolectric_gates(self):
+  r=self.build();self.assertEqual(r.returncode,0,r.stdout+r.stderr)
+  def expensive():
+   return [c for c in self.calls() if c[0]=='run_chrome_junit_tests' or any('archium-test-gates.py' in a for a in c)]
+  before=expensive()
+  r=self.build('--work');self.assertEqual(r.returncode,0,r.stdout+r.stderr)
+  self.assertEqual(before,expensive())
+  self.assertIn('GATE_REUSED=PASS',r.stdout)
  def test_work_requires_same_job_restore_receipt(self):self.assert_blocked(self.build('--work'),2)
  def test_restore_failure_never_packs_partial_tree(self):
   self.assert_blocked(self.build(RESTORE_EXIT='7'),7);self.assertFalse(any('pack' in c for c in self.calls()))
- def test_wrong_chromium_pin_blocks_transition(self):self.assert_blocked(self.build(BAD_PIN='c'*40),2)
- def test_wrong_depot_pin_blocks_transition(self):self.assert_blocked(self.build(BAD_DEPOT='c'*40),2)
+ def test_incompatible_gn_args_stop_before_transition_without_overwrite(self):
+  r=self.build(BAD_ARGS='1')
+  self.assert_blocked(r,2)
+  self.assertIn('BLOCKED_CHECKPOINT_INCOMPATIBLE',r.stderr)
+  args=self.root/'runner/chromium-archium/checkout/src/out/Archium/args.gn'
+  self.assertEqual(args.read_text(),'incompatible GN args')
+  self.assertFalse(any(any('transition-archium-patches.py' in arg for arg in c) for c in self.calls()))
+ def test_wrong_chromium_pin_blocks_transition(self):
+  r=self.build(BAD_PIN='c'*40);self.assert_blocked(r,2)
+  self.assertIn('BLOCKED_CHECKPOINT_INCOMPATIBLE',r.stderr)
+ def test_wrong_depot_pin_blocks_transition(self):
+  r=self.build(BAD_DEPOT='c'*40);self.assert_blocked(r,2)
+  self.assertIn('BLOCKED_CHECKPOINT_INCOMPATIBLE',r.stderr)
  def test_failed_transition_blocks_gn_and_native(self):self.assert_blocked(self.build(TRANSITION_EXIT='8'),8)
  def test_media_failure_blocks_all_native_actions(self):
   self.assert_blocked(self.build(MEDIA_EXIT='11'),11);self.assertEqual(self.targets(),[])

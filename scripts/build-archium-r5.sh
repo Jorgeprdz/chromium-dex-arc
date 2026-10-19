@@ -55,6 +55,11 @@ save_checkpoint() {
             printf 'saved_%s=true\n' "${group##*/}" | tr '-' '_' >> "$GITHUB_OUTPUT"
         done
     fi
+    local receipt_args=()
+    (( pack_status == 0 )) && receipt_args+=(--packed)
+    "$host_python" "$GITHUB_WORKSPACE/scripts/r5-stage-receipt.py" \
+        --out "$build_workspace/checkout/src/out/Archium" \
+        --receipt "$RUNNER_TEMP/stage-receipt.json" --exit-code "$status" "${receipt_args[@]}"
     printf 'complete=false\n' >> "$GITHUB_OUTPUT"
     exit "$status"
 }
@@ -101,16 +106,18 @@ if [[ "$phase" != --work ]]; then
     export DEPOT_TOOLS_UPDATE=0
     run_prepare bash "$build_workspace/depot_tools/ensure_bootstrap"
     cd "$build_workspace/checkout/src"
-    [[ "$(git rev-parse HEAD)" == "$chromium_revision" ]] || die 'Restored Chromium pin mismatch.'
+    [[ "$(git rev-parse HEAD)" == "$chromium_revision" ]] ||
+        die 'BLOCKED_CHECKPOINT_INCOMPATIBLE: restored Chromium pin mismatch.'
     [[ "$(git -C "$build_workspace/depot_tools" rev-parse HEAD)" == "$depot_revision" ]] ||
-        die 'Restored depot_tools pin mismatch.'
+        die 'BLOCKED_CHECKPOINT_INCOMPATIBLE: restored depot_tools pin mismatch.'
+    # A changed configuration needs an explicitly compatible checkpoint. Never
+    # overwrite restored args: that would silently invalidate its native outputs.
+    cmp -s "$GITHUB_WORKSPACE/config/archium-args.gn" out/Archium/args.gn ||
+        die 'BLOCKED_CHECKPOINT_INCOMPATIBLE: restored GN args differ; outputs preserved.'
     install_deps
     run_prepare git -C "$GITHUB_WORKSPACE" fetch --depth 1 origin "$ARCHIUM_SOURCE_COMMIT"
     run_prepare python3 "$GITHUB_WORKSPACE/scripts/transition-archium-patches.py" "$PWD" \
         --source-commit "$ARCHIUM_SOURCE_COMMIT" --implementation-commit "$GITHUB_SHA"
-    if ! cmp -s "$GITHUB_WORKSPACE/config/archium-args.gn" out/Archium/args.gn; then
-        cp "$GITHUB_WORKSPACE/config/archium-args.gn" out/Archium/args.gn
-    fi
     run_prepare "$host_python" "$GITHUB_WORKSPACE/scripts/integrate-archium-portal.py" "$PWD"
     run_prepare gn gen out/Archium
     printf '%s\n%s\n%s\n' "$GITHUB_SHA" "$job_started" "$deadline" > "$prepared_marker"
@@ -160,6 +167,21 @@ gate() {
     fi
     return "$result"
 }
+# These receipts are part of the checkpoint. Reuse only for the exact source,
+# args and pinned toolchain; a source/configuration change gets a fresh namespace.
+gate_key=$(printf '%s\n' "$GITHUB_SHA" "$chromium_revision" "$depot_revision" \
+    "$(sha256sum out/Archium/args.gn)" | sha256sum | cut -d' ' -f1)
+gate_dir="$PWD/out/Archium/.archium-r5-gates/$gate_key"
+mkdir -p "$gate_dir"
+gate_once() {
+    local name="$1"; shift
+    if [[ -f "$gate_dir/$name" ]]; then
+        printf 'GATE_REUSED=PASS name=%s source=%s\n' "$name" "$GITHUB_SHA"
+        return
+    fi
+    gate "$@"
+    printf '%s\n' "$GITHUB_SHA" > "$gate_dir/$name"
+}
 stage S2
 ninja_query="$PWD/third_party/ninja/ninja"
 [[ -x "$ninja_query" ]] || die 'Pinned Ninja query tool absent.'
@@ -188,12 +210,17 @@ android_jar="$PWD/third_party/android_sdk/public/platforms/android-$platform_ver
 # Validate the complete host suite under the restored PATH/toolchain before native work.
 # A failure here has no new native outputs to save: retain the remote source.
 host_preflight_status=0
-run_work TERM "$host_seconds" false \
-    "$host_python" "$GITHUB_WORKSPACE/scripts/archium-test-gates.py" host-preflight \
-    --out "$PWD/out/Archium" --android-jar "$android_jar" || host_preflight_status=$?
-(( host_preflight_status == 0 )) || exit "$host_preflight_status"
+if [[ -f "$gate_dir/host_preflight" ]]; then
+    printf 'GATE_REUSED=PASS name=host_preflight source=%s\n' "$GITHUB_SHA"
+else
+    run_work TERM "$host_seconds" false \
+        "$host_python" "$GITHUB_WORKSPACE/scripts/archium-test-gates.py" host-preflight \
+        --out "$PWD/out/Archium" --android-jar "$android_jar" || host_preflight_status=$?
+    (( host_preflight_status == 0 )) || exit "$host_preflight_status"
+    printf '%s\n' "$GITHUB_SHA" > "$gate_dir/host_preflight"
+fi
 compile_slice chrome_public_apk__compile_resources
-gate "$host_python" "$GITHUB_WORKSPACE/scripts/check-portal-chromium-resources.py" \
+gate_once portal_resources "$host_python" "$GITHUB_WORKSPACE/scripts/check-portal-chromium-resources.py" \
     --out "$PWD/out/Archium" --aapt2 "$sdk_tools/aapt2" --report "$PWD/out/Archium/archium-real-resources.json"
 targets="$PWD/out/Archium/archium-java-targets.txt"
 gate python3 "$GITHUB_WORKSPACE/scripts/archium-java-preflight.py" --out "$PWD/out/Archium" --targets-file "$targets"
@@ -224,7 +251,8 @@ for suite in \
     'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.TabVerticalViewBinderUnitTest.*' \
     'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabRailLayoutUnitTest.*'; do
     # Assertions belong to this subprocess only. Later compilers inherit no -ea.
-    gate env JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:-} -ea" "$runner" -f "$suite"
+    suite_key=$(printf '%s' "$suite" | sha256sum | cut -d' ' -f1)
+    gate_once "robolectric_$suite_key" env JAVA_TOOL_OPTIONS="${JAVA_TOOL_OPTIONS:-} -ea" "$runner" -f "$suite"
 done
 printf 'ROBOLECTRIC_PASS=PASS scope=early_Chromium_suites\n'
 compile_slice libchrome
@@ -238,7 +266,7 @@ fi
 printf 'JNI_LINK_PASS=PASS scope=real_APK_libchrome_link_and_symbols\n'
 stage S3
 printf 'PASSWORD_TESTS=DEPRECATED OUT_OF_SCOPE; no native test PASS claimed\n'
-gate "$host_python" "$GITHUB_WORKSPACE/scripts/archium-test-gates.py" robolectric --out "$PWD/out/Archium" --android-jar "$android_jar"
+gate_once final_robolectric "$host_python" "$GITHUB_WORKSPACE/scripts/archium-test-gates.py" robolectric --out "$PWD/out/Archium" --android-jar "$android_jar"
 stage S4
 compile_slice chrome_public_apk
 apk="$PWD/out/Archium/apks/ChromePublic.apk"
@@ -271,7 +299,11 @@ Path(sys.argv[1]).write_text(json.dumps({
     'PERFORMANCE': 'NOT_RUN',
     'chromium_pin': 'cfd94726b7b5fb48aedcc32662f2f3fbdbadec35',
     'APK_VERIFIED': 'PASS', 'ROBOLECTRIC_PASS': 'PASS', 'JNI_LINK_PASS': 'PASS',
+    'mandatory_gates': 'PASS',
     'ARCHIUM_PASSWORD_FEATURE': 'DEPRECATED', 'ARCHIUM_PASSWORD_TESTS': 'OUT_OF_SCOPE',
     'ANDROID_RUNTIME': 'NOT_EXECUTED'}, indent=2) + '\n')
 PY
 printf 'APK_VERIFIED=PASS\ncomplete=true\n' >> "$GITHUB_OUTPUT"
+"$host_python" "$GITHUB_WORKSPACE/scripts/r5-stage-receipt.py" \
+    --out "$PWD/out/Archium" --receipt "$RUNNER_TEMP/stage-receipt.json" \
+    --exit-code 0 --complete

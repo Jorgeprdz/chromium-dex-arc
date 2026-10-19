@@ -67,3 +67,24 @@
 5. Cerrar P0; **solo entonces** trabajar P1 por lotes pequeños verificables.
 
 **Documentos relacionados:** `docs/ARCHIUM_DESKTOP_ENGINE_R1_PERFORMANCE_RENDERING_2026-10-12.md` y verificaciones R3/R4 en `docs/` cuando existan en la rama. Sus planes no constituyen pruebas de que P0 ya esté arreglado.
+
+## Avance de diagnóstico — 2026-10-19
+
+Estado: **PREPARADO PARA BUILD INCREMENTAL SUPERVISADO**. Los anexos QEMU y
+Autonomous Supervisor sustituyen la exigencia de pruebas físicas durante esta
+ejecución; Galaxy/DeX quedan PENDING_DEVICE_VALIDATION. El estado vivo y los
+RUN_ID se guardan en el registro privado del supervisor.
+Se reprodujo y corrigió un recorte vacío/obsoleto de Surface al cambiar su tamaño
+sin resize del holder (4 regresiones Robolectric SDK30/36 RED → GREEN y mutación
+negativa RED). Esto no cierra P0-03 ni demuestra causa común con P0-01/P0-02.
+Se añadió una página determinista de renderizado/diálogos y un bloqueo de GN args
+incompatibles que conserva los outputs del checkpoint. R5.2 sigue pendiente.
+
+Evidencia, checkpoint candidato y límites de validación:
+[Auditoría R5 progresiva](docs/ARCHIUM_R5_PROGRESSIVE_2026-10-19.md).
+
+El supervisor continúa únicamente checkpoints completos y compatibles, con seis
+runs/10 horas y dos reparaciones por causa. Codex se reanuda por ID exacto solo ante
+fallos técnicos reparables o instalación realmente confirmada. QEMU incompatible
+se registra BLOCKED, sin PASS simulado, instalación ni builds limpios. No se cierran
+las tareas P0/P1 por haber compilado o instalado una APK.

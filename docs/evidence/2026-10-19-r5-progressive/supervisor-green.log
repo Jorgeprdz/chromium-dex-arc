@@ -1,0 +1,15 @@
+test_receipt_requires_system_evidence_and_exact_installed_identity (test_r5_supervisor.InstallationReceiptTests.test_receipt_requires_system_evidence_and_exact_installed_identity) ... ok
+test_real_subprocess_contract_checks_thread_and_replays_without_second_execution (test_r5_supervisor.ResumeExecutionTests.test_real_subprocess_contract_checks_thread_and_replays_without_second_execution) ... ok
+test_wrong_thread_from_subprocess_is_rejected (test_r5_supervisor.ResumeExecutionTests.test_wrong_thread_from_subprocess_is_rejected) ... ok
+test_approved_repair_restarts_dispatch_without_polling_old_run (test_r5_supervisor.SupervisorReviewRegressions.test_approved_repair_restarts_dispatch_without_polling_old_run) ... ok
+test_audit_result_can_replay_after_interruption (test_r5_supervisor.SupervisorReviewRegressions.test_audit_result_can_replay_after_interruption) ... ok
+test_unrelated_system_text_cannot_authorize_install_success (test_r5_supervisor.SupervisorReviewRegressions.test_unrelated_system_text_cannot_authorize_install_success) ... ok
+test_infrastructure_never_wakes_codex (test_r5_supervisor.SupervisorTests.test_infrastructure_never_wakes_codex) ... ok
+test_limits (test_r5_supervisor.SupervisorTests.test_limits) ... ok
+test_session_must_exist_exactly_and_idle_state_is_observed (test_r5_supervisor.SupervisorTests.test_session_must_exist_exactly_and_idle_state_is_observed) ... ok
+test_wrong_or_missing_thread_is_rejected (test_r5_supervisor.SupervisorTests.test_wrong_or_missing_thread_is_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 10 tests in 0.310s
+
+OK
