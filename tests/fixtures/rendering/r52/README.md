@@ -37,3 +37,48 @@ It has not been wired into Chromium. To prove the proposed native-dialog gate,
 an additional adapter must record BrowserControlsStateProvider hidden ratio,
 heights/offsets, pending-enter flag, observer callbacks and add/remove events.
 Do not alter flags or skip the gate simply to make a host test green.
+
+## R5.2D layer boundary probe
+
+`r52d-layer-reuse.html` is an additional synthetic page, not a replacement for
+the original popup diagnostics. It has 96 cards, sixteen shared 768² PNG sources,
+sticky/fixed elements, fractional transforms, multiply blending and paint
+containment. `window.r52d.cycle()` performs twelve scroll/recycle steps and returns
+to the original phase and scroll position. Await `window.r52d.ready` first.
+Manually resize the window and restore its original geometry before comparing
+explicit card ROIs. Different phases, viewports, DPRs or image placement are not
+a valid pixel oracle. This new fixture has not been executed on Android yet.
+
+After serving that exact filename on localhost and placing it visibly in front,
+an operator can allocate a temporary CDP forward and run:
+
+```sh
+adb -s SERIAL forward tcp:0 localabstract:chrome_devtools_remote
+node scripts/r52d-layer-probe.cjs RETURNED_PORT /private/new-probe
+adb -s SERIAL forward --remove tcp:RETURNED_PORT
+```
+
+Use Node 22 or later. The probe performs no navigation, scroll, reload, Android
+input or ADB commands. It selects only the synthetic localhost pathname. The
+explicit `--amazon-homepage` argument instead permits only the exact Amazon MX
+HTTPS homepage, without query or fragment; this mode requires an available
+device and authorized homepage reproduction. Never run it on account/form pages.
+It records at most 512 layers, three visible-image layer replays, bounded metadata
+and private screenshots. It does not save text, titles, source URLs or inputs.
+All output is private: screenshots can contain personalized images. Do not commit
+or upload them. A metadata-stable pair is not a GPU resource identity guarantee.
+
+`makeSnapshot` runs inspector lifecycle work and `replaySnapshot` uses a fresh
+software bitmap in the pinned implementation. It is not a live tile/texture
+readback. Treat clean replay plus corrupt composition as a narrower hypothesis,
+not proof of the first failing GPU stage. Re-check after-snapshot presentation
+because the act of inspecting may alter state.
+
+`r52d-frame-timeline.pbtxt` prepares a separate eight-second gfx-only Perfetto
+capture with process-name metadata. It has not been executed on Android. Raw
+process/window information stays private. Use a unique output under
+`/data/misc/perfetto-traces`, never stop another session, coordinate the action
+within the capture, and inspect loss/import statistics before interpreting it.
+This config does not by itself collect Chromium tile/resource IDs. Query
+`Tracing.getCategories` and arrange an independently bounded Chromium trace for
+that boundary; neither trace availability nor capture success is a visual PASS.

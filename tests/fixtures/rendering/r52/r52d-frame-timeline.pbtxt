@@ -1,0 +1,15 @@
+# Independent 8-second capture. Output must use /data/misc/perfetto-traces/UUID.
+# Private raw output; no frame correctness, fence, GPU tile or performance PASS.
+# Do not stop or reconfigure another trace. Narrow gfx-only atrace reduces volume.
+buffers { size_kb: 16384 fill_policy: RING_BUFFER }
+duration_ms: 8000
+max_file_size_bytes: 33554432
+write_into_file: true
+data_sources { config { name: "android.surfaceflinger.frametimeline" } }
+data_sources { config { name: "linux.process_stats"
+  process_stats_config { scan_all_processes_on_start: true }
+} }
+data_sources { config { name: "linux.ftrace" ftrace_config {
+  atrace_categories: "gfx"
+  atrace_apps: "app.archium.android"
+} } }
