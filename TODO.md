@@ -110,3 +110,22 @@ las tareas P0/P1 por haber compilado o instalado una APK.
 [Informe forense y límites de validación](docs/validation/R5_1_FORENSIC_REPORT.md).
 QEMU del build evaluado: **QEMU_ABI_BLOCKED**, 32 casos BLOCKED; GPU/DeX siguen
 PENDING_DEVICE_VALIDATION. No cerrar estos fallos por superar build o tests host.
+
+## R5.2 — investigación aislada y ensayo original (2026-10-19)
+
+- [ ] P0-01 Amazon: causa NOT_PROVEN; fixture/oracle y captura acotada preparados,
+  sin GREEN visual ni cambio arbitrario de GPU.
+- [ ] P0-02: RED real en DeX con alert/confirm/prompt, incluidos seis mosaicos de
+  ruta nativa. Scrim visible, contenedor GONE/0×0 y sin ModalDialogView durante
+  evento abierto. Hipótesis prioritaria: espera del gate de browser controls;
+  falta observar hiddenRatio/callback interno antes de una corrección.
+- [x] Ejecutar individualmente los doce mosaicos del HTML original intacto en
+  Galaxy con capturas/dumps correlacionados: HTML modal/no modal/overlay,
+  window.open y selector Android visibles. Este check sólo certifica el ensayo,
+  no cierra P0-02 ni valida marcadores reales o descargas generales.
+- [ ] GREEN posterior a reparación y validación GPU/DeX completa pendientes.
+  QEMU_ABI_BLOCKED permanece; no hubo ejecución Android QEMU.
+
+[Informe GPU/diálogos](docs/validation/R5_2_GPU_DIALOG_FORENSIC.md) y
+[matriz del HTML original](docs/validation/R5_2_PHONE_HTML_DIAGNOSTICS.md).
+Rama activa/run 39296066030 preservados; ningún build nuevo desde investigación.

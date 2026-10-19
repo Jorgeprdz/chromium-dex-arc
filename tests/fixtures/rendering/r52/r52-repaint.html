@@ -1,0 +1,37 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Archium R5.2 — deterministic repaint fixture</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#e8edf2;color:#172534;font:16px system-ui}
+header{position:sticky;top:0;z-index:5;padding:8px;background:#f4c5ad}
+button{padding:8px;margin:3px;font:inherit}main{padding:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:12px}
+article{min-height:220px;background:white;border:3px solid #273e55;padding:8px;overflow:hidden}
+article:nth-child(3n){transform:translateZ(0)}article:nth-child(5n){contain:paint}
+img{width:100%;height:145px;object-fit:contain}#fixed{position:fixed;bottom:4px;right:4px;background:#fdc;color:#123;padding:4px;z-index:6}
+#log{max-height:100px;overflow:auto;font:11px monospace;white-space:pre-wrap}
+</style>
+<header>
+<strong>R5.2 local fixture — no accounts or external content</strong>
+<div id="actions">
+<button data-action="phase">Change paint phase A/B</button><button data-action="scroll">Scroll cycle</button><button data-action="export">Export metadata</button>
+</div><output id="status"></output><div id="log"></div>
+</header>
+<main id="tiles"></main><div id="fixed">Fixed anchor R5.2 — 0123456789</div>
+<script>
+'use strict';
+const events=[], state={phase:0,cycle:0};
+const $=s=>document.querySelector(s);
+function record(event){const row={event,monotonicMs:performance.now(),utc:new Date().toISOString(),phase:state.phase,cycle:state.cycle,width:innerWidth,height:innerHeight,dpr:devicePixelRatio,scrollY,visibility:document.visibilityState,focused:document.hasFocus(),activeId:document.activeElement?.id||'none'};events.push(row);if(events.length>250)events.shift();$('#log').textContent=events.slice(-3).map(r=>JSON.stringify(r)).join('\n');$('#status').textContent=`Phase ${state.phase?'B':'A'} / cycle ${state.cycle} / ${innerWidth}×${innerHeight} DPR ${devicePixelRatio}`}
+const palette=['#e62846','#14aad2','#edbf26','#42b96f'];
+function image(index){const c=document.createElement('canvas');c.width=1024;c.height=1024;const x=c.getContext('2d');for(let row=0;row<8;row++)for(let col=0;col<8;col++){x.fillStyle=palette[(row+col+index+state.phase)%4];x.fillRect(col*128,row*128,128,128)}x.fillStyle='white';x.fillRect(120,440,784,144);x.fillStyle='#123';x.font='72px monospace';x.fillText(`PHASE ${state.phase?'B':'A'} / ${index}`,140,540);return c.toDataURL('image/png')}
+function repaint(){const sources=[0,1,2,3].map(image);document.querySelectorAll('article img').forEach((img,i)=>img.src=sources[i%4]);document.querySelectorAll('article strong').forEach((s,i)=>s.textContent=`Unique tile ${String(i).padStart(3,'0')} / phase ${state.phase?'B':'A'} / ÁÉ ñ 0123`);record('paint-requested');Promise.all([...document.querySelectorAll('article img')].map(img=>img.decode().then(()=>true,()=>false))).then(decoded=>record(decoded.every(Boolean)?'images-decoded':'image-decode-failure'));requestAnimationFrame(()=>requestAnimationFrame(()=>record('two-animation-frames-not-presentation-proof')))}
+for(let i=0;i<80;i++){const card=document.createElement('article');card.id='tile-'+i;const title=document.createElement('strong');card.append(title,document.createElement('img'));const p=document.createElement('p');p.textContent='Deterministic glyph row / sticky + fixed / 0123456789';card.append(p);$('#tiles').append(card)}
+$('#actions').onclick=e=>{const action=e.target.dataset.action;if(!action)return;record(action+'-requested');
+ if(action==='phase'){state.phase^=1;repaint()}
+ if(action==='scroll'){let step=0;const start=scrollY;function tick(){scrollTo(0,step%2?0:document.documentElement.scrollHeight);if(++step<10)setTimeout(tick,350);else{scrollTo(0,start);state.cycle++;record('scroll-returned')}}tick()}
+ if(action==='export'){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify({kind:'JAVASCRIPT_METADATA_NOT_LOGCAT',events},null,2)],{type:'application/json'}));a.download='r52-fixture-events.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
+ requestAnimationFrame(()=>record(action+'-dom-observed'));
+};
+for(const event of ['resize','focus','blur'])addEventListener(event,()=>record(event));document.addEventListener('visibilitychange',()=>record('visibilitychange'));repaint();
+</script>

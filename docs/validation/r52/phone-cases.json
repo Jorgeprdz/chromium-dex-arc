@@ -1,0 +1,851 @@
+{
+  "original_sha256": "ea568bda931099858fc8d24336507d194bb60a6a0ef0e07ef7843fec87427dac",
+  "device": "Galaxy S25 / SM-S931B / Android 17",
+  "adb_serial_is_physical_phone_despite_name": true,
+  "cases": [
+    {
+      "case": "dex-alert",
+      "action": "test-alert",
+      "result": "FAIL",
+      "scope": "Visibility of this original-fixture case only",
+      "started_utc": "2026-10-19T18:11:55.294Z",
+      "capture_utc": "2026-10-19T18:11:57.152Z",
+      "finished_utc": "2026-10-19T18:11:57.514Z",
+      "display_id": 35,
+      "uri": "content://media/external/file/113091",
+      "javascript_open_types": [
+        "alert"
+      ],
+      "javascript_close_count": 1,
+      "screenshot_private_basename": "dex-alert-during.PRIVATE.png",
+      "screenshot_sha256": "9f82859b498d1ef33745a9a990bc06b7dc55320da9397a0edc4db3bf79cbbbe0",
+      "dialog": {
+        "state": "CONTAINER_GONE_ZERO_BOUNDS",
+        "cause": "NOT_PROVEN",
+        "container": {
+          "kind": "android.widget.FrameLayout",
+          "view_id": "159df3b",
+          "resource": "app:id/tab_modal_dialog_container",
+          "bounds": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visibility": "GONE",
+          "flags": "GFE...C..",
+          "z": "NOT_AVAILABLE",
+          "elevation": "NOT_AVAILABLE",
+          "window_token": "NOT_AVAILABLE_FROM_VIEW_DUMP"
+        },
+        "note": "A closed container may be GONE/zero; synchronize with an active open event."
+      },
+      "modal_view_count": 0,
+      "bounds": [],
+      "logs": [
+        {
+          "private_basename": "dex-alert-during-activity.PRIVATE.txt",
+          "sha256": "09fcddd7735f2260ac9165e21372fb07e5bca872fc81be8e5e54034af092564b"
+        },
+        {
+          "private_basename": "dex-alert-during-logcat.PRIVATE.txt",
+          "sha256": "5306a4dbac86e0d482f665678915204f3a6fa0b76475abfe531f2bca8105506b"
+        },
+        {
+          "private_basename": "dex-alert-during-surface.PRIVATE.txt",
+          "sha256": "dd7d95e215ccd2b15d222c6c80d249d9b0f9a54871a445525701a2ea68b267f7"
+        },
+        {
+          "private_basename": "dex-alert-during-window.PRIVATE.txt",
+          "sha256": "dd052b919f1f7991e62bc18477a4aed86ffd7a943986311a1c126c94b774077b"
+        }
+      ]
+    },
+    {
+      "case": "dex-confirm",
+      "action": "test-confirm",
+      "result": "FAIL",
+      "scope": "Visibility of this original-fixture case only",
+      "started_utc": "2026-10-19T18:11:57.903Z",
+      "capture_utc": "2026-10-19T18:11:59.442Z",
+      "finished_utc": "2026-10-19T18:11:59.803Z",
+      "display_id": 35,
+      "uri": "content://media/external/file/113091",
+      "javascript_open_types": [
+        "confirm"
+      ],
+      "javascript_close_count": 1,
+      "screenshot_private_basename": "dex-confirm-during.PRIVATE.png",
+      "screenshot_sha256": "4d394bc31351e58b2956fd55a7874e4fb59ec21c329df2a446719a634b0b500b",
+      "dialog": {
+        "state": "CONTAINER_GONE_ZERO_BOUNDS",
+        "cause": "NOT_PROVEN",
+        "container": {
+          "kind": "android.widget.FrameLayout",
+          "view_id": "159df3b",
+          "resource": "app:id/tab_modal_dialog_container",
+          "bounds": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visibility": "GONE",
+          "flags": "GFE...C..",
+          "z": "NOT_AVAILABLE",
+          "elevation": "NOT_AVAILABLE",
+          "window_token": "NOT_AVAILABLE_FROM_VIEW_DUMP"
+        },
+        "note": "A closed container may be GONE/zero; synchronize with an active open event."
+      },
+      "modal_view_count": 0,
+      "bounds": [],
+      "logs": [
+        {
+          "private_basename": "dex-confirm-during-activity.PRIVATE.txt",
+          "sha256": "acca2f0faa6eb170ebd0197586f963dcfec8652fe934fe45a279575a20569494"
+        },
+        {
+          "private_basename": "dex-confirm-during-logcat.PRIVATE.txt",
+          "sha256": "2d17f741ae9ae451be35e251e0dc23cbc5c16ae78e56d1e379a5fa2fefbba3dd"
+        },
+        {
+          "private_basename": "dex-confirm-during-surface.PRIVATE.txt",
+          "sha256": "dd7d95e215ccd2b15d222c6c80d249d9b0f9a54871a445525701a2ea68b267f7"
+        },
+        {
+          "private_basename": "dex-confirm-during-window.PRIVATE.txt",
+          "sha256": "96bd7f554fa3298ff0593e7fc3832a6c4270593fe682da72bfc8fcb2fd52d6c1"
+        }
+      ]
+    },
+    {
+      "case": "dex-prompt",
+      "action": "test-prompt",
+      "result": "FAIL",
+      "scope": "Visibility of this original-fixture case only",
+      "started_utc": "2026-10-19T18:12:00.218Z",
+      "capture_utc": "2026-10-19T18:12:01.940Z",
+      "finished_utc": "2026-10-19T18:12:02.302Z",
+      "display_id": 35,
+      "uri": "content://media/external/file/113091",
+      "javascript_open_types": [
+        "prompt"
+      ],
+      "javascript_close_count": 1,
+      "screenshot_private_basename": "dex-prompt-during.PRIVATE.png",
+      "screenshot_sha256": "e23a84d07cd6e8025b839f76eecf885d1a3c4938d94d9690af75576ee710717b",
+      "dialog": {
+        "state": "CONTAINER_GONE_ZERO_BOUNDS",
+        "cause": "NOT_PROVEN",
+        "container": {
+          "kind": "android.widget.FrameLayout",
+          "view_id": "159df3b",
+          "resource": "app:id/tab_modal_dialog_container",
+          "bounds": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visibility": "GONE",
+          "flags": "GFE...C..",
+          "z": "NOT_AVAILABLE",
+          "elevation": "NOT_AVAILABLE",
+          "window_token": "NOT_AVAILABLE_FROM_VIEW_DUMP"
+        },
+        "note": "A closed container may be GONE/zero; synchronize with an active open event."
+      },
+      "modal_view_count": 0,
+      "bounds": [],
+      "logs": [
+        {
+          "private_basename": "dex-prompt-during-activity.PRIVATE.txt",
+          "sha256": "f13c913156fdb29aa3e19ccfa52538a7379728a6b697d654ae99f6fac73a992b"
+        },
+        {
+          "private_basename": "dex-prompt-during-logcat.PRIVATE.txt",
+          "sha256": "84c97e916190378ef8342fed2d90122ebc1fdb022a8768e8f2eafeb7b61418ec"
+        },
+        {
+          "private_basename": "dex-prompt-during-surface.PRIVATE.txt",
+          "sha256": "dd7d95e215ccd2b15d222c6c80d249d9b0f9a54871a445525701a2ea68b267f7"
+        },
+        {
+          "private_basename": "dex-prompt-during-window.PRIVATE.txt",
+          "sha256": "f588cddf5d8f26e2f137ceb58045e7d6d4cf914683e56ce5759ea5090b634404"
+        }
+      ]
+    },
+    {
+      "case": "dex-download",
+      "action": "test-download",
+      "result": "FAIL",
+      "scope": "Visibility of this original-fixture case only",
+      "started_utc": "2026-10-19T18:15:46.111Z",
+      "capture_utc": "2026-10-19T18:15:47.658Z",
+      "finished_utc": "2026-10-19T18:15:48.017Z",
+      "display_id": 35,
+      "uri": "content://media/external/file/113091",
+      "javascript_open_types": [
+        "confirm"
+      ],
+      "javascript_close_count": 1,
+      "screenshot_private_basename": "dex-download-during.PRIVATE.png",
+      "screenshot_sha256": "3c48772a10bd13e757890ef35d8115105e098ce3da3ddfddf2cdb6217f3900a3",
+      "dialog": {
+        "state": "CONTAINER_GONE_ZERO_BOUNDS",
+        "cause": "NOT_PROVEN",
+        "container": {
+          "kind": "android.widget.FrameLayout",
+          "view_id": "159df3b",
+          "resource": "app:id/tab_modal_dialog_container",
+          "bounds": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visibility": "GONE",
+          "flags": "GFE...C..",
+          "z": "NOT_AVAILABLE",
+          "elevation": "NOT_AVAILABLE",
+          "window_token": "NOT_AVAILABLE_FROM_VIEW_DUMP"
+        },
+        "note": "A closed container may be GONE/zero; synchronize with an active open event."
+      },
+      "modal_view_count": 0,
+      "bounds": [],
+      "limitation": "JS confirmation invisible; later original 0.07 kB TXT download snackbar visible. Not a general download manager test.",
+      "logs": [
+        {
+          "private_basename": "dex-download-during-activity.PRIVATE.txt",
+          "sha256": "20a90b2f2109f9c7ed1d73311fb9b55cc9dfdf231cba6bc5e1d9a7c97f354cf6"
+        },
+        {
+          "private_basename": "dex-download-during-logcat.PRIVATE.txt",
+          "sha256": "2ff559b8b6a06049727c5d19ec0337e797463808f03b7abddbdbca3ce7d67b5f"
+        },
+        {
+          "private_basename": "dex-download-during-surface.PRIVATE.txt",
+          "sha256": "e094406d11b5cfbdddb785eaa192bce8bb76b20c3bd971da871787ee432d095e"
+        },
+        {
+          "private_basename": "dex-download-during-window.PRIVATE.txt",
+          "sha256": "eeabbfecf6f40ab19fc16d07111ca9bc1778af78f33d29df1aeb7ade8714e3ec"
+        }
+      ]
+    },
+    {
+      "case": "dex-favorite",
+      "action": "test-favorite",
+      "result": "FAIL",
+      "scope": "Visibility of this original-fixture case only",
+      "started_utc": "2026-10-19T18:15:52.945Z",
+      "capture_utc": "2026-10-19T18:15:54.682Z",
+      "finished_utc": "2026-10-19T18:15:55.043Z",
+      "display_id": 35,
+      "uri": "content://media/external/file/113091",
+      "javascript_open_types": [
+        "confirm"
+      ],
+      "javascript_close_count": 1,
+      "screenshot_private_basename": "dex-favorite-during.PRIVATE.png",
+      "screenshot_sha256": "8acd00dc3223776e33e043b4ce7a2392556bbce382be578b90d7c476e6618e7c",
+      "dialog": {
+        "state": "CONTAINER_GONE_ZERO_BOUNDS",
+        "cause": "NOT_PROVEN",
+        "container": {
+          "kind": "android.widget.FrameLayout",
+          "view_id": "159df3b",
+          "resource": "app:id/tab_modal_dialog_container",
+          "bounds": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visibility": "GONE",
+          "flags": "GFE...C..",
+          "z": "NOT_AVAILABLE",
+          "elevation": "NOT_AVAILABLE",
+          "window_token": "NOT_AVAILABLE_FROM_VIEW_DUMP"
+        },
+        "note": "A closed container may be GONE/zero; synchronize with an active open event."
+      },
+      "modal_view_count": 0,
+      "bounds": [],
+      "limitation": "Original handler writes only synthetic localStorage; not Chromium bookmarks.",
+      "logs": [
+        {
+          "private_basename": "dex-favorite-during-activity.PRIVATE.txt",
+          "sha256": "96716e7bd110c682285d9f3308dee79a528a194ea5378079646cb57b56f6e4de"
+        },
+        {
+          "private_basename": "dex-favorite-during-logcat.PRIVATE.txt",
+          "sha256": "45c222da25a5f968a88262c75b46d29e12cc42018675edb788e987dd1c83dd11"
+        },
+        {
+          "private_basename": "dex-favorite-during-surface.PRIVATE.txt",
+          "sha256": "7ee86d5d14f920b322d67397c37fcd6d26d5835ee30f9cf6220d7ce16d93ec4d"
+        },
+        {
+          "private_basename": "dex-favorite-during-window.PRIVATE.txt",
+          "sha256": "c4016ad63df76b206d7cbaf9009cfb1908ccad046f9f714d7a0120a5ee6a642a"
+        }
+      ]
+    },
+    {
+      "case": "dex-chain",
+      "action": "test-chain",
+      "result": "FAIL",
+      "scope": "Visibility of this original-fixture case only",
+      "started_utc": "2026-10-19T18:16:00.928Z",
+      "capture_utc": "2026-10-19T18:16:02.516Z",
+      "finished_utc": "2026-10-19T18:16:06.082Z",
+      "display_id": 35,
+      "uri": "content://media/external/file/113091",
+      "javascript_open_types": [
+        "alert",
+        "confirm",
+        "prompt"
+      ],
+      "javascript_close_count": 3,
+      "screenshot_private_basename": "dex-chain-during.PRIVATE.png",
+      "screenshot_sha256": "82711151c938a9e7513593846eba5ad6bf5955e28589b520ec4f604a24c0dd09",
+      "dialog": {
+        "state": "CONTAINER_GONE_ZERO_BOUNDS",
+        "cause": "NOT_PROVEN",
+        "container": {
+          "kind": "android.widget.FrameLayout",
+          "view_id": "159df3b",
+          "resource": "app:id/tab_modal_dialog_container",
+          "bounds": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visibility": "GONE",
+          "flags": "GFE...C..",
+          "z": "NOT_AVAILABLE",
+          "elevation": "NOT_AVAILABLE",
+          "window_token": "NOT_AVAILABLE_FROM_VIEW_DUMP"
+        },
+        "note": "A closed container may be GONE/zero; synchronize with an active open event."
+      },
+      "modal_view_count": 0,
+      "bounds": [],
+      "logs": [
+        {
+          "private_basename": "dex-chain-during-activity.PRIVATE.txt",
+          "sha256": "44d10ceef463d2189383530347712bd5e706d120aef2c27e0b0f3d5fd3d54e87"
+        },
+        {
+          "private_basename": "dex-chain-during-logcat.PRIVATE.txt",
+          "sha256": "a04db93df13e1c842a43fb9cbefcbe8e2fb0dee10620b83836ab2eac63b0a777"
+        },
+        {
+          "private_basename": "dex-chain-during-surface.PRIVATE.txt",
+          "sha256": "e63fdffa85c38f3784955f4f808f4dea242fd5b3b254cbb73d7d83e65848a324"
+        },
+        {
+          "private_basename": "dex-chain-during-window.PRIVATE.txt",
+          "sha256": "9d3b9b282008e21a8256db0756fd94b73c91695ee11778f0927fb77d9abafe66"
+        }
+      ]
+    },
+    {
+      "case": "dex-modal",
+      "action": "test-modal",
+      "result": "PASS",
+      "scope": "Visibility of this original-fixture case only",
+      "started_utc": "2026-10-19T18:15:24.660Z",
+      "capture_utc": "2026-10-19T18:15:26.504Z",
+      "finished_utc": "2026-10-19T18:15:26.717Z",
+      "display_id": 35,
+      "uri": "content://media/external/file/113091",
+      "javascript_open_types": [],
+      "javascript_close_count": 0,
+      "screenshot_private_basename": "dex-modal-during.PRIVATE.png",
+      "screenshot_sha256": "f016ce415ba8c5fc2af55cc5ef1761415923fd7cb188c17a24ec0ab6f8c65090",
+      "dialog": {
+        "state": "CONTAINER_GONE_ZERO_BOUNDS",
+        "cause": "NOT_PROVEN",
+        "container": {
+          "kind": "android.widget.FrameLayout",
+          "view_id": "159df3b",
+          "resource": "app:id/tab_modal_dialog_container",
+          "bounds": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visibility": "GONE",
+          "flags": "GFE...C..",
+          "z": "NOT_AVAILABLE",
+          "elevation": "NOT_AVAILABLE",
+          "window_token": "NOT_AVAILABLE_FROM_VIEW_DUMP"
+        },
+        "note": "A closed container may be GONE/zero; synchronize with an active open event."
+      },
+      "modal_view_count": 0,
+      "bounds": [
+        {
+          "id": "modal",
+          "open": true,
+          "x": 913.3638305664062,
+          "y": 575.4207153320312,
+          "width": 429.9837951660156,
+          "height": 179.44590759277344,
+          "display": "block",
+          "visibility": "visible",
+          "opacity": "1",
+          "z": "auto"
+        },
+        {
+          "id": "nonmodal",
+          "open": false,
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "display": "none",
+          "visibility": "visible",
+          "opacity": "1",
+          "z": "auto"
+        },
+        {
+          "id": "overlay",
+          "open": false,
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "display": "none",
+          "visibility": "visible",
+          "opacity": "1",
+          "z": "5000"
+        }
+      ],
+      "logs": [
+        {
+          "private_basename": "dex-modal-during-activity.PRIVATE.txt",
+          "sha256": "fb8facf161a0ebf090b52eb7d1457ebb4c5fb1efe53d65ef4df451ab4375dfa6"
+        },
+        {
+          "private_basename": "dex-modal-during-logcat.PRIVATE.txt",
+          "sha256": "082f8f3480185e5f2c901a9a08a05274a274eb212ff1756d3c4de0828860dcc2"
+        },
+        {
+          "private_basename": "dex-modal-during-surface.PRIVATE.txt",
+          "sha256": "2bb8dca8918d8b9ca28929b4c2ba342c5267586ea3fa3c10f47d5717e01e4e6d"
+        },
+        {
+          "private_basename": "dex-modal-during-window.PRIVATE.txt",
+          "sha256": "377bf09bdd04c036259022100e20000a407667561412697cda6fae37a27c0bbf"
+        }
+      ]
+    },
+    {
+      "case": "dex-nonmodal",
+      "action": "test-nonmodal",
+      "result": "PASS",
+      "scope": "Visibility of this original-fixture case only",
+      "started_utc": "2026-10-19T18:15:31.121Z",
+      "capture_utc": "2026-10-19T18:15:32.681Z",
+      "finished_utc": "2026-10-19T18:15:32.891Z",
+      "display_id": 35,
+      "uri": "content://media/external/file/113091",
+      "javascript_open_types": [],
+      "javascript_close_count": 0,
+      "screenshot_private_basename": "dex-nonmodal-during.PRIVATE.png",
+      "screenshot_sha256": "b34424a1dc204aca913a5d8c7a4f39fc2118bcf2e943284c5ce9dcffd4f466fb",
+      "dialog": {
+        "state": "CONTAINER_GONE_ZERO_BOUNDS",
+        "cause": "NOT_PROVEN",
+        "container": {
+          "kind": "android.widget.FrameLayout",
+          "view_id": "159df3b",
+          "resource": "app:id/tab_modal_dialog_container",
+          "bounds": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visibility": "GONE",
+          "flags": "GFE...C..",
+          "z": "NOT_AVAILABLE",
+          "elevation": "NOT_AVAILABLE",
+          "window_token": "NOT_AVAILABLE_FROM_VIEW_DUMP"
+        },
+        "note": "A closed container may be GONE/zero; synchronize with an active open event."
+      },
+      "modal_view_count": 0,
+      "bounds": [
+        {
+          "id": "modal",
+          "open": false,
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "display": "none",
+          "visibility": "visible",
+          "opacity": "1",
+          "z": "auto"
+        },
+        {
+          "id": "nonmodal",
+          "open": true,
+          "x": 916.0149536132812,
+          "y": 1176.0025634765625,
+          "width": 424.6978454589844,
+          "height": 154.642578125,
+          "display": "block",
+          "visibility": "visible",
+          "opacity": "1",
+          "z": "auto"
+        },
+        {
+          "id": "overlay",
+          "open": false,
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "display": "none",
+          "visibility": "visible",
+          "opacity": "1",
+          "z": "5000"
+        }
+      ],
+      "limitation": "Visible at bottom; bounds exceed CSS viewport bottom by ~0.34px. Not centered by original HTML.",
+      "logs": [
+        {
+          "private_basename": "dex-nonmodal-during-activity.PRIVATE.txt",
+          "sha256": "acb7d9ca3545ebc009924393d805147041c90f7e5a1704b1481d7b5d59d3a0e7"
+        },
+        {
+          "private_basename": "dex-nonmodal-during-logcat.PRIVATE.txt",
+          "sha256": "84bd559ab2ca73005b6d92b99f65b895577a09dcc80e0e387313d1775fd99e8a"
+        },
+        {
+          "private_basename": "dex-nonmodal-during-surface.PRIVATE.txt",
+          "sha256": "2bb8dca8918d8b9ca28929b4c2ba342c5267586ea3fa3c10f47d5717e01e4e6d"
+        },
+        {
+          "private_basename": "dex-nonmodal-during-window.PRIVATE.txt",
+          "sha256": "7f87f1e15a75db9921d13ad29a9ef97a5f95e408ef50f054823178ec8479093a"
+        }
+      ]
+    },
+    {
+      "case": "dex-overlay",
+      "action": "test-overlay",
+      "result": "PASS",
+      "scope": "Visibility of this original-fixture case only",
+      "started_utc": "2026-10-19T18:15:40.107Z",
+      "capture_utc": "2026-10-19T18:15:41.664Z",
+      "finished_utc": "2026-10-19T18:15:41.873Z",
+      "display_id": 35,
+      "uri": "content://media/external/file/113091",
+      "javascript_open_types": [],
+      "javascript_close_count": 0,
+      "screenshot_private_basename": "dex-overlay-during.PRIVATE.png",
+      "screenshot_sha256": "61cad44c1d76f1c3130f8fcc4562bf1101632414e8f9b2d91b43509f5b4463f2",
+      "dialog": {
+        "state": "CONTAINER_GONE_ZERO_BOUNDS",
+        "cause": "NOT_PROVEN",
+        "container": {
+          "kind": "android.widget.FrameLayout",
+          "view_id": "159df3b",
+          "resource": "app:id/tab_modal_dialog_container",
+          "bounds": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visibility": "GONE",
+          "flags": "GFE...C..",
+          "z": "NOT_AVAILABLE",
+          "elevation": "NOT_AVAILABLE",
+          "window_token": "NOT_AVAILABLE_FROM_VIEW_DUMP"
+        },
+        "note": "A closed container may be GONE/zero; synchronize with an active open event."
+      },
+      "modal_view_count": 0,
+      "bounds": [
+        {
+          "id": "modal",
+          "open": false,
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "display": "none",
+          "visibility": "visible",
+          "opacity": "1",
+          "z": "auto"
+        },
+        {
+          "id": "nonmodal",
+          "open": false,
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "display": "none",
+          "visibility": "visible",
+          "opacity": "1",
+          "z": "auto"
+        },
+        {
+          "id": "overlay",
+          "open": false,
+          "x": 0,
+          "y": 0,
+          "width": 2256.727783203125,
+          "height": 1330.3035888671875,
+          "display": "flex",
+          "visibility": "visible",
+          "opacity": "1",
+          "z": "5000"
+        }
+      ],
+      "logs": [
+        {
+          "private_basename": "dex-overlay-during-activity.PRIVATE.txt",
+          "sha256": "f5f1d4c38fcf6a1cb692103d35324e8731f8657a193c79a9653d9f64c81f783e"
+        },
+        {
+          "private_basename": "dex-overlay-during-logcat.PRIVATE.txt",
+          "sha256": "f86709e6346b968de208f9ea6cb290ddb48bfe4e0bad41d0e1d239042ac2da50"
+        },
+        {
+          "private_basename": "dex-overlay-during-surface.PRIVATE.txt",
+          "sha256": "e094406d11b5cfbdddb785eaa192bce8bb76b20c3bd971da871787ee432d095e"
+        },
+        {
+          "private_basename": "dex-overlay-during-window.PRIVATE.txt",
+          "sha256": "1607100b4d967cacb57aee3664a1ced39a66bf768c3fa67232a5e4386a346d4d"
+        }
+      ]
+    },
+    {
+      "case": "dex-all-html",
+      "action": "test-all-html",
+      "result": "PASS",
+      "scope": "Visibility of this original-fixture case only",
+      "started_utc": "2026-10-19T18:16:14.347Z",
+      "capture_utc": "2026-10-19T18:16:15.890Z",
+      "finished_utc": "2026-10-19T18:16:16.102Z",
+      "display_id": 35,
+      "uri": "content://media/external/file/113091",
+      "javascript_open_types": [],
+      "javascript_close_count": 0,
+      "screenshot_private_basename": "dex-all-html-during.PRIVATE.png",
+      "screenshot_sha256": "7e626265bafc2b64b9888ef1e14bc4beec9801c8860a4fdb9537d3e7d8531ae7",
+      "dialog": {
+        "state": "CONTAINER_GONE_ZERO_BOUNDS",
+        "cause": "NOT_PROVEN",
+        "container": {
+          "kind": "android.widget.FrameLayout",
+          "view_id": "159df3b",
+          "resource": "app:id/tab_modal_dialog_container",
+          "bounds": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visibility": "GONE",
+          "flags": "GFE...C..",
+          "z": "NOT_AVAILABLE",
+          "elevation": "NOT_AVAILABLE",
+          "window_token": "NOT_AVAILABLE_FROM_VIEW_DUMP"
+        },
+        "note": "A closed container may be GONE/zero; synchronize with an active open event."
+      },
+      "modal_view_count": 0,
+      "bounds": [
+        {
+          "id": "modal",
+          "open": true,
+          "x": 913.3638305664062,
+          "y": 575.4207153320312,
+          "width": 429.9837951660156,
+          "height": 179.44590759277344,
+          "display": "block",
+          "visibility": "visible",
+          "opacity": "1",
+          "z": "auto"
+        },
+        {
+          "id": "nonmodal",
+          "open": false,
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "display": "none",
+          "visibility": "visible",
+          "opacity": "1",
+          "z": "auto"
+        },
+        {
+          "id": "overlay",
+          "open": false,
+          "x": 0,
+          "y": 0,
+          "width": 0,
+          "height": 0,
+          "display": "none",
+          "visibility": "visible",
+          "opacity": "1",
+          "z": "5000"
+        }
+      ],
+      "logs": [
+        {
+          "private_basename": "dex-all-html-during-activity.PRIVATE.txt",
+          "sha256": "fe1b40f1d9810548b7bc5e52c8b8eb6c387a5e4f36cbf882284fdaaacd68941a"
+        },
+        {
+          "private_basename": "dex-all-html-during-logcat.PRIVATE.txt",
+          "sha256": "119efc5f947a6bfa0883fdb0a4570fa8862a12a96f7b7fee52d97b08bea02d6c"
+        },
+        {
+          "private_basename": "dex-all-html-during-surface.PRIVATE.txt",
+          "sha256": "279ca56f5991ac361d5fc725658da01f7e699b7250bf632537b17b9c730619ac"
+        },
+        {
+          "private_basename": "dex-all-html-during-window.PRIVATE.txt",
+          "sha256": "606d8625b92d754b8f7b185d216c28cfc3ca2528882ea1e370f5d7d3ba1163e4"
+        }
+      ]
+    },
+    {
+      "case": "dex-window",
+      "action": "test-window",
+      "result": "PASS",
+      "scope": "Visibility of this original-fixture case only",
+      "started_utc": "2026-10-19T18:16:22.057Z",
+      "capture_utc": "2026-10-19T18:16:23.543Z",
+      "finished_utc": "2026-10-19T18:16:23.543Z",
+      "display_id": 35,
+      "uri": "content://media/external/file/113091",
+      "javascript_open_types": [],
+      "javascript_close_count": 0,
+      "screenshot_private_basename": "dex-window-during.PRIVATE.png",
+      "screenshot_sha256": "e569cd288c38b7c8f0e4d9a7a2d8f1a98316141eb2b004fe5115e968783b6323",
+      "dialog": {
+        "state": "CONTAINER_GONE_ZERO_BOUNDS",
+        "cause": "NOT_PROVEN",
+        "container": {
+          "kind": "android.widget.FrameLayout",
+          "view_id": "159df3b",
+          "resource": "app:id/tab_modal_dialog_container",
+          "bounds": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visibility": "GONE",
+          "flags": "GFE...C..",
+          "z": "NOT_AVAILABLE",
+          "elevation": "NOT_AVAILABLE",
+          "window_token": "NOT_AVAILABLE_FROM_VIEW_DUMP"
+        },
+        "note": "A closed container may be GONE/zero; synchronize with an active open event."
+      },
+      "modal_view_count": 0,
+      "bounds": [],
+      "logs": [
+        {
+          "private_basename": "dex-window-during-activity.PRIVATE.txt",
+          "sha256": "97d13867566df3e1e7a2b8d7efa4e137efa20f385fda31e8fd72df3b38f3fb11"
+        },
+        {
+          "private_basename": "dex-window-during-logcat.PRIVATE.txt",
+          "sha256": "b5f7738b61853559b94c2695c1e0e40525aed7b2fb9e2806231e078615af194e"
+        },
+        {
+          "private_basename": "dex-window-during-surface.PRIVATE.txt",
+          "sha256": "e63fdffa85c38f3784955f4f808f4dea242fd5b3b254cbb73d7d83e65848a324"
+        },
+        {
+          "private_basename": "dex-window-during-window.PRIVATE.txt",
+          "sha256": "0201ebcf048e1b0368cbfa23f3400f747685a92d65a4bf7197f65603b774a622"
+        }
+      ]
+    },
+    {
+      "case": "dex-file",
+      "action": "test-file",
+      "result": "PASS",
+      "scope": "Visibility of this original-fixture case only",
+      "started_utc": "2026-10-19T18:16:28.951Z",
+      "capture_utc": "2026-10-19T18:16:30.566Z",
+      "finished_utc": "2026-10-19T18:16:30.566Z",
+      "display_id": 35,
+      "uri": "content://media/external/file/113091",
+      "javascript_open_types": [],
+      "javascript_close_count": 0,
+      "screenshot_private_basename": "dex-file-during.PRIVATE.png",
+      "screenshot_sha256": "a100463a2f38ea0eda97035114b421038f33c86a11fea7651fc2b36d29894c63",
+      "dialog": {
+        "state": "CONTAINER_GONE_ZERO_BOUNDS",
+        "cause": "NOT_PROVEN",
+        "container": {
+          "kind": "android.widget.FrameLayout",
+          "view_id": "159df3b",
+          "resource": "app:id/tab_modal_dialog_container",
+          "bounds": [
+            0,
+            0,
+            0,
+            0
+          ],
+          "visibility": "GONE",
+          "flags": "GFE...C..",
+          "z": "NOT_AVAILABLE",
+          "elevation": "NOT_AVAILABLE",
+          "window_token": "NOT_AVAILABLE_FROM_VIEW_DUMP"
+        },
+        "note": "A closed container may be GONE/zero; synchronize with an active open event."
+      },
+      "modal_view_count": 0,
+      "bounds": [],
+      "limitation": "Android action chooser visible; cancelled without choosing a provider or personal file.",
+      "logs": [
+        {
+          "private_basename": "dex-file-during-activity.PRIVATE.txt",
+          "sha256": "7adc3dc03272c9a51d1ebafb440b4d955bee78a10c8845a1014cdf100bc19cf3"
+        },
+        {
+          "private_basename": "dex-file-during-logcat.PRIVATE.txt",
+          "sha256": "b7542d72751135e56f692fbada7d7f49a1371f502f5d2d5b6c0664ca829a4de8"
+        },
+        {
+          "private_basename": "dex-file-during-surface.PRIVATE.txt",
+          "sha256": "ffe040cdec43d8c37597e6aa3094948c72e82a4c0ef9a12f7e0f16a4ce31a07b"
+        },
+        {
+          "private_basename": "dex-file-during-window.PRIVATE.txt",
+          "sha256": "0b00cf76d073cd5e4716022a9d0116b2e4b95318094361a5c9ff1f0257b6a6bd"
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "PASS only for captured visibility, not complete product validation",
+    "Raw evidence remains private",
+    "Earlier wrong-display captures excluded",
+    "Logcat snapshots retrospective and not atomic with screenshots"
+  ]
+}
