@@ -4,14 +4,14 @@
 
 **Repositorio:** `Jorgeprdz/chromium-dex-arc`  
 **Rama de trabajo de este TODO:** `assistant/archium-r5-arc-experience`  
-**Rama candidata de correcciones:** `assistant/archium-r5-2-ui-fixes` (aislada; rama base sin modificar).
+**Rama candidata de correcciones:** `assistant/archium-r5-2-ui-fixes`; integración en la rama de build autorizada el 19-oct-2026 por «compila e instala».
 **Entorno observado:** Samsung Galaxy S25, Android, Archium; validar tanto modo teléfono como Samsung DeX.  
 **Motor de referencia documentado:** Chromium 157.0.8086.0 (confirmar pin y HEAD efectivos antes de trabajar).  
 
 > **Orden:** estabilidad/renderizado primero; después pulido estético. Evitar un build pesado antes de aislar causas y probar cambios pequeños. No modificar `main` ni `feat/arc-desktop` durante el diagnóstico sin autorización.
 
 **Alcance vigente autorizado:** correcciones de diálogos e interfaz fuera de Amazon.
-Amazon conserva su bloqueo; no se reabre su investigación ni se autoriza un build por esta actualización.
+Amazon conserva su bloqueo y no se reabre su investigación. El usuario autorizó después una compilación incremental de los fixes de diálogos/sidebar y su instalación, sujeta a los gates existentes.
 
 ## P0 — R5.1: estabilidad del contenido, compositor y ventanas
 
@@ -239,3 +239,14 @@ ni los tres archivos del fix de diálogos 5184755.
 - [ ] QEMU_ABI_BLOCKED y aceptación GPU/DeX pendientes. Amazon continúa UNRESOLVED_GRAPHICS_BLOCKER y fuera de este lote.
 
 [Implementación, RED/GREEN y límites de validación](docs/validation/R5_2_UI_FIXES.md).
+
+## Compilación de fixes autorizada — 19-oct-2026
+
+- [x] ~~Preparar integración de diálogos `5184755` y controles/sidebar `0ab6204`~~ — preserva el arreglo de pestañas `3db367a`; sin cambios nuevos de pin, GN args ni toolchain.
+- [x] ~~Verificar inventario y manifiesto remoto del último checkpoint disponible~~ — `archium-checkpoint-38511423805-1`, fuente `0abfc9f03e34c23762190365ccb0cf6f9e5c3260`, cuatro grupos/25 partes. Hashes de partes, árbol y outputs se verifican otra vez durante la restauración en CI.
+- [ ] Completar build incremental del candidato integrado; RUN_ID/SHA y primera consulta quedarán en el estado privado persistente del supervisor.
+- [ ] Verificar nueva APK y actualización en Android; mantener los datos. QEMU continúa `QEMU_ABI_BLOCKED`: no es PASS y el gate existente impide instalación automática si se repite.
+- [ ] Validar visualmente diálogos nativos, foco, footer y sidebar con la APK nueva; no cerrar estos defectos por el mero éxito del build.
+- [ ] Amazon: `UNRESOLVED_GRAPHICS_BLOCKER`, ahora también congelamiento reportado por el usuario; sin corrección en este lote.
+
+Preparación: [R5.2 build e instalación](docs/validation/R5_2_BUILD_INSTALL_PREPARATION.md).
