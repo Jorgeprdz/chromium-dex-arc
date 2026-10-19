@@ -177,3 +177,22 @@ Rama activa/run 39296066030 preservados; ningún build nuevo desde investigació
 
 [Informe R5.2D y evidencia](docs/validation/R5_2D_AMAZON_COMPOSITOR_ROOT_CAUSE.md).
 Sin nuevos runs, integración del fix nativo ni cambios de flags/checkpoints.
+
+## R5.2E — decisión final NO-GO
+
+- [x] Ejecutar el intento final acotado en Galaxy. Amazon vuelve a mostrar
+  corrupción en readback de Chromium y pantalla física. Traza Chromium recuperada
+  con EOF y sin pérdida declarada; los eventos no incluyen píxeles de tiles GPU.
+- [x] Obtener RED visual de la fixture existente sin contenido privado: distorsión
+  en Archium; control Chrome sin errores en las muestras de color. Versiones y
+  backends diferentes; no equivale a causa raíz ni GREEN de una corrección.
+- [ ] **P0-01: UNRESOLVED_GRAPHICS_BLOCKER.** No se demostró la primera transición
+  defectuosa ni el código responsable. Buffer Android identificado sólo por
+  metadata; replay software no equivale a raster GPU vivo.
+- [ ] P0-02: fix 5184755 preservado aislado; aceptación visual con APK corregida
+  pendiente. Reordenamiento/sidebar preservados, sin nueva certificación visual.
+- [x] Detener experimentos y no despachar build. Sin flags/workarounds gráficos,
+  limpieza de outputs, cambios de supervisor ni integración automática.
+
+[Decisión final y punto de cierre](docs/validation/R5_2_FINAL_GO_NO_GO.md).
+**No continuar automáticamente ni abrir otra fase. Esperar decisión del usuario.**
