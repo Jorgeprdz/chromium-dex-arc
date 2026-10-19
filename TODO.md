@@ -88,3 +88,25 @@ runs/10 horas y dos reparaciones por causa. Codex se reanuda por ID exacto solo 
 fallos técnicos reparables o instalación realmente confirmada. QEMU incompatible
 se registra BLOCKED, sin PASS simulado, instalación ni builds limpios. No se cierran
 las tareas P0/P1 por haber compilado o instalado una APK.
+
+## R5.1 post-build — run 39259086848
+
+- [ ] **FAIL 1 confirmado por usuario:** Amazon mantiene imágenes negras, texto
+  duplicado y residuos incluso tras recuperación. Captura en teléfono recuperada;
+  GPU observada Adreno 830 / ANGLE Vulkan / GraphiteDawnVulkan. Causa raíz y GREEN
+  visual pendientes; no desactivar GPU ni atribuirlo al clip Arc anterior.
+- [ ] **FAIL 2 confirmado por usuario:** scrim sin cuadro. Separar alert/confirm/prompt,
+  HTML modal, HTML no modal, overlay CSS y Chromium/Android nativo. Se recuperó
+  `archium-popup-log.txt` (JavaScript, no Logcat); retornos OK no prueban visibilidad.
+  Jerarquía fuera del incidente no prueba bounds durante el fallo. Sin causa ni GREEN.
+- [ ] **FAIL 3 confirmado por usuario:** títulos/filas se superponen tras reorder.
+  Dump Android demuestra coexistencia de fila antigua 208px y compacta 44px en el
+  mismo intervalo vertical. Candidato mínimo preserva modelos durante reorder de
+  pestañas simples, con RED/GREEN JVM; validación visual y drag Android pendientes.
+- [ ] Preservar PASS del usuario: restauración entre apps/pestañas, omnibox/navegación,
+  ventanas y formularios. No equivale a nueva ejecución propia. Marcadores,
+  descargas y persistencia completa de sesiones siguen PENDING.
+
+[Informe forense y límites de validación](docs/validation/R5_1_FORENSIC_REPORT.md).
+QEMU del build evaluado: **QEMU_ABI_BLOCKED**, 32 casos BLOCKED; GPU/DeX siguen
+PENDING_DEVICE_VALIDATION. No cerrar estos fallos por superar build o tests host.

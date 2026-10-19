@@ -1,0 +1,60 @@
+{
+  "evidence_location": "Private workspace; raw captures/dumps not published",
+  "files": {
+    "amazon.jpg": {
+      "sha256": "1c45b5b9302171052e450c8473f75b73a769347b5af14d8c95f2ecf777f71d46",
+      "bytes": 346490
+    },
+    "dialog.jpg": {
+      "sha256": "64fd0e3504b8467a90fbf7f115ef20399b99a73b7fef16c9cb4a0fdc97ef4a07",
+      "bytes": 924924
+    },
+    "drag.jpg": {
+      "sha256": "36c8a9b3f115b58fac71c7c2c2245c50ae1a10303a394f4db68264f6db8dab05",
+      "bytes": 452844
+    },
+    "archium-popup-log.txt": {
+      "sha256": "bb067ee97def1f5db06dd2c26c12a7942497e123c8fb0833ff74ea59ff8ae70f",
+      "bytes": 3759
+    },
+    "logcat.txt": {
+      "sha256": "dba1d87340430dff004d68d773d4924db76985389d19843eabbb8d9498693aab",
+      "bytes": 459183
+    },
+    "activity.txt": {
+      "sha256": "e0797ae69bf8c1fc00c71a1b7ba55b772951ed66d2836d351665ea2cb323b63e",
+      "bytes": 49490
+    },
+    "windows.txt": {
+      "sha256": "387cb17c99d72ffb73f0ec226febc42aac2251f54ed3c96be1e4b251fc9ee69b",
+      "bytes": 269602
+    },
+    "surfaces.txt": {
+      "sha256": "33d978d25c48e4f2b4bb84556a6986f4f7b3b0966300aa6a3468de96cdb08c8f",
+      "bytes": 40110
+    },
+    "graphics-trace.atrace": {
+      "sha256": "71e957cfa3886a9ffb30fab156b944c64af9aa75fd845ca340b4a442069dffcc",
+      "bytes": 3487657
+    },
+    "gpu-system-info.json": {
+      "sha256": "7122c480b76fd6a8236c0da993ecc6d480d1fa737dfce0622d2b5e6b3d1f54ff",
+      "bytes": 9014
+    },
+    "installed-sha256.txt": {
+      "sha256": "dbcdbbbb214a219fc8d779896f5d08535876dc203ab418009ba3f4de6dc04ed4",
+      "bytes": 157
+    }
+  },
+  "build_run_id": "39259086848",
+  "build_sha": "fca5d00619a531a7ec8f702ab8272a926bc170fb",
+  "installed_apk_sha256": "6807d5a200f0e98b5f329510af3c3b2807e1c2e12742affd7b6c17da0677d70f",
+  "qemu": "QEMU_ABI_BLOCKED",
+  "physical_tests_executed": false,
+  "android_diagnostics_collected": true,
+  "graphics_trace_scope": "5 seconds of existing state; no reproduction synchronized",
+  "evidence_notes": [
+    "JS log is not system Logcat",
+    "Duplicate stale/compact row bounds observed, causal link to reset pending physical validation"
+  ]
+}

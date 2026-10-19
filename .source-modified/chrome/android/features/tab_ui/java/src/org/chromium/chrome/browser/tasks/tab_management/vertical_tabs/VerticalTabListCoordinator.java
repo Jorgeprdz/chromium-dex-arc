@@ -1205,7 +1205,33 @@ public class VerticalTabListCoordinator {
     /** Rebuilds the presentation list from the current global TabModel. */
     public void refreshTabPresentation() {
         if (!mTabModelSelector.isTabStateInitialized()) return;
-        resetWithListOfTabs(mTabModelSelector.getCurrentModel());
+        TabModel model = mTabModelSelector.getCurrentModel();
+        if (model != null && reconcileStandaloneTabOrder(model)) return;
+        resetWithListOfTabs(model);
+    }
+
+    /** Preserve row models/drag holders for a pure reorder of the same standalone tabs. */
+    private boolean reconcileStandaloneTabOrder(TabModel tabModel) {
+        if (mTabVisibilityPredicate == null) return false;
+        List<Tab> tabs = getTabsForPresentation(tabModel);
+        if (tabs.size() != mModelList.size()) return false;
+        // Structural/group/pinned changes retain the full projection path. Validate the entire
+        // population before mutating: never partly reorder then fall back to a rebuild.
+        for (int i = 0; i < tabs.size(); i++) {
+            Tab tab = tabs.get(i);
+            PropertyModel row = mModelList.get(i).model;
+            if (tab.getTabGroupId() != null || tab.getIsPinned()
+                    || !TabProperties.isTabOrTabGroup(row)
+                    || TabProperties.isTabGroupHeader(row)
+                    || mModelList.indexFromTabId(tab.getId()) == TabModel.INVALID_TAB_INDEX) {
+                return false;
+            }
+        }
+        for (int i = 0; i < tabs.size(); i++) {
+            int sourceIndex = mModelList.indexFromTabId(tabs.get(i).getId());
+            if (sourceIndex != i) mModelList.move(sourceIndex, i);
+        }
+        return true;
     }
 
     private void refreshTabPresentationIfFiltered() {

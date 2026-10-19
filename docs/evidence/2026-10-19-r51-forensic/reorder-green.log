@@ -1,0 +1,10 @@
+test_group_keeps_group_projection (test_r51_reorder_projection.ReorderProjectionTests.test_group_keeps_group_projection) ... ok
+test_new_tab_keeps_structural_reset (test_r51_reorder_projection.ReorderProjectionTests.test_new_tab_keeps_structural_reset) ... ok
+test_pinned_keeps_pinned_projection (test_r51_reorder_projection.ReorderProjectionTests.test_pinned_keeps_pinned_projection) ... ok
+test_repeated_abc_reorder_preserves_models_and_selected_identity (test_r51_reorder_projection.ReorderProjectionTests.test_repeated_abc_reorder_preserves_models_and_selected_identity) ... ok
+test_unfiltered_keeps_upstream_path (test_r51_reorder_projection.ReorderProjectionTests.test_unfiltered_keeps_upstream_path) ... ok
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.873s
+
+OK

@@ -2,28 +2,26 @@
 
 Status: **QEMU_ABI_BLOCKED**
 
-Local infrastructure observation on 2026-10-19 using the verified historical artifact from run 38602932971; this is not a new-APK validation. CI regenerates this report from its exact same-run artifact.
-
 Hardware-specific validation: **PENDING_DEVICE_VALIDATION** (Galaxy GPU, Samsung Internet comparison, physical input and phone/DeX transitions).
 
 ```json
 {
   "schema_version": 1,
   "status": "QEMU_ABI_BLOCKED",
-  "source_sha": "90d3f9e5be9bccc047ebba5115aff3ae8a610e5f",
-  "run_id": "38602932971",
-  "apk_sha256": "cca0e5eba76bab179c5ae132dcb3353bfeb9e2d32dcc652a65d6bef8c3b4064d",
+  "source_sha": "fca5d00619a531a7ec8f702ab8272a926bc170fb",
+  "run_id": "39259086848",
+  "apk_sha256": "6807d5a200f0e98b5f329510af3c3b2807e1c2e12742affd7b6c17da0677d70f",
   "device_validation": "PENDING_DEVICE_VALIDATION",
   "artifact_verification": "PASS",
   "apk": {
     "package": "app.archium.android",
     "abi": "arm64-v8a",
     "signature": "VERIFIED",
-    "package_version": "package: name='app.archium.android' versionCode='808600074' versionName='157.0.8086.0' platformBuildVersionName='' platformBuildVersionCode='' compileSdkVersion='37' compileSdkVersionCodename='17'"
+    "package_version": "package: name='app.archium.android' versionCode='808600074' versionName='157.0.8086.0' platformBuildVersionName='17' platformBuildVersionCode='37' compileSdkVersion='37' compileSdkVersionCodename='17'"
   },
   "environment": {
-    "host_arch": "aarch64",
-    "host": "Linux-6.17.0-PRoot-Distro-aarch64-with-glibc2.36",
+    "host_arch": "x86_64",
+    "host": "Linux-6.17.0-1022-azure-x86_64-with-glibc2.39",
     "kvm_accessible": false,
     "emulator": null,
     "emulator_version": "UNAVAILABLE",
@@ -80,3 +78,5 @@ Reproduce: download the same run’s `Archium-for-Android-arm64` artifact, then 
 The existing local fixture is `tests/fixtures/rendering/r5-compositor.html`. Fixture, scroll, dialog, keyboard, window/lifecycle and incognito cases remain NOT_TESTED until exercised with observable evidence. Startup and a screenshot cannot establish visual correctness. No screenshot is claimed for a blocked run.
 
 Infrastructure references: [Android emulator acceleration](https://developer.android.com/studio/run/emulator-acceleration), [emulator release notes](https://developer.android.com/studio/releases/emulator). ARM64 host support depends on the actual emulator/image distribution; absence here does not prove universal impossibility.
+
+This is the actual report from run 39259086848 at implementation fca5d00619a531a7ec8f702ab8272a926bc170fb. A subsequent repair build must publish its own report; this report cannot validate another SHA/APK.

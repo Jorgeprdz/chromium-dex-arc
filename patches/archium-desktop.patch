@@ -424,7 +424,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          mVerticalTabsActiveSupplier.removeObserver(mActiveObserver);
          if (mBackPressManager.has(BackPressHandler.Type.CANCEL_TAB_SWITCHER_DRAG)) {
              mBackPressManager.removeHandler(BackPressHandler.Type.CANCEL_TAB_SWITCHER_DRAG);
-@@ -1116,6 +1170,98 @@
+@@ -1116,6 +1170,124 @@
          if (mTabModelSelector.isTabStateInitialized()) {
              resetWithListOfTabs(tabModel);
          }
@@ -463,7 +463,33 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 +    /** Rebuilds the presentation list from the current global TabModel. */
 +    public void refreshTabPresentation() {
 +        if (!mTabModelSelector.isTabStateInitialized()) return;
-+        resetWithListOfTabs(mTabModelSelector.getCurrentModel());
++        TabModel model = mTabModelSelector.getCurrentModel();
++        if (model != null && reconcileStandaloneTabOrder(model)) return;
++        resetWithListOfTabs(model);
++    }
++
++    /** Preserve row models/drag holders for a pure reorder of the same standalone tabs. */
++    private boolean reconcileStandaloneTabOrder(TabModel tabModel) {
++        if (mTabVisibilityPredicate == null) return false;
++        List<Tab> tabs = getTabsForPresentation(tabModel);
++        if (tabs.size() != mModelList.size()) return false;
++        // Structural/group/pinned changes retain the full projection path. Validate the entire
++        // population before mutating: never partly reorder then fall back to a rebuild.
++        for (int i = 0; i < tabs.size(); i++) {
++            Tab tab = tabs.get(i);
++            PropertyModel row = mModelList.get(i).model;
++            if (tab.getTabGroupId() != null || tab.getIsPinned()
++                    || !TabProperties.isTabOrTabGroup(row)
++                    || TabProperties.isTabGroupHeader(row)
++                    || mModelList.indexFromTabId(tab.getId()) == TabModel.INVALID_TAB_INDEX) {
++                return false;
++            }
++        }
++        for (int i = 0; i < tabs.size(); i++) {
++            int sourceIndex = mModelList.indexFromTabId(tabs.get(i).getId());
++            if (sourceIndex != i) mModelList.move(sourceIndex, i);
++        }
++        return true;
 +    }
 +
 +    private void refreshTabPresentationIfFiltered() {
@@ -523,7 +549,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
      }
 
      /**
-@@ -1126,9 +1272,10 @@
+@@ -1126,9 +1298,10 @@
          if (tabModel == null) return;
 
          mMediator.resetWithListOfTabs(
@@ -535,7 +561,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          mPinnedTabsMediator.updateTabModel(tabModel);
          boolean isIncognito =
                  !IncognitoUtils.shouldOpenIncognitoAsWindow() && tabModel.isIncognitoBranded();
-@@ -2373,9 +2520,21 @@
+@@ -2373,9 +2546,21 @@
                                  mContainerModel.get(VerticalTabListProperties.COLLAPSE_STATE));
 
          TabModel model = mTabModelSelector.getCurrentModel();
@@ -563,7 +589,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinatorUnitTest.java b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinatorUnitTest.java
 --- a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinatorUnitTest.java
 +++ b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinatorUnitTest.java
-@@ -4027,6 +4027,117 @@
+@@ -4027,6 +4027,144 @@
          assertEquals(View.VISIBLE, separator.getVisibility());
      }
 
@@ -591,6 +617,33 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 +        mCoordinator.setTabVisibilityPredicate(null);
 +        assertEquals(4, adapter.getModelList().size());
 +        assertEquals(4, mTabModel.getCount());
++    }
++
++    // Real coordinator/model adapter, mocked TabModel; visual/GPU acceptance remains separate.
++    @Test
++    public void testArcStandaloneReordersKeepRowIdentityExpandedAndCollapsed() {
++        List<Tab> tabs = setupMockTabModelWithPinnedAndRegularTabs(0, 3);
++        createCoordinator();
++        mCoordinator.setTabVisibilityPredicate(tabId -> true);
++        TabListRecyclerView recycler =
++                mCoordinator.getView().findViewById(R.id.tab_list_recycler_view);
++        SimpleRecyclerViewAdapter adapter = (SimpleRecyclerViewAdapter) recycler.getAdapter();
++        List<PropertyModel> original = new ArrayList<>();
++        for (int i = 0; i < 3; i++) original.add(adapter.getModelList().get(i).model);
++        for (int state : new int[] {RailCollapseState.EXPANDED, RailCollapseState.COLLAPSED}) {
++            mCoordinator.setRailCollapseState(state);
++            for (int repeat = 0; repeat < 12; repeat++) {
++                Collections.rotate(tabs, 1);
++                mCoordinator.refreshTabPresentation();
++                assertEquals(3, adapter.getModelList().size());
++                for (int i = 0; i < 3; i++) {
++                    PropertyModel row = adapter.getModelList().get(i).model;
++                    int id = tabs.get(i).getId();
++                    assertEquals(id, row.get(TabProperties.TAB_ID));
++                    org.junit.Assert.assertSame(original.get(id - 1), row);
++                }
++            }
++        }
 +    }
 +
 +    // SIMULATED_BOUNDARY: pinned/regular production projection with a mocked Chromium TabModel.

@@ -135,8 +135,8 @@
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/NestedLayoutDelegate.java": "d8d533fa1ef88fcf2534bf597b6e367bdee8cd50776686a457636dc9eecc3d87",
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/TabListMediator.java": "2c2ae5c75b649b60c6d327b0957b4dcdbe71f06b55b7b60f13f29a22f63cd2d5",
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinder.java": "99b96c98a4e9eb724ee6192ea80bf355a753c148fa3f855728e50827fb5c982b",
-    "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinator.java": "fa2d5e20512cfbaa5d85c9ad901e29f1f8b6ff7a85ebccf974c2d661df037db3",
-    "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinatorUnitTest.java": "082a963fc6f03a7f54aaa0c96b4b69253dd3fdccd9c7f20c00ffe9404dd9fdef",
+    "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinator.java": "7a0789840baa4d0ad18e760eb0777e237a5b60aa2084bb2c38bc321e48fa9c9c",
+    "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinatorUnitTest.java": "89590c93caca6f28c87ec7704a7812a281d53a1f3b767b57a8a7bb493c10bdd8",
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListViewBinder.java": "885459c89678f9f24ad2ab853778bd2b273bf377a77f6e562e5d65390049a803",
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabRailLayout.java": "977b4100eb5ea83993b87237bb3353e8a35ba48fc78486e80e3a98d6d01d8561",
     "chrome/android/java/res_chromium_base/values/channel_constants.xml": "e4909d3f5731496c09e1fb02be7f16c348a522d00c620346f95967df2ca68a83",
@@ -254,5 +254,5 @@
     "components/password_manager/core/browser/password_store/password_store_backend.cc": "45764d4ad0e05acc5a216944a5a6763212f6c17e71bf689e9c973f12fb5c87d8",
     "components/password_manager/core/browser/password_store/password_store_interface.cc": "7e9dd5813ce8ece459ec66abdd3306028b7b3d6bbae048664872a34d8d097268"
   },
-  "patch_sha256": "18213a01553dd6aea549832511baef608b14bf2b453db0eaa20d226ed817aa4a"
+  "patch_sha256": "eb96a1efe346980a58eb3df5792515543f516889e9c8940f4615b8fdaa62f14f"
 }
