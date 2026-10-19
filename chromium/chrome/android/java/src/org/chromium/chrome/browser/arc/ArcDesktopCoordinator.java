@@ -529,6 +529,8 @@ public final class ArcDesktopCoordinator {
             scheduleAppearance();
         };
         rail.addOnLayoutChangeListener(mLayoutListener);
+        mMenuButtonWrapper.addOnLayoutChangeListener(mLayoutListener);
+        mNewTabRow.addOnLayoutChangeListener(mLayoutListener);
         mIncognitoStateProvider.addIncognitoStateObserverAndTrigger(mIncognitoObserver);
         mFontLayoutListener = () -> {
             if (mDestroyed) return;
@@ -952,7 +954,9 @@ public final class ArcDesktopCoordinator {
                 ArcDesktopPolicy.showFullControls(
                         mRail.getWidth(),
                         mRail.getHeight(),
-                        density) && collectionBudget >= dp(80);
+                        density);
+        // Collection scrolling can run out of height while navigation still fits the wide rail.
+        // Budget only the collection area; do not turn a wide sidebar into the compact layout.
         // Keep the real Chromium LocationBar visible even in collapsed mode so keyboard/focus
         // paths never target a GONE omnibox. Secondary Arc controls are restored on expansion.
         mHeader.setVisibility(View.VISIBLE);
@@ -981,11 +985,19 @@ public final class ArcDesktopCoordinator {
             mExtensionsToolbarHost.setVisibility(expanded ? View.VISIBLE : View.GONE);
             View toolbar = mActivity.findViewById(R.id.toolbar);
             if (expanded && toolbar instanceof ToolbarTablet tablet) {
-                tablet.updateArcExtensionsWidth(Math.max(0, mRail.getWidth() - dp(132)));
+                // The native menu is not guaranteed to be 44dp (theme, padding and font scale).
+                // Reserve its measured width, both Arc buttons and rail insets before allocating
+                // extension icons. Its layout listener refreshes this budget after first measure.
+                tablet.updateArcExtensionsWidth(Math.max(0, mRail.getWidth()
+                        - mRail.getPaddingLeft() - mRail.getPaddingRight()
+                        - Math.max(dp(ArcDesktopPolicy.ARC_NAV_BUTTON_WIDTH_DP),
+                                mMenuButtonWrapper.getMeasuredWidth())
+                        - 2 * dp(ArcDesktopPolicy.ARC_NAV_BUTTON_WIDTH_DP)));
             }
         }
         if (mCollectionsView != null) {
-            mCollectionsView.setVisibility(expanded ? View.VISIBLE : View.GONE);
+            mCollectionsView.setVisibility(
+                    expanded && collectionBudget >= dp(80) ? View.VISIBLE : View.GONE);
         }
         applyFrameGeometry();
         if (expanded && mCollectionsView != null) {
@@ -1027,7 +1039,13 @@ public final class ArcDesktopCoordinator {
         if (!TextUtils.equals(mNewTabRow.getText(), label)) mNewTabRow.setText(label);
         mNewTabRow.setCompoundDrawablesRelative(mNewTabIcon, null, null, null);
         mNewTabRow.setCompoundDrawablePadding(expanded ? dp(8) : 0);
-        int padding = expanded ? dp(12) : Math.max(0, (mRail.getWidth() - dp(24)) / 2);
+        int availableWidth = Math.max(0, mRail.getWidth()
+                - mRail.getPaddingLeft() - mRail.getPaddingRight());
+        int rowWidth = Math.min(mNewTabRow.getWidth(), availableWidth);
+        if (rowWidth <= 0) {
+            rowWidth = availableWidth;
+        }
+        int padding = expanded ? dp(12) : Math.max(0, (rowWidth - dp(24)) / 2);
         mNewTabRow.setPadding(padding, 0, padding, 0);
         mNewTabRow.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
         mNewTabRow.setEnabled(mNativeNewTabButton.isEnabled());
@@ -1267,7 +1285,7 @@ public final class ArcDesktopCoordinator {
             GradientDrawable active = new GradientDrawable();
             active.setColor(selection);
             active.setCornerRadius(dp(8));
-            states.addState(new int[] {state}, active);
+            states.addState(new int[] {android.R.attr.state_enabled, state}, active);
         }
         GradientDrawable idle = new GradientDrawable();
         idle.setColor("arc-header-tile".equals(view.getTag())
@@ -1305,6 +1323,8 @@ public final class ArcDesktopCoordinator {
         clearCollections();
         mPreferences.unregisterOnSharedPreferenceChangeListener(mPreferenceListener);
         mRail.removeOnLayoutChangeListener(mLayoutListener);
+        mMenuButtonWrapper.removeOnLayoutChangeListener(mLayoutListener);
+        mNewTabRow.removeOnLayoutChangeListener(mLayoutListener);
         if (mColorDialog != null) mColorDialog.dismiss();
         if (mAboutDialog != null) mAboutDialog.dismiss();
         View locationBar = mLocationBarHost.findViewById(R.id.location_bar);
