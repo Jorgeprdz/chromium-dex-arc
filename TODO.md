@@ -159,3 +159,21 @@ Rama activa/run 39296066030 preservados; ningún build nuevo desde investigació
   al cambiar el usuario de aplicación. No introducir flags GPU por tanteo.
 
 [Informe R5.2C](docs/validation/R5_2C_AMAZON_NATIVE_DIALOGS.md). Sin nuevo build.
+
+## R5.2D — frontera paint/raster/composición, sin build
+
+- [x] Captura sincronizada real de Amazon y scroll: imágenes negras antes del
+  desplazamiento y repeticiones de texto/imágenes después. P0-01 continúa FAIL.
+- [x] Relacionar tres imágenes DOM con capas y recuperar replays software
+  visualmente normales. No son readbacks de tiles GPU ni una pareja atómica.
+- [x] Analizar traza: 97 frames con layer_name de Archium en la ventana de scroll;
+  pérdidas/import errors y ausencia de eventos de tiles impiden causa concluyente.
+- [x] Preparar fixture de reciclaje/capas y sonda privada acotada; 7 tests Node y
+  15 Python PASS locales. No equivalen a GREEN gráfico.
+- [ ] Ejecutar nueva fixture en Galaxy/Chrome Android y enlazar raster/resources
+  con composición. Referencia Chromium Linux bloqueada al conectar a CDP.
+- [ ] Causa raíz, fix mínimo y GREEN visual de Amazon siguen pendientes.
+  QEMU_ABI_BLOCKED y aceptación GPU/DeX pendientes; fix 5184755 preservado aislado.
+
+[Informe R5.2D y evidencia](docs/validation/R5_2D_AMAZON_COMPOSITOR_ROOT_CAUSE.md).
+Sin nuevos runs, integración del fix nativo ni cambios de flags/checkpoints.
