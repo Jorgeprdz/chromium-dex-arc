@@ -86,3 +86,24 @@ class TraceCaptureTests(unittest.TestCase):
     self.assertEqual(result,1)
    receipt=json.loads((Path(d)/'capture/trace-receipt.json').read_text())
    self.assertEqual(receipt['status'],'CAPTURE_BLOCKED');self.assertNotIn('SECRET',str(receipt))
+ def test_android_output_policy_allows_trace_to_be_pulled_privately(self):
+  import sys,json,subprocess,stat
+  from unittest.mock import patch
+  m=self.module()
+  # Android's perfetto domain can write its designated trace directory, not
+  # arbitrary shell-writable paths. Model that external permission boundary.
+  def android(args,**kwargs):
+   if 'perfetto' in args:
+    remote=args[args.index('-o')+1]
+    allowed=remote.startswith('/data/misc/perfetto-traces/')
+    return subprocess.CompletedProcess(args,0 if allowed else 1,stdout='',stderr='')
+   if 'pull' in args:
+    Path(args[-1]).write_bytes(b'fixture trace bytes')
+    return subprocess.CompletedProcess(args,0,stdout=b'',stderr=b'')
+   raise AssertionError('Unexpected device action')
+  with tempfile.TemporaryDirectory() as d:
+   with patch.object(sys,'argv',['trace','--serial','device','--output',d+'/capture','--execute','--fixture-confirmed']),patch.object(m.subprocess,'run',side_effect=android):
+    self.assertEqual(m.main(),0,'Trace capture must survive Android output-directory policy')
+   receipt=json.loads((Path(d)/'capture/trace-receipt.json').read_text())
+   self.assertEqual(receipt['status'],'CAPTURED')
+   self.assertEqual(stat.S_IMODE((Path(d)/'capture/incident.PRIVATE.pftrace').stat().st_mode),0o600)

@@ -144,3 +144,18 @@ Rama activa/run 39296066030 preservados; ningún build nuevo desde investigació
   ventanas reales siguen pendientes. QEMU_ABI_BLOCKED no cambia.
 
 [Diagnóstico, RED/GREEN y límites R5.2B](docs/validation/R5_2B_NATIVE_DIALOG_ROOT_CAUSE.md).
+
+## R5.2C — Amazon directo sobre APK 3db367a
+
+- [x] Confirmar por hash que la APK instalada es la publicada en 39296066030;
+  todavía no incluye el fix nativo 5184755. No se declara autoinstalación.
+- [x] Reproducir en Amazon corrupción de imágenes/texto con imágenes DOM
+  decodificadas y sin fallos HTTP/transporte de imagen en la ventana registrada.
+- [x] Diferencial de imágenes: PNG local tras scroll sin diferencias; tres
+  muestras AVIF reales y sus PNG visibles en composición simple normal/multiply.
+- [x] Corregir path de output de Perfetto con RED/GREEN; captura real recuperada.
+- [ ] Amazon: causa gráfica y fix de producto pendientes. La traza recuperada
+  no se sincronizó con el scroll y no es prueba causal. Se detuvieron acciones
+  al cambiar el usuario de aplicación. No introducir flags GPU por tanteo.
+
+[Informe R5.2C](docs/validation/R5_2C_AMAZON_NATIVE_DIALOGS.md). Sin nuevo build.

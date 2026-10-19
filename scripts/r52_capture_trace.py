@@ -35,7 +35,7 @@ def main():
     if a.execute and not a.fixture_confirmed:raise SystemExit('Select only the original local diagnostic fixture before capture')
     if a.output.exists():raise SystemExit('Fresh private output directory required')
     a.output.mkdir(parents=True,mode=0o700)
-    remote='/data/local/tmp/archium-r52-'+uuid.uuid4().hex+'.pftrace'
+    remote='/data/misc/perfetto-traces/archium-r52-'+uuid.uuid4().hex+'.pftrace'
     command=['adb','-s',a.serial,'shell','perfetto','--txt','-c','-','-o',remote]
     (a.output/'trace.pbtxt').write_text(CONFIG)
     record=dict(utc=datetime.now(timezone.utc).isoformat(),duration_seconds=8,buffer_kib=4096,
