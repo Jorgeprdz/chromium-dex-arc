@@ -1,0 +1,107 @@
+import static org.junit.Assert.*;
+import android.animation.*;
+import android.app.Activity;
+import android.content.Context;
+import android.content.res.Resources;
+import android.view.*;
+import android.view.accessibility.AccessibilityNodeInfo;
+import android.widget.*;
+import android.util.Log;
+import java.util.*;
+import java.util.function.Supplier;
+import org.junit.*;
+import org.junit.runner.RunWith;
+import org.robolectric.*;
+import org.robolectric.annotation.*;
+@SuppressWarnings({"unchecked","deprecation"})
+@RunWith(RobolectricTestRunner.class)
+@Config(manifest=Config.NONE,sdk={30,36},qualifiers="mdpi")
+@GraphicsMode(GraphicsMode.Mode.LEGACY)
+@SQLiteMode(SQLiteMode.Mode.LEGACY)
+public class NativeDialogGateProbe {
+ final org.robolectric.android.controller.ActivityController<Activity> activity=Robolectric.buildActivity(Activity.class).setup();
+ @After public void cleanup(){activity.pause().stop().destroy();}
+ static <T> T assumeNonNull(T t){return Objects.requireNonNull(t);}
+ static class ControlsPosition {static final int TOP=0,BOTTOM=1;}
+ static class Controls {
+  int mControlsPosition=0,topHeight=0,bottomHeight=48,topOffset=0,bottomOffset=0;
+  int getControlsPosition(){return mControlsPosition;}
+  int getTopControlsHeight(){return topHeight;} int getBottomControlsHeight(){return bottomHeight;}
+  int getTopControlOffset(){return topOffset;} int getBottomControlOffset(){return bottomOffset;}
+  __MANAGER__
+ }
+ static class BrowserControlsUtils {__UTIL__}
+ static class R {
+  static class id {static final int coordinator=1000,tab_modal_dialog_container=1001;}
+  static class drawable {static final int dialog_bg_no_shadow=android.R.drawable.dialog_holo_light_frame;}
+  static class dimen {static final int modal_dialog_view_horizontal_margin_lff=android.R.dimen.app_icon_size;}
+  static class color {static final int modal_dialog_scrim_color_lff=android.R.color.black;}
+ }
+ static class ContextCompat {static int getColor(Context c,int id){return c.getColor(id);}}
+ static class ModalDialogFeatureMap {static boolean isLargeFormFactorUiEnabled(Context c){return false;}}
+ static class Interpolators {
+  static final android.animation.TimeInterpolator LINEAR_OUT_SLOW_IN_INTERPOLATOR=new android.view.animation.LinearInterpolator();
+  static final android.animation.TimeInterpolator FAST_OUT_LINEAR_IN_INTERPOLATOR=new android.view.animation.LinearInterpolator();
+ }
+ static class PropertyModel {
+  final Map<Object,Object> fields=new HashMap<>();
+  static class Builder {final PropertyModel m=new PropertyModel();Builder(Object[] keys){} Builder with(Object k,Object v){m.fields.put(k,v);return this;}PropertyModel build(){return m;}}
+  <T>T get(Object k){return (T)fields.get(k);}void set(Object k,Object v){fields.put(k,v);}
+ }
+ static class ScrimProperties {static final Object AFFECTS_STATUS_BAR=new Object(),AFFECTS_NAVIGATION_BAR=new Object(),ANCHOR_VIEW=new Object(),TOP_MARGIN=new Object(),BOTTOM_MARGIN=new Object(),BACKGROUND_COLOR=new Object(),CUSTOM_PARENT=new Object();static final Object[] ALL_KEYS={};}
+ static class ScrimManager {boolean visible;void showScrim(PropertyModel m){visible=true;}void hideScrim(PropertyModel m,boolean animate){visible=false;}}
+ static class TabObscuringHandler {static class Target {static final int TAB_CONTENT=0;}Object obscure(int t){return new Object();}void unobscure(Object token){}}
+ static class FakeTab {int getId(){return 7;}}
+ static class ModalDialogView extends FrameLayout {ModalDialogView(Context c){super(c);setMinimumHeight(100);}void onEnterAnimationStarted(long d){}void blockInputs(boolean b){}}
+ static class ViewCompat {static boolean isAttachedToWindow(View v){return v.isAttachedToWindow();}}
+ static class Processor {void destroy(){}}
+ static class Base {
+  final Context mContext;FrameLayout mDialogContainer;ModalDialogView mDialogView;PropertyModel model;
+  static final int ENTER_EXIT_ANIMATION_DURATION_MS=0;
+  Base(Context c){mContext=c;}
+  ViewGroup getDialogContainer(){return mDialogContainer;}PropertyModel getDialogModel(){return model;}
+  void updateContainerHierarchy(boolean front){}
+  Processor mModelChangeProcessor;void setBrowserControlsAccess(boolean restricted){}
+  __BASE__
+ }
+ class Presenter extends Base {
+  final Activity mActivity;final Controls mBrowserControlsVisibilityManager=new Controls();
+  final TabObscuringHandler obscuring=new TabObscuringHandler();final ScrimManager scrim=new ScrimManager();
+  final Supplier<TabObscuringHandler> mTabObscuringHandlerSupplier=()->obscuring;
+  final Supplier<ScrimManager> mScrimManagerSupplier=()->scrim;
+  Object mTabObscuringToken;PropertyModel mScrimModel;ScrimManager mScrimManager;
+  ViewGroup mContainerParent;int mBottomControlsHeight,mArcModalTraceEvents;boolean mShouldUpdateContainerLayoutParams,mRunEnterAnimationOnCallback;
+  FakeTab mActiveTab=new FakeTab();
+  Presenter(){super(activity.get());mActivity=activity.get();FrameLayout root=new FrameLayout(mActivity);root.setId(R.id.coordinator);mContainerParent=root;
+   mDialogContainer=new FrameLayout(mActivity);mDialogContainer.setId(R.id.tab_modal_dialog_container);mDialogContainer.setVisibility(View.GONE);
+   root.addView(mDialogContainer,new FrameLayout.LayoutParams(-1,-1));mActivity.setContentView(root);root.layout(0,0,800,600);}
+  void start(){model=new PropertyModel();mDialogView=new ModalDialogView(mActivity);showDialogContainer();settle();}
+  void settle(){Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();mDialogContainer.measure(View.MeasureSpec.makeMeasureSpec(800,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(600,View.MeasureSpec.EXACTLY));mDialogContainer.layout(0,0,800,600);Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();}
+  void offset(){onControlsOffsetChanged(0,0,false,0,0,false,true,false);settle();}
+  void dismiss(){removeDialogView(model);settle();model=null;}
+  boolean doesScrimAffectNavBar(){return false;}int getScrimBottomMargin(boolean affects){return 0;}
+  void maybeUpdateDialogLayout(){mShouldUpdateContainerLayoutParams=false;}
+  int getContainerTopMargin(Controls c){return c.getTopControlsHeight();}
+  __CHROME__
+ }
+ @Test public void traceIsOptInBoundedAndContainsNoDialogText(){org.robolectric.shadows.ShadowLog.setLoggable("ArchiumModal",Log.DEBUG);Presenter p=new Presenter();p.start();for(int i=0;i<70;i++)p.offset();java.util.List<org.robolectric.shadows.ShadowLog.LogItem> logs=org.robolectric.shadows.ShadowLog.getLogsForTag("ArchiumModal");assertFalse("opt-in metadata must record show/attach",logs.isEmpty());assertTrue(logs.size()<=24);assertTrue(logs.stream().anyMatch(e->e.msg.contains("attach_after")));assertTrue(logs.stream().allMatch(e->!e.msg.contains("PRUEBA")&&!e.msg.contains("content://")));p.dismiss();logs=org.robolectric.shadows.ShadowLog.getLogsForTag("ArchiumModal");assertTrue(logs.size()<=26);assertTrue(logs.get(logs.size()-1).msg.contains("remove_after"));org.robolectric.shadows.ShadowLog.setLoggable("ArchiumModal",Log.INFO);}
+ @Test public void absentTopControlsMustAttachDespiteHiddenRatioOne(){Presenter p=new Presenter();assertEquals(1f,p.mBrowserControlsVisibilityManager.getBrowserControlHiddenRatio(),0);p.start();assertTrue(p.scrim.visible);System.out.println("HOST_GATE top_h=0 hidden_ratio="+p.mBrowserControlsVisibilityManager.getBrowserControlHiddenRatio()+" pending="+p.mRunEnterAnimationOnCallback+" children="+p.mDialogContainer.getChildCount()+" visibility="+p.mDialogContainer.getVisibility());assertEquals("No toolbar must not deadlock attachment",1,p.mDialogContainer.getChildCount());assertEquals(View.VISIBLE,p.mDialogContainer.getVisibility());assertTrue(p.mDialogView.getHeight()>0);assertTrue(p.mDialogView.isAttachedToWindow());p.dismiss();}
+ @Test public void absentBottomControlsMustAttachWithNonzeroOppositeStack(){Presenter p=new Presenter();Controls c=p.mBrowserControlsVisibilityManager;c.mControlsPosition=ControlsPosition.BOTTOM;c.topHeight=90;c.bottomHeight=0;p.start();assertEquals(1,p.mDialogContainer.getChildCount());p.dismiss();}
+ @Test public void presentControlsWaitForVisibilityThenAttachExactlyOnce(){Presenter p=new Presenter();Controls c=p.mBrowserControlsVisibilityManager;c.topHeight=90;c.topOffset=-30;p.start();assertEquals(0,p.mDialogContainer.getChildCount());assertTrue(p.mRunEnterAnimationOnCallback);c.topOffset=0;p.offset();assertEquals(1,p.mDialogContainer.getChildCount());p.offset();assertEquals(1,p.mDialogContainer.getChildCount());p.dismiss();}
+ @Test public void pendingDialogRecoversWhenToolbarRemovedWithoutOffsetEvent(){Presenter p=new Presenter();Controls c=p.mBrowserControlsVisibilityManager;c.topHeight=90;c.topOffset=-30;p.start();assertEquals(0,p.mDialogContainer.getChildCount());c.topHeight=0;p.onTopControlsHeightChanged(0,0);p.settle();assertEquals(1,p.mDialogContainer.getChildCount());p.dismiss();}
+ @Test public void pendingBottomDialogRecoversWhenBottomStackRemoved(){Presenter p=new Presenter();Controls c=p.mBrowserControlsVisibilityManager;c.mControlsPosition=ControlsPosition.BOTTOM;c.bottomHeight=48;c.bottomOffset=24;p.start();assertEquals(0,p.mDialogContainer.getChildCount());c.bottomHeight=0;p.onBottomControlsHeightChanged(0,0);p.settle();assertEquals(1,p.mDialogContainer.getChildCount());p.dismiss();}
+ @Test public void closingDeferredDialogPreventsLateHeightCallbacksFromReattaching(){Presenter p=new Presenter();p.mBrowserControlsVisibilityManager.topHeight=90;p.mBrowserControlsVisibilityManager.topOffset=-45;p.start();assertEquals(0,p.mDialogContainer.getChildCount());ModalDialogView abandoned=p.mDialogView;p.dismiss();p.mBrowserControlsVisibilityManager.topHeight=0;p.onTopControlsHeightChanged(0,0);p.offset();assertEquals(0,p.mDialogContainer.getChildCount());assertNull(abandoned.getParent());assertNull(p.getDialogModel());assertFalse(p.scrim.visible);}
+ @Test public void repeatedDialogsDoNotLeaveViewsAndStaleCallbacksDoNotReattach(){Presenter p=new Presenter();for(int i=0;i<25;i++){p.start();assertEquals(1,p.mDialogContainer.getChildCount());ModalDialogView old=p.mDialogView;p.dismiss();assertNull(old.getParent());assertEquals(0,p.mDialogContainer.getChildCount());p.offset();assertEquals(0,p.mDialogContainer.getChildCount());}}
+ static class ModalDialogProperties {static class ButtonType {static final int POSITIVE=1,NEGATIVE=2;}}
+ static class DialogDismissalCause {static final int POSITIVE_BUTTON_CLICKED=1,NEGATIVE_BUTTON_CLICKED=2,DISMISSED_BY_NATIVE=3;}
+ static class CustomInput {String text="";String getPromptText(){return text;}boolean isSuppressCheckBoxChecked(){return false;}}
+ static class JavascriptController {
+  static final String TAG="TestJsController";
+  PropertyModel mDialogModel=new PropertyModel();CustomInput mDialogCustomView=new CustomInput();DialogManager mModalDialogManager=new DialogManager(this);
+  String accepted;Boolean cancelled;int completions;
+  void accept(String text,boolean suppress){accepted=text;completions++;}void cancel(boolean clicked,boolean suppress){cancelled=clicked;completions++;}
+  __JS__
+ }
+ static class DialogManager {final JavascriptController c;DialogManager(JavascriptController c){this.c=c;}void dismissDialog(PropertyModel m,int cause){c.onDismiss(m,cause);}}
+ @Test public void deliveredJavascriptControllerPreservesAcceptCancelAndPromptValues(){for(String text:new String[]{"","PRUEBA","á漢字"}){JavascriptController c=new JavascriptController();c.mDialogCustomView.text=text;c.onClick(c.mDialogModel,ModalDialogProperties.ButtonType.POSITIVE);assertEquals(text,c.accepted);assertEquals(1,c.completions);assertNull(c.mDialogModel);assertNull(c.mDialogCustomView);assertNull(c.mModalDialogManager);}JavascriptController negative=new JavascriptController();negative.onClick(negative.mDialogModel,ModalDialogProperties.ButtonType.NEGATIVE);assertEquals(Boolean.TRUE,negative.cancelled);JavascriptController back=new JavascriptController();back.onDismiss(back.mDialogModel,99);assertEquals(Boolean.FALSE,back.cancelled);JavascriptController nativeDismiss=new JavascriptController();nativeDismiss.onDismiss(nativeDismiss.mDialogModel,DialogDismissalCause.DISMISSED_BY_NATIVE);assertEquals(0,nativeDismiss.completions);}
+}

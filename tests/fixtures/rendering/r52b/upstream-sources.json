@@ -1,0 +1,10 @@
+{
+  "revision": "cfd94726b7b5fb48aedcc32662f2f3fbdbadec35",
+  "files": {
+    "chrome/android/java/src/org/chromium/chrome/browser/modaldialog/ChromeTabModalPresenter.java": "db48f93621edbe71342ef7b803b17a844c0972598557e2d60e0fca6797310627",
+    "components/browser_ui/modaldialog/android/java/src/org/chromium/components/browser_ui/modaldialog/TabModalPresenter.java": "029b498d863e6bd80fc495a053ff1d8186e5801249230f1ce303ec4c07fb79cb",
+    "chrome/android/java/src/org/chromium/chrome/browser/fullscreen/BrowserControlsManager.java": "7a0573e437a25a531dda929e9fbf8d96f24d8dccad166ef09909ba2e10e23a3a",
+    "chrome/browser/browser_controls/android/java/src/org/chromium/chrome/browser/browser_controls/BrowserControlsUtils.java": "9cf6510e128dd9485f8eec90ff795b25824e8843ea7923a18ccaafa8ee5ba447",
+    "components/javascript_dialogs/android/java/src/org/chromium/components/javascript_dialogs/JavascriptModalDialog.java": "f36141512519edab50eb3f272f69833056445f79f9f0c5d2164994bb985d785b"
+  }
+}

@@ -902,6 +902,157 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
      private void applySideUiContentOffsetX(SideUiSpecs sideUiSpecs) {
          @Px int leftSideUiWidth = sideUiSpecs.getReservedWidth(AnchorSide.LEFT);
          mLayoutManager.setContentOffsetX(leftSideUiWidth);
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/modaldialog/ChromeTabModalPresenter.java b/chrome/android/java/src/org/chromium/chrome/browser/modaldialog/ChromeTabModalPresenter.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/modaldialog/ChromeTabModalPresenter.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/modaldialog/ChromeTabModalPresenter.java
+@@ -21,6 +21,7 @@
+ import org.chromium.cc.input.BrowserControlsState;
+ import org.chromium.chrome.R;
+ import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider;
++import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider.ControlsPosition;
+ import org.chromium.chrome.browser.browser_controls.BrowserControlsUtils;
+ import org.chromium.chrome.browser.browser_controls.BrowserControlsVisibilityManager;
+ import org.chromium.chrome.browser.fullscreen.FullscreenManager;
+@@ -82,6 +83,9 @@
+      */
+     private boolean mRunEnterAnimationOnCallback;
+
++    // Opt-in incident metadata only; no dialog text, origin or user input.
++    private int mArcModalTraceEvents;
++
+     /**
+      * The sibling view of the dialog container drawn next in its parent when it should be behind
+      * browser controls. If BottomSheet is opened or UrlBar is focused, the dialog container should
+@@ -177,14 +181,16 @@
+
+     @Override
+     protected void showDialogContainer() {
++        mArcModalTraceEvents = 0;
++        traceDialogState("show_request");
+         maybeUpdateDialogLayout();
+
+-        // Don't show the dialog container before browser controls are guaranteed fully visible.
+-        if (BrowserControlsUtils.areBrowserControlsFullyVisible(
+-                mBrowserControlsVisibilityManager)) {
++        // A missing active toolbar reports hiddenRatio=1, but has no reveal animation to await.
++        if (areBrowserControlsReadyForDialog()) {
+             runEnterAnimation();
+         } else {
+             mRunEnterAnimationOnCallback = true;
++            traceDialogState("show_deferred");
+         }
+         assert mTabObscuringToken == null;
+         mTabObscuringToken =
+@@ -233,6 +239,49 @@
+     }
+
+     @Override
++    protected void runEnterAnimation() {
++        traceDialogState("attach_before");
++        super.runEnterAnimation();
++        traceDialogState("attach_after");
++    }
++
++    private void traceDialogState(String stage) {
++        if (!android.util.Log.isLoggable("ArchiumModal", android.util.Log.DEBUG)
++                || getDialogModel() == null) {
++            return;
++        }
++        // Keep the final close transition even after a noisy sequence of control callbacks.
++        if (mArcModalTraceEvents >= 24 && !stage.startsWith("remove_")) return;
++        mArcModalTraceEvents++;
++        ViewGroup container = getDialogContainer();
++        android.util.Log.d(
++                "ArchiumModal",
++                "stage=" + stage
++                        + " mono_ns=" + android.os.SystemClock.elapsedRealtimeNanos()
++                        + " thread=" + android.os.Process.myTid()
++                        + " model=" + System.identityHashCode(getDialogModel())
++                        + " presenter=" + System.identityHashCode(this)
++                        + " activity=" + System.identityHashCode(mActivity)
++                        + " window=" + System.identityHashCode(mActivity.getWindow())
++                        + " token=" + System.identityHashCode(
++                                mActivity.getWindow().getDecorView().getWindowToken())
++                        + " tab=" + (mActiveTab == null ? -1 : mActiveTab.getId())
++                        + " position=" + mBrowserControlsVisibilityManager.getControlsPosition()
++                        + " top_h=" + mBrowserControlsVisibilityManager.getTopControlsHeight()
++                        + " bottom_h=" + mBrowserControlsVisibilityManager.getBottomControlsHeight()
++                        + " top_offset=" + mBrowserControlsVisibilityManager.getTopControlOffset()
++                        + " bottom_offset=" + mBrowserControlsVisibilityManager.getBottomControlOffset()
++                        + " hidden_ratio=" + mBrowserControlsVisibilityManager.getBrowserControlHiddenRatio()
++                        + " pending=" + mRunEnterAnimationOnCallback
++                        + " container=" + System.identityHashCode(container)
++                        + " visibility=" + (container == null ? -1 : container.getVisibility())
++                        + " children=" + (container == null ? -1 : container.getChildCount())
++                        + " width=" + (container == null ? -1 : container.getWidth())
++                        + " height=" + (container == null ? -1 : container.getHeight())
++                        + " focus=" + (container != null && container.hasFocus()));
++    }
++
++    @Override
+     protected void setBrowserControlsAccess(boolean restricted) {
+         if (restricted) {
+             mActiveTab = mTabModelSelector.getCurrentTab();
+@@ -296,6 +345,7 @@
+     @Override
+     protected void removeDialogView(@Nullable PropertyModel model) {
+         assumeNonNull(mTabObscuringToken);
++        traceDialogState("remove_before");
+
+         mRunEnterAnimationOnCallback = false;
+         mTabObscuringHandlerSupplier.get().unobscure(mTabObscuringToken);
+@@ -307,6 +357,7 @@
+         }
+
+         super.removeDialogView(model);
++        traceDialogState("remove_after");
+     }
+
+     @Override
+@@ -319,10 +370,24 @@
+             boolean bottomControlsMinHeightChanged,
+             boolean requestNewFrame,
+             boolean isVisibilityForced) {
++        traceDialogState("controls_offset");
++        maybeRunPendingEnterAnimation();
++    }
++
++    private boolean areBrowserControlsReadyForDialog() {
++        int activeHeight =
++                mBrowserControlsVisibilityManager.getControlsPosition() == ControlsPosition.TOP
++                        ? mBrowserControlsVisibilityManager.getTopControlsHeight()
++                        : mBrowserControlsVisibilityManager.getBottomControlsHeight();
++        return activeHeight == 0
++                || BrowserControlsUtils.areBrowserControlsFullyVisible(
++                        mBrowserControlsVisibilityManager);
++    }
++
++    private void maybeRunPendingEnterAnimation() {
+         if (getDialogModel() == null
+                 || !mRunEnterAnimationOnCallback
+-                || !BrowserControlsUtils.areBrowserControlsFullyVisible(
+-                        mBrowserControlsVisibilityManager)) {
++                || !areBrowserControlsReadyForDialog()) {
+             return;
+         }
+         mRunEnterAnimationOnCallback = false;
+@@ -335,12 +400,16 @@
+         mBottomControlsHeight = bottomControlsHeight;
+         mShouldUpdateContainerLayoutParams = true;
+         maybeUpdateDialogLayout();
++        traceDialogState("controls_height");
++        maybeRunPendingEnterAnimation();
+     }
+
+     @Override
+     public void onTopControlsHeightChanged(int topControlsHeight, int topControlsMinHeight) {
+         mShouldUpdateContainerLayoutParams = true;
+         maybeUpdateDialogLayout();
++        traceDialogState("controls_height");
++        maybeRunPendingEnterAnimation();
+     }
+
+     @Override
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
 --- a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java
@@ -1401,6 +1552,73 @@ diff --git a/chrome/android/junit/BUILD.gn b/chrome/android/junit/BUILD.gn
        ":chrome_junit_tests_helper",
        "//chrome/browser/lifetime/android:java",
        "//chrome/browser/settings:java",
+diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/modaldialog/ChromeTabModalPresenterUnitTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/modaldialog/ChromeTabModalPresenterUnitTest.java
+--- a/chrome/android/junit/src/org/chromium/chrome/browser/modaldialog/ChromeTabModalPresenterUnitTest.java
++++ b/chrome/android/junit/src/org/chromium/chrome/browser/modaldialog/ChromeTabModalPresenterUnitTest.java
+@@ -28,6 +28,7 @@
+ import org.chromium.base.supplier.ObservableSuppliers;
+ import org.chromium.base.supplier.OneshotSupplier;
+ import org.chromium.base.test.BaseRobolectricTestRunner;
++import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider.ControlsPosition;
+ import org.chromium.chrome.browser.browser_controls.BrowserControlsVisibilityManager;
+ import org.chromium.chrome.browser.fullscreen.FullscreenManager;
+ import org.chromium.chrome.browser.tab.Tab;
+@@ -95,6 +96,12 @@
+         }
+
+         private ViewGroup mTestDialogContainer;
++        private int mEnterAnimationCount;
++
++        @Override
++        protected void runEnterAnimation() {
++            mEnterAnimationCount++;
++        }
+
+         public void setDialogContainerForTesting(ViewGroup container) {
+             mTestDialogContainer = container;
+@@ -207,4 +214,42 @@
+                 96,
+                 scrimModel.get(ScrimProperties.TOP_MARGIN));
+     }
++    @Test
++    public void testAbsentTopControlsDoesNotWaitForImpossibleReveal() {
++        when(mBrowserControlsVisibilityManager.getControlsPosition()).thenReturn(ControlsPosition.TOP);
++        when(mBrowserControlsVisibilityManager.getTopControlsHeight()).thenReturn(0);
++        when(mBrowserControlsVisibilityManager.getBottomControlsHeight()).thenReturn(48);
++        when(mBrowserControlsVisibilityManager.getBrowserControlHiddenRatio()).thenReturn(1.f);
++        mPresenter.showDialogContainer();
++        assertEquals(1, mPresenter.mEnterAnimationCount);
++    }
++
++    @Test
++    public void testAbsentBottomControlsDoesNotWaitForOppositeStack() {
++        when(mBrowserControlsVisibilityManager.getControlsPosition()).thenReturn(ControlsPosition.BOTTOM);
++        when(mBrowserControlsVisibilityManager.getTopControlsHeight()).thenReturn(96);
++        when(mBrowserControlsVisibilityManager.getBottomControlsHeight()).thenReturn(0);
++        when(mBrowserControlsVisibilityManager.getBrowserControlHiddenRatio()).thenReturn(1.f);
++        mPresenter.showDialogContainer();
++        assertEquals(1, mPresenter.mEnterAnimationCount);
++    }
++
++    @Test
++    public void testExistingHiddenControlsStillWaitForReveal() {
++        when(mBrowserControlsVisibilityManager.getControlsPosition()).thenReturn(ControlsPosition.TOP);
++        when(mBrowserControlsVisibilityManager.getTopControlsHeight()).thenReturn(96);
++        when(mBrowserControlsVisibilityManager.getBrowserControlHiddenRatio()).thenReturn(0.5f);
++        mPresenter.showDialogContainer();
++        assertEquals(0, mPresenter.mEnterAnimationCount);
++    }
++
++    @Test
++    public void testExistingVisibleControlsShowDialogImmediately() {
++        when(mBrowserControlsVisibilityManager.getControlsPosition()).thenReturn(ControlsPosition.TOP);
++        when(mBrowserControlsVisibilityManager.getTopControlsHeight()).thenReturn(96);
++        when(mBrowserControlsVisibilityManager.getBrowserControlHiddenRatio()).thenReturn(0.f);
++        mPresenter.showDialogContainer();
++        assertEquals(1, mPresenter.mEnterAnimationCount);
++    }
++
+ }
 diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinatorUnitTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinatorUnitTest.java
 --- a/chrome/android/junit/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinatorUnitTest.java
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinatorUnitTest.java
@@ -3266,6 +3484,37 @@ diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrom
          return ChromeSharedPreferences.getInstance()
                  .readBoolean(ChromePreferenceKeys.VERTICAL_TABS_ENABLED, defaultValue);
      }
+diff --git a/components/javascript_dialogs/android/java/src/org/chromium/components/javascript_dialogs/JavascriptModalDialog.java b/components/javascript_dialogs/android/java/src/org/chromium/components/javascript_dialogs/JavascriptModalDialog.java
+--- a/components/javascript_dialogs/android/java/src/org/chromium/components/javascript_dialogs/JavascriptModalDialog.java
++++ b/components/javascript_dialogs/android/java/src/org/chromium/components/javascript_dialogs/JavascriptModalDialog.java
+@@ -85,7 +85,19 @@
+                         .build();
+
+         mModalDialogManager = manager;
++        traceDialogState("js_request");
+         mModalDialogManager.showDialog(mDialogModel, dialogType);
++    }
++
++    private void traceDialogState(String stage) {
++        if (!android.util.Log.isLoggable("ArchiumModal", android.util.Log.DEBUG)) return;
++        android.util.Log.d(
++                "ArchiumModal",
++                "stage=" + stage
++                        + " mono_ns=" + android.os.SystemClock.elapsedRealtimeNanos()
++                        + " thread=" + android.os.Process.myTid()
++                        + " model=" + System.identityHashCode(mDialogModel)
++                        + " manager=" + System.identityHashCode(mModalDialogManager));
+     }
+
+     /**
+@@ -117,6 +129,7 @@
+     @Override
+     public void onDismiss(PropertyModel model, int dismissalCause) {
+         if (mDialogCustomView == null) return;
++        traceDialogState("js_close");
+         switch (dismissalCause) {
+             case DialogDismissalCause.POSITIVE_BUTTON_CLICKED:
+                 accept(
 diff --git a/components/password_manager/core/browser/BUILD.gn b/components/password_manager/core/browser/BUILD.gn
 --- a/components/password_manager/core/browser/BUILD.gn
 +++ b/components/password_manager/core/browser/BUILD.gn

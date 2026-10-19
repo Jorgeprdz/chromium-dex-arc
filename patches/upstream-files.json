@@ -15,10 +15,12 @@
     "chrome/android/java/res_chromium_base/values/channel_constants.xml": "bfbe36ebd7f5a4737cf059abd48c0a4df0b84b4dd277350fb55e4b925561beb6",
     "chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java": "00a376101c2b0ace0c3bfb290f4708f12de8ad3e22035b547bb13c1af1042f4e",
     "chrome/android/java/src/org/chromium/chrome/browser/compositor/CompositorViewHolder.java": "d97a75b795091ef8d4535c758d42ecd43d9a989049c26cc3502ec11747e6dac4",
+    "chrome/android/java/src/org/chromium/chrome/browser/modaldialog/ChromeTabModalPresenter.java": "db48f93621edbe71342ef7b803b17a844c0972598557e2d60e0fca6797310627",
     "chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java": "b0875738519be1f5f9e301f6e676919aa027738174087d353c901525ff352348",
     "chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java": "df443b67fcd9ef61433f21dc19b1147478f3312c822d881a5b5a486bea6bea2d",
     "chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java": "e3bac8038982a4233e23128e6c183fbcbd9e15c425cd43d88f61d99a00f91a1a",
     "chrome/android/junit/BUILD.gn": "23046180f6133aaec2758147881f9b9008aab03eb12cb86f1ffdd17722758c83",
+    "chrome/android/junit/src/org/chromium/chrome/browser/modaldialog/ChromeTabModalPresenterUnitTest.java": "5d464bd275e1975ad8eaa96e6e4d25ad9aca53f3cfa215db51e8fcbe1fab856b",
     "chrome/android/junit/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinatorUnitTest.java": "0deb0f369a28729565cd7b88516ec70427098601e21c0fa26dbcfc68a43d12dc",
     "chrome/browser/BUILD.gn": "4d06881a2c2a111fef61e304b367b7131e6fea6d0936e0c50bb010287a348e61",
     "chrome/browser/autofill/android/BUILD.gn": "185f8cc78ff078b3cbf64118f95f5aa5279db9e6a379c937e7b51174fdd6db31",
@@ -47,6 +49,7 @@
     "chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java": "b337f4d66b713deb79629d1048f84a795c0fc56b9977f04d20aa5ad6edee5b3f",
     "chrome/browser/ui/vertical_tabs/BUILD.gn": "86df0c943df87a0c91d7a134c4adb77fe2a60ada21d96b9c56ff48de813a3d63",
     "chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/VerticalTabUtils.java": "10d4abef6f5940c4b59fa8114d0ad6b9253c04a391a152d1bdafe37d99288c54",
+    "components/javascript_dialogs/android/java/src/org/chromium/components/javascript_dialogs/JavascriptModalDialog.java": "f36141512519edab50eb3f272f69833056445f79f9f0c5d2164994bb985d785b",
     "components/password_manager/core/browser/BUILD.gn": "f6a13b033b668c620188f19cf022c7253cac498cd2327b7c138b1ca6529ef1fc",
     "components/password_manager/core/browser/buildflags.gni": "9c46011b5756c088c2414cae2b6615f45f2a8136ecb6e8010d20870ec3c4c490",
     "components/password_manager/core/browser/import/BUILD.gn": "f2f974365a7a4a17ca1d1c1e439692b433ef9691d23e0888c0bccad86085b116",
@@ -142,10 +145,12 @@
     "chrome/android/java/res_chromium_base/values/channel_constants.xml": "e4909d3f5731496c09e1fb02be7f16c348a522d00c620346f95967df2ca68a83",
     "chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java": "408c3d8bec266c9659ce7774a8eef805ed0a25244107d50e4b1a2a8ffbc72808",
     "chrome/android/java/src/org/chromium/chrome/browser/compositor/CompositorViewHolder.java": "1a0027e42f0a5d7ad5d2199457dc11c194bb0fed6a324de25409e7b44c944548",
+    "chrome/android/java/src/org/chromium/chrome/browser/modaldialog/ChromeTabModalPresenter.java": "0fa6c86f5cd6358af0cc70aa856673492a25386392085e7c24e6ece0a75b4af1",
     "chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java": "fc27bad7451ca8da011c828efb4239759b26f584f6e0523773fce9c2f8b2e62b",
     "chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java": "aeeb81c3fd9e85ed0ac42b1fe2c74345c105fe22e3ae1661a3c57cee4b4edca7",
     "chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java": "53ce77e5859382a7baf1b96a94a73ed3d7d5cd35328af4a9fd4ee252c07179b1",
     "chrome/android/junit/BUILD.gn": "88f073629a7bfd408d674c4cc81d915b7f46ba094c86df48f517bd6ad149b5fd",
+    "chrome/android/junit/src/org/chromium/chrome/browser/modaldialog/ChromeTabModalPresenterUnitTest.java": "fc44f988f2756694fb64cb1918ce16c25021280c61915ecd2bee75be495c173a",
     "chrome/android/junit/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinatorUnitTest.java": "d5261f64fe0e5e5612125143d95ca54001a217cee00d0f77920bd9cf114aace6",
     "chrome/browser/BUILD.gn": "48b9c964ed8ac56546d3d32248cde6638c00a182def11d9a7d5531e428599c2c",
     "chrome/browser/autofill/android/BUILD.gn": "00e2d69719b56d99054d6f62e59fd139ac396af4248cd4aa8d9a4ee813749125",
@@ -174,6 +179,7 @@
     "chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java": "22ce2700694286a33c79c621a1b80589de871139f210a92177caa36156632f5b",
     "chrome/browser/ui/vertical_tabs/BUILD.gn": "58d53b2edaa42bbcd2eff10be6d914263d7eb53b916f0f744b3fff5040882966",
     "chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/VerticalTabUtils.java": "27d45236478c427bb81b0f6e8fb91146d60ca5a19469e8fca5cd8e1b44af4dd9",
+    "components/javascript_dialogs/android/java/src/org/chromium/components/javascript_dialogs/JavascriptModalDialog.java": "aa20873c481e366c773051ebfcbd676ad806b5c70f33abd92c0a7c8b0323ddfa",
     "components/password_manager/core/browser/BUILD.gn": "e0f4a6001b4835b0aab3bb959e56fd356b396bdad6fca0edc3a6e14a30fd1d70",
     "components/password_manager/core/browser/buildflags.gni": "bb075d18fe0ada65a1d02e3abb2d824626d5aa710ce95328afae24675271a310",
     "components/password_manager/core/browser/import/BUILD.gn": "57cbc210bef55a9487a6f78cc025fac761aae884562d20003e3f70bd5ed4f014",
@@ -254,5 +260,5 @@
     "components/password_manager/core/browser/password_store/password_store_backend.cc": "45764d4ad0e05acc5a216944a5a6763212f6c17e71bf689e9c973f12fb5c87d8",
     "components/password_manager/core/browser/password_store/password_store_interface.cc": "7e9dd5813ce8ece459ec66abdd3306028b7b3d6bbae048664872a34d8d097268"
   },
-  "patch_sha256": "eb96a1efe346980a58eb3df5792515543f516889e9c8940f4615b8fdaa62f14f"
+  "patch_sha256": "b9b8cd75bdd7c51c843d867818e177515b64bcb1b083a2d6e2c34fca00d53944"
 }
