@@ -1,0 +1,86 @@
+{
+  "implementation_sha": "51847556e761ca0600a4aa824531e40d200fdf17",
+  "chromium_revision": "cfd94726b7b5fb48aedcc32662f2f3fbdbadec35",
+  "source_mechanism": "ACTIVE_CONTROLS_HEIGHT_ZERO_REPORTS_HIDDEN_RATIO_ONE_DEADLOCKS_ATTACHMENT",
+  "device_cause_link": "PENDING",
+  "red_before_change": {
+    "runs": 16,
+    "assertion_failures": 12
+  },
+  "baseline_negative_final": {
+    "runs": 18,
+    "assertion_failures": 12
+  },
+  "green": {
+    "runs": 18,
+    "passed": 18,
+    "sdks": [
+      30,
+      36
+    ],
+    "scope": "EXTRACTED_DELIVERED_METHODS_REAL_ANDROID_VIEWS_EXPLICIT_BOUNDARY_ADAPTERS"
+  },
+  "host_full_initial": {
+    "runs": 339,
+    "passed": 337,
+    "failed": 2,
+    "seconds": 548.338,
+    "cause": "Missing ARCHIUM_TEST_AAPT2 and ARCHIUM_TEST_ANDROID_JAR"
+  },
+  "resource_rerun": {
+    "runs": 2,
+    "passed": 2,
+    "seconds": 243.709,
+    "aapt2": "/opt/android-sdk/build-tools/37.0.0/aapt2",
+    "android_jar": "/opt/android-sdk/platforms/android-37.0/android.jar",
+    "full_suite_rerun": false
+  },
+  "patch": {
+    "status": "PATCH_RECONSTRUCTION_PASS",
+    "paths": 128,
+    "changed_or_added_paths": [
+      "chrome/android/java/src/org/chromium/chrome/browser/modaldialog/ChromeTabModalPresenter.java",
+      "chrome/android/junit/src/org/chromium/chrome/browser/modaldialog/ChromeTabModalPresenterUnitTest.java",
+      "components/javascript_dialogs/android/java/src/org/chromium/components/javascript_dialogs/JavascriptModalDialog.java"
+    ],
+    "revision": "cfd94726b7b5fb48aedcc32662f2f3fbdbadec35",
+    "patch_sha256": "b9b8cd75bdd7c51c843d867818e177515b64bcb1b083a2d6e2c34fca00d53944",
+    "checkpoint_bytes_restored": false,
+    "ninja_executed": false
+  },
+  "build_dispatched": false,
+  "device_green_executed": false,
+  "qemu": "QEMU_ABI_BLOCKED",
+  "logs": [
+    {
+      "private_basename": "red-with-trace.log",
+      "sha256": "8cfc474f1416be04b4906a32d29c9ed66e30641b0c2535e2410c8f94a3aaec34",
+      "bytes": 7175
+    },
+    {
+      "private_basename": "baseline-negative-final.log",
+      "sha256": "6ecb1c633014058df816ab095cb415a1082a448b8b777c876894f74508114bbd",
+      "bytes": 7048
+    },
+    {
+      "private_basename": "green-final.log",
+      "sha256": "4e869c5cccb6188d5cabe368460bd9874bc6b98496cbbef2b6eab252aa7c3ff9",
+      "bytes": 318
+    },
+    {
+      "private_basename": "full-suite.log",
+      "sha256": "610aef3188bf279b7514e29dd41706a79211f261458aad37a9990d31f5448647",
+      "bytes": 57769
+    },
+    {
+      "private_basename": "resource-rerun.log",
+      "sha256": "cea115d12bba9cbb555486064a570aef79327b17939c61d707a77e225252c27c",
+      "bytes": 648
+    },
+    {
+      "private_basename": "patch-validation.json",
+      "sha256": "fde94e2e800613e674f2fca08a9e440404790fee23e36d463c42fdc2697fadc0",
+      "bytes": 636
+    }
+  ]
+}

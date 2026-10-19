@@ -129,3 +129,18 @@ PENDING_DEVICE_VALIDATION. No cerrar estos fallos por superar build o tests host
 [Informe GPU/diálogos](docs/validation/R5_2_GPU_DIALOG_FORENSIC.md) y
 [matriz del HTML original](docs/validation/R5_2_PHONE_HTML_DIAGNOSTICS.md).
 Rama activa/run 39296066030 preservados; ningún build nuevo desde investigación.
+
+## R5.2B — presenter nativo con barra ausente
+
+- [x] Reproducir en código el bloqueo: altura del stack activo cero → hiddenRatio
+  uno → scrim visible sin adjuntar ModalDialogView; RED/GREEN Robolectric de
+  métodos fijados y vistas Android. Se conserva la semántica global del provider.
+- [x] Preparar fix local del gate y de callbacks de altura, más trazas optativas
+  correlacionadas por modelo; no se modificaron JNI, respuestas ni identidades
+  de pestañas. No hubo build ni integración en la rama activa.
+- [ ] Confirmar los valores internos del provider durante el incidente del Galaxy
+  y obtener GREEN visual de alert/confirm/prompt con APK posterior autorizada.
+  El fix de código no cierra P0-02 del instalado. Foco, permisos, draw y fugas de
+  ventanas reales siguen pendientes. QEMU_ABI_BLOCKED no cambia.
+
+[Diagnóstico, RED/GREEN y límites R5.2B](docs/validation/R5_2B_NATIVE_DIALOG_ROOT_CAUSE.md).
