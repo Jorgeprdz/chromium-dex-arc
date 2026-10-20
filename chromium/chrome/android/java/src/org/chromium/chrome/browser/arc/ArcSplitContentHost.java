@@ -18,6 +18,7 @@ public final class ArcSplitContentHost {
     private final ViewGroup mParent;
     private final Map<ContentView, Saved> mSaved = new IdentityHashMap<>();
     private Tab mLeft, mRight;
+    private int mInset, mGutter;
     private final RectF mLeftBounds = new RectF(), mRightBounds = new RectF();
     private static final class Saved {
         final ViewGroup.LayoutParams params;
@@ -26,6 +27,12 @@ public final class ArcSplitContentHost {
     }
     public ArcSplitContentHost(ViewGroup parent) { mParent = parent; }
 
+    public void setFrameSpacing(int inset, int gutter) {
+        if (inset < 0 || gutter < 0) throw new IllegalArgumentException("Negative split spacing");
+        mInset = inset; mGutter = gutter;
+    }
+    public int frameInset() { return mInset; }
+
     public boolean show(Tab left, Tab right, Rect viewport, float ratio) {
         if (left == null || right == null || left == right || left.isDestroyed() || right.isDestroyed()
                 || left.getId() == right.getId() || !Float.isFinite(ratio)
@@ -33,13 +40,14 @@ public final class ArcSplitContentHost {
         ContentView leftView = left.getContentView(), rightView = right.getContentView();
         if (leftView == null || rightView == null || leftView == rightView
                 || left.getView() != leftView || right.getView() != rightView) return false;
+        Rect[] panes = ArcSplitGeometry.panes(viewport, ratio, mInset, mGutter);
+        if (panes[0].isEmpty() || panes[1].isEmpty()) return false;
         if (!mSaved.containsKey(leftView) || !mSaved.containsKey(rightView)) clear();
         mSaved.computeIfAbsent(leftView, Saved::new);
         mSaved.computeIfAbsent(rightView, Saved::new);
         mLeft = left; mRight = right;
-        int middle = viewport.left + Math.round(viewport.width() * Math.max(.2f, Math.min(.8f, ratio)));
-        mLeftBounds.set(viewport.left, viewport.top, middle, viewport.bottom);
-        mRightBounds.set(middle, viewport.top, viewport.right, viewport.bottom);
+        mLeftBounds.set(panes[0]);
+        mRightBounds.set(panes[1]);
         place(leftView, mLeftBounds, 1);
         place(rightView, mRightBounds, 2);
         return true;
@@ -52,11 +60,13 @@ public final class ArcSplitContentHost {
         }
         FrameLayout.LayoutParams current = view.getLayoutParams() instanceof FrameLayout.LayoutParams p ? p : null;
         int width = Math.round(bounds.width()), x = Math.round(bounds.left);
-        if (current == null || current.width != width || current.height != -1
+        int height = Math.round(bounds.height()), y = Math.round(bounds.top);
+        if (current == null || current.width != width || current.height != height
+                || current.topMargin != y || current.bottomMargin != 0
                 || current.leftMargin != x || current.rightMargin != 0 || current.gravity != (android.view.Gravity.LEFT | android.view.Gravity.TOP)) {
-            FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(width, -1,
+            FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(width, height,
                     android.view.Gravity.LEFT | android.view.Gravity.TOP);
-            params.leftMargin = x;
+            params.leftMargin = x; params.topMargin = y;
             view.setLayoutParams(params);
         }
         // Android already translates the event/container origin into this pane.

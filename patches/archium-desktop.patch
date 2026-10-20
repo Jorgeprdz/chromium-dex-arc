@@ -22,7 +22,7 @@ diff --git a/chrome/android/chrome_java_resources.gni b/chrome/android/chrome_ja
 diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java_sources.gni
 --- a/chrome/android/chrome_java_sources.gni
 +++ b/chrome/android/chrome_java_sources.gni
-@@ -5,6 +5,30 @@
+@@ -5,6 +5,32 @@
  import("//content/public/common/features.gni")
 
  chrome_java_sources = [
@@ -43,6 +43,8 @@ diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java
 +  "java/src/org/chromium/chrome/browser/arc/ArcSplitViewportPolicy.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcSplitContentHost.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcSplitDividerView.java",
++  "java/src/org/chromium/chrome/browser/arc/ArcSplitGeometry.java",
++  "java/src/org/chromium/chrome/browser/arc/ArcSplitFrameView.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcSplitSwapAnimator.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcSplitViewCoordinator.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcOmniboxPlacement.java",
@@ -1054,17 +1056,20 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
 
          // The view size takes into account of the browser controls whose height should be
          // subtracted from the view if they are visible, therefore shrink Blink-side view size.
-@@ -1201,7 +1228,8 @@
+@@ -1201,8 +1228,10 @@
          int webContentsHeightInset = getEffectiveWebContentsHeightInset();
          int verticalViewportInsets = controlsInsets + webContentsHeightInset;
 
 -        int webContentsWidth = width - horizontalViewportInsets;
+-        int webContentsHeight = height - verticalViewportInsets;
 +        int webContentsWidth = mArcSplitHost.contains(tab)
 +                ? Math.round(mArcSplitHost.bounds(tab).width()) : width - horizontalViewportInsets;
-         int webContentsHeight = height - verticalViewportInsets;
++        int webContentsHeight = height - verticalViewportInsets
++                - (mArcSplitHost.contains(tab) ? 2 * mArcSplitHost.frameInset() : 0);
 
          if (ChromeFeatureList.sVirtualKeyboardTransientInnerHeightFix.isEnabled()
-@@ -1688,11 +1716,138 @@
+                 && virtualKeyboardModeOutsetsWebContentsHeight()
+@@ -1688,11 +1717,142 @@
       * Shifts the composited web contents and its touch coordinate space to sit next to the Side UI
       * on the left, without resizing the web contents.
       */
@@ -1079,6 +1084,10 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
 +            right = specs.getReservedWidth(AnchorSide.RIGHT);
 +        }
 +        return new Rect(left, 0, Math.max(left, size.x - right), size.y);
++    }
++
++    public void setArcSplitFrameSpacing(int inset, int gutter) {
++        mArcSplitHost.setFrameSpacing(inset, gutter);
 +    }
 +
 +    public boolean canPresentArcSplit() {
@@ -1204,7 +1213,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
      }
 
      // View.OnHierarchyChangeListener implementation
-@@ -2043,6 +2198,11 @@
+@@ -2043,6 +2203,11 @@
      }
 
      private void updateContentOverlayVisibility(boolean show) {
@@ -1216,7 +1225,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
          if (mView == null) return;
          WebContents webContents = getWebContents();
          if (show) {
-@@ -2133,7 +2293,8 @@
+@@ -2133,7 +2298,8 @@
 
          // TODO(dtrainor): Look into changing this only if the views differ, but still parse the
          // WebContents list even if they're the same.
@@ -1226,7 +1235,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
 
          if (mTabVisible != tab) {
              // Reset the geometrychange event flag so it can fire on the current active tab.
-@@ -2153,7 +2314,7 @@
+@@ -2153,7 +2319,7 @@
          mTabVisible = tab;
          mView = newView;
 
@@ -1235,7 +1244,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
 
          if (mTabVisible != null) initializeTab(mTabVisible);
 
-@@ -2165,6 +2326,11 @@
+@@ -2165,6 +2331,11 @@
              mOnscreenContentProvider.onWebContentsChanged(assumeNonNull(getWebContents()));
          }
 
@@ -1247,7 +1256,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
          // Clear drop permissions when tab changes unless this is a new tab loading from the drop.
          if (mDropUri == null
                  || tab == null
-@@ -2221,8 +2387,10 @@
+@@ -2221,8 +2392,10 @@
                      webContents, mCompositorView.getWidth(), mCompositorView.getHeight());
              onControlsResizeViewChanged(webContents, mControlsResizeView);
 
@@ -5462,7 +5471,7 @@ diff --git a/chrome/android/java/res/values/arc_strings.xml b/chrome/android/jav
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/res/values/arc_strings.xml
-@@ -0,0 +1,77 @@
+@@ -0,0 +1,78 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<resources>
 +    <string name="arc_about">Acerca de Archium</string>
@@ -5537,6 +5546,7 @@ new file mode 100644
 +    <string name="arc_split_exit">Salir de vista dividida</string>
 +    <string name="arc_split_unsupported">Esta combinación de páginas no admite vista dividida.</string>
 +    <string name="arc_split_no_tabs">No hay otra pestaña compatible abierta.</string>
++    <string name="arc_split_controls">Arrastra para redimensionar; pulsa para ver opciones</string>
 +    <string name="arc_split_swap">Intercambiar paneles</string>
 +    <string name="arc_split_dialog_open">Cierra el diálogo actual antes de cambiar la vista.</string>
 +</resources>
@@ -7115,7 +7125,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopC
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
-@@ -0,0 +1,1439 @@
+@@ -0,0 +1,1441 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -7453,7 +7463,8 @@ new file mode 100644
 +                            activity.getString(R.string.arc_split_unsupported),
 +                            activity.getString(R.string.arc_split_no_tabs),
 +                            activity.getString(R.string.arc_split_swap),
-+                            activity.getString(R.string.arc_split_dialog_open)));
++                            activity.getString(R.string.arc_split_dialog_open),
++                            activity.getString(R.string.arc_split_controls)));
 +            mNativeTabListCoordinator.setArcSplitRequest(
 +                    tab -> { if (mSplitView != null) mSplitView.requestSplit(tab); },
 +                    () -> !mDestroyed && ArcDesktopAppearance.isDesktopWindow(mActivity));
@@ -8124,6 +8135,7 @@ new file mode 100644
 +        }
 +        applyAddressBarPosition();
 +        int surface = frameSurface(incognito);
++        if (mSplitView != null) mSplitView.setAppearance(surface);
 +        boolean paletteChanged = !mPaletteInitialized || mPaletteDesktop != desktop
 +                || mPaletteIncognito != incognito || mPaletteSurface != surface;
 +        mPaletteInitialized = true;
@@ -9743,7 +9755,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitCon
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitContentHost.java
-@@ -0,0 +1,117 @@
+@@ -0,0 +1,127 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -9764,6 +9776,7 @@ new file mode 100644
 +    private final ViewGroup mParent;
 +    private final Map<ContentView, Saved> mSaved = new IdentityHashMap<>();
 +    private Tab mLeft, mRight;
++    private int mInset, mGutter;
 +    private final RectF mLeftBounds = new RectF(), mRightBounds = new RectF();
 +    private static final class Saved {
 +        final ViewGroup.LayoutParams params;
@@ -9772,6 +9785,12 @@ new file mode 100644
 +    }
 +    public ArcSplitContentHost(ViewGroup parent) { mParent = parent; }
 +
++    public void setFrameSpacing(int inset, int gutter) {
++        if (inset < 0 || gutter < 0) throw new IllegalArgumentException("Negative split spacing");
++        mInset = inset; mGutter = gutter;
++    }
++    public int frameInset() { return mInset; }
++
 +    public boolean show(Tab left, Tab right, Rect viewport, float ratio) {
 +        if (left == null || right == null || left == right || left.isDestroyed() || right.isDestroyed()
 +                || left.getId() == right.getId() || !Float.isFinite(ratio)
@@ -9779,13 +9798,14 @@ new file mode 100644
 +        ContentView leftView = left.getContentView(), rightView = right.getContentView();
 +        if (leftView == null || rightView == null || leftView == rightView
 +                || left.getView() != leftView || right.getView() != rightView) return false;
++        Rect[] panes = ArcSplitGeometry.panes(viewport, ratio, mInset, mGutter);
++        if (panes[0].isEmpty() || panes[1].isEmpty()) return false;
 +        if (!mSaved.containsKey(leftView) || !mSaved.containsKey(rightView)) clear();
 +        mSaved.computeIfAbsent(leftView, Saved::new);
 +        mSaved.computeIfAbsent(rightView, Saved::new);
 +        mLeft = left; mRight = right;
-+        int middle = viewport.left + Math.round(viewport.width() * Math.max(.2f, Math.min(.8f, ratio)));
-+        mLeftBounds.set(viewport.left, viewport.top, middle, viewport.bottom);
-+        mRightBounds.set(middle, viewport.top, viewport.right, viewport.bottom);
++        mLeftBounds.set(panes[0]);
++        mRightBounds.set(panes[1]);
 +        place(leftView, mLeftBounds, 1);
 +        place(rightView, mRightBounds, 2);
 +        return true;
@@ -9798,11 +9818,13 @@ new file mode 100644
 +        }
 +        FrameLayout.LayoutParams current = view.getLayoutParams() instanceof FrameLayout.LayoutParams p ? p : null;
 +        int width = Math.round(bounds.width()), x = Math.round(bounds.left);
-+        if (current == null || current.width != width || current.height != -1
++        int height = Math.round(bounds.height()), y = Math.round(bounds.top);
++        if (current == null || current.width != width || current.height != height
++                || current.topMargin != y || current.bottomMargin != 0
 +                || current.leftMargin != x || current.rightMargin != 0 || current.gravity != (android.view.Gravity.LEFT | android.view.Gravity.TOP)) {
-+            FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(width, -1,
++            FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(width, height,
 +                    android.view.Gravity.LEFT | android.view.Gravity.TOP);
-+            params.leftMargin = x;
++            params.leftMargin = x; params.topMargin = y;
 +            view.setLayoutParams(params);
 +        }
 +        // Android already translates the event/container origin into this pane.
@@ -9865,12 +9887,13 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitDiv
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitDividerView.java
-@@ -0,0 +1,131 @@
+@@ -0,0 +1,269 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
 +package org.chromium.chrome.browser.arc;
 +
++import android.animation.ValueAnimator;
 +import android.content.Context;
 +import android.graphics.Canvas;
 +import android.graphics.Color;
@@ -9881,41 +9904,51 @@ new file mode 100644
 +import android.graphics.drawable.Drawable;
 +import android.graphics.drawable.GradientDrawable;
 +import android.view.Gravity;
++import android.view.KeyEvent;
++import android.view.PointerIcon;
 +import android.view.MotionEvent;
 +import android.view.TouchDelegate;
 +import android.view.View;
 +import android.view.ViewConfiguration;
 +import android.widget.FrameLayout;
 +import android.widget.ImageButton;
++import android.widget.LinearLayout;
++import android.widget.PopupWindow;
 +import java.util.function.Consumer;
 +
-+/** Small white swap capsule and separate horizontal resize gesture; no web surface effects. */
++/** White resize grip with an anchored action capsule; never changes web surface ownership. */
 +public final class ArcSplitDividerView extends FrameLayout {
 +    private final ImageButton mButton;
 +    private final Consumer<Float> mResize;
++    private final Runnable mSwap, mExit;
++    private final String mSwapLabel, mExitLabel;
++    private PopupWindow mPopup;
++    private View mActions, mSwapButton, mExitButton;
++    private boolean mDestroyed;
 +    private final int mSlop;
 +    private float mRatio = .5f, mStartRatio, mDownX;
 +    private int mViewportWidth;
-+    private boolean mDragging, mBusy;
++    private boolean mDragging, mBusy, mResizeTarget;
 +
-+    public ArcSplitDividerView(Context context, Runnable swap, Consumer<Float> resize, String label) {
++    public ArcSplitDividerView(Context context, Runnable swap, Runnable exit,
++            Consumer<Float> resize, String label, String swapLabel, String exitLabel) {
 +        super(context);
-+        mResize = resize;
++        mResize = resize; mSwap = swap; mExit = exit;
++        mSwapLabel = swapLabel; mExitLabel = exitLabel;
 +        mSlop = ViewConfiguration.get(context).getScaledTouchSlop();
-+        View line = new View(context);
-+        line.setBackgroundColor(0x33777777);
-+        addView(line, new LayoutParams(dp(2), -1, Gravity.CENTER));
 +        mButton = new ImageButton(context);
 +        GradientDrawable capsule = new GradientDrawable();
 +        capsule.setColor(Color.WHITE);
 +        capsule.setCornerRadius(dp(14));
 +        mButton.setBackground(capsule);
-+        mButton.setImageDrawable(new SwapArrows());
++        mButton.setImageDrawable(new ControlIcon(0));
 +        mButton.setPadding(dp(5), dp(5), dp(5), dp(5));
 +        mButton.setContentDescription(label);
 +        mButton.setTooltipText(label);
 +        mButton.setElevation(dp(2));
-+        mButton.setOnClickListener(v -> { if (!mBusy) swap.run(); });
++        mButton.setOnClickListener(v -> { if (!mBusy && !mDestroyed) toggleActions(); });
++        mButton.setPointerIcon(PointerIcon.getSystemIcon(context, PointerIcon.TYPE_HORIZONTAL_DOUBLE_ARROW));
++        setPointerIcon(PointerIcon.getSystemIcon(context, PointerIcon.TYPE_HORIZONTAL_DOUBLE_ARROW));
 +        addView(mButton, new LayoutParams(dp(28), dp(44), Gravity.CENTER));
 +        setClipChildren(false);
 +        setClipToPadding(false);
@@ -9924,8 +9957,122 @@ new file mode 100644
 +    public void setGeometry(float ratio, int viewportWidth) {
 +        mRatio = ratio;
 +        mViewportWidth = viewportWidth;
++        if (isExpanded()) { int[] at = actionPosition(); mPopup.update(at[0], at[1], -1, -1); }
 +    }
-+    public void setBusy(boolean busy) { mBusy = busy; mButton.setEnabled(!busy); }
++    public void setBusy(boolean busy) {
++        mBusy = busy; mButton.setEnabled(!busy);
++        if (busy) dismissActions();
++    }
++    private void toggleActions() {
++        if (isExpanded()) { dismissActions(); return; }
++        if (getWindowToken() == null || getVisibility() != VISIBLE) return;
++        // Native PopupWindow handles Escape/Back. Also handle Escape at our content
++        // boundary, before focused children, when a host forwards keys directly here.
++        LinearLayout actions = new LinearLayout(getContext()) {
++            @Override public boolean dispatchKeyEvent(KeyEvent event) {
++                if (event.getKeyCode() == KeyEvent.KEYCODE_ESCAPE) {
++                    dismissActions(); return true;
++                }
++                return super.dispatchKeyEvent(event);
++            }
++        };
++        actions.setGravity(Gravity.CENTER);
++        GradientDrawable bg = new GradientDrawable(); bg.setColor(Color.WHITE); bg.setCornerRadius(dp(24));
++        actions.setBackground(bg); actions.setElevation(dp(4));
++        mSwapButton = action(new ControlIcon(1), mSwapLabel, mSwap);
++        mExitButton = action(new ControlIcon(2), mExitLabel, mExit);
++        ImageButton grip = action(new ControlIcon(0), mButton.getContentDescription().toString(), () -> {});
++        grip.setOnTouchListener((v, event) -> onExpandedGripTouch(event));
++        actions.addView(mSwapButton, new LinearLayout.LayoutParams(dp(44), dp(48)));
++        actions.addView(grip, new LinearLayout.LayoutParams(dp(32), dp(48)));
++        actions.addView(mExitButton, new LinearLayout.LayoutParams(dp(44), dp(48)));
++        mActions = actions;
++        PopupWindow popup = new PopupWindow(actions, dp(120), dp(48), true);
++        mPopup = popup; popup.setBackgroundDrawable(bg); popup.setOutsideTouchable(true);
++        popup.setElevation(dp(4)); popup.setAnimationStyle(0);
++        actions.setFocusableInTouchMode(true);
++        popup.setOnDismissListener(() -> {
++            actions.animate().cancel();
++            if (mPopup == popup) { mPopup = null; mActions = null; }
++            if (isShown() && !mDestroyed) mButton.requestFocus();
++        });
++        int[] at = actionPosition();
++        popup.showAtLocation(this, Gravity.TOP | Gravity.LEFT, at[0], at[1]);
++        actions.requestFocus();
++        if (ValueAnimator.areAnimatorsEnabled()) {
++            actions.setPivotX(dp(60)); actions.setPivotY(dp(24));
++            actions.setScaleX(.3f); actions.setAlpha(0f);
++            actions.animate().scaleX(1f).alpha(1f).setDuration(150).start();
++        }
++    }
++    private int[] actionPosition() {
++        int[] at = new int[2]; mButton.getLocationInWindow(at);
++        int[] root = new int[2]; getRootView().getLocationInWindow(root);
++        return new int[] {
++            Math.max(root[0], Math.min(at[0] + mButton.getWidth()/2 - dp(60),
++                    root[0] + getRootView().getWidth() - dp(120))),
++            Math.max(root[1], Math.min(at[1] + mButton.getHeight()/2 - dp(24),
++                    root[1] + getRootView().getHeight() - dp(48)))
++        };
++    }
++    private boolean onExpandedGripTouch(MotionEvent event) {
++        if (mBusy || mDestroyed || mViewportWidth <= 0) return false;
++        switch (event.getActionMasked()) {
++            case MotionEvent.ACTION_DOWN:
++                mDownX = event.getRawX(); mStartRatio = mRatio; mDragging = false;
++                return false; // Preserve the button's normal click to collapse.
++            case MotionEvent.ACTION_MOVE:
++                if (mDragging || Math.abs(event.getRawX()-mDownX) > mSlop) {
++                    mDragging = true; resizeTo(event.getRawX()); return true;
++                }
++                return false;
++            case MotionEvent.ACTION_UP:
++            case MotionEvent.ACTION_CANCEL:
++                if (mDragging) { mDragging = false; dismissActions(); return true; }
++                return false;
++            default: return false;
++        }
++    }
++    private void resizeTo(float rawX) {
++        mResize.accept(Math.max(.2f, Math.min(.8f, mStartRatio + (rawX-mDownX)/mViewportWidth)));
++    }
++    private ImageButton action(Drawable icon, String label, Runnable action) {
++        ImageButton button = new ImageButton(getContext());
++        button.setBackgroundColor(Color.TRANSPARENT); button.setImageDrawable(icon);
++        button.setPadding(dp(12), dp(12), dp(12), dp(12));
++        button.setContentDescription(label); button.setTooltipText(label);
++        button.setPointerIcon(PointerIcon.getSystemIcon(getContext(), PointerIcon.TYPE_HAND));
++        button.setOnClickListener(v -> {
++            if (mBusy || mDestroyed || !isExpanded()) return;
++            dismissActions(); action.run();
++        });
++        return button;
++    }
++    public void dismissActions() {
++        if (mActions != null) mActions.animate().cancel();
++        if (mPopup != null) mPopup.dismiss();
++        mPopup = null; mActions = null;
++    }
++    public void destroy() { mDestroyed = true; dismissActions(); mButton.setOnClickListener(null); }
++    boolean isExpanded() { return mPopup != null && mPopup.isShowing(); }
++    boolean isExpandedForTesting() { return isExpanded(); }
++    View swapForTesting() { return mSwapButton; }
++    View exitForTesting() { return mExitButton; }
++    @Override public boolean dispatchKeyEvent(KeyEvent event) {
++        if (event.getKeyCode() == KeyEvent.KEYCODE_ESCAPE && isExpanded()) {
++            dismissActions(); return true;
++        }
++        return super.dispatchKeyEvent(event);
++    }
++    @Override protected void onVisibilityChanged(View changed, int visibility) {
++        super.onVisibilityChanged(changed, visibility);
++        if (visibility != VISIBLE) dismissActions();
++    }
++    @Override protected void onWindowVisibilityChanged(int visibility) {
++        super.onWindowVisibilityChanged(visibility);
++        if (visibility != VISIBLE) dismissActions();
++    }
++    @Override protected void onDetachedFromWindow() { dismissActions(); super.onDetachedFromWindow(); }
 +    View buttonForTesting() { return mButton; }
 +
 +    @Override protected void onLayout(boolean changed, int l, int t, int r, int b) {
@@ -9937,14 +10084,16 @@ new file mode 100644
 +    }
 +
 +    @Override public boolean onInterceptTouchEvent(MotionEvent event) {
-+        if (mBusy) return false;
++        if (mBusy || mDestroyed) return false;
 +        switch (event.getActionMasked()) {
 +            case MotionEvent.ACTION_DOWN:
 +                mDownX = event.getRawX(); mStartRatio = mRatio; mDragging = false;
++                mResizeTarget = Math.abs(event.getX()-getWidth()/2f) <= dp(4)
++                        || (event.getY() >= mButton.getTop()-dp(6) && event.getY() <= mButton.getBottom()+dp(6));
 +                break;
 +            case MotionEvent.ACTION_MOVE:
-+                if (Math.abs(event.getRawX() - mDownX) > mSlop) {
-+                    mDragging = true;
++                if (mResizeTarget && Math.abs(event.getRawX() - mDownX) > mSlop) {
++                    mDragging = true; dismissActions();
 +                    getParent().requestDisallowInterceptTouchEvent(true);
 +                    return true;
 +                }
@@ -9954,16 +10103,16 @@ new file mode 100644
 +    }
 +
 +    @Override public boolean onTouchEvent(MotionEvent event) {
-+        if (mBusy || mViewportWidth <= 0) return false;
++        if (mBusy || mDestroyed || mViewportWidth <= 0) return false;
 +        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
++            if (!mResizeTarget) return false;
 +            mDownX = event.getRawX(); mStartRatio = mRatio;
 +            return true;
 +        }
 +        if (event.getActionMasked() == MotionEvent.ACTION_MOVE) {
 +            if (mDragging || Math.abs(event.getRawX() - mDownX) > mSlop) {
 +                mDragging = true;
-+                mResize.accept(Math.max(.2f, Math.min(.8f,
-+                        mStartRatio + (event.getRawX() - mDownX) / mViewportWidth)));
++                resizeTo(event.getRawX());
 +            }
 +            return true;
 +        }
@@ -9976,11 +10125,22 @@ new file mode 100644
 +    }
 +
 +    private int dp(int value) { return Math.round(value * getResources().getDisplayMetrics().density); }
-+    private static final class SwapArrows extends Drawable {
++    private static final class ControlIcon extends Drawable {
++        private final int mKind;
 +        private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-+        SwapArrows() { mPaint.setColor(0xff333333); mPaint.setStrokeCap(Paint.Cap.ROUND); }
++        ControlIcon(int kind) { mKind = kind; mPaint.setColor(0xff333333); mPaint.setStrokeCap(Paint.Cap.ROUND); }
 +        @Override public void draw(Canvas canvas) {
 +            Rect b = getBounds();
++            mPaint.setStrokeWidth(Math.max(1f, b.width() * .085f));
++            if (mKind == 0) {
++                canvas.drawLine(b.exactCenterX(), b.top+b.height()*.25f,
++                        b.exactCenterX(), b.top+b.height()*.75f, mPaint); return;
++            }
++            if (mKind == 2) {
++                float pad = b.width()*.24f;
++                canvas.drawLine(b.left+pad,b.top+pad,b.right-pad,b.bottom-pad,mPaint);
++                canvas.drawLine(b.right-pad,b.top+pad,b.left+pad,b.bottom-pad,mPaint); return;
++            }
 +            float left = b.left + b.width() * .12f, right = b.right - b.width() * .12f;
 +            float top = b.top + b.height() * .33f, bottom = b.top + b.height() * .67f;
 +            float tip = b.width() * .22f;
@@ -9995,6 +10155,90 @@ new file mode 100644
 +        @Override public void setAlpha(int alpha) { mPaint.setAlpha(alpha); invalidateSelf(); }
 +        @Override public void setColorFilter(ColorFilter filter) { mPaint.setColorFilter(filter); }
 +        @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
++    }
++}
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitFrameView.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitFrameView.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitFrameView.java
+@@ -0,0 +1,52 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++import android.content.Context;
++import android.graphics.Canvas;
++import android.graphics.Paint;
++import android.graphics.Path;
++import android.graphics.Rect;
++import android.graphics.RectF;
++import android.view.View;
++
++/** Noninteractive trim; pane geometry reserves the border instead of covering page edges. */
++public final class ArcSplitFrameView extends View {
++    private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Path mTrim = new Path();
++    private final Rect mViewport = new Rect(), mActive = new Rect();
++    private Rect[] mPanes = {new Rect(), new Rect()};
++    private int mSurface;
++    public ArcSplitFrameView(Context context) {
++        super(context);
++        setImportantForAccessibility(IMPORTANT_FOR_ACCESSIBILITY_NO);
++    }
++    public void setAppearance(int surface) { mSurface = surface; invalidate(); }
++    public void setGeometry(Rect viewport, float ratio, boolean leftActive) {
++        mViewport.set(viewport);
++        mPanes = ArcSplitGeometry.panes(viewport, ratio, dp(4), dp(8));
++        mActive.set(mPanes[leftActive ? 0 : 1]);
++        invalidate();
++    }
++    @Override protected void onDraw(Canvas canvas) {
++        if (mViewport.isEmpty()) return;
++        mTrim.reset();
++        mTrim.setFillType(Path.FillType.EVEN_ODD);
++        mTrim.addRect(new RectF(mViewport), Path.Direction.CW);
++        for (Rect pane : mPanes)
++            mTrim.addRoundRect(new RectF(pane), dp(10), dp(10), Path.Direction.CW);
++        mPaint.setStyle(Paint.Style.FILL); mPaint.setColor(mSurface);
++        canvas.drawPath(mTrim, mPaint);
++        // Low contrast outline follows the active page without recoloring its content.
++        mPaint.setStyle(Paint.Style.STROKE); mPaint.setStrokeWidth(dp(1));
++        double luminance = .2126 * android.graphics.Color.red(mSurface)
++                + .7152 * android.graphics.Color.green(mSurface) + .0722 * android.graphics.Color.blue(mSurface);
++        mPaint.setColor(luminance > 140 ? 0x26000000 : 0x40ffffff);
++        RectF outline = new RectF(mActive); outline.inset(-dp(1) / 2f, -dp(1) / 2f);
++        canvas.drawRoundRect(outline, dp(10), dp(10), mPaint);
++    }
++    private int dp(int v) { return Math.round(v * getResources().getDisplayMetrics().density); }
++    int surfaceForTesting() { return mSurface; }
++    Rect activeBoundsForTesting() { return new Rect(mActive); }
++}
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitGeometry.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitGeometry.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitGeometry.java
+@@ -0,0 +1,22 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++import android.graphics.Rect;
++
++/** Shared physical pane geometry for Android input, Blink and native composition. */
++public final class ArcSplitGeometry {
++    private ArcSplitGeometry() {}
++    public static Rect[] panes(Rect viewport, float ratio, int inset, int gutter) {
++        if (inset < 0 || gutter < 0 || !Float.isFinite(ratio))
++            throw new IllegalArgumentException("Invalid split spacing or ratio");
++        int middle = viewport.left + Math.round(viewport.width() * Math.max(.2f, Math.min(.8f, ratio)));
++        return new Rect[] {
++            new Rect(viewport.left + inset, viewport.top + inset,
++                    middle - gutter / 2, viewport.bottom - inset),
++            new Rect(middle + (gutter - gutter / 2), viewport.top + inset,
++                    viewport.right - inset, viewport.bottom - inset)
++        };
 +    }
 +}
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitState.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitState.java
@@ -10129,7 +10373,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitVie
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitViewCoordinator.java
-@@ -0,0 +1,394 @@
+@@ -0,0 +1,415 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -10164,9 +10408,14 @@ new file mode 100644
 +public final class ArcSplitViewCoordinator {
 +    private static final int MIN_PANE_DP = 240;
 +    public static final class Labels {
-+        final String title, existing, newTab, exit, unsupported, noTabs, swap, blocked;
++        final String title, existing, newTab, exit, unsupported, noTabs, swap, blocked, controls;
 +        public Labels(String title, String existing, String newTab, String exit,
 +                String unsupported, String noTabs, String swap, String blocked) {
++            this(title,existing,newTab,exit,unsupported,noTabs,swap,blocked,title);
++        }
++        public Labels(String title, String existing, String newTab, String exit,
++                String unsupported, String noTabs, String swap, String blocked, String controls) {
++            this.controls=controls;
 +            this.title=title; this.existing=existing; this.newTab=newTab; this.exit=exit;
 +            this.unsupported=unsupported; this.noTabs=noTabs; this.swap=swap; this.blocked=blocked;
 +        }
@@ -10185,6 +10434,7 @@ new file mode 100644
 +    private final ArcSplitState mState = new ArcSplitState();
 +    private final ArcSplitSwapAnimator mAnimation = new ArcSplitSwapAnimator();
 +    private final ArcSplitDividerView mDivider;
++    private final ArcSplitFrameView mFrame;
 +    private final String mStateKey;
 +    private final View.OnLayoutChangeListener mLayoutListener;
 +    private final CompositorViewHolder.FrameRequestObserver mFrameObserver;
@@ -10205,7 +10455,7 @@ new file mode 100644
 +        }
 +        @Override public void onHidden(Tab tab, int type) {
 +            if (mUpdating || !mState.isSplit() || type != TabHidingType.ACTIVITY_HIDDEN) return;
-+            mAnimation.settle();mLastViewport=null;
++            mAnimation.settle();mDivider.dismissActions();mLastViewport=null;
 +            mBackground=true; mUpdating=true;
 +            try {Tab peer=tab==mObservedLeft?mObservedRight:mObservedLeft;
 +                if (peer!=null && !peer.isDestroyed()) peer.hide(type);
@@ -10240,13 +10490,18 @@ new file mode 100644
 +        mActivity=activity; mRoot=root; mHolder=holder; mModelSupplier=model;
 +        mCreator=creator; mCurrent=current; mFocusNew=focusNew; mCanChangeLayout=canChangeLayout;
 +        mPrefs=prefs; mLabels=labels; mStateKey="arc_split_task_"+activity.getTaskId();
-+        mDivider=new ArcSplitDividerView(activity,this::swap,this::resize,labels.swap);
++        mFrame=new ArcSplitFrameView(activity); mFrame.setVisibility(View.GONE);
++        holder.setArcSplitFrameSpacing(dp(4),dp(8));
++        mDivider=new ArcSplitDividerView(activity,this::swap,()->{
++            if(mCanChangeLayout.getAsBoolean())exit();
++        },this::resize,labels.controls,labels.swap,labels.exit);
 +        mDivider.setVisibility(View.GONE);
 +        View boundary=activity.findViewById(R.id.tab_modal_dialog_container);
 +        if(boundary==null)boundary=activity.findViewById(R.id.tab_modal_dialog_container_stub);
 +        while(boundary!=null && boundary.getParent() instanceof View && boundary.getParent()!=root)
 +            boundary=(View)boundary.getParent();
 +        int index=boundary!=null && boundary.getParent()==root?root.indexOfChild(boundary):root.getChildCount();
++        root.addView(mFrame,index++,new ViewGroup.MarginLayoutParams(0,0));
 +        root.addView(mDivider,index,new ViewGroup.MarginLayoutParams(dp(48),0));
 +        mLayoutListener=(v,l,t,r,b,ol,ot,or,ob)->refresh(mDesktop);
 +        holder.addOnLayoutChangeListener(mLayoutListener);root.addOnLayoutChangeListener(mLayoutListener);
@@ -10379,7 +10634,7 @@ new file mode 100644
 +        if(!compatible(left,right) || active==null || !mState.activate(active.getId())) {exit();return;}
 +        Rect viewport=mHolder.getArcSplitViewport();
 +        if(!desktop || mBackground || active.isHidden() || mHolder.getWindowVisibility()!=View.VISIBLE
-+                || viewport.width()<2*dp(MIN_PANE_DP) || viewport.height()<=0 || !mHolder.canPresentArcSplit()) {
++                || viewport.width()<2*dp(MIN_PANE_DP)+2*dp(4)+dp(8) || viewport.height()<=2*dp(4) || !mHolder.canPresentArcSplit()) {
 +            mAnimation.settle();leavePresentation();return;
 +        }
 +        float ratio=presentationRatio(viewport);
@@ -10406,15 +10661,16 @@ new file mode 100644
 +        var one=navigation(left);var two=navigation(right);
 +        mViewportPolicy.retain(one,two);
 +        float density=mActivity.getResources().getDisplayMetrics().density;
-+        int leftWidth=Math.round(viewport.width()*presentationRatio(viewport));
-+        mViewportPolicy.update(one,leftWidth/density);
-+        mViewportPolicy.update(two,(viewport.width()-leftWidth)/density);
++        Rect[] panes=ArcSplitGeometry.panes(viewport,presentationRatio(viewport),dp(4),dp(8));
++        mViewportPolicy.update(one,panes[0].width()/density);
++        mViewportPolicy.update(two,panes[1].width()/density);
 +    }
 +    private float presentationRatio(Rect viewport) {
 +        if(viewport.width()<=0)return .5f;
-+        float minimum=(float)dp(MIN_PANE_DP)/viewport.width();
++        float minimum=(float)(dp(MIN_PANE_DP)+dp(4)+(dp(8)-dp(8)/2))/viewport.width();
 +        return Math.max(minimum,Math.min(1f-minimum,mState.ratio()));
 +    }
++    public void setAppearance(int surface) { mFrame.setAppearance(surface); }
 +    private void positionDivider(Rect viewport) {
 +        int[] holder=new int[2],root=new int[2];mHolder.getLocationInWindow(holder);mRoot.getLocationInWindow(root);
 +        ViewGroup.LayoutParams raw=mDivider.getLayoutParams();
@@ -10423,6 +10679,13 @@ new file mode 100644
 +        mDivider.setX(holder[0]-root[0]+viewport.left+viewport.width()*presentationRatio(viewport)-dp(24));
 +        mDivider.setY(holder[1]-root[1]);mDivider.setGeometry(presentationRatio(viewport),viewport.width());
 +        mDivider.setVisibility(View.VISIBLE);
++        ViewGroup.LayoutParams frameParams=mFrame.getLayoutParams();
++        if(frameParams.width!=mHolder.getWidth() || frameParams.height!=height) {
++            frameParams.width=mHolder.getWidth();frameParams.height=height;mFrame.setLayoutParams(frameParams);
++        }
++        mFrame.setX(holder[0]-root[0]);mFrame.setY(holder[1]-root[1]);
++        mFrame.setGeometry(viewport,presentationRatio(viewport),mState.activeId()==mState.leftId());
++        mFrame.setVisibility(View.VISIBLE);
 +    }
 +    private void resize(float ratio) {
 +        if(!mState.isSplit() || mDestroyed)return;
@@ -10443,7 +10706,7 @@ new file mode 100644
 +    }
 +    private void leavePresentation() {
 +        mViewportPolicy.clear();
-+        mHolder.clearArcSplitTabs();mDivider.setVisibility(View.GONE);mLastViewport=null;
++        mHolder.clearArcSplitTabs();mDivider.setVisibility(View.GONE);mFrame.setVisibility(View.GONE);mLastViewport=null;
 +        Tab active=mCurrent.get();
 +        for(Tab tab:new Tab[]{mObservedLeft,mObservedRight})
 +            if(tab!=null && tab!=active && !tab.isDestroyed() && !tab.isHidden())tab.hide(TabHidingType.CHANGED_TABS);
@@ -10521,6 +10784,8 @@ new file mode 100644
 +        mHolder.removeCallbacks(mDeferredSave);mHolder.removeOnLayoutChangeListener(mLayoutListener);mRoot.removeOnLayoutChangeListener(mLayoutListener);
 +        mHolder.setArcSplitActivation(null);leavePresentation();unwatch();dismissPicker();
 +        if(mModel!=null)mModel.removeObserver(mModelObserver);
++        mDivider.destroy();
++        if(mFrame.getParent()==mRoot)mRoot.removeView(mFrame);
 +        if(mDivider.getParent()==mRoot)mRoot.removeView(mDivider);
 +    }
 +}
@@ -11886,7 +12151,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitCo
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitContentHostTest.java
-@@ -0,0 +1,67 @@
+@@ -0,0 +1,81 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -11953,12 +12218,26 @@ new file mode 100644
 +        assertFalse(host.focus(one,address,false));assertTrue(address.hasFocus());
 +        host.clear();a.finish();
 +    }
++    @Test public void frameReservesRealInsetsAndGutterAndRestoresOriginalLayout() {
++        Activity a=Robolectric.buildActivity(Activity.class).setup().get();FrameLayout parent=new FrameLayout(a);a.setContentView(parent);
++        Tab one=tab(a,17),two=tab(a,42);FrameLayout.LayoutParams original=new FrameLayout.LayoutParams(-1,-1);parent.addView(one.getView(),original);
++        ArcSplitContentHost host=new ArcSplitContentHost(parent);host.setFrameSpacing(4,8);
++        assertTrue(host.show(one,two,new Rect(216,0,1216,600),.5f));
++        assertEquals(new android.graphics.RectF(220,4,712,596),host.bounds(one));
++        assertEquals(new android.graphics.RectF(720,4,1212,596),host.bounds(two));
++        FrameLayout.LayoutParams params=(FrameLayout.LayoutParams)one.getView().getLayoutParams();
++        assertEquals(4,params.topMargin);assertEquals(592,params.height);assertEquals(492,params.width);
++        assertNull(host.tabAt(716,100));assertNull(host.tabAt(217,100));assertSame(one,host.tabAt(221,5));
++        assertFalse(host.show(one,two,new Rect(0,0,8,8),.5f));assertEquals(492,one.getView().getLayoutParams().width);
++        host.clear();assertSame(original,one.getView().getLayoutParams());a.finish();
++    }
++
 +}
 diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitControlsTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitControlsTest.java
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitControlsTest.java
-@@ -0,0 +1,63 @@
+@@ -0,0 +1,138 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -11986,16 +12265,91 @@ new file mode 100644
 +@GraphicsMode(GraphicsMode.Mode.LEGACY)
 +@SQLiteMode(SQLiteMode.Mode.LEGACY)
 +public class ArcSplitControlsTest {
-+    @Test public void capsuleIsWhiteAccessibleAndBusyDoesNotSwapAgain() {
++    @Test public void capsuleExpandsWithoutSwappingAndActionsCloseBeforeCallback() {
 +        Activity activity=Robolectric.buildActivity(Activity.class).setup().get();
-+        AtomicInteger swaps=new AtomicInteger();
-+        ArcSplitDividerView divider=new ArcSplitDividerView(activity,swaps::incrementAndGet,r -> {},"Intercambiar paneles");
-+        activity.setContentView(divider);
++        AtomicInteger swaps=new AtomicInteger(),exits=new AtomicInteger();
++        ArcSplitDividerView divider=new ArcSplitDividerView(activity,swaps::incrementAndGet,
++                exits::incrementAndGet,r -> {},"Redimensionar y opciones","Intercambiar paneles","Salir de vista dividida");
++        FrameLayout root=new FrameLayout(activity);root.addView(divider,new FrameLayout.LayoutParams(48,600));activity.setContentView(root);
++        root.layout(0,0,1000,600);divider.layout(450,0,498,600);
 +        assertEquals(Color.WHITE,((GradientDrawable)divider.buttonForTesting().getBackground()).getColor().getDefaultColor());
-+        assertEquals("Intercambiar paneles",divider.buttonForTesting().getContentDescription());
-+        divider.buttonForTesting().performClick();assertEquals(1,swaps.get());
-+        divider.setBusy(true);divider.buttonForTesting().performClick();assertEquals(1,swaps.get());
-+        divider.setBusy(false);divider.buttonForTesting().performClick();assertEquals(2,swaps.get());activity.finish();
++        divider.buttonForTesting().performClick();assertEquals(0,swaps.get());assertTrue(divider.isExpandedForTesting());
++        divider.swapForTesting().performClick();assertEquals(1,swaps.get());assertFalse(divider.isExpandedForTesting());
++        divider.buttonForTesting().performClick();divider.exitForTesting().performClick();
++        assertEquals(1,exits.get());assertFalse(divider.isExpandedForTesting());
++        divider.buttonForTesting().performClick();divider.setBusy(true);assertFalse(divider.isExpandedForTesting());
++        divider.buttonForTesting().performClick();assertFalse(divider.isExpandedForTesting());activity.finish();
++    }
++    @Test public void escapeOutsideAndHiddenWindowDismissWithoutAction() {
++        Activity a=Robolectric.buildActivity(Activity.class).setup().get();AtomicInteger actions=new AtomicInteger();
++        ArcSplitDividerView d=new ArcSplitDividerView(a,actions::incrementAndGet,actions::incrementAndGet,r->{},"Opciones","Intercambiar","Salir");
++        a.setContentView(d);d.layout(0,0,48,600);d.buttonForTesting().performClick();
++        assertTrue(d.dispatchKeyEvent(new android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN,android.view.KeyEvent.KEYCODE_ESCAPE)));
++        assertFalse(d.isExpandedForTesting());assertEquals(0,actions.get());
++        d.buttonForTesting().performClick();d.dismissActions();assertFalse(d.isExpandedForTesting());
++        d.buttonForTesting().performClick();d.setVisibility(android.view.View.GONE);assertFalse(d.isExpandedForTesting());
++        d.destroy();a.finish();
++    }
++    @Test public void gripDragResizesWithoutOpeningActionsAndCancelDoesNotClick() {
++        Activity a=Robolectric.buildActivity(Activity.class).setup().get();List<Float> ratios=new ArrayList<>();
++        ArcSplitDividerView d=new ArcSplitDividerView(a,()->fail("swap on drag"),()->fail("exit on drag"),ratios::add,"Opciones","Intercambiar","Salir");
++        FrameLayout root=new FrameLayout(a);root.addView(d,new FrameLayout.LayoutParams(48,600));a.setContentView(root);root.layout(0,0,1000,600);d.layout(0,0,48,600);d.setGeometry(.5f,1000);
++        long now=android.os.SystemClock.uptimeMillis();
++        for(int i=0;i<3;i++){android.view.MotionEvent e=android.view.MotionEvent.obtain(now,now+i*20,i==0?0:i==1?2:1,i==0?24:124,300,0);d.dispatchTouchEvent(e);e.recycle();}
++        assertFalse(ratios.isEmpty());assertEquals(.6f,ratios.get(0),.01f);assertFalse(d.isExpandedForTesting());d.destroy();a.finish();
++    }
++    @Test public void outsideTouchDetachAndReducedMotionLeaveNoPopupWindow() {
++        var controller=Robolectric.buildActivity(Activity.class).setup();Activity a=controller.get();
++        FrameLayout root=new FrameLayout(a);a.setContentView(root);
++        ArcSplitDividerView d=new ArcSplitDividerView(a,()->fail("outside swap"),()->fail("outside exit"),r->{},"Options","Swap","Exit");
++        root.addView(d,new FrameLayout.LayoutParams(48,600));root.layout(0,0,1000,600);d.layout(450,0,498,600);
++        ReflectionHelpers.callStaticMethod(ValueAnimator.class,"setDurationScale",ClassParameter.from(float.class,0f));
++        try {
++            d.buttonForTesting().performClick();assertTrue(d.isExpandedForTesting());
++            android.view.View actions=(android.view.View)d.swapForTesting().getParent();assertEquals(1f,actions.getScaleX(),0f);assertEquals(1f,actions.getAlpha(),0f);
++            android.view.MotionEvent e=android.view.MotionEvent.obtain(0,0,android.view.MotionEvent.ACTION_OUTSIDE,-1,-1,0);
++            actions.getRootView().dispatchTouchEvent(e);e.recycle();assertFalse(d.isExpandedForTesting());
++            d.buttonForTesting().performClick();root.removeView(d);assertFalse(d.isExpandedForTesting());d.destroy();
++        } finally {ReflectionHelpers.callStaticMethod(ValueAnimator.class,"setDurationScale",ClassParameter.from(float.class,1f));controller.pause().stop().destroy();}
++    }
++    @Test public void escapeDismissesWhenAnActionHasKeyboardFocus() {
++        var controller=Robolectric.buildActivity(Activity.class).setup();Activity a=controller.get();
++        ArcSplitDividerView d=new ArcSplitDividerView(a,()->fail("swap"),()->fail("exit"),r->{},"Options","Swap","Exit");
++        a.setContentView(d);d.layout(0,0,48,600);d.buttonForTesting().performClick();
++        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
++        d.swapForTesting().setFocusableInTouchMode(true);assertTrue(d.swapForTesting().requestFocus());
++        // Exercise our popup content boundary; native WindowManager key tracking is separate.
++        android.view.View content=(android.view.View)d.swapForTesting().getParent();
++        assertTrue(content.dispatchKeyEvent(new android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN,android.view.KeyEvent.KEYCODE_ESCAPE)));
++        assertFalse(d.isExpandedForTesting());d.destroy();controller.pause().stop().destroy();
++    }
++    @Test public void expandedGripCanStillResizeWithoutTriggeringAnAction() {
++        var controller=Robolectric.buildActivity(Activity.class).setup();Activity a=controller.get();List<Float> ratios=new ArrayList<>();
++        ArcSplitDividerView d=new ArcSplitDividerView(a,()->fail("swap"),()->fail("exit"),ratios::add,"Options","Swap","Exit");
++        a.setContentView(d);d.layout(0,0,48,600);d.setGeometry(.5f,1000);d.buttonForTesting().performClick();
++        android.view.View grip=((android.view.ViewGroup)d.swapForTesting().getParent()).getChildAt(1);
++        long now=android.os.SystemClock.uptimeMillis();
++        for(int i=0;i<3;i++){android.view.MotionEvent e=android.view.MotionEvent.obtain(now,now+i*20,i==0?0:i==1?2:1,i==0?16:116,24,0);grip.dispatchTouchEvent(e);e.recycle();}
++        assertFalse(ratios.isEmpty());assertEquals(.6f,ratios.get(0),.01f);assertFalse(d.isExpandedForTesting());
++        d.destroy();controller.pause().stop().destroy();
++    }
++    @Test public void seamPassesPageTouchesAndDestroyDisablesReopening() {
++        var controller=Robolectric.buildActivity(Activity.class).setup();Activity a=controller.get();
++        ArcSplitDividerView d=new ArcSplitDividerView(a,()->{},()->{},r->{},"Options","Swap","Exit");
++        a.setContentView(d);d.layout(0,0,48,600);d.setGeometry(.5f,1000);
++        android.view.MotionEvent e=android.view.MotionEvent.obtain(0,0,android.view.MotionEvent.ACTION_DOWN,2,100,0);
++        assertFalse(d.dispatchTouchEvent(e));e.recycle();
++        d.buttonForTesting().performClick();assertTrue(d.isExpandedForTesting());d.destroy();
++        d.buttonForTesting().performClick();assertFalse(d.isExpandedForTesting());controller.pause().stop().destroy();
++    }
++    @Test public void frameUsesThemeAndSharedGeometryWithoutInterceptingPageTouches() {
++        Activity a=Robolectric.buildActivity(Activity.class).setup().get();ArcSplitFrameView frame=new ArcSplitFrameView(a);
++        frame.setAppearance(0xff789abc);frame.setGeometry(new android.graphics.Rect(216,0,1216,600),.5f,true);
++        assertEquals(0xff789abc,frame.surfaceForTesting());assertFalse(frame.isClickable());assertFalse(frame.isFocusable());
++        android.graphics.Rect[] panes=ArcSplitGeometry.panes(new android.graphics.Rect(216,0,1216,600),.5f,4,8);
++        assertEquals(new android.graphics.Rect(220,4,712,596),panes[0]);assertEquals(new android.graphics.Rect(720,4,1212,596),panes[1]);
++        frame.setGeometry(new android.graphics.Rect(216,0,1216,600),.8f,false);
++        assertEquals(ArcSplitGeometry.panes(new android.graphics.Rect(216,0,1216,600),.8f,4,8)[1],frame.activeBoundsForTesting());a.finish();
 +    }
 +    @Test public void swapAnimatesProgressAndSettlesExactlyOnce() {
 +        ArcSplitSwapAnimator animation=new ArcSplitSwapAnimator();List<Float> frames=new ArrayList<>();AtomicInteger done=new AtomicInteger();
@@ -12096,7 +12450,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitVi
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitViewCoordinatorTest.java
-@@ -0,0 +1,213 @@
+@@ -0,0 +1,242 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -12164,6 +12518,34 @@ new file mode 100644
 +        f.coordinator.activate(18);assertSame(f.two,f.current.get());assertEquals(18,f.coordinator.stateForTesting().activeId());
 +        f.coordinator.exit();assertFalse(f.coordinator.stateForTesting().isSplit());
 +        verify(f.holder,atLeastOnce()).clearArcSplitTabs();verify(f.one,never()).reload();verify(f.two,never()).reload();f.close();
++    }
++    @Test public void frameAndActionsStayBelowNativeModalsAndExitPreservesActiveIdentity() {
++        Fixture f=new Fixture();f.coordinator.destroy();
++        FrameLayout modal=new FrameLayout(f.a);modal.setId(org.chromium.chrome.R.id.tab_modal_dialog_container);f.root.addView(modal);
++        f.coordinator=new ArcSplitViewCoordinator(f.a,f.root,f.holder,()->f.model,()->f.creator,f.current::get,()->{},()->true,f.prefs,
++            new ArcSplitViewCoordinator.Labels("Split","Existing","New","Exit","Unsupported","No tabs","Swap","Blocked"));
++        f.coordinator.refresh(true);assertTrue(f.coordinator.enter(f.one,f.two));f.coordinator.activate(18);f.coordinator.setAppearance(0xff654321);
++        ArcSplitFrameView frame=null;ArcSplitDividerView divider=null;
++        for(int i=0;i<f.root.getChildCount();i++){
++            if(f.root.getChildAt(i) instanceof ArcSplitFrameView v)frame=v;
++            if(f.root.getChildAt(i) instanceof ArcSplitDividerView v)divider=v;
++        }
++        assertNotNull(frame);assertNotNull(divider);assertEquals(0xff654321,frame.surfaceForTesting());
++        assertTrue(f.root.indexOfChild(frame)<f.root.indexOfChild(divider));assertTrue(f.root.indexOfChild(divider)<f.root.indexOfChild(modal));
++        verify(f.holder,atLeastOnce()).setArcSplitFrameSpacing(4,8);
++        divider.layout(500,0,548,800);divider.buttonForTesting().performClick();assertTrue(divider.isExpandedForTesting());
++        divider.exitForTesting().performClick();assertFalse(f.coordinator.stateForTesting().isSplit());assertSame(f.two,f.current.get());
++        assertEquals(android.view.View.GONE,frame.getVisibility());assertEquals(android.view.View.GONE,divider.getVisibility());
++        verify(f.one,never()).reload();verify(f.two,never()).reload();verifyNoInteractions(f.creator);
++        f.close();assertNull(frame.getParent());assertNull(divider.getParent());assertFalse(divider.isExpandedForTesting());
++    }
++    @Test public void insufficientSpaceSuspendsTrimAndKeepsSavedPair() {
++        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));
++        when(f.holder.getArcSplitViewport()).thenReturn(new android.graphics.Rect(0,0,490,800));clearInvocations(f.holder);f.coordinator.refresh(true);
++        verify(f.holder).clearArcSplitTabs();verify(f.holder,never()).setArcSplitTabs(any(),any(),anyFloat(),anyInt());
++        assertTrue(f.coordinator.stateForTesting().isSplit());
++        when(f.holder.getArcSplitViewport()).thenReturn(new android.graphics.Rect(0,0,1100,800));f.coordinator.refresh(true);
++        verify(f.holder).setArcSplitTabs(f.one,f.two,.5f,17);f.close();
 +    }
 +    @Test public void wrongProfileOrNativePageCannotReplaceExistingPair() {
 +        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));
@@ -12277,7 +12659,7 @@ new file mode 100644
 +    @Test public void asymmetricRatioKeepsTwoUsablePanesWithoutLosingIntendedRatio() {
 +        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));f.coordinator.stateForTesting().setRatio(.2f);
 +        when(f.holder.getArcSplitViewport()).thenReturn(new android.graphics.Rect(0,0,500,800));f.coordinator.refresh(true);
-+        verify(f.holder).setArcSplitTabs(f.one,f.two,.48f,17);assertEquals(.2f,f.coordinator.stateForTesting().ratio(),.001f);
++        verify(f.holder).setArcSplitTabs(f.one,f.two,.496f,17);assertEquals(.2f,f.coordinator.stateForTesting().ratio(),.001f);
 +        when(f.holder.getArcSplitViewport()).thenReturn(new android.graphics.Rect(0,0,2000,800));f.coordinator.refresh(true);
 +        verify(f.holder).setArcSplitTabs(f.one,f.two,.2f,17);f.close();
 +    }
@@ -12299,7 +12681,8 @@ new file mode 100644
 +            int width=Math.round(500*density),minimum=Math.round(240*density);
 +            when(f.holder.getArcSplitViewport()).thenReturn(new android.graphics.Rect(0,0,width,800));clearInvocations(f.holder);f.coordinator.refresh(true);
 +            ArgumentCaptor<Float> ratio=ArgumentCaptor.forClass(Float.class);verify(f.holder).setArcSplitTabs(eq(f.one),eq(f.two),ratio.capture(),eq(17));
-+            int left=Math.round(width*ratio.getValue());assertTrue(left>=minimum);assertTrue(width-left>=minimum);
++            android.graphics.Rect[] panes=ArcSplitGeometry.panes(new android.graphics.Rect(0,0,width,800),ratio.getValue(),Math.round(4*density),Math.round(8*density));
++            assertTrue(panes[0].width()>=minimum);assertTrue(panes[1].width()>=minimum);
 +            assertEquals(17,f.coordinator.stateForTesting().leftId());assertEquals(.8f,f.coordinator.stateForTesting().ratio(),.001f);
 +        }
 +        f.a.getResources().getDisplayMetrics().density=1f;f.close();

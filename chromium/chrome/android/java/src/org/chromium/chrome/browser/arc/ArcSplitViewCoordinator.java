@@ -32,9 +32,14 @@ import org.chromium.ui.base.WindowAndroid;
 public final class ArcSplitViewCoordinator {
     private static final int MIN_PANE_DP = 240;
     public static final class Labels {
-        final String title, existing, newTab, exit, unsupported, noTabs, swap, blocked;
+        final String title, existing, newTab, exit, unsupported, noTabs, swap, blocked, controls;
         public Labels(String title, String existing, String newTab, String exit,
                 String unsupported, String noTabs, String swap, String blocked) {
+            this(title,existing,newTab,exit,unsupported,noTabs,swap,blocked,title);
+        }
+        public Labels(String title, String existing, String newTab, String exit,
+                String unsupported, String noTabs, String swap, String blocked, String controls) {
+            this.controls=controls;
             this.title=title; this.existing=existing; this.newTab=newTab; this.exit=exit;
             this.unsupported=unsupported; this.noTabs=noTabs; this.swap=swap; this.blocked=blocked;
         }
@@ -53,6 +58,7 @@ public final class ArcSplitViewCoordinator {
     private final ArcSplitState mState = new ArcSplitState();
     private final ArcSplitSwapAnimator mAnimation = new ArcSplitSwapAnimator();
     private final ArcSplitDividerView mDivider;
+    private final ArcSplitFrameView mFrame;
     private final String mStateKey;
     private final View.OnLayoutChangeListener mLayoutListener;
     private final CompositorViewHolder.FrameRequestObserver mFrameObserver;
@@ -73,7 +79,7 @@ public final class ArcSplitViewCoordinator {
         }
         @Override public void onHidden(Tab tab, int type) {
             if (mUpdating || !mState.isSplit() || type != TabHidingType.ACTIVITY_HIDDEN) return;
-            mAnimation.settle();mLastViewport=null;
+            mAnimation.settle();mDivider.dismissActions();mLastViewport=null;
             mBackground=true; mUpdating=true;
             try {Tab peer=tab==mObservedLeft?mObservedRight:mObservedLeft;
                 if (peer!=null && !peer.isDestroyed()) peer.hide(type);
@@ -108,13 +114,18 @@ public final class ArcSplitViewCoordinator {
         mActivity=activity; mRoot=root; mHolder=holder; mModelSupplier=model;
         mCreator=creator; mCurrent=current; mFocusNew=focusNew; mCanChangeLayout=canChangeLayout;
         mPrefs=prefs; mLabels=labels; mStateKey="arc_split_task_"+activity.getTaskId();
-        mDivider=new ArcSplitDividerView(activity,this::swap,this::resize,labels.swap);
+        mFrame=new ArcSplitFrameView(activity); mFrame.setVisibility(View.GONE);
+        holder.setArcSplitFrameSpacing(dp(4),dp(8));
+        mDivider=new ArcSplitDividerView(activity,this::swap,()->{
+            if(mCanChangeLayout.getAsBoolean())exit();
+        },this::resize,labels.controls,labels.swap,labels.exit);
         mDivider.setVisibility(View.GONE);
         View boundary=activity.findViewById(R.id.tab_modal_dialog_container);
         if(boundary==null)boundary=activity.findViewById(R.id.tab_modal_dialog_container_stub);
         while(boundary!=null && boundary.getParent() instanceof View && boundary.getParent()!=root)
             boundary=(View)boundary.getParent();
         int index=boundary!=null && boundary.getParent()==root?root.indexOfChild(boundary):root.getChildCount();
+        root.addView(mFrame,index++,new ViewGroup.MarginLayoutParams(0,0));
         root.addView(mDivider,index,new ViewGroup.MarginLayoutParams(dp(48),0));
         mLayoutListener=(v,l,t,r,b,ol,ot,or,ob)->refresh(mDesktop);
         holder.addOnLayoutChangeListener(mLayoutListener);root.addOnLayoutChangeListener(mLayoutListener);
@@ -247,7 +258,7 @@ public final class ArcSplitViewCoordinator {
         if(!compatible(left,right) || active==null || !mState.activate(active.getId())) {exit();return;}
         Rect viewport=mHolder.getArcSplitViewport();
         if(!desktop || mBackground || active.isHidden() || mHolder.getWindowVisibility()!=View.VISIBLE
-                || viewport.width()<2*dp(MIN_PANE_DP) || viewport.height()<=0 || !mHolder.canPresentArcSplit()) {
+                || viewport.width()<2*dp(MIN_PANE_DP)+2*dp(4)+dp(8) || viewport.height()<=2*dp(4) || !mHolder.canPresentArcSplit()) {
             mAnimation.settle();leavePresentation();return;
         }
         float ratio=presentationRatio(viewport);
@@ -274,15 +285,16 @@ public final class ArcSplitViewCoordinator {
         var one=navigation(left);var two=navigation(right);
         mViewportPolicy.retain(one,two);
         float density=mActivity.getResources().getDisplayMetrics().density;
-        int leftWidth=Math.round(viewport.width()*presentationRatio(viewport));
-        mViewportPolicy.update(one,leftWidth/density);
-        mViewportPolicy.update(two,(viewport.width()-leftWidth)/density);
+        Rect[] panes=ArcSplitGeometry.panes(viewport,presentationRatio(viewport),dp(4),dp(8));
+        mViewportPolicy.update(one,panes[0].width()/density);
+        mViewportPolicy.update(two,panes[1].width()/density);
     }
     private float presentationRatio(Rect viewport) {
         if(viewport.width()<=0)return .5f;
-        float minimum=(float)dp(MIN_PANE_DP)/viewport.width();
+        float minimum=(float)(dp(MIN_PANE_DP)+dp(4)+(dp(8)-dp(8)/2))/viewport.width();
         return Math.max(minimum,Math.min(1f-minimum,mState.ratio()));
     }
+    public void setAppearance(int surface) { mFrame.setAppearance(surface); }
     private void positionDivider(Rect viewport) {
         int[] holder=new int[2],root=new int[2];mHolder.getLocationInWindow(holder);mRoot.getLocationInWindow(root);
         ViewGroup.LayoutParams raw=mDivider.getLayoutParams();
@@ -291,6 +303,13 @@ public final class ArcSplitViewCoordinator {
         mDivider.setX(holder[0]-root[0]+viewport.left+viewport.width()*presentationRatio(viewport)-dp(24));
         mDivider.setY(holder[1]-root[1]);mDivider.setGeometry(presentationRatio(viewport),viewport.width());
         mDivider.setVisibility(View.VISIBLE);
+        ViewGroup.LayoutParams frameParams=mFrame.getLayoutParams();
+        if(frameParams.width!=mHolder.getWidth() || frameParams.height!=height) {
+            frameParams.width=mHolder.getWidth();frameParams.height=height;mFrame.setLayoutParams(frameParams);
+        }
+        mFrame.setX(holder[0]-root[0]);mFrame.setY(holder[1]-root[1]);
+        mFrame.setGeometry(viewport,presentationRatio(viewport),mState.activeId()==mState.leftId());
+        mFrame.setVisibility(View.VISIBLE);
     }
     private void resize(float ratio) {
         if(!mState.isSplit() || mDestroyed)return;
@@ -311,7 +330,7 @@ public final class ArcSplitViewCoordinator {
     }
     private void leavePresentation() {
         mViewportPolicy.clear();
-        mHolder.clearArcSplitTabs();mDivider.setVisibility(View.GONE);mLastViewport=null;
+        mHolder.clearArcSplitTabs();mDivider.setVisibility(View.GONE);mFrame.setVisibility(View.GONE);mLastViewport=null;
         Tab active=mCurrent.get();
         for(Tab tab:new Tab[]{mObservedLeft,mObservedRight})
             if(tab!=null && tab!=active && !tab.isDestroyed() && !tab.isHidden())tab.hide(TabHidingType.CHANGED_TABS);
@@ -389,6 +408,8 @@ public final class ArcSplitViewCoordinator {
         mHolder.removeCallbacks(mDeferredSave);mHolder.removeOnLayoutChangeListener(mLayoutListener);mRoot.removeOnLayoutChangeListener(mLayoutListener);
         mHolder.setArcSplitActivation(null);leavePresentation();unwatch();dismissPicker();
         if(mModel!=null)mModel.removeObserver(mModelObserver);
+        mDivider.destroy();
+        if(mFrame.getParent()==mRoot)mRoot.removeView(mFrame);
         if(mDivider.getParent()==mRoot)mRoot.removeView(mDivider);
     }
 }

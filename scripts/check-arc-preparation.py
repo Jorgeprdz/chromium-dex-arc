@@ -294,7 +294,7 @@ def main():
         holder_source = (ROOT / '.source-modified/chrome/android/java/src/org/chromium/'
             'chrome/browser/compositor/CompositorViewHolder.java').read_text()
         for method in ('setArcSplitTabs', 'clearArcSplitTabs', 'setArcSplitActivation',
-                'setArcSplitSwapProgress', 'setArcSplitInputBlocked', 'getArcSplitViewport', 'canPresentArcSplit'):
+                'setArcSplitSwapProgress', 'setArcSplitInputBlocked', 'setArcSplitFrameSpacing', 'getArcSplitViewport', 'canPresentArcSplit'):
             if not re.search(r'public\s+[^;{}]+\b' + method + r'\s*\(', holder_source):
                 raise RuntimeError('Missing delivered split holder API: ' + method)
         def extend(name, members):
@@ -303,7 +303,7 @@ def main():
         extend('org.chromium.chrome.browser.compositor.CompositorViewHolder',
             ' public interface FrameRequestObserver {void onFrameRequested();} public void addFrameRequestObserver(FrameRequestObserver o){} public void removeFrameRequestObserver(FrameRequestObserver o){} public boolean setArcSplitTabs(org.chromium.chrome.browser.tab.Tab a,org.chromium.chrome.browser.tab.Tab b,float r,int id){return false;}'
             ' public void clearArcSplitTabs(){} public void setArcSplitActivation(java.util.function.IntConsumer c){}'
-            ' public void setArcSplitSwapProgress(float p){} public void setArcSplitInputBlocked(boolean b){}'
+            ' public void setArcSplitSwapProgress(float p){} public void setArcSplitInputBlocked(boolean b){} public void setArcSplitFrameSpacing(int inset,int gutter){}'
             ' public android.graphics.Rect getArcSplitViewport(){return null;} public boolean canPresentArcSplit(){return false;} public void onContentChanged(){}')
         extend('org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabListCoordinator',
             ' public void setArcSplitRequest(java.util.function.Consumer<org.chromium.chrome.browser.tab.Tab> c,java.util.function.BooleanSupplier enabled){}')

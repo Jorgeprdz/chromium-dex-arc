@@ -64,4 +64,18 @@ public class ArcSplitContentHostTest {
         assertFalse(host.focus(one,address,false));assertTrue(address.hasFocus());
         host.clear();a.finish();
     }
+    @Test public void frameReservesRealInsetsAndGutterAndRestoresOriginalLayout() {
+        Activity a=Robolectric.buildActivity(Activity.class).setup().get();FrameLayout parent=new FrameLayout(a);a.setContentView(parent);
+        Tab one=tab(a,17),two=tab(a,42);FrameLayout.LayoutParams original=new FrameLayout.LayoutParams(-1,-1);parent.addView(one.getView(),original);
+        ArcSplitContentHost host=new ArcSplitContentHost(parent);host.setFrameSpacing(4,8);
+        assertTrue(host.show(one,two,new Rect(216,0,1216,600),.5f));
+        assertEquals(new android.graphics.RectF(220,4,712,596),host.bounds(one));
+        assertEquals(new android.graphics.RectF(720,4,1212,596),host.bounds(two));
+        FrameLayout.LayoutParams params=(FrameLayout.LayoutParams)one.getView().getLayoutParams();
+        assertEquals(4,params.topMargin);assertEquals(592,params.height);assertEquals(492,params.width);
+        assertNull(host.tabAt(716,100));assertNull(host.tabAt(217,100));assertSame(one,host.tabAt(221,5));
+        assertFalse(host.show(one,two,new Rect(0,0,8,8),.5f));assertEquals(492,one.getView().getLayoutParams().width);
+        host.clear();assertSame(original,one.getView().getLayoutParams());a.finish();
+    }
+
 }
