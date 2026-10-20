@@ -22,7 +22,7 @@ diff --git a/chrome/android/chrome_java_resources.gni b/chrome/android/chrome_ja
 diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java_sources.gni
 --- a/chrome/android/chrome_java_sources.gni
 +++ b/chrome/android/chrome_java_sources.gni
-@@ -5,6 +5,24 @@
+@@ -5,6 +5,25 @@
  import("//content/public/common/features.gni")
 
  chrome_java_sources = [
@@ -39,6 +39,7 @@ diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java
 +  "java/src/org/chromium/chrome/browser/arc/ArcColorPicker.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcCompactOmnibox.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcCommandBar.java",
++  "java/src/org/chromium/chrome/browser/arc/ArcSplitState.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcOmniboxPlacement.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcFrameDispatch.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcNavigationControls.java",
@@ -1526,7 +1527,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 diff --git a/chrome/android/junit/BUILD.gn b/chrome/android/junit/BUILD.gn
 --- a/chrome/android/junit/BUILD.gn
 +++ b/chrome/android/junit/BUILD.gn
-@@ -431,6 +431,17 @@
+@@ -431,6 +431,18 @@
    # down.
    robolectric_library("chrome_junit_tests_org.chromium.chrome.browser") {
      sources = [
@@ -1536,6 +1537,7 @@ diff --git a/chrome/android/junit/BUILD.gn b/chrome/android/junit/BUILD.gn
 +      "src/org/chromium/chrome/browser/arc/ArcFrameDispatchTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcNavigationControlsTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcCommandBarTest.java",
++      "src/org/chromium/chrome/browser/arc/ArcSplitStateTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcOmniboxPlacementTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcCollectionsFocusTest.java",
 +      "src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearanceTest.java",
@@ -1544,7 +1546,7 @@ diff --git a/chrome/android/junit/BUILD.gn b/chrome/android/junit/BUILD.gn
        "//chrome/android/java/src/org/chromium/chrome/browser/bottombar/BottomBarAppMenuUpdateBadgeControllerUnitTest.java",
        "//chrome/android/java/src/org/chromium/chrome/browser/bottombar/BottomBarContainerCoordinatorUnitTest.java",
        "src/org/chromium/chrome/browser/BrowserExitReasonTrackerUnitTest.java",
-@@ -463,6 +474,7 @@
+@@ -463,6 +475,7 @@
      ]
 
      deps = [
@@ -2306,7 +2308,7 @@ diff --git a/chrome/browser/sync/sync_service_factory.cc b/chrome/browser/sync/s
 diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarLayout.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarLayout.java
 --- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarLayout.java
 +++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarLayout.java
-@@ -7,6 +7,7 @@
+@@ -7,11 +7,13 @@
  import android.content.Context;
  import android.content.res.ColorStateList;
  import android.content.res.Resources;
@@ -2314,15 +2316,77 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
  import android.graphics.drawable.Drawable;
  import android.os.Parcelable;
  import android.util.AttributeSet;
-@@ -231,6 +232,42 @@
-         mDeleteButton.setBackgroundResource(resourceId);
-     }
+ import android.util.SparseArray;
+ import android.view.LayoutInflater;
++import android.view.MotionEvent;
+ import android.view.View;
+ import android.widget.ImageButton;
 
+@@ -45,6 +47,8 @@
+ import org.chromium.ui.base.DeviceFormFactor;
+ import org.chromium.ui.base.WindowAndroid;
+
++import java.util.function.BooleanSupplier;
++
+ /** This class represents the location bar where the user types in URLs and search terms. */
+ @NullMarked
+ public class LocationBarLayout extends ConstraintLayout {
+@@ -229,6 +233,87 @@
+
+     /* package */ void setDeleteButtonBackground(@DrawableRes int resourceId) {
+         mDeleteButton.setBackgroundResource(resourceId);
++    }
++
 +    /** Optional window palette; phone layouts retain their native appearance. */
 +    public void setArcSurfaceColor(@Nullable Integer color) {}
 +
 +    /** Rectangular address row when the Arc shell places it above the page. */
 +    public void setArcTopBar(boolean active) {}
++
++    private @Nullable BooleanSupplier mArcAddressPopupOpener;
++    private boolean mArcConsumesAddressGesture;
++
++    /** Optional Arc entry; returning false keeps Chromium's original touch dispatch. */
++    public void setArcAddressPopupOpener(@Nullable BooleanSupplier opener) {
++        mArcAddressPopupOpener = opener;
++        if (opener == null) mArcConsumesAddressGesture = false;
++    }
++
++    @Override
++    public boolean dispatchTouchEvent(MotionEvent event) {
++        int action = event.getActionMasked();
++        if (mArcConsumesAddressGesture) {
++            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
++                mArcConsumesAddressGesture = false;
++            }
++            return true;
++        }
++        if (action == MotionEvent.ACTION_DOWN && mArcAddressPopupOpener != null
++                && (event.getButtonState() == 0
++                        || event.getButtonState() == MotionEvent.BUTTON_PRIMARY)
++                && isArcAddressEntryTarget(event) && mArcAddressPopupOpener.getAsBoolean()) {
++            // Moving the same editor into the popup must not deliver a stray release to it.
++            mArcConsumesAddressGesture = true;
++            return true;
++        }
++        return super.dispatchTouchEvent(event);
++    }
++
++    private boolean isArcAddressEntryTarget(MotionEvent event) {
++        float x = event.getX(), y = event.getY();
++        if (x < 0 || y < 0 || x >= getWidth() || y >= getHeight()) return false;
++        Rect bounds = new Rect();
++        for (int i = 0; i < getChildCount(); i++) {
++            View child = getChildAt(i);
++            if (child == mUrlBar || child == mFocusThief || child.getVisibility() != View.VISIBLE) {
++                continue;
++            }
++            // Preserve entire auxiliary segments, including buttons in non-clickable groups.
++            child.getHitRect(bounds);
++            if (bounds.contains((int) x, (int) y)) return false;
++        }
++        return true;
++    }
 +
 +    private @Nullable Rect mArcCommandResults;
 +    private boolean mArcCommandActions;
@@ -2352,11 +2416,9 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
 +        if (close == null) return false;
 +        close.run();
 +        return true;
-+    }
-+
-     /* package */ void updateVisualsForState(@BrandedColorScheme int brandedColorScheme) {
-         updateActivationChipVisuals(brandedColorScheme);
      }
+
+     /* package */ void updateVisualsForState(@BrandedColorScheme int brandedColorScheme) {
 diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarMediator.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarMediator.java
 --- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarMediator.java
 +++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarMediator.java
@@ -5805,7 +5867,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCommandB
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCommandBar.java
-@@ -0,0 +1,365 @@
+@@ -0,0 +1,374 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -5943,9 +6005,18 @@ new file mode 100644
 +    }
 +
 +    public void open(boolean actions) {
++        open(actions, mBeginInput);
++    }
++
++    /** Edit/copy the active address through Chromium's native focus-and-select callback. */
++    public void openAddress(Runnable beginAddressInput) {
++        open(false, beginAddressInput);
++    }
++
++    private void open(boolean actions, Runnable beginInput) {
 +        if (mDestroyed) return;
 +        if (isShowing()) {
-+            if (mState == State.CLOSING) { finishAnimationForTesting(); open(actions); }
++            if (mState == State.CLOSING) { finishAnimationForTesting(); open(actions, beginInput); }
 +            return;
 +        }
 +        mActions = actions; mState = State.OPENING;
@@ -5958,7 +6029,7 @@ new file mode 100644
 +        mHeader.removeView(mHolder); mHeader.addView(mHolder, 0, new LinearLayout.LayoutParams(0, -1, 1));
 +        mEditor.setHint(mPlaceholder); mEditor.addTextChangedListener(mTextWatcher);
 +        resize();
-+        mBeginInput.run(); rebuildResults();
++        beginInput.run(); rebuildResults();
 +        mProxy = new TextView(mActivity); mProxy.setText(mOriginalHint);
 +        mProxy.setTextColor(mForeground); mProxy.setGravity(Gravity.CENTER_VERTICAL);
 +        mProxy.setPadding(dp(12), 0, dp(12), 0); mProxy.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
@@ -6389,7 +6460,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopC
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
-@@ -0,0 +1,1342 @@
+@@ -0,0 +1,1402 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -6444,6 +6515,9 @@ new file mode 100644
 +import org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabListViewBinder;
 +import org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabRailLayout;
 +import org.chromium.chrome.browser.toolbar.top.ToolbarTablet;
++import org.chromium.chrome.browser.toolbar.top.NavigationPopup;
++import org.chromium.chrome.browser.history.HistoryManagerUtils;
++import org.chromium.content_public.browser.WebContents;
 +import org.chromium.chrome.browser.omnibox.LocationBarLayout;
 +
 +/** Composes profile-owned Arc collections around Chromium's real vertical tab rail. */
@@ -6479,7 +6553,9 @@ new file mode 100644
 +    private final ImageButton mAppearanceButton;
 +    private final ArcCompactOmnibox mCompactOmnibox;
 +    private final ArcOmniboxPlacement mOmniboxPlacement;
++    private NavigationPopup mNavigationPopup;
 +    private ArcCommandBar mCommandBar;
++    private LocationBarLayout mAddressPopupLocation;
 +    private Runnable mFocusAddressBar;
 +    private Runnable mOpenSettings;
 +    private Runnable mEndAddressInput = () -> {};
@@ -6708,6 +6784,7 @@ new file mode 100644
 +        mNavigationControls.addView(forward);
 +        mNavigationControls.addView(reload);
 +        mNavigationState = new ArcNavigationControls(currentTab, back, forward, reload);
++        mNavigationState.setHistoryActions(this::showNavigationHistory, this::dismissNavigationHistory);
 +        mNavigationRow.addView(
 +                mNavigationControls,
 +                new LinearLayout.LayoutParams(
@@ -6996,8 +7073,24 @@ new file mode 100644
 +                }
 +            }
 +        });
++        if (location instanceof LocationBarLayout bar) {
++            mAddressPopupLocation = bar;
++            bar.setArcAddressPopupOpener(this::openAddressCommandBar);
++        }
 +        mPaletteInitialized = false;
 +        applyAppearance();
++    }
++
++    private boolean openAddressCommandBar() {
++        if (mDestroyed || mCommandBar == null || mCommandBar.isShowing()
++                || mFocusAddressBar == null || !ArcDesktopAppearance.isDesktopWindow(mActivity)
++                || ArcDesktopAppearance.getAddressBarPosition(mActivity)
++                        != ArcDesktopAppearance.ADDRESS_SIDEBAR) return false;
++        // Finish a native popover before moving its existing holder, as in the Ctrl+T path.
++        mEndAddressInput.run();
++        mCompactOmnibox.restore();
++        mCommandBar.openAddress(mFocusAddressBar);
++        return true;
 +    }
 +
 +    private Rect commandViewport() {
@@ -7069,7 +7162,7 @@ new file mode 100644
 +                                    mActivity.getResources().getDisplayMetrics().density)) {
 +                        mCollapseButton.performClick();
 +                    }
-+                    mFocusAddressBar.run();
++                    if (!openAddressCommandBar()) mFocusAddressBar.run();
 +                }
 +                return true;
 +            }
@@ -7108,6 +7201,37 @@ new file mode 100644
 +        button.setPadding(dp(4), 0, dp(4), 0);
 +        button.setOnClickListener(v -> action.run());
 +        return button;
++    }
++
++    private boolean showNavigationHistory(View anchor, boolean forward) {
++        Tab tab = mCurrentTab.get();
++        if (mDestroyed || mActivity.isFinishing() || mActivity.isDestroyed()
++                || tab == null || tab.isDestroyed()
++                || !(forward ? tab.canGoForward() : tab.canGoBack())) return false;
++        WebContents contents = tab.getWebContents();
++        if (contents == null || contents.isDestroyed() || !anchor.isAttachedToWindow()) return false;
++        dismissNavigationHistory();
++        NavigationPopup popup = new NavigationPopup(tab.getProfile(), mActivity,
++                contents.getNavigationController(),
++                forward ? NavigationPopup.Type.TABLET_FORWARD : NavigationPopup.Type.TABLET_BACK,
++                () -> tab,
++                selected -> {
++                    if (!mDestroyed && selected == mCurrentTab.get() && !selected.isDestroyed()) {
++                        HistoryManagerUtils.showHistoryManager(mActivity, selected, selected.getProfile());
++                    }
++                });
++        mNavigationPopup = popup;
++        popup.setOnDismissCallback(() -> {
++            if (mNavigationPopup == popup) mNavigationPopup = null;
++        });
++        popup.show(anchor);
++        return true;
++    }
++
++    private void dismissNavigationHistory() {
++        NavigationPopup popup = mNavigationPopup;
++        mNavigationPopup = null;
++        if (popup != null) popup.dismiss();
 +    }
 +
 +    private ImageButton navigationButton(
@@ -7304,7 +7428,10 @@ new file mode 100644
 +        boolean desktop = ArcDesktopAppearance.isDesktopWindow(mActivity);
 +        boolean incognito = mIncognitoStateProvider.isIncognitoSelected();
 +        setArcToolbarCompositionActive(desktop);
-+        if (!desktop && mCommandBar != null) mCommandBar.close(false, null);
++        if (!desktop) {
++            dismissNavigationHistory();
++            if (mCommandBar != null) mCommandBar.close(false, null);
++        }
 +        applyAddressBarPosition();
 +        int surface = frameSurface(incognito);
 +        boolean paletteChanged = !mPaletteInitialized || mPaletteDesktop != desktop
@@ -7704,6 +7831,10 @@ new file mode 100644
 +        mDestroyed = true;
 +        mAppearanceDispatch.destroy();
 +        mColumn.getViewTreeObserver().removeOnGlobalLayoutListener(mFontLayoutListener);
++        if (mAddressPopupLocation != null) {
++            mAddressPopupLocation.setArcAddressPopupOpener(null);
++            mAddressPopupLocation = null;
++        }
 +        if (mCommandBar != null) mCommandBar.destroy();
 +        mFrameDispatch.destroy();
 +        mCompactOmnibox.destroy();
@@ -8230,7 +8361,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcNavigati
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcNavigationControls.java
-@@ -0,0 +1,101 @@
+@@ -0,0 +1,136 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -8243,6 +8374,7 @@ new file mode 100644
 +import org.chromium.chrome.browser.tab.TabObserver;
 +
 +import java.util.function.Supplier;
++import java.util.function.BiPredicate;
 +
 +/** Keep Arc navigation state attached to the current Chromium Tab only. */
 +public final class ArcNavigationControls {
@@ -8252,13 +8384,19 @@ new file mode 100644
 +    private final ImageButton mReload;
 +    private Tab mObserved;
 +    private boolean mDestroyed;
++    private BiPredicate<View, Boolean> mOpenHistory;
++    private Runnable mDismissHistory = () -> {};
 +    private final TabObserver mObserver = new TabObserver() {
 +        @Override public void onUrlUpdated(Tab tab) { changed(tab); }
 +        @Override public void onNavigationEntriesDeleted(Tab tab) { changed(tab); }
 +        @Override public void onLoadStarted(Tab tab, boolean toDifferentDocument) { changed(tab); }
 +        @Override public void onLoadStopped(Tab tab, boolean toDifferentDocument) { changed(tab); }
++        @Override public void onHidden(Tab tab, int type) {
++            if (tab == mObserved) mDismissHistory.run();
++        }
 +        @Override public void onDestroyed(Tab tab) {
 +            if (tab != mObserved) return;
++            mDismissHistory.run();
 +            detach();
 +            update(null);
 +        }
@@ -8284,6 +8422,24 @@ new file mode 100644
 +        });
 +    }
 +
++    /** Native history presentation remains owned by Chromium; this class guards its lifecycle. */
++    public void setHistoryActions(BiPredicate<View, Boolean> open, Runnable dismiss) {
++        if (mDestroyed) return;
++        mDismissHistory.run();
++        mOpenHistory = open;
++        mDismissHistory = dismiss;
++        mBack.setOnLongClickListener(v -> openHistory(v, false));
++        mForward.setOnLongClickListener(v -> openHistory(v, true));
++    }
++
++    private boolean openHistory(View anchor, boolean forward) {
++        Tab tab = selected();
++        if (tab == null || mOpenHistory == null
++                || !(forward ? tab.canGoForward() : tab.canGoBack())) return false;
++        refresh();
++        return mOpenHistory.test(anchor, forward);
++    }
++
 +    private Tab selected() {
 +        if (mDestroyed) return null;
 +        Tab tab = mCurrent.get();
@@ -8298,7 +8454,10 @@ new file mode 100644
 +    }
 +
 +    private void changed(Tab tab) {
-+        if (!mDestroyed && tab == mObserved) refresh();
++        if (!mDestroyed && tab == mObserved) {
++            mDismissHistory.run();
++            refresh();
++        }
 +    }
 +
 +    public void refresh() {
@@ -8306,6 +8465,7 @@ new file mode 100644
 +        Tab selected = mCurrent.get();
 +        if (selected != null && selected.isDestroyed()) selected = null;
 +        if (selected != mObserved) {
++            mDismissHistory.run();
 +            detach();
 +            mObserved = selected;
 +            if (selected != null) selected.addObserver(mObserver);
@@ -8327,7 +8487,13 @@ new file mode 100644
 +    }
 +
 +    public void destroy() {
++        if (mDestroyed) return;
 +        mDestroyed = true;
++        mDismissHistory.run();
++        mDismissHistory = () -> {};
++        mOpenHistory = null;
++        mBack.setOnLongClickListener(null);
++        mForward.setOnLongClickListener(null);
 +        detach();
 +        update(null);
 +    }
@@ -8881,6 +9047,73 @@ new file mode 100644
 +        mCommitted = encoded;
 +    }
 +}
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitState.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitState.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitState.java
+@@ -0,0 +1,62 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++/** Window-local identities only. TabModel retains ownership of every Tab/WebContents. */
++public final class ArcSplitState {
++    private int mLeft = -1;
++    private int mRight = -1;
++    private int mActive = -1;
++    private float mRatio = .5f;
++
++    public boolean start(int leftId, int rightId) {
++        if (leftId < 0 || rightId < 0 || leftId == rightId) return false;
++        mLeft = leftId;
++        mRight = rightId;
++        mActive = leftId;
++        mRatio = .5f;
++        return true;
++    }
++
++    public boolean activate(int tabId) {
++        if (tabId < 0 || (tabId != mLeft && tabId != mRight)) return false;
++        mActive = tabId;
++        return true;
++    }
++
++    /** Swap physical positions while preserving active identity and physical left width. */
++    public void swap() {
++        if (!isSplit()) return;
++        int previousLeft = mLeft;
++        mLeft = mRight;
++        mRight = previousLeft;
++    }
++
++    public void setRatio(float ratio) {
++        if (!Float.isFinite(ratio)) throw new IllegalArgumentException("Non-finite split ratio");
++        mRatio = Math.max(.2f, Math.min(.8f, ratio));
++    }
++
++    public void remove(int tabId) {
++        if (tabId < 0 || (tabId != mLeft && tabId != mRight)) return;
++        int survivor = tabId == mLeft ? mRight : mLeft;
++        mLeft = survivor;
++        mRight = -1;
++        mActive = survivor;
++        mRatio = .5f;
++    }
++
++    /** Leave both native tabs alive; only the active one remains presented. */
++    public void exit() {
++        mLeft = mActive;
++        mRight = -1;
++        mRatio = .5f;
++    }
++
++    public boolean isSplit() { return mLeft >= 0 && mRight >= 0; }
++    public int leftId() { return mLeft; }
++    public int rightId() { return mRight; }
++    public int activeId() { return mActive; }
++    public float ratio() { return mRatio; }
++}
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcTabActions.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcTabActions.java
 new file mode 100644
 --- /dev/null
@@ -9400,7 +9633,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCommand
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCommandBarTest.java
-@@ -0,0 +1,123 @@
+@@ -0,0 +1,151 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -9460,6 +9693,34 @@ new file mode 100644
 +        f.bar.finishAnimationForTesting(); assertFalse(f.bar.isShowing());
 +        assertSame(f.original, f.holder.getParent()); assertEquals(0, f.commits.get());
 +        assertEquals(0, f.sessions.get()); f.finish();
++    }
++    @Test public void addressPopupSelectsNativeUrlAndCtrlTStillStartsEmpty() {
++        Fixture f = new Fixture();
++        String url = "https://example.test/path?q=1#fragment";
++        Runnable focusAddress = () -> {
++            f.sessions.incrementAndGet();
++            f.editor.requestFocus();
++            f.editor.setText(url);
++            f.editor.selectAll();
++        };
++        f.bar.openAddress(focusAddress);
++        f.bar.finishAnimationForTesting();
++        assertEquals(url, f.editor.getText().toString());
++        assertEquals(0, f.editor.getSelectionStart());
++        assertEquals(url.length(), f.editor.getSelectionEnd());
++        f.editor.setText("edited query");
++        f.bar.openAddress(focusAddress);
++        assertEquals("edited query", f.editor.getText().toString());
++        assertEquals(1, f.sessions.get());
++        f.bar.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ESCAPE));
++        f.bar.finishAnimationForTesting();
++        assertSame(f.original, f.holder.getParent());
++        assertEquals(0, f.sessions.get());
++        f.bar.open(false);
++        f.bar.finishAnimationForTesting();
++        assertEquals("", f.editor.getText().toString());
++        assertEquals(0, f.commits.get());
++        f.finish();
 +    }
 +    @Test public void tabActionsAndEnterCommitExactlyOnce() {
 +        Fixture f = new Fixture(); f.bar.open(false); f.bar.finishAnimationForTesting();
@@ -9935,7 +10196,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcNavigat
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcNavigationControlsTest.java
-@@ -0,0 +1,115 @@
+@@ -0,0 +1,155 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -9989,9 +10250,49 @@ new file mode 100644
 +        buttons[0].performClick();
 +        verify(tab, times(1)).goBack();
 +    }
++    @Test public void longPressHistoryUsesDirectionAndKeepsSimpleNavigation() {
++        Tab tab = mock(Tab.class); when(tab.canGoBack()).thenReturn(true); when(tab.canGoForward()).thenReturn(true);
++        ImageButton[] buttons = buttons();
++        ArcNavigationControls controls = new ArcNavigationControls(() -> tab, buttons[0], buttons[1], buttons[2]);
++        java.util.List<Boolean> directions = new java.util.ArrayList<>();
++        controls.setHistoryActions((anchor, forward) -> {directions.add(forward); return true;}, () -> {});
++        controls.refresh();
++        assertTrue(buttons[0].performLongClick()); assertTrue(buttons[1].performLongClick());
++        assertEquals(java.util.List.of(false, true), directions);
++        buttons[0].performClick(); buttons[1].performClick(); verify(tab).goBack(); verify(tab).goForward();
++        controls.destroy(); assertFalse(buttons[0].performLongClick());
++    }
++    @Test public void historyDismissesOnHideMutationSelectionAndDestroy() {
++        Tab tab = mock(Tab.class); when(tab.canGoBack()).thenReturn(true);
++        AtomicReference<Tab> current = new AtomicReference<>(tab);
++        ImageButton[] buttons = buttons();
++        ArcNavigationControls controls = new ArcNavigationControls(current::get, buttons[0], buttons[1], buttons[2]);
++        java.util.concurrent.atomic.AtomicInteger dismissed = new java.util.concurrent.atomic.AtomicInteger();
++        controls.setHistoryActions((v, forward) -> true, dismissed::incrementAndGet);
++        controls.refresh();
++        ArgumentCaptor<TabObserver> observer = ArgumentCaptor.forClass(TabObserver.class);
++        verify(tab).addObserver(observer.capture()); int before = dismissed.get();
++        observer.getValue().onHidden(tab, 0); assertEquals(before + 1, dismissed.get());
++        observer.getValue().onNavigationEntriesDeleted(tab); assertEquals(before + 2, dismissed.get());
++        current.set(null); controls.refresh(); assertEquals(before + 3, dismissed.get());
++        controls.destroy(); assertEquals(before + 4, dismissed.get());
++    }
++    @Test public void disabledOrDestroyedTabCannotOpenHistory() {
++        Tab tab = mock(Tab.class); ImageButton[] buttons = buttons();
++        ArcNavigationControls controls = new ArcNavigationControls(() -> tab, buttons[0], buttons[1], buttons[2]);
++        java.util.concurrent.atomic.AtomicInteger opens = new java.util.concurrent.atomic.AtomicInteger();
++        controls.setHistoryActions((v, forward) -> {opens.incrementAndGet(); return true;}, () -> {});
++        controls.refresh(); assertFalse(buttons[0].performLongClick()); assertEquals(0, opens.get());
++        when(tab.canGoBack()).thenReturn(true); when(tab.isDestroyed()).thenReturn(true);
++        assertFalse(buttons[0].performLongClick()); assertEquals(0, opens.get()); controls.destroy();
++    }
 +    private ImageButton[] buttons() {
 +        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
-+        return new ImageButton[] {new ImageButton(activity), new ImageButton(activity), new ImageButton(activity)};
++        ImageButton[] result = {new ImageButton(activity), new ImageButton(activity), new ImageButton(activity)};
++        android.widget.LinearLayout row = new android.widget.LinearLayout(activity);
++        for (ImageButton button : result) row.addView(button);
++        activity.setContentView(row);
++        return result;
 +    }
 +
 +    @Test
@@ -10119,6 +10420,67 @@ new file mode 100644
 +        placement.restore(); placement.move(sidebar, 1, new FrameLayout.LayoutParams(200, 44));
 +        assertSame(holder, sidebar.getChildAt(1)); assertEquals(3, sidebar.getChildCount());
 +        a.finish();
++    }
++}
+diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitStateTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitStateTest.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitStateTest.java
+@@ -0,0 +1,56 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++import static org.junit.Assert.*;
++import org.junit.Test;
++
++/** Identity/geometry state only: no claim of two WebContents rendered on Android. */
++public class ArcSplitStateTest {
++    @Test public void pairStartsEqualWithFirstActive() {
++        ArcSplitState state = new ArcSplitState();
++        assertFalse(state.isSplit()); assertTrue(state.start(17, 42));
++        assertEquals(17, state.leftId()); assertEquals(42, state.rightId());
++        assertEquals(17, state.activeId()); assertEquals(.5f, state.ratio(), 0f);
++    }
++    @Test public void invalidPairDoesNotReplaceExistingState() {
++        ArcSplitState state = new ArcSplitState(); state.start(17, 42); state.activate(42);
++        assertFalse(state.start(17, 17)); assertFalse(state.start(-1, 42));
++        assertFalse(state.start(17, -1)); assertEquals(17, state.leftId());
++        assertEquals(42, state.rightId()); assertEquals(42, state.activeId());
++    }
++    @Test public void repeatedSwapsKeepActiveTabAndPhysicalRatio() {
++        ArcSplitState state = new ArcSplitState(); state.start(17, 42); state.activate(42); state.setRatio(.65f);
++        state.swap(); assertEquals(42, state.leftId()); assertEquals(17, state.rightId());
++        assertEquals(42, state.activeId()); assertEquals(.65f, state.ratio(), 0f);
++        state.swap(); assertEquals(17, state.leftId()); assertEquals(42, state.rightId());
++        assertFalse(state.activate(99)); assertEquals(42, state.activeId());
++    }
++    @Test public void closeActiveOrInactiveKeepsSurvivorWithoutCreatingTab() {
++        for (int closed : new int[] {17, 42}) {
++            ArcSplitState state = new ArcSplitState(); state.start(17, 42); state.activate(closed);
++            state.remove(99); assertTrue(state.isSplit()); state.remove(closed);
++            int survivor = closed == 17 ? 42 : 17;
++            assertFalse(state.isSplit()); assertEquals(survivor, state.activeId());
++            assertEquals(survivor, state.leftId()); assertEquals(-1, state.rightId());
++            state.remove(closed); assertEquals(survivor, state.activeId());
++        }
++    }
++    @Test public void exitIsIdempotentAndPreservesActiveIdentity() {
++        ArcSplitState state = new ArcSplitState(); state.start(17, 42); state.activate(42);
++        state.exit(); state.exit(); state.swap(); assertFalse(state.isSplit());
++        assertEquals(42, state.activeId()); assertEquals(42, state.leftId());
++        state.remove(42); assertEquals(-1, state.activeId());
++    }
++    @Test public void ratioRejectsNonFiniteAndBoundsFiniteValues() {
++        ArcSplitState state = new ArcSplitState(); state.start(17, 42);
++        for (float invalid : new float[] {Float.NaN, Float.POSITIVE_INFINITY, Float.NEGATIVE_INFINITY}) {
++            try {state.setRatio(invalid); fail("Non-finite ratio accepted");}
++            catch (IllegalArgumentException expected) {}
++            assertEquals(.5f, state.ratio(), 0f);
++        }
++        state.setRatio(-10f); assertEquals(.2f, state.ratio(), 0f);
++        state.setRatio(10f); assertEquals(.8f, state.ratio(), 0f);
 +    }
 +}
 diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/ArcTabSelectionTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/ArcTabSelectionTest.java

@@ -18,6 +18,7 @@ chrome_java_sources = [
   "java/src/org/chromium/chrome/browser/arc/ArcColorPicker.java",
   "java/src/org/chromium/chrome/browser/arc/ArcCompactOmnibox.java",
   "java/src/org/chromium/chrome/browser/arc/ArcCommandBar.java",
+  "java/src/org/chromium/chrome/browser/arc/ArcSplitState.java",
   "java/src/org/chromium/chrome/browser/arc/ArcOmniboxPlacement.java",
   "java/src/org/chromium/chrome/browser/arc/ArcFrameDispatch.java",
   "java/src/org/chromium/chrome/browser/arc/ArcNavigationControls.java",

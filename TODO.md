@@ -32,7 +32,9 @@ Amazon conserva su bloqueo y no se reabre su investigación. El usuario autoriz�
 **Aceptación:** mensaje y acciones visibles y operables, restauración del foco y retiro del oscurecimiento tras cerrar. Verificar móvil y escritorio, con teclado/mouse y toque.
 
 - [x] ~~Corregir el gate del presenter cuando el stack activo de browser controls está ausente~~ — fix `5184755`, 18 pruebas locales PASS; incluido en la rama candidata y su parche.
-- [ ] Integrar en una APK mediante build incremental autorizado y verificar visibilidad, apertura/cierre/cancelación y foco en Galaxy. **P0-02 no está cerrado en la APK instalada.**
+- [x] ~~Integrar el fix en APK mediante build incremental~~ — run `39338037898`, SHA `5b8694a07f328128e1267262780e6996b0ba4509`; artefacto y firma verificados.
+- [x] ~~Confirmar que los diálogos vuelven a ser visibles en Galaxy~~ — confirmación directa del usuario el 20-oct-2026 tras instalación manual. PASS de visibilidad reportado por el usuario; no equivale a ejecutar toda la matriz.
+- [ ] Verificar por separado alert/confirm/prompt, aceptar/cancelar, valores devueltos, secuencias, retiro del scrim y recuperación del foco; escritorio/móvil pendientes según escenario. **P0-02 conserva abierta la aceptación funcional completa.**
 
 ### [ ] P0-03 — Desaparece el contenido web y solo queda la title bar
 
@@ -244,9 +246,33 @@ ni los tres archivos del fix de diálogos 5184755.
 
 - [x] ~~Preparar integración de diálogos `5184755` y controles/sidebar `0ab6204`~~ — preserva el arreglo de pestañas `3db367a`; sin cambios nuevos de pin, GN args ni toolchain.
 - [x] ~~Verificar inventario y manifiesto remoto del último checkpoint disponible~~ — `archium-checkpoint-38511423805-1`, fuente `0abfc9f03e34c23762190365ccb0cf6f9e5c3260`, cuatro grupos/25 partes. Hashes de partes, árbol y outputs se verifican otra vez durante la restauración en CI.
-- [ ] Completar build incremental del candidato integrado; RUN_ID/SHA y primera consulta quedarán en el estado privado persistente del supervisor.
-- [ ] Verificar nueva APK y actualización en Android; mantener los datos. QEMU continúa `QEMU_ABI_BLOCKED`: no es PASS y el gate existente impide instalación automática si se repite.
+- [x] ~~Completar build incremental del candidato integrado~~ — run `39338037898` SUCCESS; SHA `5b8694a07f328128e1267262780e6996b0ba4509`, APK SHA256 `9db795ddf861a008e0181a60c52bbdf96e91c070c3464ae2b85913f545e6dc37`.
+- [x] ~~Verificar identidad de la nueva APK instalada~~ — `base.apk` leído por ADB y SHA256 idéntico al artefacto `9db795ddf861a008e0181a60c52bbdf96e91c070c3464ae2b85913f545e6dc37`; instalación manual confirmada por el usuario. Mantener los datos. QEMU continúa `QEMU_ABI_BLOCKED`: no es PASS y el gate existente impide instalación automática si se repite.
 - [ ] Validar visualmente diálogos nativos, foco, footer y sidebar con la APK nueva; no cerrar estos defectos por el mero éxito del build.
 - [ ] Amazon: `UNRESOLVED_GRAPHICS_BLOCKER`, ahora también congelamiento reportado por el usuario; sin corrección en este lote.
 
 Preparación: [R5.2 build e instalación](docs/validation/R5_2_BUILD_INSTALL_PREPARATION.md).
+
+### Confirmación del usuario — 20-oct-2026
+
+Instalación manual reportada; los diálogos ya se ven. La identidad de la APK
+instalada fue confirmada posteriormente por lectura del `base.apk` del sistema
+y SHA256 idéntico al artefacto publicado. No se sustituye `QEMU_ABI_BLOCKED`
+ni se afirma auditoría completa del dispositivo.
+Se registra únicamente la visibilidad confirmada, sin atribuir resolución de Amazon.
+
+
+## R5.3 — omnibox, historial y vista dividida (20-oct-2026)
+
+- [x] ~~Preparar clic en la omnibox lateral → pop-up de Ctrl+T con URL seleccionada~~ — reutiliza foco nativo; Ctrl+T sigue vacío. RED baseline: 10/16 fallos; GREEN final: 18/18 en Robolectric, sin afirmar validación de APK nueva.
+- [ ] Validar sugerencias, copiar/editar URL, teclado, foco y modo móvil con APK que contenga este cambio.
+- [x] ~~Aprobar diseño de vista dividida y plan técnico~~ — ambas opciones de segunda pestaña; dos páginas reales, separador ajustable y cápsula blanca con flechas opuestas apiladas.
+- [x] ~~Preparar estado puro de pareja~~ — seis tests JUnit: identidad, swap reversible, activo, cierre, salida y ratio finito. No presenta dos páginas por sí solo.
+- [ ] Implementar presentación de dos WebContents, lifecycle, input y navegación por panel; no publicar botón sin integración.
+- [ ] Intercambio sin recarga con transición suave de 180 ms; respetar animaciones desactivadas, cancelación por resize/destroy y conservar foco/estado.
+- [x] ~~Implementar conexión al historial nativo al mantener Atrás/Adelante~~ — preserva clic simple y descarta menú obsoleto por lifecycle/cambio de Tab; seis casos nuevos PASS host/Robolectric.
+- [ ] Validar visualmente historial nativo y saltos a entradas con APK nueva.
+- [ ] Gate Android de split: dos páginas vivas, scroll, diálogo por panel, cierre, foco, resize y recuperación de superficie. QEMU sigue bloqueado por ABI.
+
+Diseño: `docs/superpowers/specs/2026-10-20-arc-split-view-design.md`.
+Plan aprobado: `docs/superpowers/plans/2026-10-20-arc-split-view.md`.

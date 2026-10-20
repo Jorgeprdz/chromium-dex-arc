@@ -21,7 +21,7 @@ def main():
     classes.mkdir(parents=True, exist_ok=True)
     adapters = {
         'Tab.java': 'package org.chromium.chrome.browser.tab; public interface Tab { boolean canGoBack(); boolean canGoForward(); boolean isDestroyed(); void goBack(); void goForward(); void reload(); void addObserver(TabObserver o); void removeObserver(TabObserver o); }',
-        'TabObserver.java': 'package org.chromium.chrome.browser.tab; public interface TabObserver { default void onUrlUpdated(Tab t){} default void onNavigationEntriesDeleted(Tab t){} default void onLoadStarted(Tab t,boolean different){} default void onLoadStopped(Tab t,boolean different){} default void onDestroyed(Tab t){} }',
+        'TabObserver.java': 'package org.chromium.chrome.browser.tab; public interface TabObserver { default void onUrlUpdated(Tab t){} default void onNavigationEntriesDeleted(Tab t){} default void onLoadStarted(Tab t,boolean different){} default void onLoadStopped(Tab t,boolean different){} default void onHidden(Tab t,int type){} default void onDestroyed(Tab t){} }',
     }
     sources = []
     for name, contents in adapters.items():
@@ -30,7 +30,7 @@ def main():
         sources.append(str(path))
     names = ['ArcNavigationControls']
     if not a.navigation_only:
-        names += ['ArcOmniboxPlacement', 'ArcCommandBar']
+        names += ['ArcOmniboxPlacement', 'ArcCommandBar', 'ArcSplitState']
     for name in names:
         production = ROOT / 'chromium' / ARC / (name + '.java')
         if a.mutation:

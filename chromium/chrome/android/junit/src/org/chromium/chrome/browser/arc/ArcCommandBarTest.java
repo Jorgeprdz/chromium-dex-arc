@@ -58,6 +58,34 @@ public class ArcCommandBarTest {
         assertSame(f.original, f.holder.getParent()); assertEquals(0, f.commits.get());
         assertEquals(0, f.sessions.get()); f.finish();
     }
+    @Test public void addressPopupSelectsNativeUrlAndCtrlTStillStartsEmpty() {
+        Fixture f = new Fixture();
+        String url = "https://example.test/path?q=1#fragment";
+        Runnable focusAddress = () -> {
+            f.sessions.incrementAndGet();
+            f.editor.requestFocus();
+            f.editor.setText(url);
+            f.editor.selectAll();
+        };
+        f.bar.openAddress(focusAddress);
+        f.bar.finishAnimationForTesting();
+        assertEquals(url, f.editor.getText().toString());
+        assertEquals(0, f.editor.getSelectionStart());
+        assertEquals(url.length(), f.editor.getSelectionEnd());
+        f.editor.setText("edited query");
+        f.bar.openAddress(focusAddress);
+        assertEquals("edited query", f.editor.getText().toString());
+        assertEquals(1, f.sessions.get());
+        f.bar.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ESCAPE));
+        f.bar.finishAnimationForTesting();
+        assertSame(f.original, f.holder.getParent());
+        assertEquals(0, f.sessions.get());
+        f.bar.open(false);
+        f.bar.finishAnimationForTesting();
+        assertEquals("", f.editor.getText().toString());
+        assertEquals(0, f.commits.get());
+        f.finish();
+    }
     @Test public void tabActionsAndEnterCommitExactlyOnce() {
         Fixture f = new Fixture(); f.bar.open(false); f.bar.finishAnimationForTesting();
         f.bar.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_TAB));

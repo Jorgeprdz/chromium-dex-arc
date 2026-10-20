@@ -135,9 +135,18 @@ public final class ArcCommandBar {
     }
 
     public void open(boolean actions) {
+        open(actions, mBeginInput);
+    }
+
+    /** Edit/copy the active address through Chromium's native focus-and-select callback. */
+    public void openAddress(Runnable beginAddressInput) {
+        open(false, beginAddressInput);
+    }
+
+    private void open(boolean actions, Runnable beginInput) {
         if (mDestroyed) return;
         if (isShowing()) {
-            if (mState == State.CLOSING) { finishAnimationForTesting(); open(actions); }
+            if (mState == State.CLOSING) { finishAnimationForTesting(); open(actions, beginInput); }
             return;
         }
         mActions = actions; mState = State.OPENING;
@@ -150,7 +159,7 @@ public final class ArcCommandBar {
         mHeader.removeView(mHolder); mHeader.addView(mHolder, 0, new LinearLayout.LayoutParams(0, -1, 1));
         mEditor.setHint(mPlaceholder); mEditor.addTextChangedListener(mTextWatcher);
         resize();
-        mBeginInput.run(); rebuildResults();
+        beginInput.run(); rebuildResults();
         mProxy = new TextView(mActivity); mProxy.setText(mOriginalHint);
         mProxy.setTextColor(mForeground); mProxy.setGravity(Gravity.CENTER_VERTICAL);
         mProxy.setPadding(dp(12), 0, dp(12), 0); mProxy.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);

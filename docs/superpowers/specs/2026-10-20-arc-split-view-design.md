@@ -1,14 +1,16 @@
-# Archium — omnibox y vista dividida (propuesta para revisión)
+# Archium — omnibox y vista dividida (diseño aprobado)
 
 Fecha: 20-oct-2026. Rama aislada: `assistant/archium-r5-3-omnibox-split`.
 Base: `5b8694a07f328128e1267262780e6996b0ba4509`.
-Estado: DRAFT — implementación de vista dividida pendiente de aprobación.
+Estado: DISEÑO APROBADO por el usuario; plan técnico de integración pendiente de revisión.
 
 ## Intención y alcance
 
 El usuario reporta que ya no ve sugerencias al escribir en la omnibox lateral.
-Se debe recuperar el desplegable de Chromium y conservar historial, búsqueda,
-seguridad de navegación y comportamiento de teclado; no sustituirlo por resultados falsos.
+El usuario precisó que el clic en la dirección abra el mismo pop-up de Ctrl+T,
+con la URL actual completa y seleccionada para copiar o editar. Ctrl+T conserva
+la entrada vacía. Se reutilizan las sugerencias nativas de Chromium; los controles
+de información del sitio y demás botones mantienen sus acciones originales.
 
 El usuario solicita dos páginas reales en el mismo visor de Archium. La entrada
 será el menú de una pestaña, mediante clic derecho o pulsación prolongada.
@@ -23,8 +25,15 @@ No se modifica Amazon, el motor, flags gráficos, perfiles ni datos del teléfon
 4. Distribución inicial 50/50; un separador permite ajustar los tamaños.
 5. Clic o toque en un panel lo activa. Omnibox, atrás/adelante, recarga y atajos
    actúan sobre ese panel; ambos contenidos permanecen visibles e interactivos.
-6. «Salir de vista dividida» conserva las dos pestañas y muestra la activa.
-7. Cerrar una pestaña usa el cierre nativo habitual; el panel restante vuelve
+6. Una cápsula blanca, pequeña y redondeada sobre el separador muestra dos
+   flechas oscuras horizontales en sentidos opuestos, una encima de otra (→ / ←).
+   Al pulsarla intercambia los paneles conservando WebContents, scroll, formularios,
+   historial y la identidad de la pestaña activa. No recarga. El intercambio usa
+   una transición rápida y suave de 180 ms, respetando animaciones desactivadas
+   en Android; al destruir o redimensionar se cancela dejando geometría final válida. El blanco es el
+   acabado inicial elegido; blur queda como alternativa visual, no requisito.
+7. «Salir de vista dividida» conserva las dos pestañas y muestra la activa.
+8. Cerrar una pestaña usa el cierre nativo habitual; el panel restante vuelve
    al visor completo. Nunca se intercambian silenciosamente identidades de pestaña.
 
 Supuestos de la propuesta: vista lado a lado; máximo dos paneles por ventana;
@@ -94,8 +103,10 @@ Un cambio nativo futuro sólo permite recompilar dependencias invalidadas por
 el grafo de Ninja, después de verificar el checkpoint e integrar los gates.
 Actualizar TODO con implementación, resultados reales y limitaciones por separado.
 
-## Decisión solicitada
+## Decisiones del usuario
 
-Aprobar el comportamiento propuesto y el alcance de integración nativa para
-preparar el plan técnico. Esta propuesta no afirma viabilidad ni implementación
-terminada y no autoriza presentar un botón inoperante como la función completa.
+Diseño lateral de dos paneles aprobado explícitamente; ambas opciones de segunda
+pestaña aprobadas. Intercambio de paneles aprobado, con cápsula blanca y flechas
+oscuras apiladas. El usuario también aprobó historial al mantener Atrás/Adelante;
+se reutilizará el NavigationPopup nativo como trabajo independiente.
+La aprobación de diseño no equivale a validación de superficies ni de una APK.

@@ -52,6 +52,9 @@ import org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTa
 import org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabListViewBinder;
 import org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabRailLayout;
 import org.chromium.chrome.browser.toolbar.top.ToolbarTablet;
+import org.chromium.chrome.browser.toolbar.top.NavigationPopup;
+import org.chromium.chrome.browser.history.HistoryManagerUtils;
+import org.chromium.content_public.browser.WebContents;
 import org.chromium.chrome.browser.omnibox.LocationBarLayout;
 
 /** Composes profile-owned Arc collections around Chromium's real vertical tab rail. */
@@ -87,7 +90,9 @@ public final class ArcDesktopCoordinator {
     private final ImageButton mAppearanceButton;
     private final ArcCompactOmnibox mCompactOmnibox;
     private final ArcOmniboxPlacement mOmniboxPlacement;
+    private NavigationPopup mNavigationPopup;
     private ArcCommandBar mCommandBar;
+    private LocationBarLayout mAddressPopupLocation;
     private Runnable mFocusAddressBar;
     private Runnable mOpenSettings;
     private Runnable mEndAddressInput = () -> {};
@@ -316,6 +321,7 @@ public final class ArcDesktopCoordinator {
         mNavigationControls.addView(forward);
         mNavigationControls.addView(reload);
         mNavigationState = new ArcNavigationControls(currentTab, back, forward, reload);
+        mNavigationState.setHistoryActions(this::showNavigationHistory, this::dismissNavigationHistory);
         mNavigationRow.addView(
                 mNavigationControls,
                 new LinearLayout.LayoutParams(
@@ -604,8 +610,24 @@ public final class ArcDesktopCoordinator {
                 }
             }
         });
+        if (location instanceof LocationBarLayout bar) {
+            mAddressPopupLocation = bar;
+            bar.setArcAddressPopupOpener(this::openAddressCommandBar);
+        }
         mPaletteInitialized = false;
         applyAppearance();
+    }
+
+    private boolean openAddressCommandBar() {
+        if (mDestroyed || mCommandBar == null || mCommandBar.isShowing()
+                || mFocusAddressBar == null || !ArcDesktopAppearance.isDesktopWindow(mActivity)
+                || ArcDesktopAppearance.getAddressBarPosition(mActivity)
+                        != ArcDesktopAppearance.ADDRESS_SIDEBAR) return false;
+        // Finish a native popover before moving its existing holder, as in the Ctrl+T path.
+        mEndAddressInput.run();
+        mCompactOmnibox.restore();
+        mCommandBar.openAddress(mFocusAddressBar);
+        return true;
     }
 
     private Rect commandViewport() {
@@ -677,7 +699,7 @@ public final class ArcDesktopCoordinator {
                                     mActivity.getResources().getDisplayMetrics().density)) {
                         mCollapseButton.performClick();
                     }
-                    mFocusAddressBar.run();
+                    if (!openAddressCommandBar()) mFocusAddressBar.run();
                 }
                 return true;
             }
@@ -716,6 +738,37 @@ public final class ArcDesktopCoordinator {
         button.setPadding(dp(4), 0, dp(4), 0);
         button.setOnClickListener(v -> action.run());
         return button;
+    }
+
+    private boolean showNavigationHistory(View anchor, boolean forward) {
+        Tab tab = mCurrentTab.get();
+        if (mDestroyed || mActivity.isFinishing() || mActivity.isDestroyed()
+                || tab == null || tab.isDestroyed()
+                || !(forward ? tab.canGoForward() : tab.canGoBack())) return false;
+        WebContents contents = tab.getWebContents();
+        if (contents == null || contents.isDestroyed() || !anchor.isAttachedToWindow()) return false;
+        dismissNavigationHistory();
+        NavigationPopup popup = new NavigationPopup(tab.getProfile(), mActivity,
+                contents.getNavigationController(),
+                forward ? NavigationPopup.Type.TABLET_FORWARD : NavigationPopup.Type.TABLET_BACK,
+                () -> tab,
+                selected -> {
+                    if (!mDestroyed && selected == mCurrentTab.get() && !selected.isDestroyed()) {
+                        HistoryManagerUtils.showHistoryManager(mActivity, selected, selected.getProfile());
+                    }
+                });
+        mNavigationPopup = popup;
+        popup.setOnDismissCallback(() -> {
+            if (mNavigationPopup == popup) mNavigationPopup = null;
+        });
+        popup.show(anchor);
+        return true;
+    }
+
+    private void dismissNavigationHistory() {
+        NavigationPopup popup = mNavigationPopup;
+        mNavigationPopup = null;
+        if (popup != null) popup.dismiss();
     }
 
     private ImageButton navigationButton(
@@ -912,7 +965,10 @@ public final class ArcDesktopCoordinator {
         boolean desktop = ArcDesktopAppearance.isDesktopWindow(mActivity);
         boolean incognito = mIncognitoStateProvider.isIncognitoSelected();
         setArcToolbarCompositionActive(desktop);
-        if (!desktop && mCommandBar != null) mCommandBar.close(false, null);
+        if (!desktop) {
+            dismissNavigationHistory();
+            if (mCommandBar != null) mCommandBar.close(false, null);
+        }
         applyAddressBarPosition();
         int surface = frameSurface(incognito);
         boolean paletteChanged = !mPaletteInitialized || mPaletteDesktop != desktop
@@ -1312,6 +1368,10 @@ public final class ArcDesktopCoordinator {
         mDestroyed = true;
         mAppearanceDispatch.destroy();
         mColumn.getViewTreeObserver().removeOnGlobalLayoutListener(mFontLayoutListener);
+        if (mAddressPopupLocation != null) {
+            mAddressPopupLocation.setArcAddressPopupOpener(null);
+            mAddressPopupLocation = null;
+        }
         if (mCommandBar != null) mCommandBar.destroy();
         mFrameDispatch.destroy();
         mCompactOmnibox.destroy();

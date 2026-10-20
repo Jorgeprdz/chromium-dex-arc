@@ -209,11 +209,13 @@ def main():
         native_location_bar = (
             checkout / 'chrome/browser/ui/android/omnibox/java/src/org/chromium/'
             'chrome/browser/omnibox/LocationBarLayout.java').read_text()
+        if not re.search(r'public\s+void\s+setArcAddressPopupOpener\s*\(\s*@Nullable\s+BooleanSupplier\s+opener\s*\)', native_location_bar):
+            raise RuntimeError('Delivered LocationBarLayout lacks address popup callback authority')
         definitions.update({
             # Type-only adapter for the public base hook shipped in the same patch.
             # Actual color/focus behavior is verified separately with Android/Chromium tests.
             'org.chromium.chrome.browser.omnibox.LocationBarLayout':
-                    native_module.native_definition(native_location_bar).replace('\n}', '\npublic void setArcTopBar(boolean active) {}\n}'),
+                    native_module.native_definition(native_location_bar).replace('\n}', '\npublic void setArcTopBar(boolean active) {}\npublic void setArcAddressPopupOpener(java.util.function.BooleanSupplier opener) {}\n}'),
             # Minimal type contracts from cfd94726's CompositorViewHolder,
             # TouchEventObserver and NullableObservableSupplier. Stub bodies are
             # never used as evidence of compositor/touch/browser runtime behavior.
@@ -238,13 +240,26 @@ def main():
                 public void setTabVisibilityPredicate(java.util.function.IntPredicate predicate){}
                 public void refreshTabPresentation(){}
             }''',
-            'org.chromium.chrome.browser.tab.Tab': 'public class Tab { public int getId(){return 1;} public org.chromium.url.GURL getUrl(){return new org.chromium.url.GURL();} public String getTitle(){return "Title";} public boolean isDestroyed(){return false;} public boolean canGoBack(){return false;} public void goBack(){} public boolean canGoForward(){return false;} public void goForward(){} public void reload(){} public void addObserver(TabObserver o){} public void removeObserver(TabObserver o){} }',
+            'org.chromium.chrome.browser.tab.Tab': 'public class Tab { public int getId(){return 1;} public org.chromium.url.GURL getUrl(){return new org.chromium.url.GURL();} public String getTitle(){return "Title";} public boolean isDestroyed(){return false;} public boolean canGoBack(){return false;} public void goBack(){} public boolean canGoForward(){return false;} public void goForward(){} public void reload(){} public void addObserver(TabObserver o){} public void removeObserver(TabObserver o){} public org.chromium.chrome.browser.profiles.Profile getProfile(){return null;} public org.chromium.content_public.browser.WebContents getWebContents(){return null;} }',
             'org.chromium.chrome.browser.tab.TabObserver': ('public interface TabObserver { '
                  'default void onUrlUpdated(Tab tab){} '
                  'default void onNavigationEntriesDeleted(Tab tab){} '
                  'default void onLoadStarted(Tab tab,boolean differentDocument){} '
                  'default void onLoadStopped(Tab tab,boolean differentDocument){} '
-                 'default void onDestroyed(Tab tab){} }'),
+                 'default void onHidden(Tab tab,int type){} default void onDestroyed(Tab tab){} }'),
+            'org.chromium.content_public.browser.NavigationController': 'public interface NavigationController {}',
+            'org.chromium.content_public.browser.WebContents': 'public interface WebContents { boolean isDestroyed(); NavigationController getNavigationController(); }',
+            # NavigationPopup and HistoryManagerUtils signatures match pinned Chromium; this gate
+            # checks types only. Native history implementation is reused, not simulated in product.
+            'org.chromium.chrome.browser.toolbar.top.NavigationPopup': '''public class NavigationPopup {
+                public @interface Type { int TABLET_BACK=0; int TABLET_FORWARD=1; }
+                public interface HistoryDelegate { void show(org.chromium.chrome.browser.tab.Tab tab); }
+                public NavigationPopup(org.chromium.chrome.browser.profiles.Profile profile, android.content.Context context,
+                    org.chromium.content_public.browser.NavigationController controller, int type,
+                    java.util.function.Supplier<org.chromium.chrome.browser.tab.Tab> current, HistoryDelegate history){}
+                public void show(android.view.View anchor){} public void dismiss(){} public void setOnDismissCallback(Runnable callback){}
+            }''',
+            'org.chromium.chrome.browser.history.HistoryManagerUtils': 'public class HistoryManagerUtils { public static void showHistoryManager(android.app.Activity activity,org.chromium.chrome.browser.tab.Tab tab,org.chromium.chrome.browser.profiles.Profile profile){} }',
             'org.chromium.chrome.browser.tab.TabLaunchType': 'public class TabLaunchType { public static final int FROM_CHROME_UI=1; }',
             'org.chromium.chrome.browser.tab.TabSelectionType': 'public class TabSelectionType { public static final int FROM_USER=1; }',
             'org.chromium.content_public.browser.LoadUrlParams': 'public class LoadUrlParams { public LoadUrlParams(String url){} }',
