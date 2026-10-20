@@ -354,3 +354,18 @@ Informe de implementación y límites: [R5.3](docs/validation/R5_3_SPLIT_VIEW.md
 - [ ] Cuando se acuerde compilar el conjunto, verificar y reutilizar el último checkpoint compatible; no hay nuevo build despachado en esta tarea.
 
 [Informe del acabado de split](docs/validation/R5_4_SPLIT_POLISH.md).
+
+## R5.4 — enlaces y gestos aprobados (20-oct-2026)
+
+- [x] ~~Implementar doble clic a 50/50 y ajuste magnético al centro~~ — transición rápida, histéresis de captura/liberación y límites reales del panel.
+- [x] ~~Añadir hover y breve iluminación de encaje~~ — sin botones permanentes adicionales ni animaciones al desactivar movimiento.
+- [x] ~~Ampliar temporalmente el panel y restaurar la pareja/proporción~~ — conserva Tabs/WebContents y acción de retorno visible.
+- [x] ~~Añadir «Abrir en pestaña dividida» al menú nativo de enlaces~~ — clic alterno/long press; HTTP(S), contexto nativo y validación de origen/ventana/modelo.
+- [x] ~~Conectar Ctrl+Alt+clic a NEW_SPLIT_VIEW~~ — Ctrl+clic y Alt+clic mantienen su tratamiento nativo; fallback fuera de ventanas Arc elegibles.
+- [x] ~~Conservar metadata y propiedad de navegación nativa~~ — referrer/additional params del menú, headers/POST/renderer del atajo; la ruta renderer conserva el WebContents creado y deja viva la antigua pestaña vecina.
+- [x] ~~Corregir hallazgos de revisión del conjunto~~ — agarre anclado al expandirse y animación detenida antes de cambiar de modelo; RED/GREEN.
+- [x] ~~Superar gates locales de la tanda~~ — 124 JVM split PASS; 371 host verificados (dos fixtures AAPT2 reejecutados con SDK configurado); dos hooks host nuevos, preparación SDK37, sintaxis, actionlint y patch reproducible PASS.
+- [ ] Despachar la compilación incremental autorizada con checkpoint39370769321-1 y entregar el RUN_ID/SHA al monitor independiente.
+- [ ] Validar las mejoras con APK instalada: enlaces generales, Ctrl+Alt, target=_blank, formularios, descargas, foco/restore y resize/móvil. No marcar PASS por gates host o por superar el build.
+
+[Reporte de enlaces y gestos](docs/validation/R5_4_SPLIT_LINKS_AND_GESTURES.md).

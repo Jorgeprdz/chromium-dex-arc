@@ -39,7 +39,7 @@
 - [x] Add menu entry without removing native options, preserve context metadata; accept existing NEW_SPLIT_VIEW at Android bridge; route Java requests and normalize unsupported cases. GREEN.
 
 ## Task4 — gates, PR and progressive handoff
-- [ ] Regenerate patch/manifests; run relevant JVM/native/host/preparation gates, review whole diff and resolve Important findings with RED/GREEN.
+- [x] Regenerate patch/manifests; run relevant JVM/native/host/preparation gates, review whole diff and resolve Important findings with RED/GREEN.
 - [ ] Update TODO/report/PR with implemented versus device-pending results; preserve checkpoints and inspect last compatible run/manifests before dispatch.
 - [ ] Integrate authorized candidate to build branch, dispatch exactly once with matching SHA/source inputs, update existing watcher and verify independent Termux process/first poll, then end Codex turn.
 
@@ -47,3 +47,5 @@
 - Baseline: draft PR2, HEAD23a493d, clean isolated branch assistant/archium-r5-split-polish-batch.
 - Ruling: renderer-created child WebContents cannot be destroyed/transplanted speculatively; retain native creation and replace displayed neighbor slot, preserving prior Tab in sidebar. This preserves opener/navigation data and user forms, at cost of a new Tab on that route.
 - Ruling: native WindowManager/GPU/device keyboard behavior remains pending APK acceptance; host adapters cannot certify it.
+
+- Evidence:124 JVM PASS; host371 run had2SDK-environment failures, both rerunPASS with genuineAAPT2/SDK37;2new hook host casesPASS; review issue model-change animation fixedRED/GREEN; pointer anchor fixedRED/GREEN. Runtime acceptance remains pendingAPK.
