@@ -1230,7 +1230,8 @@ public class CompositorViewHolder extends FrameLayout
 
         int webContentsWidth = mArcSplitHost.contains(tab)
                 ? Math.round(mArcSplitHost.bounds(tab).width()) : width - horizontalViewportInsets;
-        int webContentsHeight = height - verticalViewportInsets;
+        int webContentsHeight = height - verticalViewportInsets
+                - (mArcSplitHost.contains(tab) ? 2 * mArcSplitHost.frameInset() : 0);
 
         if (ChromeFeatureList.sVirtualKeyboardTransientInnerHeightFix.isEnabled()
                 && virtualKeyboardModeOutsetsWebContentsHeight()
@@ -1727,6 +1728,10 @@ public class CompositorViewHolder extends FrameLayout
             right = specs.getReservedWidth(AnchorSide.RIGHT);
         }
         return new Rect(left, 0, Math.max(left, size.x - right), size.y);
+    }
+
+    public void setArcSplitFrameSpacing(int inset, int gutter) {
+        mArcSplitHost.setFrameSpacing(inset, gutter);
     }
 
     public boolean canPresentArcSplit() {

@@ -72,6 +72,11 @@
     <string name="arc_split_exit">Salir de vista dividida</string>
     <string name="arc_split_unsupported">Esta combinación de páginas no admite vista dividida.</string>
     <string name="arc_split_no_tabs">No hay otra pestaña compatible abierta.</string>
+    <string name="arc_split_focus">Ampliar panel</string>
+    <string name="arc_split_restore">Volver a división</string>
+    <string name="arc_split_open_link">Abrir en pestaña dividida</string>
+    <item type="id" name="arc_split_open_link" />
+    <string name="arc_split_controls">Arrastra para redimensionar; pulsa para ver opciones</string>
     <string name="arc_split_swap">Intercambiar paneles</string>
     <string name="arc_split_dialog_open">Cierra el diálogo actual antes de cambiar la vista.</string>
 </resources>

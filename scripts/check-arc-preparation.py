@@ -158,7 +158,7 @@ def main():
             'org.chromium.chrome.R': 'public final class R { public static final class string { public static final int arc_bookmarks=1, arc_frame_color=2, arc_bookmark_root=3, arc_google_login=4, arc_autofill=5, arc_reset_color=6, arc_color_format=7, arc_interface=8, arc_interface_auto=9, arc_interface_arc=10, arc_interface_mobile=11; } public static final class id { public static final int toolbar=1, desktop_window_spacer=2; } }',
             'org.chromium.chrome.browser.profiles.Profile': 'public class Profile { public boolean isOffTheRecord(){return false;} public boolean shutdownStarted(){return false;} public Profile getOriginalProfile(){return this;} }',
             'org.chromium.components.bookmarks.BookmarkId': 'public class BookmarkId {}',
-            'org.chromium.url.GURL': 'public class GURL { public GURL(){} public GURL(String url){} public String getSpec() { return ""; } }',
+            'org.chromium.url.GURL': 'public class GURL { public GURL(){} public GURL(String url){} public String getSpec() { return ""; } public boolean isValid(){return true;} public String getScheme(){return "https";} }',
             'org.chromium.components.bookmarks.BookmarkItem': 'public class BookmarkItem { public String getTitle(){return "";} public boolean isFolder(){return false;} public org.chromium.url.GURL getUrl(){return null;} }',
             'org.chromium.chrome.browser.bookmarks.BookmarkModelObserver': 'public abstract class BookmarkModelObserver { public abstract void bookmarkModelChanged(); }',
             'org.chromium.chrome.browser.bookmarks.BookmarkModel': 'public class BookmarkModel { public void addObserver(BookmarkModelObserver o){} public void removeObserver(BookmarkModelObserver o){} public boolean isBookmarkModelLoaded(){return true;} public boolean finishLoadingBookmarkModel(Runnable r){return false;} public org.chromium.components.bookmarks.BookmarkId getDesktopFolderId(){return null;} public java.util.List<org.chromium.components.bookmarks.BookmarkId> getChildIds(org.chromium.components.bookmarks.BookmarkId id){return null;} public java.util.List<org.chromium.components.bookmarks.BookmarkId> getTopLevelFolderIds(){return null;} public org.chromium.components.bookmarks.BookmarkItem getBookmarkById(org.chromium.components.bookmarks.BookmarkId id){return null;} }',
@@ -261,9 +261,9 @@ def main():
                 public void show(android.view.View anchor){} public void dismiss(){} public void setOnDismissCallback(Runnable callback){}
             }''',
             'org.chromium.chrome.browser.history.HistoryManagerUtils': 'public class HistoryManagerUtils { public static void showHistoryManager(android.app.Activity activity,org.chromium.chrome.browser.tab.Tab tab,org.chromium.chrome.browser.profiles.Profile profile){} }',
-            'org.chromium.chrome.browser.tab.TabLaunchType': 'public class TabLaunchType { public static final int FROM_CHROME_UI=1; }',
+            'org.chromium.chrome.browser.tab.TabLaunchType': 'public class TabLaunchType { public static final int FROM_CHROME_UI=1, FROM_LONGPRESS_FOREGROUND=2; }',
             'org.chromium.chrome.browser.tab.TabSelectionType': 'public class TabSelectionType { public static final int FROM_USER=1; }',
-            'org.chromium.content_public.browser.LoadUrlParams': 'public class LoadUrlParams { public LoadUrlParams(String url){} }',
+            'org.chromium.content_public.browser.LoadUrlParams': 'public class LoadUrlParams { public LoadUrlParams(String url){} public String getUrl(){return "https://example.test/";} public void setHasUserGesture(boolean value){} public void setVerbatimHeaders(String value){} public void setPostData(org.chromium.content_public.common.ResourceRequestBody value){} public void setIsRendererInitiated(boolean value){} }',
             'org.chromium.chrome.browser.tabmodel.TabCreator': 'public interface TabCreator { org.chromium.chrome.browser.tab.Tab createNewTab(org.chromium.content_public.browser.LoadUrlParams p,int type,org.chromium.chrome.browser.tab.Tab parent); }',
             'org.chromium.chrome.browser.tabmodel.TabClosureParams': 'public class TabClosureParams { public static Builder closeTab(org.chromium.chrome.browser.tab.Tab t){return new Builder();} public static class Builder { public Builder allowUndo(boolean b){return this;} public TabClosureParams build(){return new TabClosureParams();} } }',
             'org.chromium.chrome.browser.tabmodel.TabRemover': 'public interface TabRemover { void closeTabs(TabClosureParams p,boolean allowDialog); }',
@@ -294,7 +294,7 @@ def main():
         holder_source = (ROOT / '.source-modified/chrome/android/java/src/org/chromium/'
             'chrome/browser/compositor/CompositorViewHolder.java').read_text()
         for method in ('setArcSplitTabs', 'clearArcSplitTabs', 'setArcSplitActivation',
-                'setArcSplitSwapProgress', 'setArcSplitInputBlocked', 'getArcSplitViewport', 'canPresentArcSplit'):
+                'setArcSplitSwapProgress', 'setArcSplitInputBlocked', 'setArcSplitFrameSpacing', 'getArcSplitViewport', 'canPresentArcSplit'):
             if not re.search(r'public\s+[^;{}]+\b' + method + r'\s*\(', holder_source):
                 raise RuntimeError('Missing delivered split holder API: ' + method)
         def extend(name, members):
@@ -303,7 +303,7 @@ def main():
         extend('org.chromium.chrome.browser.compositor.CompositorViewHolder',
             ' public interface FrameRequestObserver {void onFrameRequested();} public void addFrameRequestObserver(FrameRequestObserver o){} public void removeFrameRequestObserver(FrameRequestObserver o){} public boolean setArcSplitTabs(org.chromium.chrome.browser.tab.Tab a,org.chromium.chrome.browser.tab.Tab b,float r,int id){return false;}'
             ' public void clearArcSplitTabs(){} public void setArcSplitActivation(java.util.function.IntConsumer c){}'
-            ' public void setArcSplitSwapProgress(float p){} public void setArcSplitInputBlocked(boolean b){}'
+            ' public void setArcSplitSwapProgress(float p){} public void setArcSplitInputBlocked(boolean b){} public void setArcSplitFrameSpacing(int inset,int gutter){}'
             ' public android.graphics.Rect getArcSplitViewport(){return null;} public boolean canPresentArcSplit(){return false;} public void onContentChanged(){}')
         extend('org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabListCoordinator',
             ' public void setArcSplitRequest(java.util.function.Consumer<org.chromium.chrome.browser.tab.Tab> c,java.util.function.BooleanSupplier enabled){}')
@@ -318,6 +318,9 @@ def main():
             ' default void willCloseTab(org.chromium.chrome.browser.tab.Tab tab,boolean alone){}'
             ' default void tabRemoved(org.chromium.chrome.browser.tab.Tab tab){}'
             ' default void onDidActiveStateChange(TabModel model,boolean active){}')
+        if ' loadUrl(' not in definitions['org.chromium.chrome.browser.tab.Tab']:
+            extend('org.chromium.chrome.browser.tab.Tab', ' public int loadUrl(org.chromium.content_public.browser.LoadUrlParams params){return 0;}')
+        definitions['org.chromium.content_public.common.ResourceRequestBody'] = 'public class ResourceRequestBody {}'
         definitions['org.chromium.ui.base.WindowAndroid'] = 'public class WindowAndroid {public java.lang.ref.WeakReference<android.app.Activity> getActivity(){return null;}}'
         definitions['org.chromium.chrome.browser.tab.TabHidingType'] = 'public class TabHidingType {public static final int CHANGED_TABS=0,ACTIVITY_HIDDEN=1;}'
         definitions['org.chromium.components.embedder_support.view.ContentView'] = 'public class ContentView extends android.widget.FrameLayout {public ContentView(android.content.Context c){super(c);} public int getContentOffsetXPix(){return 0;} public void setContentOffsetXPix(int x){}}'
