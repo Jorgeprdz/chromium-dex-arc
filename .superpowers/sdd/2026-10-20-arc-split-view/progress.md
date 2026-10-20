@@ -33,3 +33,9 @@ Final: minor (deferred): compact lifecycle formatting; no polish edits in the co
 Final: Ruling: real GPU/Surface/IME/TalkBack/permissions/performance remain APK/device gates, GN/JNI are incremental-build gates — no host/adapter equivalence; cost if wrong: code cannot be accepted visually until actual validation.
 Final: Ruling: no speculative NavigationController crash fix — same-pin implementation has pointer-zero getter/setter guards, additional source hash in report; no crash established.
 Final: Ruling: Amazon remains outside this implementation and UNRESOLVED_GRAPHICS_BLOCKER — user excluded it from this batch; cost: Amazon still not repaired.
+
+Task 6 source gates: complete at 044e148 — corrected full Python suite 340/340 PASS, 68/68 split after final rollback changes, preparation PASS, 44/44 helper and 18/18 address regressions PASS. Native scene and menu probes PASS; GN/JNI/runtime remain actual incremental-build/APK gates.
+Final review correction pass complete. Source commit 044e1488dc3ab64547f6072d616283c888f9d3a3; no unaddressed Important/Critical. Do not rerun unrelated suites after documentation-only commits.
+Ruling: integrate into the explicitly named assistant/archium-r5-arc-experience branch for the already authorized build — no main/feat changes, no separate permission menu; cost if wrong: preserve isolated branch and rollback source only, never touch checkpoints.
+Ruling: retain the forensic worktree and versioned progress ledger for user-requested continuation; archive only generated review/brief artifacts privately — prevents losing continuation evidence, costs a small retained directory.
+Budget: user asked optional renewal because current window ends 03:39 UTC; no reset applied while awaiting answer. Existing counters/stage/repair limits preserved.

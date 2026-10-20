@@ -281,7 +281,8 @@ Plan aprobado: `docs/superpowers/plans/2026-10-20-arc-split-view.md`.
 - [x] ~~Implementar viewport por panel y preferencia móvil temporal al estrechar~~ — umbrales 600/640 dp, sin recarga ni cambio de zoom/preferencia global. Variantes de servidor pueden requerir navegación explícita.
 - [x] ~~Regresiones de recuperación de ContentView, restauración de IDs e incógnito~~ — 68 casos split/controlador/puente Java con límites nativos explícitos; no son GREEN gráfico.
 - [ ] Verificar en APK: adaptación móvil por panel, sugerencias, ambos contenidos vivos, IME, diálogos, cierre, TalkBack, persistencia y transición suave.
-- [ ] Build progresivo del conjunto completo tras revisión/gates/checkpoint; no hay run nuevo todavía.
+- [x] ~~Terminar el conjunto diseñado, revisión y gates locales~~ — 340/340 host, 68/68 split, 44/44 helpers y 18/18 omnibox; preparación PASS.
+- [ ] Completar compilación incremental y validar la nueva APK; RUN_ID/SHA/checkpoint se registran en el supervisor, sin build limpio.
 
 Informe de implementación y límites: [R5.3](docs/validation/R5_3_SPLIT_VIEW.md).
 

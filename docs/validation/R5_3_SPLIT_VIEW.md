@@ -2,7 +2,7 @@
 
 Rama de implementación: `assistant/archium-r5-3-omnibox-split`, base `5b8694a`.
 Chromium `157.0.8086.0`, pin `cfd94726b7b5fb48aedcc32662f2f3fbdbadec35`.
-Estado: implementación conectada y correcciones de revisión verificadas; suite host final en curso. Sin APK nueva ni run despachado.
+Estado a este commit: candidato completo, revisión atendida y gates locales superados. Compilación/APK y aceptación Android posteriores quedan bajo el supervisor.
 
 ## Presentación y autoridad
 
@@ -36,7 +36,7 @@ Se garantiza un mínimo de 240 dp por panel ajustando únicamente la proporción
 - Superficie: RED NPE al perder ContentView durante suspensión → GREEN no adjunta pareja obsoleta/parcial.
 - Split completo tras revisión: 68 PASS (controles, animator, ContentHost, controller, viewport policy y cuerpos Java/JNI). Incluye selectores, cancelación, selección, perfiles, cierre, rollback, background, restauración, IDs faltantes y no persistir incógnito.
 - Probe C++ compila el `.cc/.h` entregado, verifica geometría/IDs/límites en adaptadores explícitos de Layer/Tab/JNI. Probe de menú ejecuta AnchorInfo real. No son GPU, enlace Chromium ni capturas Android.
-- Preparación aplica/parchea originales y compila Arc contra contratos sintéticos tipados; no sustituye build real GN/JNI/Chromium. Suite host completa se registra al concluir; revisión independiente realizada y hallazgos importantes cubiertos con regresiones.
+- Preparación aplica/parchea originales y compila Arc contra contratos sintéticos tipados; no sustituye build real GN/JNI/Chromium. Suite Python host final: 340/340 PASS (549.713 s); revisión independiente atendida. Preparación del parche PASS; 68 tests split, 44 helpers y 18 omnibox PASS. Los últimos cambios de rollback se verificaron además con la suite split completa y preparación después de modificarlos.
 
 ## Riesgos y aceptación pendiente
 
@@ -73,3 +73,11 @@ La suite host inicial falló sólo por el inventario cerrado de filtros de CI, q
 - Wrapper NavigationController destruido: autoridad adicional del mismo pin inspeccionada (`NavigationControllerImpl.java`, SHA256 `db926a125b4ea60565d00a0e4447e95b591e6331c341e833d7f61d4c7c9cfd5d`); getter retorna false y setter no hace JNI si el puntero es cero. No se inventa crash ni se añade parche para uno no demostrado.
 - Atribución completa de permisos desde panel inactivo: pendiente de prueba Android, ninguna afirmación de validación por corregir sólo foco.
 - Amazon permanece fuera de alcance y bloqueado.
+
+## Entrega de fuente verificada
+
+Implementación inicial `4b69ca633c008f9380b254b86232d820865b0a57`; corrección final de fuente `044e1488dc3ab64547f6072d616283c888f9d3a3`. Los commits posteriores de este informe no alteran código compilado.
+Checkpoint verificado de nuevo el 20-oct-2026 02:40 UTC: 4 grupos, 25 partes, 26,508,245,892 bytes, manifiesto SHA256 `50d9ad33ed84646d15368c696ff74fd103a7a9ef5e5829c152c399b95ccea56f`. Inventario/identidad comprobados; bytes completos, espacio/inodos y árbol restaurado son gates CI previos a compilación.
+GN args idénticos al commit fuente del checkpoint: SHA256 `81ce4e68968921b23f0f494eebfa8d469528c8bd37217dbbf6d987a80abf7d24`. Pin y toolchain sin modificaciones.
+RUN_ID, expected_sha, checkpoint y progreso quedan en el registro privado persistente del supervisor; sólo éste continúa etapas normales. Se conserva el worktree forense y el ledger versionado; artefactos de revisión generados archivados en almacenamiento privado.
+El presupuesto temporal y los contadores no se reinician sin autorización. QEMU continúa bloqueado por ABI; no se afirma instalación automática armada ni GREEN en Galaxy de las funciones nuevas.
