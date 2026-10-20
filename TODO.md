@@ -339,3 +339,18 @@ Informe de implementación y límites: [R5.3](docs/validation/R5_3_SPLIT_VIEW.md
 [Corrección de dirección y compacta](docs/validation/R5_3_ADDRESS_AND_COMPACT_FIX.md).
 
 - [x] ~~Superar gates locales del candidato~~ — 371/371 host PASS; 18 puente/Fusebox, 18 popup, 86 split y 50 helpers JVM PASS; preparación API37 y sintaxis PASS. No equivale a GREEN visual.
+
+
+## R5.4 — acabado de split y PR de mejoras (20-oct-2026)
+
+- [x] ~~Registrar confirmación del usuario: la pantalla dividida instalada ya funciona~~ — aceptación acotada a su confirmación; no implica validar este acabado nuevo.
+- [x] ~~Añadir marco del tono de la ventana, separación central y esquinas suaves~~ — geometría compartida con ContentView/capas; contorno sutil del panel activo.
+- [x] ~~Convertir la cápsula blanca en agarre y menú desplegable~~ — arrastre en estado compacto o expandido; intercambio con transición existente; X sale del split conservando ambas pestañas y la activa.
+- [x] ~~Añadir cierre exterior/Escape/lifecycle y movimiento reducido~~ — casos JVM de controles, foco hijo, teardown y reducción de movimiento; aceptación WindowManager real pendiente.
+- [x] ~~Ajustar mínimos y adaptación móvil al ancho interior del marco~~ — incluidos densidad fraccional, RTL y restauración de layout previo.
+- [x] ~~Superar revisión y gates locales del acabado~~ — 106/106 JVM split, 24/24 parche, 17/17 host Arc, descubrimiento, preparación SDK37 y escena C++ con adaptadores host. No son GREEN visual.
+- [ ] Mantener el PR en borrador y agrupar los siguientes fixes o implementaciones acordados antes de integrar y compilar.
+- [ ] Validar el acabado con una APK futura: marco y color, cápsula, hover, teclado/Escape, resize, IME/insets, foco al salir, diálogos y restauración de superficie.
+- [ ] Cuando se acuerde compilar el conjunto, verificar y reutilizar el último checkpoint compatible; no hay nuevo build despachado en esta tarea.
+
+[Informe del acabado de split](docs/validation/R5_4_SPLIT_POLISH.md).
