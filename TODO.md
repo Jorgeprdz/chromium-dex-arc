@@ -365,7 +365,20 @@ Informe de implementación y límites: [R5.3](docs/validation/R5_3_SPLIT_VIEW.md
 - [x] ~~Conservar metadata y propiedad de navegación nativa~~ — referrer/additional params del menú, headers/POST/renderer del atajo; la ruta renderer conserva el WebContents creado y deja viva la antigua pestaña vecina.
 - [x] ~~Corregir hallazgos de revisión del conjunto~~ — agarre anclado al expandirse y animación detenida antes de cambiar de modelo; RED/GREEN.
 - [x] ~~Superar gates locales de la tanda~~ — 124 JVM split PASS; 371 host verificados (dos fixtures AAPT2 reejecutados con SDK configurado); dos hooks host nuevos, preparación SDK37, sintaxis, actionlint y patch reproducible PASS.
-- [ ] Despachar la compilación incremental autorizada con checkpoint39370769321-1 y entregar el RUN_ID/SHA al monitor independiente.
+- [x] ~~Despachar la tanda R5.4 y entregar el monitor~~ — run39486593880, SHA0eabba1; enlace nativo PASS, detenido por seis fallos de preparación JVM. Checkpoint39486593880-1 publicado; no se produjo APK validada.
 - [ ] Validar las mejoras con APK instalada: enlaces generales, Ctrl+Alt, target=_blank, formularios, descargas, foco/restore y resize/móvil. No marcar PASS por gates host o por superar el build.
 
 [Reporte de enlaces y gestos](docs/validation/R5_4_SPLIT_LINKS_AND_GESTURES.md).
+
+
+## R5.4 — reparación del gate JVM y reutilización del último checkpoint
+
+- [x] ~~Identificar el fallo real del run39486593880~~ — falta de contexto nativo para GURL y mock de clase final ResourceRequestBody; tres casos × SDK30/36.
+- [x] ~~Corregir la preparación de las pruebas~~ — BaseRobolectricTestRunner y fábrica real de ResourceRequestBody con interfaz JNI acotada y limpieza en finally; sin cambios de producción.
+- [x] ~~Reproducir RED y obtener GREEN local pertinente~~ — 54 casos del controlador: seis fallos → 54 PASS; conjunto split 124 PASS. El probe declara sus límites y usa Mockito subclass y la clase final upstream real.
+- [x] ~~Verificar metadata del checkpoint más reciente~~ — checkpoint39486593880-1, cuatro grupos y 25 partes; manifiesto/SHA de origen comprobados. Bytes completos y capacidad del runner deben verificarse antes de restaurar en CI.
+- [x] ~~Completar controles host y de preparación~~ — 373 ejecutados:372 PASS, guard de descubrimiento ajustado y reejecutado1/1 PASS; SDK37, actionlint y patch reproducible PASS.
+- [ ] Confirmar GREEN con el runner Chromium nativo completo y publicar APK verificable en la recompilación incremental.
+- [ ] Validar marco, cápsula, gestos y enlaces divididos con la APK instalada; Amazon sigue UNRESOLVED_GRAPHICS_BLOCKER.
+
+[Diagnóstico y corrección del gate JVM](docs/validation/R5_4_CI_JVM_REPAIR.md).
