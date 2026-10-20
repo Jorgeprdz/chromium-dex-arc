@@ -614,6 +614,7 @@ public final class ArcDesktopCoordinator {
                 bar.setArcCommandBar(mCommandBar.isShowing() ? mCommandBar.resultsBoundsInWindow() : null,
                         mCommandBar.isActions(), mCommandBar::commitNativeNavigation,
                         () -> mCommandBar.close(false, null));
+                bar.setArcCommandEditingAddress(mCommandBar.isEditingAddress());
             }
             // The native suggestion container shares this coordinator root. Keep native results
             // above the temporary command surface, retaining its original security/navigation UI.

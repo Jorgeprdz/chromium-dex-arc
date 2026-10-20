@@ -314,3 +314,28 @@ Informe de implementación y límites: [R5.3](docs/validation/R5_3_SPLIT_VIEW.md
 - [ ] Ejecutar aceptación visual de split, cápsula, transición, omnibox y viewport móvil en la nueva APK.
 
 [Diagnóstico, límites y actualización](docs/validation/R5_3_TEST_DISCOVERY_ADB_UPDATE.md).
+
+## R5.3 — validación real de uso (20-oct-2026)
+
+- [x] ~~Verificar APK instalada del run 39379198808~~ — hash leído del sistema Android idéntico al artefacto `ade9b690…829f1fc`.
+- [x] ~~Recorrer pestañas existentes y comprobar split básico en Galaxy~~ — pareja visible, foco por panel, scroll derecho, intercambio, separador, enlace público y Atrás ejecutados; PASS acotado a esta sesión.
+- [x] ~~Comprobar sugerencias e historial desplegable~~ — sugerencias nativas al escribir y menú de historial hacia adelante visibles.
+- [ ] **DEVICE-01 / omnibox: restaurar URL actual seleccionada.** El popup queda vacío al abrirlo desde la dirección lateral; reproducido en visor simple y split.
+- [ ] **DEVICE-02 / split: navegar desde omnibox sobre el panel activo.** Enter crea otra pestaña y deja de mostrar la división, en vez de cambiar la dirección del panel seleccionado.
+- [ ] **DEVICE-03 / sidebar compacta:** revisar fila activa que muestra X sin favicon; medir bounds de selección/cierre sin cerrar pestañas del usuario.
+- [ ] Medir suavidad de intercambio por frames y validar cambio efectivo de UA móvil, creación desde selector, restauración y estabilidad prolongada; no cubiertos por esta revisión.
+
+[Revisión real y evidencia](docs/validation/R5_3_DEVICE_USABILITY_REVIEW.md).
+
+
+## R5.3 — fixes derivados de la revisión real (20-oct-2026)
+
+- [x] ~~Corregir código DEVICE-01/02: diferenciar editar dirección actual de Ctrl+T~~ — el puente conserva URL y navegación actual; RED 4 fallos → GREEN 6/6 en ramas Java entregadas. Aceptación visual de nueva APK pendiente.
+- [x] ~~Corregir política DEVICE-03 de fila compacta en ventana Arc~~ — no reemplazar favicon por X sin hover; conserva comportamiento móvil, expandido y pinned. Pendiente comprobar en Galaxy con nueva APK.
+- [x] ~~Añadir regresiones en pruebas nativas Chromium y gate de Mediator~~ — no se salta ninguna suite existente.
+- [ ] Completar build incremental y confirmar que el runner real pasa las regresiones nuevas.
+- [ ] Instalar APK nueva y repetir casos DEVICE-01/02/03 en el Galaxy; mantener abiertos los defectos observados hasta GREEN visual.
+
+[Corrección de dirección y compacta](docs/validation/R5_3_ADDRESS_AND_COMPACT_FIX.md).
+
+- [x] ~~Superar gates locales del candidato~~ — 371/371 host PASS; 18 puente/Fusebox, 18 popup, 86 split y 50 helpers JVM PASS; preparación API37 y sintaxis PASS. No equivale a GREEN visual.

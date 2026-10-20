@@ -1140,20 +1140,24 @@ public class LocationBarMediator
                     mLocationBarLayout.finishArcCommandNavigation();
                     return;
                 }
-                // Input has been resolved by the profile's native autocomplete engine. Preserve
-                // POST, headers, transitions and callbacks; create a tab only at confirmation.
-                OmniboxLoadUrlParams.Builder commandLoad = new OmniboxLoadUrlParams.Builder(
-                        omniboxLoadUrlParams.url, omniboxLoadUrlParams.transitionType)
-                        .setInputStartTimestamp(omniboxLoadUrlParams.inputStartTimestamp)
-                        .setOpenInNewTab(true)
-                        .setOpenInNewWindow(omniboxLoadUrlParams.openInNewWindow)
-                        .setOpenInBackground(omniboxLoadUrlParams.openInBackground)
-                        .setPostData(omniboxLoadUrlParams.postData)
-                        .setExtraHeaders(omniboxLoadUrlParams.extraHeaders);
-                if (omniboxLoadUrlParams.callback != null) {
-                    commandLoad.setAutocompleteLoadCallback(omniboxLoadUrlParams.callback);
+                // Address editing retains Chromium's native current-tab/explicit disposition.
+                // Ctrl+T alone opens a new tab. Capture this before closing clears the bridge.
+                if (!mLocationBarLayout.isArcCommandEditingAddress()) {
+                    // Input has been resolved by the profile's native autocomplete engine. Preserve
+                    // POST, headers, transitions and callbacks; create a tab only at confirmation.
+                    OmniboxLoadUrlParams.Builder commandLoad = new OmniboxLoadUrlParams.Builder(
+                            omniboxLoadUrlParams.url, omniboxLoadUrlParams.transitionType)
+                            .setInputStartTimestamp(omniboxLoadUrlParams.inputStartTimestamp)
+                            .setOpenInNewTab(true)
+                            .setOpenInNewWindow(omniboxLoadUrlParams.openInNewWindow)
+                            .setOpenInBackground(omniboxLoadUrlParams.openInBackground)
+                            .setPostData(omniboxLoadUrlParams.postData)
+                            .setExtraHeaders(omniboxLoadUrlParams.extraHeaders);
+                    if (omniboxLoadUrlParams.callback != null) {
+                        commandLoad.setAutocompleteLoadCallback(omniboxLoadUrlParams.callback);
+                    }
+                    omniboxLoadUrlParams = commandLoad.build();
                 }
-                omniboxLoadUrlParams = commandLoad.build();
                 mLocationBarLayout.finishArcCommandNavigation();
             }
             // The code of the rest of this class ensures that this can't be called until the native
@@ -1490,7 +1494,8 @@ public class LocationBarMediator
                 () -> {
                     if (mAutocompleteCoordinator == null || mCurrentInput == null) return;
 
-                    if (activateNewSession && mLocationBarLayout.getArcCommandResults() != null) {
+                    if (activateNewSession && mLocationBarLayout.getArcCommandResults() != null
+                            && !mLocationBarLayout.isArcCommandEditingAddress()) {
                         // Desktop session activation normally seeds an empty editor with the
                         // current page URL. New-tab commands start empty; retained drafts and
                         // normal Ctrl+L sessions continue to use Chromium's existing behavior.

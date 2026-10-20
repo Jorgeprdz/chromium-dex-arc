@@ -70,7 +70,7 @@ public final class ArcCommandBar {
     private final android.view.ViewTreeObserver.OnGlobalLayoutListener mGlobalLayout =
             this::onGlobalLayout;
     private State mState = State.CLOSED;
-    private boolean mActions, mDestroyed;
+    private boolean mActions, mDestroyed, mEditingAddress;
     private int mSelected = -1;
     private int mForeground, mSelection;
     private List<Result> mVisible = List.of();
@@ -125,6 +125,7 @@ public final class ArcCommandBar {
     }
     public boolean isShowing() { return mState != State.CLOSED; }
     public boolean isActions() { return isShowing() && mActions; }
+    public boolean isEditingAddress() { return isShowing() && mEditingAddress; }
     public void setBoundsChangedListener(Runnable listener) { mBoundsChanged = listener; }
 
     public void setAppearance(int surface, int foreground, int selection) {
@@ -135,21 +136,21 @@ public final class ArcCommandBar {
     }
 
     public void open(boolean actions) {
-        open(actions, mBeginInput);
+        open(actions, mBeginInput, false);
     }
 
     /** Edit/copy the active address through Chromium's native focus-and-select callback. */
     public void openAddress(Runnable beginAddressInput) {
-        open(false, beginAddressInput);
+        open(false, beginAddressInput, true);
     }
 
-    private void open(boolean actions, Runnable beginInput) {
+    private void open(boolean actions, Runnable beginInput, boolean editingAddress) {
         if (mDestroyed) return;
         if (isShowing()) {
-            if (mState == State.CLOSING) { finishAnimationForTesting(); open(actions, beginInput); }
+            if (mState == State.CLOSING) { finishAnimationForTesting(); open(actions, beginInput, editingAddress); }
             return;
         }
-        mActions = actions; mState = State.OPENING;
+        mActions = actions; mEditingAddress = editingAddress; mState = State.OPENING;
         mPreviousFocus = mRoot.findFocus(); mOriginalHint = mEditor.getHint();
         mOrigin = boundsInRoot(mHolder);
         mRoot.addView(mOverlay, new ViewGroup.LayoutParams(-1, -1));

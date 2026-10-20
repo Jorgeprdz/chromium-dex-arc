@@ -238,7 +238,17 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
  import org.chromium.chrome.browser.ui.vertical_tabs.VerticalTabUtils;
  import org.chromium.chrome.tab_ui.R;
  import org.chromium.components.browser_ui.styles.ChromeColors;
-@@ -825,6 +827,14 @@
+@@ -325,7 +327,8 @@
+                         && actionButton != null
+                         && actionData != null
+                         && (showIconOnly
+-                                ? (isSelected && (!DeviceInfo.isDesktop() || isHovered))
++                                ? (isSelected && (isHovered || (!DeviceInfo.isDesktop()
++                                        && !ArcDesktopAppearance.isDesktopWindow(view.getContext()))))
+                                 : (!DeviceInfo.isDesktop() || isSelected || isHovered));
+         @TabAlert
+         int alertState =
+@@ -825,6 +828,14 @@
       */
      private static ColorStateList getBackgroundTintList(
              Context context, boolean isSelected, boolean isMultiSelected, boolean isIncognito) {
@@ -253,7 +263,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          if (!isSelected && !isMultiSelected) {
              return ColorStateList.valueOf(Color.TRANSPARENT);
          }
-@@ -850,6 +860,11 @@
+@@ -850,6 +861,11 @@
       */
      private static @ColorInt int getTextColor(
              Context context, boolean isSelected, boolean isIncognito) {
@@ -265,7 +275,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          if (isSelected) {
              return isIncognito
                      ? context.getColor(R.color.default_text_color_light)
-@@ -871,6 +886,9 @@
+@@ -871,6 +887,9 @@
       */
      private static ColorStateList getActionButtonTintList(
              Context context, boolean isSelected, boolean isIncognito) {
@@ -275,6 +285,44 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          if (isIncognito) {
              return isSelected
                      ? ChromeColors.getPrimaryIconTint(context, /* isIncognito= */ true)
+diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinderUnitTest.java b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinderUnitTest.java
+--- a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinderUnitTest.java
++++ b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinderUnitTest.java
+@@ -577,6 +577,34 @@
+     }
+
+     @Test
++    public void testArcCompactDesktopWindowKeepsSelectedFaviconWithoutHover() {
++        org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.setUiMode(
++                mActivity, org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy.MODE_ARC);
++        try {
++            DeviceInfo.setIsDesktopForTesting(false);
++            mModel.set(TabProperties.TAB_ACTION_BUTTON_DATA,
++                    new TabActionButtonData(TabActionButtonType.CLOSE, mCloseListener));
++            mModel.set(TabProperties.RAIL_COLLAPSE_STATE, RailCollapseState.COLLAPSED);
++            mModel.set(TabProperties.IS_SELECTED, true);
++            mModel.set(TabProperties.FAVICON_FETCHER, mFaviconFetcher);
++            TabVerticalViewBinder.bindTab(mModel, mItemView, TabProperties.FAVICON_FETCHER);
++            TabVerticalViewBinder.bindTab(mModel, mItemView, TabProperties.TAB_ACTION_BUTTON_DATA);
++            TabVerticalViewBinder.bindTab(mModel, mItemView, TabProperties.RAIL_COLLAPSE_STATE);
++            TabVerticalViewBinder.bindTab(mModel, mItemView, TabProperties.IS_SELECTED);
++            assertEquals(View.GONE, mCloseButton.getVisibility());
++            assertEquals(View.VISIBLE, mFaviconView.getVisibility());
++            MotionEvent enter = MotionEvent.obtain(0, 0, MotionEvent.ACTION_HOVER_ENTER, 10f, 10f, 0);
++            enter.setSource(InputDevice.SOURCE_MOUSE);
++            mItemView.dispatchGenericMotionEvent(enter);
++            enter.recycle();
++            assertEquals(View.VISIBLE, mCloseButton.getVisibility());
++        } finally {
++            org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.setUiMode(
++                    mActivity, org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy.MODE_AUTO);
++        }
++    }
++
++    @Test
+     public void testCloseButtonVisibility_TouchDevice_CollapsedRail_Unselected() {
+         DeviceInfo.setIsDesktopForTesting(false);
+         TabActionButtonData actionButtonData =
 diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinator.java b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinator.java
 --- a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinator.java
 +++ b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinator.java
@@ -2891,7 +2939,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
  /** This class represents the location bar where the user types in URLs and search terms. */
  @NullMarked
  public class LocationBarLayout extends ConstraintLayout {
-@@ -229,6 +233,87 @@
+@@ -229,6 +233,93 @@
 
      /* package */ void setDeleteButtonBackground(@DrawableRes int resourceId) {
          mDeleteButton.setBackgroundResource(resourceId);
@@ -2950,6 +2998,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
 +
 +    private @Nullable Rect mArcCommandResults;
 +    private boolean mArcCommandActions;
++    private boolean mArcCommandEditingAddress;
 +    private @Nullable Runnable mArcBeforeCommandNavigation;
 +    private @Nullable Runnable mArcCommandInputEnd;
 +
@@ -2959,6 +3008,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
 +        if (java.util.Objects.equals(mArcCommandResults, results) && mArcCommandActions == actions) return;
 +        mArcCommandResults = results == null ? null : new Rect(results);
 +        mArcCommandActions = actions;
++        if (results == null) mArcCommandEditingAddress = false;
 +        mArcBeforeCommandNavigation = results == null ? null : beforeNavigation;
 +        mArcCommandInputEnd = results == null ? null : inputEnd;
 +        requestLayout();
@@ -2966,6 +3016,10 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
 +
 +    public @Nullable Rect getArcCommandResults() { return mArcCommandResults; }
 +    public boolean isArcCommandActions() { return mArcCommandActions; }
++    public void setArcCommandEditingAddress(boolean editingAddress) {
++        mArcCommandEditingAddress = mArcCommandResults != null && editingAddress;
++    }
++    public boolean isArcCommandEditingAddress() { return mArcCommandEditingAddress; }
 +    public void finishArcCommandNavigation() {
 +        Runnable before = mArcBeforeCommandNavigation;
 +        if (before != null) before.run();
@@ -2982,7 +3036,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
 diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarMediator.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarMediator.java
 --- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarMediator.java
 +++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarMediator.java
-@@ -1135,6 +1135,27 @@
+@@ -1135,6 +1135,31 @@
      @Override
      public void loadUrl(OmniboxLoadUrlParams omniboxLoadUrlParams) {
          try (TraceEvent e = TraceEvent.scoped("LocationBarMediator.loadUrl")) {
@@ -2991,30 +3045,35 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
 +                    mLocationBarLayout.finishArcCommandNavigation();
 +                    return;
 +                }
-+                // Input has been resolved by the profile's native autocomplete engine. Preserve
-+                // POST, headers, transitions and callbacks; create a tab only at confirmation.
-+                OmniboxLoadUrlParams.Builder commandLoad = new OmniboxLoadUrlParams.Builder(
-+                        omniboxLoadUrlParams.url, omniboxLoadUrlParams.transitionType)
-+                        .setInputStartTimestamp(omniboxLoadUrlParams.inputStartTimestamp)
-+                        .setOpenInNewTab(true)
-+                        .setOpenInNewWindow(omniboxLoadUrlParams.openInNewWindow)
-+                        .setOpenInBackground(omniboxLoadUrlParams.openInBackground)
-+                        .setPostData(omniboxLoadUrlParams.postData)
-+                        .setExtraHeaders(omniboxLoadUrlParams.extraHeaders);
-+                if (omniboxLoadUrlParams.callback != null) {
-+                    commandLoad.setAutocompleteLoadCallback(omniboxLoadUrlParams.callback);
++                // Address editing retains Chromium's native current-tab/explicit disposition.
++                // Ctrl+T alone opens a new tab. Capture this before closing clears the bridge.
++                if (!mLocationBarLayout.isArcCommandEditingAddress()) {
++                    // Input has been resolved by the profile's native autocomplete engine. Preserve
++                    // POST, headers, transitions and callbacks; create a tab only at confirmation.
++                    OmniboxLoadUrlParams.Builder commandLoad = new OmniboxLoadUrlParams.Builder(
++                            omniboxLoadUrlParams.url, omniboxLoadUrlParams.transitionType)
++                            .setInputStartTimestamp(omniboxLoadUrlParams.inputStartTimestamp)
++                            .setOpenInNewTab(true)
++                            .setOpenInNewWindow(omniboxLoadUrlParams.openInNewWindow)
++                            .setOpenInBackground(omniboxLoadUrlParams.openInBackground)
++                            .setPostData(omniboxLoadUrlParams.postData)
++                            .setExtraHeaders(omniboxLoadUrlParams.extraHeaders);
++                    if (omniboxLoadUrlParams.callback != null) {
++                        commandLoad.setAutocompleteLoadCallback(omniboxLoadUrlParams.callback);
++                    }
++                    omniboxLoadUrlParams = commandLoad.build();
 +                }
-+                omniboxLoadUrlParams = commandLoad.build();
 +                mLocationBarLayout.finishArcCommandNavigation();
 +            }
              // The code of the rest of this class ensures that this can't be called until the native
              // side is initialized
              assert mNativeInitialized : "Loading URL before native side initialized";
-@@ -1469,6 +1490,14 @@
+@@ -1469,6 +1494,15 @@
                  () -> {
                      if (mAutocompleteCoordinator == null || mCurrentInput == null) return;
 
-+                    if (activateNewSession && mLocationBarLayout.getArcCommandResults() != null) {
++                    if (activateNewSession && mLocationBarLayout.getArcCommandResults() != null
++                            && !mLocationBarLayout.isArcCommandEditingAddress()) {
 +                        // Desktop session activation normally seeds an empty editor with the
 +                        // current page URL. New-tab commands start empty; retained drafts and
 +                        // normal Ctrl+L sessions continue to use Chromium's existing behavior.
@@ -3025,7 +3084,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
                      var editingTextSelection =
                              translateDisplaySelectionToEditing(
                                      displayTextSelection,
-@@ -2639,7 +2668,10 @@
+@@ -2639,7 +2673,10 @@
          boolean shouldBeInPopover =
                  mCurrentInput != null
                          && mCurrentInput.getDisplayState() == DisplayState.SUGGESTIONS
@@ -3037,7 +3096,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
 
          if (shouldBeInPopover && !isParentedToSuggestionsContainer()) {
              reparentToSuggestionsContainer();
-@@ -3170,6 +3202,9 @@
+@@ -3170,6 +3207,9 @@
       */
      @Override
      public void endInput() {
@@ -3050,7 +3109,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
 diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarMediatorUnitTest.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarMediatorUnitTest.java
 --- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarMediatorUnitTest.java
 +++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarMediatorUnitTest.java
-@@ -1126,6 +1126,62 @@
+@@ -1126,6 +1126,88 @@
      }
 
      @Test
@@ -3076,6 +3135,32 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
 +        assertTrue(post == delivered.postData);
 +        assertEquals(original.extraHeaders, delivered.extraHeaders);
 +        assertTrue(callback == delivered.callback);
++    }
++
++    @Test
++    public void testArcAddressResolvedLoadRetainsCurrentTabAndNativeParameters() {
++        mMediator.onFinishNativeInitialization();
++        when(mLocationBarLayout.getArcCommandResults()).thenReturn(new Rect(100, 100, 800, 400));
++        when(mLocationBarLayout.isArcCommandEditingAddress()).thenReturn(true);
++        OmniboxLoadUrlParams original = new OmniboxLoadUrlParams.Builder(TEST_URL, PageTransition.TYPED)
++                .setInputStartTimestamp(123).setPostData(new byte[] {1, 2})
++                .setExtraHeaders(java.util.Map.of("Content-Type", "application/octet-stream"))
++                .build();
++        mMediator.loadUrl(original);
++        verify(mLocationBarLayout).finishArcCommandNavigation();
++        verify(mNavigator).loadUrl(mOmniboxLoadUrlParamsCaptor.capture());
++        assertTrue(original == mOmniboxLoadUrlParamsCaptor.getValue());
++        assertFalse(mOmniboxLoadUrlParamsCaptor.getValue().openInNewTab);
++    }
++
++    @Test
++    public void testArcAddressActivationDoesNotClearCurrentPageUrl() {
++        OmniboxCapabilities.setHasDesktopExperienceForTesting(true);
++        when(mLocationBarLayout.getArcCommandResults()).thenReturn(new Rect(100, 100, 800, 400));
++        when(mLocationBarLayout.isArcCommandEditingAddress()).thenReturn(true);
++        beginInput(new AutocompleteInput(OmniboxFocusReason.MENU_OR_KEYBOARD_ACTION));
++        assertFalse(mSessionState.getAutocompleteInput().getUserText().isEmpty());
++        assertFalse(mSessionState.getAutocompleteInput().getInitialUserText().isEmpty());
 +    }
 +
 +    @Test
@@ -3113,7 +3198,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
      public void testLoadUrl_navigatorDidNotConsumeLoad_focusesCurrentTab() {
          mMediator.onFinishNativeInitialization();
          when(mNavigator.loadUrl(any())).thenReturn(true);
-@@ -3692,6 +3748,19 @@
+@@ -3692,6 +3774,19 @@
      }
 
      @Test
@@ -6436,7 +6521,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCommandB
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCommandBar.java
-@@ -0,0 +1,374 @@
+@@ -0,0 +1,375 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -6509,7 +6594,7 @@ new file mode 100644
 +    private final android.view.ViewTreeObserver.OnGlobalLayoutListener mGlobalLayout =
 +            this::onGlobalLayout;
 +    private State mState = State.CLOSED;
-+    private boolean mActions, mDestroyed;
++    private boolean mActions, mDestroyed, mEditingAddress;
 +    private int mSelected = -1;
 +    private int mForeground, mSelection;
 +    private List<Result> mVisible = List.of();
@@ -6564,6 +6649,7 @@ new file mode 100644
 +    }
 +    public boolean isShowing() { return mState != State.CLOSED; }
 +    public boolean isActions() { return isShowing() && mActions; }
++    public boolean isEditingAddress() { return isShowing() && mEditingAddress; }
 +    public void setBoundsChangedListener(Runnable listener) { mBoundsChanged = listener; }
 +
 +    public void setAppearance(int surface, int foreground, int selection) {
@@ -6574,21 +6660,21 @@ new file mode 100644
 +    }
 +
 +    public void open(boolean actions) {
-+        open(actions, mBeginInput);
++        open(actions, mBeginInput, false);
 +    }
 +
 +    /** Edit/copy the active address through Chromium's native focus-and-select callback. */
 +    public void openAddress(Runnable beginAddressInput) {
-+        open(false, beginAddressInput);
++        open(false, beginAddressInput, true);
 +    }
 +
-+    private void open(boolean actions, Runnable beginInput) {
++    private void open(boolean actions, Runnable beginInput, boolean editingAddress) {
 +        if (mDestroyed) return;
 +        if (isShowing()) {
-+            if (mState == State.CLOSING) { finishAnimationForTesting(); open(actions, beginInput); }
++            if (mState == State.CLOSING) { finishAnimationForTesting(); open(actions, beginInput, editingAddress); }
 +            return;
 +        }
-+        mActions = actions; mState = State.OPENING;
++        mActions = actions; mEditingAddress = editingAddress; mState = State.OPENING;
 +        mPreviousFocus = mRoot.findFocus(); mOriginalHint = mEditor.getHint();
 +        mOrigin = boundsInRoot(mHolder);
 +        mRoot.addView(mOverlay, new ViewGroup.LayoutParams(-1, -1));
@@ -7029,7 +7115,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopC
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
-@@ -0,0 +1,1438 @@
+@@ -0,0 +1,1439 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -7646,6 +7732,7 @@ new file mode 100644
 +                bar.setArcCommandBar(mCommandBar.isShowing() ? mCommandBar.resultsBoundsInWindow() : null,
 +                        mCommandBar.isActions(), mCommandBar::commitNativeNavigation,
 +                        () -> mCommandBar.close(false, null));
++                bar.setArcCommandEditingAddress(mCommandBar.isEditingAddress());
 +            }
 +            // The native suggestion container shares this coordinator root. Keep native results
 +            // above the temporary command surface, retaining its original security/navigation UI.
@@ -11002,7 +11089,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCommand
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCommandBarTest.java
-@@ -0,0 +1,151 @@
+@@ -0,0 +1,155 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -11074,6 +11161,7 @@ new file mode 100644
 +        };
 +        f.bar.openAddress(focusAddress);
 +        f.bar.finishAnimationForTesting();
++        assertTrue(f.bar.isEditingAddress());
 +        assertEquals(url, f.editor.getText().toString());
 +        assertEquals(0, f.editor.getSelectionStart());
 +        assertEquals(url.length(), f.editor.getSelectionEnd());
@@ -11084,9 +11172,11 @@ new file mode 100644
 +        f.bar.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ESCAPE));
 +        f.bar.finishAnimationForTesting();
 +        assertSame(f.original, f.holder.getParent());
++        assertFalse(f.bar.isEditingAddress());
 +        assertEquals(0, f.sessions.get());
 +        f.bar.open(false);
 +        f.bar.finishAnimationForTesting();
++        assertFalse(f.bar.isEditingAddress());
 +        assertEquals("", f.editor.getText().toString());
 +        assertEquals(0, f.commits.get());
 +        f.finish();
@@ -11125,6 +11215,7 @@ new file mode 100644
 +        Fixture f = new Fixture(); f.bar.open(false); f.bar.finishAnimationForTesting();
 +        f.bar.close(true, null); f.bar.commitNativeNavigation();
 +        assertFalse(f.bar.isShowing()); assertSame(f.original, f.holder.getParent());
++        assertFalse(f.bar.isEditingAddress());
 +        assertEquals(0, f.sessions.get()); f.finish();
 +    }
 +    @Test public void rtlPanelAndSuggestionsUseTheSamePhysicalWindowCoordinates() {

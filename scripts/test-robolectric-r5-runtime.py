@@ -66,7 +66,8 @@ public class CommandRuntimeProbe {
     @After public void teardown(){for(var controller:activities)controller.pause().stop().destroy();org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();}
     static class Command {
         boolean showing=true;
-        boolean isShowing(){return showing;} boolean isActions(){return false;}
+        boolean editing;boolean isShowing(){return showing;} boolean isActions(){return false;}
+        boolean isEditingAddress(){return showing && editing;}
         Rect resultsBoundsInWindow(){return new Rect(500,120,1100,400);}
         void commitNativeNavigation(){} void close(boolean animated,Runnable after){showing=false;}
     }
@@ -117,6 +118,22 @@ public class CommandRuntimeProbe {
             bar.setArcCommandBar(null,false,null,null);mediator.mCurrentInput.text="page.example/";
             mediator.afterNativeSessionActivation(true);assertEquals("page.example/",mediator.mCurrentInput.text);
         } finally {a.finish();}
+    }
+    @Test public void addressModePreservesNativeSessionAndClearsOnClose() {
+        Activity a=activity();LocationBarLayout bar=new LocationBarLayout(a);Mediator mediator=new Mediator(bar);
+        bar.setArcCommandBar(new Rect(500,120,1100,400),false,()->{},()->{});
+        bar.setArcCommandEditingAddress(true);mediator.afterNativeSessionActivation(true);
+        assertEquals("page.example/",mediator.mCurrentInput.text);
+        assertEquals("page.example/",mediator.mCurrentInput.initial);
+        bar.setArcCommandBar(null,false,null,null);assertFalse(bar.isArcCommandEditingAddress());
+        bar.setArcCommandEditingAddress(true);assertFalse("Closed bridge cannot retain editing mode",bar.isArcCommandEditingAddress());
+    }
+    @Test public void shellPublishesAddressModeBeforeNativeInputStarts() {
+        Activity a=activity();FrameLayout root=new FrameLayout(a),holder=new FrameLayout(a);
+        LocationBarLayout bar=new LocationBarLayout(a);root.addView(holder);holder.addView(bar);a.setContentView(root);
+        Shell shell=new Shell(a,root,holder,bar);shell.mCommandBar.editing=true;shell.boundsChanged();
+        assertTrue(bar.isArcCommandEditingAddress());shell.mCommandBar.showing=false;shell.boundsChanged();
+        assertFalse(bar.isArcCommandEditingAddress());
     }
     static class Alignment {
         final FrameLayout contentView;

@@ -327,7 +327,8 @@ class TabVerticalViewBinder {
                         && actionButton != null
                         && actionData != null
                         && (showIconOnly
-                                ? (isSelected && (!DeviceInfo.isDesktop() || isHovered))
+                                ? (isSelected && (isHovered || (!DeviceInfo.isDesktop()
+                                        && !ArcDesktopAppearance.isDesktopWindow(view.getContext()))))
                                 : (!DeviceInfo.isDesktop() || isSelected || isHovered));
         @TabAlert
         int alertState =

@@ -288,6 +288,7 @@ public class LocationBarLayout extends ConstraintLayout {
 
     private @Nullable Rect mArcCommandResults;
     private boolean mArcCommandActions;
+    private boolean mArcCommandEditingAddress;
     private @Nullable Runnable mArcBeforeCommandNavigation;
     private @Nullable Runnable mArcCommandInputEnd;
 
@@ -297,6 +298,7 @@ public class LocationBarLayout extends ConstraintLayout {
         if (java.util.Objects.equals(mArcCommandResults, results) && mArcCommandActions == actions) return;
         mArcCommandResults = results == null ? null : new Rect(results);
         mArcCommandActions = actions;
+        if (results == null) mArcCommandEditingAddress = false;
         mArcBeforeCommandNavigation = results == null ? null : beforeNavigation;
         mArcCommandInputEnd = results == null ? null : inputEnd;
         requestLayout();
@@ -304,6 +306,10 @@ public class LocationBarLayout extends ConstraintLayout {
 
     public @Nullable Rect getArcCommandResults() { return mArcCommandResults; }
     public boolean isArcCommandActions() { return mArcCommandActions; }
+    public void setArcCommandEditingAddress(boolean editingAddress) {
+        mArcCommandEditingAddress = mArcCommandResults != null && editingAddress;
+    }
+    public boolean isArcCommandEditingAddress() { return mArcCommandEditingAddress; }
     public void finishArcCommandNavigation() {
         Runnable before = mArcBeforeCommandNavigation;
         if (before != null) before.run();

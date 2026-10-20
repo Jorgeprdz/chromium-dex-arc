@@ -69,6 +69,7 @@ public class ArcCommandBarTest {
         };
         f.bar.openAddress(focusAddress);
         f.bar.finishAnimationForTesting();
+        assertTrue(f.bar.isEditingAddress());
         assertEquals(url, f.editor.getText().toString());
         assertEquals(0, f.editor.getSelectionStart());
         assertEquals(url.length(), f.editor.getSelectionEnd());
@@ -79,9 +80,11 @@ public class ArcCommandBarTest {
         f.bar.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_ESCAPE));
         f.bar.finishAnimationForTesting();
         assertSame(f.original, f.holder.getParent());
+        assertFalse(f.bar.isEditingAddress());
         assertEquals(0, f.sessions.get());
         f.bar.open(false);
         f.bar.finishAnimationForTesting();
+        assertFalse(f.bar.isEditingAddress());
         assertEquals("", f.editor.getText().toString());
         assertEquals(0, f.commits.get());
         f.finish();
@@ -120,6 +123,7 @@ public class ArcCommandBarTest {
         Fixture f = new Fixture(); f.bar.open(false); f.bar.finishAnimationForTesting();
         f.bar.close(true, null); f.bar.commitNativeNavigation();
         assertFalse(f.bar.isShowing()); assertSame(f.original, f.holder.getParent());
+        assertFalse(f.bar.isEditingAddress());
         assertEquals(0, f.sessions.get()); f.finish();
     }
     @Test public void rtlPanelAndSuggestionsUseTheSamePhysicalWindowCoordinates() {

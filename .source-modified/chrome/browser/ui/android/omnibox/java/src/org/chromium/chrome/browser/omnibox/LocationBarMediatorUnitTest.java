@@ -1151,6 +1151,32 @@ public class LocationBarMediatorUnitTest {
     }
 
     @Test
+    public void testArcAddressResolvedLoadRetainsCurrentTabAndNativeParameters() {
+        mMediator.onFinishNativeInitialization();
+        when(mLocationBarLayout.getArcCommandResults()).thenReturn(new Rect(100, 100, 800, 400));
+        when(mLocationBarLayout.isArcCommandEditingAddress()).thenReturn(true);
+        OmniboxLoadUrlParams original = new OmniboxLoadUrlParams.Builder(TEST_URL, PageTransition.TYPED)
+                .setInputStartTimestamp(123).setPostData(new byte[] {1, 2})
+                .setExtraHeaders(java.util.Map.of("Content-Type", "application/octet-stream"))
+                .build();
+        mMediator.loadUrl(original);
+        verify(mLocationBarLayout).finishArcCommandNavigation();
+        verify(mNavigator).loadUrl(mOmniboxLoadUrlParamsCaptor.capture());
+        assertTrue(original == mOmniboxLoadUrlParamsCaptor.getValue());
+        assertFalse(mOmniboxLoadUrlParamsCaptor.getValue().openInNewTab);
+    }
+
+    @Test
+    public void testArcAddressActivationDoesNotClearCurrentPageUrl() {
+        OmniboxCapabilities.setHasDesktopExperienceForTesting(true);
+        when(mLocationBarLayout.getArcCommandResults()).thenReturn(new Rect(100, 100, 800, 400));
+        when(mLocationBarLayout.isArcCommandEditingAddress()).thenReturn(true);
+        beginInput(new AutocompleteInput(OmniboxFocusReason.MENU_OR_KEYBOARD_ACTION));
+        assertFalse(mSessionState.getAutocompleteInput().getUserText().isEmpty());
+        assertFalse(mSessionState.getAutocompleteInput().getInitialUserText().isEmpty());
+    }
+
+    @Test
     public void testArcCommandActionsNeverLoadAnAutocompleteUrl() {
         mMediator.onFinishNativeInitialization();
         when(mLocationBarLayout.getArcCommandResults()).thenReturn(new Rect(100, 100, 800, 400));
