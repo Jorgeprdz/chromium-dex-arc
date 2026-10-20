@@ -2133,6 +2133,16 @@ public class VerticalTabListCoordinator {
         return menuShown;
     }
 
+    private @Nullable java.util.function.Consumer<Tab> mArcSplitRequest;
+    private java.util.function.BooleanSupplier mArcSplitEnabled = () -> false;
+
+    /** Adds an optional Arc action while retaining the native context menu and drag handlers. */
+    public void setArcSplitRequest(@Nullable java.util.function.Consumer<Tab> request,
+            java.util.function.BooleanSupplier enabled) {
+        mArcSplitRequest = request;
+        mArcSplitEnabled = request == null ? () -> false : enabled;
+    }
+
     private boolean showMenuForItemView(RectProvider rectProvider, View itemView) {
         if (!(itemView.getParent() instanceof RecyclerView recyclerView)) return false;
         int position = recyclerView.getChildAdapterPosition(itemView);
@@ -2289,6 +2299,15 @@ public class VerticalTabListCoordinator {
         }
 
         var anchorInfo = new AnchorInfo(tabId, allTabIds);
+        if (allTabIds.size() == 1 && mArcSplitRequest != null && mArcSplitEnabled.getAsBoolean()) {
+            anchorInfo.setArcSplitAction(() -> {
+                java.util.function.Consumer<Tab> request = mArcSplitRequest;
+                Tab live = mTabModelSelector.getCurrentModel().getTabById(tabId);
+                if (request != null && mArcSplitEnabled.getAsBoolean() && live != null && live == tab
+                        && !live.isDestroyed() && !live.isClosing()) request.accept(live);
+            });
+        }
+
 
         if (mTabContextMenuCoordinator == null) {
             TabGroupCreationCallback tabGroupCreationCallback =

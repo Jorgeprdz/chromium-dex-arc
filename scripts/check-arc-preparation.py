@@ -57,6 +57,7 @@ def synthetic_chromium_r(values_xml: Path) -> str:
         'control_container', 'location_bar_holder', 'collapse_button', 'menu_button_wrapper',
         'extensions_toolbar_container', 'coordinator', 'new_tab_button', 'omnibox_suggestions_dropdown',
         'location_bar_status', 'location_bar_status_icon', 'url_bar', 'focus_thief',
+        'tab_modal_dialog_container', 'tab_modal_dialog_container_stub',
     )
 
     def klass(kind, members):
@@ -69,7 +70,7 @@ def synthetic_chromium_r(values_xml: Path) -> str:
 
     return ('public final class R { ' +
             klass('string', string_names) +
-            klass('id', id_names) +
+            klass('id', list(id_names) + [n.attrib['name'] for n in root if n.tag == 'item' and n.get('type') == 'id']) +
             klass('array', array_names) +
             klass('drawable', ['btn_back', 'btn_forward', 'btn_reload_stop', 'ic_add_24dp']) +
             '}')
@@ -287,6 +288,40 @@ def main():
                 'org.chromium.chrome.browser.tabwindow.TabWindowManager',
                 'org.chromium.chrome.browser.app.tabwindow.TabWindowManagerSingleton'):
             definitions[name] = arc_module.DEFINITIONS[name]
+        # Type-only split API adapters. These compile Arc callers, not native implementation.
+        # Source contract authority is the delivered holder/vertical coordinator and pinned
+        # NavigationController, Tab, WindowAndroid and ContentView, exercised separately.
+        holder_source = (ROOT / '.source-modified/chrome/android/java/src/org/chromium/'
+            'chrome/browser/compositor/CompositorViewHolder.java').read_text()
+        for method in ('setArcSplitTabs', 'clearArcSplitTabs', 'setArcSplitActivation',
+                'setArcSplitSwapProgress', 'setArcSplitInputBlocked', 'getArcSplitViewport', 'canPresentArcSplit'):
+            if not re.search(r'public\s+[^;{}]+\b' + method + r'\s*\(', holder_source):
+                raise RuntimeError('Missing delivered split holder API: ' + method)
+        def extend(name, members):
+            body = definitions[name]; end = body.rfind('}')
+            definitions[name] = body[:end] + members + body[end:]
+        extend('org.chromium.chrome.browser.compositor.CompositorViewHolder',
+            ' public boolean setArcSplitTabs(org.chromium.chrome.browser.tab.Tab a,org.chromium.chrome.browser.tab.Tab b,float r,int id){return false;}'
+            ' public void clearArcSplitTabs(){} public void setArcSplitActivation(java.util.function.IntConsumer c){}'
+            ' public void setArcSplitSwapProgress(float p){} public void setArcSplitInputBlocked(boolean b){}'
+            ' public android.graphics.Rect getArcSplitViewport(){return null;} public boolean canPresentArcSplit(){return false;} public void onContentChanged(){}')
+        extend('org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabListCoordinator',
+            ' public void setArcSplitRequest(java.util.function.Consumer<org.chromium.chrome.browser.tab.Tab> c,java.util.function.BooleanSupplier enabled){}')
+        extend('org.chromium.chrome.browser.tab.Tab',
+            ' public boolean isClosing(){return false;} public boolean isNativePage(){return false;} public boolean isHidden(){return false;} public boolean isIncognito(){return false;}'
+            ' public android.view.View getView(){return null;} public org.chromium.components.embedder_support.view.ContentView getContentView(){return null;}'
+            ' public org.chromium.ui.base.WindowAndroid getWindowAndroid(){return null;} public void show(int type){} public void hide(int type){}')
+        extend('org.chromium.chrome.browser.tab.TabObserver',
+            ' default void onShown(Tab tab,int type){} default void onContentChanged(Tab tab){} default void onActivityAttachmentChanged(Tab tab,org.chromium.ui.base.WindowAndroid window){}')
+        extend('org.chromium.chrome.browser.tabmodel.TabModelObserver',
+            ' default void willCloseTabs(java.util.List<org.chromium.chrome.browser.tab.Tab> tabs,boolean all,boolean undo){}'
+            ' default void willCloseTab(org.chromium.chrome.browser.tab.Tab tab,boolean alone){}'
+            ' default void tabRemoved(org.chromium.chrome.browser.tab.Tab tab){}'
+            ' default void onDidActiveStateChange(TabModel model,boolean active){}')
+        definitions['org.chromium.ui.base.WindowAndroid'] = 'public class WindowAndroid {public java.lang.ref.WeakReference<android.app.Activity> getActivity(){return null;}}'
+        definitions['org.chromium.chrome.browser.tab.TabHidingType'] = 'public class TabHidingType {public static final int CHANGED_TABS=0,ACTIVITY_HIDDEN=1;}'
+        definitions['org.chromium.components.embedder_support.view.ContentView'] = 'public class ContentView extends android.widget.FrameLayout {public ContentView(android.content.Context c){super(c);} public int getContentOffsetXPix(){return 0;} public void setContentOffsetXPix(int x){}}'
+        definitions['org.chromium.content_public.browser.NavigationController'] = 'public interface NavigationController {boolean getUseDesktopUserAgent(); void setUseDesktopUserAgent(boolean override,boolean reloadOnChange,boolean skipOnInitialNavigation);}'
         for annotation in ['Nullable', 'NullMarked', 'NullUnmarked']:
             definitions['org.chromium.build.annotations.' + annotation] = '@java.lang.annotation.Target({java.lang.annotation.ElementType.TYPE_USE,java.lang.annotation.ElementType.TYPE,java.lang.annotation.ElementType.METHOD,java.lang.annotation.ElementType.PACKAGE}) public @interface ' + annotation + ' {}'
         # Nullable is strictly TYPE_USE in Chromium; declaration targets can mask javac errors.

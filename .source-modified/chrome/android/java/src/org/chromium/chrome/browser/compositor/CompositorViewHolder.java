@@ -67,6 +67,8 @@ import org.chromium.chrome.R;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsUtils;
 import org.chromium.chrome.browser.compositor.layouts.Layout;
+import org.chromium.chrome.browser.compositor.layouts.StaticLayout;
+import org.chromium.chrome.browser.arc.ArcSplitContentHost;
 import org.chromium.chrome.browser.compositor.layouts.LayoutManagerHost;
 import org.chromium.chrome.browser.compositor.layouts.LayoutManagerImpl;
 import org.chromium.chrome.browser.compositor.layouts.LayoutRenderHost;
@@ -239,6 +241,15 @@ public class CompositorViewHolder extends FrameLayout
     // mode like Actor Picture-in-Picture.
     private final Point mLastNormalSize = new Point();
 
+    private final ArcSplitContentHost mArcSplitHost = new ArcSplitContentHost(this);
+    private @Nullable Tab mArcSplitLeft;
+    private @Nullable Tab mArcSplitRight;
+    private @Nullable StaticLayout mArcSplitLayout;
+    private @Nullable java.util.function.IntConsumer mArcSplitActivation;
+    private float mArcSplitRatio = .5f;
+    private boolean mArcSplitUpdating;
+    private boolean mArcSplitInputBlocked;
+
     private boolean mControlsResizeView;
     private boolean mInGesture;
     private boolean mInTouch;
@@ -308,6 +319,7 @@ public class CompositorViewHolder extends FrameLayout
 
                         @Override
                         public float getLeft() {
+                            if (mArcSplitLeft != null) return 0;
                             updateCacheViewport();
                             return mCacheViewport.left;
                         }
@@ -833,6 +845,8 @@ public class CompositorViewHolder extends FrameLayout
             mBrowserControlsManager.removeObserver(this);
         }
 
+        setArcSplitActivation(null);
+        clearArcSplitTabs();
         setTab(null);
         if (mApplicationBottomInsetSupplier != null) {
             assert mOnViewportInsetsChanged != null;
@@ -955,6 +969,12 @@ public class CompositorViewHolder extends FrameLayout
 
     @Override
     public boolean dispatchGenericMotionEvent(MotionEvent e) {
+        if (mArcSplitInputBlocked) return true;
+        if (mArcSplitLeft != null && e.getActionMasked() == MotionEvent.ACTION_SCROLL) {
+            Tab pane = mArcSplitHost.tabAt(e.getX(), e.getY());
+            java.util.function.IntConsumer activate = mArcSplitActivation;
+            if (pane != null && activate != null) activate.accept(pane.getId());
+        }
         if (mLayoutManager != null && mLayoutManager.dispatchGenericMotionEvent(e)) {
             return true;
         }
@@ -1035,6 +1055,12 @@ public class CompositorViewHolder extends FrameLayout
 
     @Override
     public boolean dispatchTouchEvent(MotionEvent e) {
+        if (mArcSplitInputBlocked) return true;
+        if (mArcSplitLeft != null && e.getActionMasked() == MotionEvent.ACTION_DOWN) {
+            Tab pane = mArcSplitHost.tabAt(e.getX(), e.getY());
+            java.util.function.IntConsumer activate = mArcSplitActivation;
+            if (pane != null && activate != null) activate.accept(pane.getId());
+        }
         assert e != null : "The motion event dispatched shouldn't be null!";
         if (mNativeInitialized) {
             InputHintChecker.onCompositorViewHolderTouchEvent();
@@ -1178,8 +1204,8 @@ public class CompositorViewHolder extends FrameLayout
             horizontalViewportInsets =
                     sideUiLeftMargin + sideUiSpecs.getReservedWidth(AnchorSide.RIGHT);
         }
-        ContentView cv = getContentView();
-        if (cv != null) cv.setContentOffsetXPix(sideUiLeftMargin);
+        ContentView cv = tab.getContentView();
+        if (cv != null) cv.setContentOffsetXPix(mArcSplitHost.contains(tab) ? 0 : sideUiLeftMargin);
 
         // The view size takes into account of the browser controls whose height should be
         // subtracted from the view if they are visible, therefore shrink Blink-side view size.
@@ -1201,7 +1227,8 @@ public class CompositorViewHolder extends FrameLayout
         int webContentsHeightInset = getEffectiveWebContentsHeightInset();
         int verticalViewportInsets = controlsInsets + webContentsHeightInset;
 
-        int webContentsWidth = width - horizontalViewportInsets;
+        int webContentsWidth = mArcSplitHost.contains(tab)
+                ? Math.round(mArcSplitHost.bounds(tab).width()) : width - horizontalViewportInsets;
         int webContentsHeight = height - verticalViewportInsets;
 
         if (ChromeFeatureList.sVirtualKeyboardTransientInnerHeightFix.isEnabled()
@@ -1688,6 +1715,93 @@ public class CompositorViewHolder extends FrameLayout
      * Shifts the composited web contents and its touch coordinate space to sit next to the Side UI
      * on the left, without resizing the web contents.
      */
+    /** Bounds in this holder's physical coordinate space; Blink scale and zoom are unchanged. */
+    public Rect getArcSplitViewport() {
+        Point size = getViewportSize();
+        int left = 0, right = 0;
+        Tab tab = getCurrentTab();
+        if (mSideUiStateProvider != null && tab != null) {
+            SideUiSpecs specs = mSideUiStateProvider.getExpectedSideUiSpecsForTab(tab);
+            left = specs.getReservedWidth(AnchorSide.LEFT);
+            right = specs.getReservedWidth(AnchorSide.RIGHT);
+        }
+        return new Rect(left, 0, Math.max(left, size.x - right), size.y);
+    }
+
+    public boolean canPresentArcSplit() {
+        return mNativeInitialized && mLayoutManager != null
+                && mLayoutManager.getActiveLayout() instanceof StaticLayout;
+    }
+
+    public void setArcSplitActivation(@Nullable java.util.function.IntConsumer activate) {
+        mArcSplitActivation = activate;
+    }
+
+    public boolean setArcSplitTabs(Tab left, Tab right, float ratio, int activeId) {
+        if (!canPresentArcSplit() || mArcSplitUpdating || left == right
+                || left.isDestroyed() || right.isDestroyed() || !Float.isFinite(ratio)
+                || (activeId != left.getId() && activeId != right.getId())) return false;
+        StaticLayout layout = (StaticLayout) assumeNonNull(assumeNonNull(mLayoutManager).getActiveLayout());
+        mArcSplitUpdating = true;
+        try {
+            mArcSplitLayout = layout;
+            mArcSplitLeft = left; mArcSplitRight = right; mArcSplitRatio = ratio;
+            // Register identities before show(), whose observers otherwise replace the scene.
+            layout.prepareArcSplitTabs(left.getId(), right.getId());
+            left.show(org.chromium.chrome.browser.tab.TabSelectionType.FROM_USER);
+            right.show(org.chromium.chrome.browser.tab.TabSelectionType.FROM_USER);
+            if (!mArcSplitHost.show(left, right, getArcSplitViewport(), ratio)) {
+                clearArcSplitTabs();
+                return false;
+            }
+            initializeTab(left); initializeTab(right);
+            layout.setArcSplitTabs(left.getId(), right.getId(),
+                    mArcSplitHost.bounds(left), mArcSplitHost.bounds(right));
+            requestRender();
+            return true;
+        } finally { mArcSplitUpdating = false; }
+    }
+
+    private void updateArcSplitPresentation() {
+        Tab left = mArcSplitLeft, right = mArcSplitRight;
+        if (left == null || right == null || mArcSplitUpdating) return;
+        mArcSplitUpdating = true;
+        try {
+            if (!mArcSplitHost.show(left, right, getArcSplitViewport(), mArcSplitRatio)) return;
+            updateWebContentsSize(left); updateWebContentsSize(right);
+            if (mArcSplitLayout != null) mArcSplitLayout.setArcSplitTabs(left.getId(), right.getId(),
+                    mArcSplitHost.bounds(left), mArcSplitHost.bounds(right));
+        } finally { mArcSplitUpdating = false; }
+    }
+
+    /** Animate the existing native layers; Android input is held at the final pane geometry. */
+    public void setArcSplitSwapProgress(float progress) {
+        Tab left = mArcSplitLeft, right = mArcSplitRight;
+        if (left == null || right == null || mArcSplitLayout == null) return;
+        float p = Math.max(0f, Math.min(1f, progress));
+        RectF l = mArcSplitHost.bounds(left), r = mArcSplitHost.bounds(right);
+        float lx = l.left, rx = r.left;
+        l.offsetTo(rx + (lx - rx) * p, l.top);
+        r.offsetTo(lx + (rx - lx) * p, r.top);
+        mArcSplitLayout.setArcSplitTabs(left.getId(), right.getId(), l, r);
+    }
+
+    public void setArcSplitInputBlocked(boolean blocked) { mArcSplitInputBlocked = blocked; }
+
+    public void clearArcSplitTabs() {
+        mArcSplitInputBlocked = false;
+        StaticLayout layout = mArcSplitLayout;
+        mArcSplitLeft = null; mArcSplitRight = null; mArcSplitLayout = null;
+        mArcSplitHost.clear();
+        if (layout != null) layout.clearArcSplitTabs();
+        // Restore Chromium's original single-view path, not a new Tab/WebContents.
+        boolean updating = mArcSplitUpdating;
+        mArcSplitUpdating = false;
+        updateContentOverlayVisibility(mContentOverlayVisiblity);
+        updateWebContentsSize(getCurrentTab());
+        mArcSplitUpdating = updating;
+    }
+
     /** Grow the Blink viewport once before collapse, then animate only draw/input origins. */
     public void beginArcRailViewportResize(int currentInset) {
         // Expected specs already reflect the collapse controller's target even while current
@@ -1701,14 +1815,16 @@ public class CompositorViewHolder extends FrameLayout
         if (mLayoutManager == null) return;
         mLayoutManager.setContentOffsetX(Math.max(0, leftWidth));
         ContentView contentView = getContentView();
-        if (contentView != null) contentView.setContentOffsetXPix(Math.max(0, leftWidth));
+        if (contentView != null) contentView.setContentOffsetXPix(mArcSplitLeft != null ? 0 : Math.max(0, leftWidth));
+        if (mArcSplitLeft != null) updateArcSplitPresentation();
     }
 
     private void applySideUiContentOffsetX(SideUiSpecs sideUiSpecs) {
         @Px int leftSideUiWidth = sideUiSpecs.getReservedWidth(AnchorSide.LEFT);
         mLayoutManager.setContentOffsetX(leftSideUiWidth);
         ContentView contentView = getContentView();
-        if (contentView != null) contentView.setContentOffsetXPix(leftSideUiWidth);
+        if (contentView != null) contentView.setContentOffsetXPix(mArcSplitLeft != null ? 0 : leftSideUiWidth);
+        if (mArcSplitLeft != null) updateArcSplitPresentation();
     }
 
     // View.OnHierarchyChangeListener implementation
@@ -2059,6 +2175,11 @@ public class CompositorViewHolder extends FrameLayout
     }
 
     private void updateContentOverlayVisibility(boolean show) {
+        if (mArcSplitLeft != null && !mArcSplitUpdating) {
+            mArcSplitHost.setAttached(show);
+            return;
+        }
+        if (mArcSplitUpdating) return;
         if (mView == null) return;
         WebContents webContents = getWebContents();
         if (show) {
@@ -2149,7 +2270,8 @@ public class CompositorViewHolder extends FrameLayout
 
         // TODO(dtrainor): Look into changing this only if the views differ, but still parse the
         // WebContents list even if they're the same.
-        updateContentOverlayVisibility(false);
+        boolean keepArcPair = mArcSplitHost.contains(tab);
+        if (!keepArcPair) updateContentOverlayVisibility(false);
 
         if (mTabVisible != tab) {
             // Reset the geometrychange event flag so it can fire on the current active tab.
@@ -2169,7 +2291,7 @@ public class CompositorViewHolder extends FrameLayout
         mTabVisible = tab;
         mView = newView;
 
-        updateContentOverlayVisibility(mContentOverlayVisiblity);
+        if (!keepArcPair) updateContentOverlayVisibility(mContentOverlayVisiblity);
 
         if (mTabVisible != null) initializeTab(mTabVisible);
 
@@ -2180,6 +2302,8 @@ public class CompositorViewHolder extends FrameLayout
         } else {
             mOnscreenContentProvider.onWebContentsChanged(assumeNonNull(getWebContents()));
         }
+
+        if (keepArcPair && !mArcSplitUpdating) updateArcSplitPresentation();
 
         // Clear drop permissions when tab changes unless this is a new tab loading from the drop.
         if (mDropUri == null

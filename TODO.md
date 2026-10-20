@@ -268,11 +268,19 @@ Se registra únicamente la visibilidad confirmada, sin atribuir resolución de A
 - [ ] Validar sugerencias, copiar/editar URL, teclado, foco y modo móvil con APK que contenga este cambio.
 - [x] ~~Aprobar diseño de vista dividida y plan técnico~~ — ambas opciones de segunda pestaña; dos páginas reales, separador ajustable y cápsula blanca con flechas opuestas apiladas.
 - [x] ~~Preparar estado puro de pareja~~ — seis tests JUnit: identidad, swap reversible, activo, cierre, salida y ratio finito. No presenta dos páginas por sí solo.
-- [ ] Implementar presentación de dos WebContents, lifecycle, input y navegación por panel; no publicar botón sin integración.
-- [ ] Intercambio sin recarga con transición suave de 180 ms; respetar animaciones desactivadas, cancelación por resize/destroy y conservar foco/estado.
+- [x] ~~Implementar presentación nativa de dos WebContents y conexión de lifecycle/input/selección~~ — código y contratos host probados; aceptación real en APK pendiente.
+- [x] ~~Implementar intercambio de capas sin recarga con transición de 180 ms y cápsula blanca~~ — tests de controles/animación PASS; comprobar visualmente con APK nueva.
 - [x] ~~Implementar conexión al historial nativo al mantener Atrás/Adelante~~ — preserva clic simple y descarta menú obsoleto por lifecycle/cambio de Tab; seis casos nuevos PASS host/Robolectric.
 - [ ] Validar visualmente historial nativo y saltos a entradas con APK nueva.
 - [ ] Gate Android de split: dos páginas vivas, scroll, diálogo por panel, cierre, foco, resize y recuperación de superficie. QEMU sigue bloqueado por ABI.
 
 Diseño: `docs/superpowers/specs/2026-10-20-arc-split-view-design.md`.
 Plan aprobado: `docs/superpowers/plans/2026-10-20-arc-split-view.md`.
+
+- [x] ~~Conectar menú de pestaña a selector existente/nueva y salida~~ — usa TabModel/TabCreator reales; pruebas del controlador en adaptadores nativos PASS.
+- [x] ~~Implementar viewport por panel y preferencia móvil temporal al estrechar~~ — umbrales 600/640 dp, sin recarga ni cambio de zoom/preferencia global. Variantes de servidor pueden requerir navegación explícita.
+- [x] ~~Regresiones de recuperación de ContentView, restauración de IDs e incógnito~~ — 50 casos split/controlador/puente Java con límites nativos explícitos; no son GREEN gráfico.
+- [ ] Verificar en APK: adaptación móvil por panel, sugerencias, ambos contenidos vivos, IME, diálogos, cierre, TalkBack, persistencia y transición suave.
+- [ ] Build progresivo del conjunto completo tras revisión/gates/checkpoint; no hay run nuevo todavía.
+
+Informe de implementación y límites: [R5.3](docs/validation/R5_3_SPLIT_VIEW.md).

@@ -88,3 +88,6 @@
 ## Estado de revisión
 
 Autorrevisión: cubiertas ambas entradas, identidad, foco, resize, intercambio, salida, perfil, lifecycle y límites de validación. La factibilidad del compositor e input es gate explícito de tarea 1. Plan aprobado por el usuario. Estado puro de pareja preparado (6 tests); presentación nativa, input, menú, cápsula y transición pendientes del gate de tarea 1. No hay nueva compilación despachada.
+
+## Solicitud adicional aprobada — panel estrecho
+Cada panel publica su ancho real al WebContents para CSS responsive. Bajo 600 dp usa temporalmente UA móvil por pestaña; restaura escritorio original a 640 dp o salida, con histéresis y sin recarga automática, zoom/DSF ni preferencias globales. Páginas con variante móvil de servidor pueden requerir navegación explícita; preservar formularios. Tests de independencia, histéresis, móvil original, override explícito, restauración e integración con ratio.

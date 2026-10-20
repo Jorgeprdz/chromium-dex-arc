@@ -11,3 +11,10 @@ Task 1: exact remaining boundary documented in docs/validation/R5_3_SPLIT_VIEW.m
 Tasks 3–6: pending native contract/integration; no new build. Omnibox/history independent changes are covered by targeted tests and preparation gate.
 
 Verification: compact helper 28/28 PASS; native command/Fusebox bodies 14/14 PASS; native command API 4/4 PASS. No APK/device GREEN for new code. Source integration Task 1 remains pending; no split menu/capsule/animation shipped. Host source-adapter tests do not validate compositor.
+
+Task 1 ruling: source viability established at explicit integration points: two independent ContentLayer live children; pair-aware StaticLayout.onShown; holder attaches two bounded ContentViews and routes focus before dispatch. Actual pixel/input acceptance remains mandatory after APK, not claimed by source audit. Source-only viability is distinct from Android GREEN.
+User authorization: finish all designed features first, then one incremental build. Earlier dispatch preparation superseded; no run dispatched. Build budget/counters preserved.
+
+Tasks 3–5: native pair presentation, controller and native menu/divider wired; source implementation ready for final review. RED native method absent / controller absent; controls and view attachment implemented test-first. Recovery regression RED NPE -> GREEN guarded reattachment.
+Additional request: per-pane mobile behavior. Ruling: 600/640 dp hysteresis and temporary per-controller UA without reload — avoids destroying unsaved form state; server-only mobile layouts may require user navigation. Normal mobile preference remains mobile.
+Verification 2026-10-20: 50 split tests PASS, 44 R5 helpers PASS; native actual C++ scene/AnchorInfo probes PASS at explicit adapters. Real Chromium compilation/JNI and APK graphical acceptance are pending, not PASS. Full host suite and final review running before dispatch.

@@ -65,4 +65,13 @@
     <string name="arc_ui_font_medium">Sans serif media</string>
     <string name="arc_ui_font_serif">Serif</string>
     <string name="arc_ui_font_mono">Monoespaciada</string>
+    <item type="id" name="arc_split_view" />
+    <string name="arc_split_view">Pantalla dividida</string>
+    <string name="arc_split_existing">Elegir pestaña abierta</string>
+    <string name="arc_split_new">Abrir pestaña nueva</string>
+    <string name="arc_split_exit">Salir de vista dividida</string>
+    <string name="arc_split_unsupported">Esta combinación de páginas no admite vista dividida.</string>
+    <string name="arc_split_no_tabs">No hay otra pestaña compatible abierta.</string>
+    <string name="arc_split_swap">Intercambiar paneles</string>
+    <string name="arc_split_dialog_open">Cierra el diálogo actual antes de cambiar la vista.</string>
 </resources>

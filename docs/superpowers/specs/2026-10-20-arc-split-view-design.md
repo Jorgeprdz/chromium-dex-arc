@@ -110,3 +110,6 @@ pestaña aprobadas. Intercambio de paneles aprobado, con cápsula blanca y flech
 oscuras apiladas. El usuario también aprobó historial al mantener Atrás/Adelante;
 se reutilizará el NavigationPopup nativo como trabajo independiente.
 La aprobación de diseño no equivale a validación de superficies ni de una APK.
+
+## Solicitud adicional aprobada — panel estrecho
+Cada panel publica su ancho real al WebContents para CSS responsive. Bajo 600 dp usa temporalmente UA móvil por pestaña; restaura escritorio original a 640 dp o salida, con histéresis y sin recarga automática, zoom/DSF ni preferencias globales. Páginas con variante móvil de servidor pueden requerir navegación explícita; preservar formularios. Tests de independencia, histéresis, móvil original, override explícito, restauración e integración con ratio.

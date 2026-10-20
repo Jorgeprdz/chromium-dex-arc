@@ -91,6 +91,7 @@ public final class ArcDesktopCoordinator {
     private final ArcCompactOmnibox mCompactOmnibox;
     private final ArcOmniboxPlacement mOmniboxPlacement;
     private NavigationPopup mNavigationPopup;
+    private ArcSplitViewCoordinator mSplitView;
     private ArcCommandBar mCommandBar;
     private LocationBarLayout mAddressPopupLocation;
     private Runnable mFocusAddressBar;
@@ -322,6 +323,24 @@ public final class ArcDesktopCoordinator {
         mNavigationControls.addView(reload);
         mNavigationState = new ArcNavigationControls(currentTab, back, forward, reload);
         mNavigationState.setHistoryActions(this::showNavigationHistory, this::dismissNavigationHistory);
+        if (mFrameRoot instanceof ViewGroup root) {
+            mSplitView = new ArcSplitViewCoordinator(activity, root, compositorViewHolder,
+                    currentModel, currentCreator, currentTab, this::focusSplitAddress,
+                    this::canChangeSplitLayout, mPreferences,
+                    new ArcSplitViewCoordinator.Labels(
+                            activity.getString(R.string.arc_split_view),
+                            activity.getString(R.string.arc_split_existing),
+                            activity.getString(R.string.arc_split_new),
+                            activity.getString(R.string.arc_split_exit),
+                            activity.getString(R.string.arc_split_unsupported),
+                            activity.getString(R.string.arc_split_no_tabs),
+                            activity.getString(R.string.arc_split_swap),
+                            activity.getString(R.string.arc_split_dialog_open)));
+            mNativeTabListCoordinator.setArcSplitRequest(
+                    tab -> { if (mSplitView != null) mSplitView.requestSplit(tab); },
+                    () -> !mDestroyed && ArcDesktopAppearance.isDesktopWindow(mActivity));
+        }
+
         mNavigationRow.addView(
                 mNavigationControls,
                 new LinearLayout.LayoutParams(
@@ -740,6 +759,20 @@ public final class ArcDesktopCoordinator {
         return button;
     }
 
+    private boolean canChangeSplitLayout() {
+        View modal = mActivity.findViewById(R.id.tab_modal_dialog_container);
+        return !mDestroyed && (modal == null || modal.getVisibility() != View.VISIBLE
+                || (modal instanceof ViewGroup group && group.getChildCount() == 0));
+    }
+
+    private void focusSplitAddress() {
+        if (mDestroyed || mCommandBar == null || mFocusAddressBar == null) return;
+        mCommandBar.close(false, null);
+        mEndAddressInput.run();
+        mCompactOmnibox.restore();
+        mCommandBar.openAddress(mFocusAddressBar);
+    }
+
     private boolean showNavigationHistory(View anchor, boolean forward) {
         Tab tab = mCurrentTab.get();
         if (mDestroyed || mActivity.isFinishing() || mActivity.isDestroyed()
@@ -963,6 +996,7 @@ public final class ArcDesktopCoordinator {
         ensureExtensionsToolbar();
         mNavigationState.refresh();
         boolean desktop = ArcDesktopAppearance.isDesktopWindow(mActivity);
+        if (mSplitView != null) mSplitView.refresh(desktop);
         boolean incognito = mIncognitoStateProvider.isIncognitoSelected();
         setArcToolbarCompositionActive(desktop);
         if (!desktop) {
@@ -1366,6 +1400,8 @@ public final class ArcDesktopCoordinator {
     public void destroy() {
         if (mDestroyed) return;
         mDestroyed = true;
+        mNativeTabListCoordinator.setArcSplitRequest(null, () -> false);
+        if (mSplitView != null) { mSplitView.destroy(); mSplitView = null; }
         mAppearanceDispatch.destroy();
         mColumn.getViewTreeObserver().removeOnGlobalLayoutListener(mFontLayoutListener);
         if (mAddressPopupLocation != null) {

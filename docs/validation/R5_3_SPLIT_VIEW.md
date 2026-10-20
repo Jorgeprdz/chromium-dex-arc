@@ -1,58 +1,49 @@
-# R5.3 — vista dividida: estado de integración
+# R5.3 — omnibox, historial y vista dividida
 
-Diseño y plan aprobados el 20-oct-2026. Trabajo aislado de la rama de compilación.
-No se ha despachado otro run ni se ha tocado el supervisor/checkpoint.
+Rama de implementación: `assistant/archium-r5-3-omnibox-split`, base `5b8694a`.
+Chromium `157.0.8086.0`, pin `cfd94726b7b5fb48aedcc32662f2f3fbdbadec35`.
+Estado: implementación conectada; revisión y gates finales en curso. Sin APK nueva ni run despachado.
 
-## Contratos comprobados en Chromium fijado
+## Presentación y autoridad
 
-Revision `cfd94726b7b5fb48aedcc32662f2f3fbdbadec35`, versión 157.0.8086.0.
+- `StaticTabSceneLayer` conserva dos ContentLayer con IDs/bounds independientes y capas vivas del TabContentManager. JNI transmite ambas geometrías; la ruta de una pestaña se conserva.
+- `StaticLayout.onShown` no sustituye el activo al mostrar la secundaria; ambas IDs quedan visibles mientras la escena es una pareja válida.
+- `ArcSplitContentHost` adjunta ContentViews existentes y conserva/restaura sus LayoutParams y offsets. No crea WebContents, snapshots, WebView ni iframe.
+- `CompositorViewHolder` dimensiona ambos WebContents y selecciona por identidad antes de dispatch de DOWN/rueda. TabModel sigue siendo autoridad de omnibox, historial y navegación.
+- El controlador valida modelo, perfil, ventana y tipo de contenido. Observar cierre/movimiento y background/foreground permite suspender/recuperar sin reconstrucción global.
+- Persistencia: IDs y ratio normales por task; espera restauración nativa, descarta IDs inexistentes y no escribe parejas incógnito.
 
-- `CompositorViewHolder.setTab()` conserva un solo `mTabVisible`, `mContentView`
-  y `OnscreenContentProvider`; actualiza foco y listeners al cambiar la pestaña.
-- `updateContentOverlayVisibility()` agrega/quita una sola vista. Las ContentView
-  web no se posicionan como las páginas nativas en `repositionTabViewForSideUi()`.
-- `StaticLayout.onShown()` cambia `LayoutTab.TAB_ID` al de cualquier pestaña
-  que se muestra. Mostrar una segunda sin adaptar ese contrato cambia la escena.
-- `TabImpl.show()/hide()` cambian visibilidad/interactabilidad y emiten observers;
-  hide se usa tanto al cambiar de tab como al ocultarse la ventana.
-- `StaticTabSceneLayer.UpdateTabLayer()` posee una sola ContentLayer; el offset
-  X se refleja en ViewAndroid. ContentLayer reparenta la capa viva durante update.
-- `ContextualSearchSceneLayer` muestra que un árbol puede contener otro WebContents
-  vivo; no demuestra por sí solo dos Tabs con input, lifecycle y accesibilidad correctos.
-- `ContentView.setContentOffsetXPix()` altera getLocationInWindow. EventOffsetHandler
-  del holder obtiene el EventForwarder exclusivamente de `mTabVisible`.
+## Funciones conectadas
 
-La primera integración pendiente es conservar dos attachments y su visibilidad
-sin que onShown de la secundaria sustituya la pestaña de la escena, y hacer
-coincidir los offsets de input con bounds de composición independientes.
-No se han modificado estos contratos nativos durante la investigación.
-Dos columnas Android o animar View.translationX no demuestra que dos superficies
-web estén presentadas; tampoco demostraría una transición nativa correcta.
+Menú nativo de pestaña → Pantalla dividida → pestaña existente/nueva (`about:blank`) o salida. Entrada por menú existente de clic derecho/long press, sin modificar drag/reordenamiento.
+Cápsula blanca con flechas oscuras apiladas, separador ajustable .2–.8 y objetivo táctil ampliado.
+Swap anima posiciones de capas nativas durante 180 ms, conserva identidad activa y no navega. Resize/destroy/segundo swap terminan la animación; animaciones desactivadas aplican final inmediato. Durante transición bloquea input.
+Clic omnibox reutiliza pop-up Ctrl+T con URL seleccionada; Ctrl+T vacío. Mantener Atrás/Adelante abre historial nativo del Tab activo.
 
-## Implementación independiente comprobada
+## Panel estrecho — solicitud adicional
 
-`ArcSplitState` conserva IDs, activo y proporción; TabModel sigue siendo propietario.
-Seis casos JUnit PASS: inicio, rechazo sin perder pareja, swap reversible sin
-cambiar activo/proporción, cierre de cualquiera, salida idempotente y ratio finito.
-La fase RED detectó ausencia de la clase; no es reproducción de un bug gráfico.
-Este componente aún no está conectado a un menú ni presenta WebContents.
-Ruling: preparar estado independiente mientras continúa el gate de contrato nativo;
-no habilitar una función incompleta en la interfaz.
+Cada WebContents recibe el ancho de su panel: CSS responsive no usa el ancho de toda la ventana.
+`ArcSplitViewportPolicy` pide UA móvil por NavigationController por debajo de 600 dp; restaura preferencia escritorio al llegar a 640 dp (histéresis), salir o retirar controlador. No cambia DSF, zoom ni preferencias globales/de sitio; no fuerza escritorio a quien ya usa móvil. Respeta restauración explícita de escritorio detectada mientras controla el panel.
+No recarga automáticamente: `setUseDesktopUserAgent(..., false, false)` está verificado en el NavigationController del pin. Una variante móvil servida por el servidor puede necesitar navegación/recarga explícita del usuario; no se promete adaptación automática de páginas no responsive.
+Si la ventana completa baja de 480 dp se suspende la presentación y se conserva la pareja.
 
-## Cápsula y movimiento aprobados
+## RED/GREEN y alcance
 
-Cápsula blanca pequeña y redondeada sobre el separador; flechas oscuras → / ←
-apiladas. Intercambio propuesto de 180 ms, suave y rápido, sin navegación/reload.
-Respetar animaciones desactivadas; resize/destroy deben cancelar dejando bounds
-finales válidos e input coherente. Especificado, no presentado como animación ejecutada.
+- Estado puro: 6 JUnit PASS.
+- Omnibox: baseline 10/16 FAIL; tests posteriores 18/18 PASS; auxiliares anidados cubiertos.
+- Helpers R5/historial: 44 PASS.
+- Policy móvil: RED clase ausente → 6 PASS. Integración: RED desktop no cambiado → GREEN SDK30/36.
+- Superficie: RED NPE al perder ContentView durante suspensión → GREEN no adjunta pareja obsoleta/parcial.
+- Split completo: 50 PASS (controles, animator, ContentHost, controller, viewport policy y cuerpos Java/JNI). Incluye selectores, cancelación, selección, perfiles, cierre, rollback, background, restauración, IDs faltantes y no persistir incógnito.
+- Probe C++ compila el `.cc/.h` entregado, verifica geometría/IDs/límites en adaptadores explícitos de Layer/Tab/JNI. Probe de menú ejecuta AnchorInfo real. No son GPU, enlace Chromium ni capturas Android.
+- Preparación aplica/parchea originales y compila Arc contra contratos sintéticos tipados; no sustituye build real GN/JNI/Chromium. Suite completa y revisión final se registrarán al concluir.
 
-## Gate y siguiente paso
+## Riesgos y aceptación pendiente
 
-INTEGRATION_PENDING: falta adaptar y probar juntos escena, attachments, viewport,
-foco, lifecycle e input antes de conectar el menú existente/nueva y el divisor.
-La prueba crítica es dos WebContents vivos, cada uno con coordenadas y navegación
-correctas, no dos snapshots. Los tests de estado no satisfacen ese gate.
-QEMU_ABI_BLOCKED. No hay APK nueva para comprobar esta integración en Galaxy.
-No se declara PASS visual ni se marca la vista dividida terminada.
-Cambios actuales de omnibox/historial conservan pin, GN args, toolchain y package;
-el último checkpoint debe verificarse de nuevo antes de cualquier build futuro.
+QEMU_ABI_BLOCKED; ningún PASS de Android gráfico. Dos páginas visibles, hit testing/IME, permisos/diálogos por panel, TalkBack, restauración tras muerte del proceso, pérdida de superficie y consumo de memoria/rendimiento requieren APK nueva y ejecución real. Fuente y host no acreditan píxeles, GPU ni estos resultados funcionales.
+El fix de diálogos `5184755` y el arreglo de identidad/reordenamiento se preservan. El usuario confirmó diálogos visibles en la APK `5b8694a`; no implica validación de split.
+Amazon permanece `UNRESOLVED_GRAPHICS_BLOCKER`, fuera de este lote. No flags gráficos, limpieza de outputs, alteración de pin/GN args/toolchain ni borrado de checkpoints.
+
+## Compilación posterior
+
+Sólo candidato completo y revisado → checkpoint compatible verificado → una compilación incremental autorizada. Fuente prevista `archium-checkpoint-38511423805-1`, commit `0abfc9f03e34c23762190365ccb0cf6f9e5c3260`, run `38511423805`; restauración/hash y configuración se vuelven a verificar antes de compilar. Presupuesto y límites del supervisor se preservan.
