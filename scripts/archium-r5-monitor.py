@@ -184,6 +184,7 @@ def dispatch(state, folder, call=gh):
         fields = dict(expected_sha=state['expected_sha'],source_checkpoint=intent['source_checkpoint'],
                       source_commit=intent['source_commit'],source_run_id=intent['source_run_id'],
                       dispatch_id=intent['nonce'],skip_preflight=str(intent['source_commit']==state['expected_sha']).lower())
+        fields['run_qemu'] = str(state.get('qemu_enabled', False)).lower()
         for key,value in fields.items(): args += ['-f',key+'='+str(value)]
         try: call(args)
         except (RuntimeError,subprocess.SubprocessError): pass

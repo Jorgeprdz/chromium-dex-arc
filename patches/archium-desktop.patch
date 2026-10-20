@@ -286,15 +286,16 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
  import org.chromium.chrome.browser.tabmodel.TabList;
  import org.chromium.chrome.browser.tabmodel.TabModel;
  import org.chromium.chrome.browser.tabmodel.TabModelSelector;
-@@ -136,6 +137,7 @@
+@@ -136,6 +137,8 @@
  import java.util.Collections;
  import java.util.List;
  import java.util.function.BooleanSupplier;
++import java.util.function.Consumer;
 +import java.util.function.IntPredicate;
  import java.util.function.Supplier;
 
  /** Coordinator to manage and display the Vertical Tab List. */
-@@ -167,7 +169,7 @@
+@@ -167,7 +170,7 @@
      private final VerticalTabGroupSpineDecoration mSpineDecoration;
      private final VerticalTabDropIndicatorDecoration mDropIndicatorDecoration;
      private final VerticalTabPinnedDropIndicatorDecoration mPinnedDropIndicatorDecoration;
@@ -303,7 +304,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
      private final NonNullObservableSupplier<Boolean> mVerticalTabsActiveSupplier;
      private final VerticalTabRailCollapseController mCollapseController;
      private final VerticalTabRailHoverController mRailHoverController;
-@@ -203,6 +205,36 @@
+@@ -203,6 +206,36 @@
      private @Nullable View mDragEndRelayView;
 
      private boolean mIsActive;
@@ -340,7 +341,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 
      private class VerticalTabListClickHandler implements TabListItemOnClickListenerProvider {
          private final TabActionListener mTabGroupClickedListener =
-@@ -763,6 +795,7 @@
+@@ -763,6 +796,7 @@
 
                      @Override
                      public void didChangePinState(Tab tab) {
@@ -348,7 +349,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
                          // Scroll the newly unpinned active tab into view.
                          if (!tab.getIsPinned()
                                  && tab.getId() == mTabModelSelector.getCurrentTabId()) {
-@@ -777,18 +810,21 @@
+@@ -777,18 +811,21 @@
                              @TabLaunchType int type,
                              @TabCreationState int creationState,
                              boolean markedForSelection) {
@@ -370,7 +371,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
                          updateIncognitoButtonVisibility();
                          updatePinnedTabsSeparatorVisibility();
                      }
-@@ -806,7 +842,18 @@
+@@ -806,7 +843,18 @@
 
                      @Override
                      public void tabClosureCommitted(Tab tab) {
@@ -389,7 +390,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
                      }
 
                      @Override
-@@ -814,6 +861,7 @@
+@@ -814,6 +862,7 @@
                          mTabItemHoverController.resetHoverState();
                      }
                  };
@@ -397,7 +398,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 
          mVerticalTabsActiveSupplier.addSyncObserverAndCallIfNonNull(mActiveObserver);
 
-@@ -863,8 +911,8 @@
+@@ -863,8 +912,8 @@
              return;
          }
 
@@ -408,7 +409,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
              return;
          }
          KeyboardFocusUtil.setFocusOnFirstFocusableDescendant(mContainerView);
-@@ -881,6 +929,10 @@
+@@ -881,6 +930,10 @@
          mModelList.clear();
          mTabModelSelector.removeObserver(mTabModelSelectorObserver);
          mTabModelSelector.getCurrentTabModelSupplier().removeObserver(mCurrentTabModelObserver);
@@ -419,7 +420,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          mTabListFaviconProvider.destroy();
 
          if (mTabStripContextMenuCoordinator != null) {
-@@ -903,7 +955,9 @@
+@@ -903,7 +956,9 @@
          }
 
          mSpineDecoration.destroy();
@@ -430,7 +431,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          mVerticalTabsActiveSupplier.removeObserver(mActiveObserver);
          if (mBackPressManager.has(BackPressHandler.Type.CANCEL_TAB_SWITCHER_DRAG)) {
              mBackPressManager.removeHandler(BackPressHandler.Type.CANCEL_TAB_SWITCHER_DRAG);
-@@ -1116,6 +1170,124 @@
+@@ -1116,6 +1171,124 @@
          if (mTabModelSelector.isTabStateInitialized()) {
              resetWithListOfTabs(tabModel);
          }
@@ -555,7 +556,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
      }
 
      /**
-@@ -1126,9 +1298,10 @@
+@@ -1126,9 +1299,10 @@
          if (tabModel == null) return;
 
          mMediator.resetWithListOfTabs(
@@ -567,15 +568,15 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          mPinnedTabsMediator.updateTabModel(tabModel);
          boolean isIncognito =
                  !IncognitoUtils.shouldOpenIncognitoAsWindow() && tabModel.isIncognitoBranded();
-@@ -1960,6 +2133,16 @@
+@@ -1960,6 +2134,16 @@
          return menuShown;
      }
 
-+    private @Nullable java.util.function.Consumer<Tab> mArcSplitRequest;
++    private @Nullable Consumer<Tab> mArcSplitRequest;
 +    private java.util.function.BooleanSupplier mArcSplitEnabled = () -> false;
 +
 +    /** Adds an optional Arc action while retaining the native context menu and drag handlers. */
-+    public void setArcSplitRequest(@Nullable java.util.function.Consumer<Tab> request,
++    public void setArcSplitRequest(@Nullable Consumer<Tab> request,
 +            java.util.function.BooleanSupplier enabled) {
 +        mArcSplitRequest = request;
 +        mArcSplitEnabled = request == null ? () -> false : enabled;
@@ -584,13 +585,13 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
      private boolean showMenuForItemView(RectProvider rectProvider, View itemView) {
          if (!(itemView.getParent() instanceof RecyclerView recyclerView)) return false;
          int position = recyclerView.getChildAdapterPosition(itemView);
-@@ -2116,6 +2299,15 @@
+@@ -2116,6 +2300,15 @@
          }
 
          var anchorInfo = new AnchorInfo(tabId, allTabIds);
 +        if (allTabIds.size() == 1 && mArcSplitRequest != null && mArcSplitEnabled.getAsBoolean()) {
 +            anchorInfo.setArcSplitAction(() -> {
-+                java.util.function.Consumer<Tab> request = mArcSplitRequest;
++                Consumer<Tab> request = mArcSplitRequest;
 +                Tab live = mTabModelSelector.getCurrentModel().getTabById(tabId);
 +                if (request != null && mArcSplitEnabled.getAsBoolean() && live != null && live == tab
 +                        && !live.isDestroyed() && !live.isClosing()) request.accept(live);
@@ -600,7 +601,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 
          if (mTabContextMenuCoordinator == null) {
              TabGroupCreationCallback tabGroupCreationCallback =
-@@ -2373,9 +2565,21 @@
+@@ -2373,9 +2566,21 @@
                                  mContainerModel.get(VerticalTabListProperties.COLLAPSE_STATE));
 
          TabModel model = mTabModelSelector.getCurrentModel();
@@ -927,7 +928,15 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
  import org.chromium.chrome.browser.compositor.layouts.LayoutManagerHost;
  import org.chromium.chrome.browser.compositor.layouts.LayoutManagerImpl;
  import org.chromium.chrome.browser.compositor.layouts.LayoutRenderHost;
-@@ -239,6 +241,15 @@
+@@ -129,6 +131,7 @@
+ import java.util.Map;
+ import java.util.Map.Entry;
+ import java.util.Set;
++import java.util.function.IntConsumer;
+
+ /**
+  * This class holds a {@link CompositorView}. This level of indirection is needed to benefit from
+@@ -239,6 +242,15 @@
      // mode like Actor Picture-in-Picture.
      private final Point mLastNormalSize = new Point();
 
@@ -935,7 +944,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
 +    private @Nullable Tab mArcSplitLeft;
 +    private @Nullable Tab mArcSplitRight;
 +    private @Nullable StaticLayout mArcSplitLayout;
-+    private @Nullable java.util.function.IntConsumer mArcSplitActivation;
++    private @Nullable IntConsumer mArcSplitActivation;
 +    private float mArcSplitRatio = .5f;
 +    private boolean mArcSplitUpdating;
 +    private boolean mArcSplitInputBlocked;
@@ -943,7 +952,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
      private boolean mControlsResizeView;
      private boolean mInGesture;
      private boolean mInTouch;
-@@ -308,6 +319,7 @@
+@@ -308,6 +320,7 @@
 
                          @Override
                          public float getLeft() {
@@ -951,7 +960,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
                              updateCacheViewport();
                              return mCacheViewport.left;
                          }
-@@ -833,6 +845,8 @@
+@@ -833,6 +846,8 @@
              mBrowserControlsManager.removeObserver(this);
          }
 
@@ -960,33 +969,33 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
          setTab(null);
          if (mApplicationBottomInsetSupplier != null) {
              assert mOnViewportInsetsChanged != null;
-@@ -955,6 +969,12 @@
+@@ -955,6 +970,12 @@
 
      @Override
      public boolean dispatchGenericMotionEvent(MotionEvent e) {
 +        if (mArcSplitInputBlocked) return true;
 +        if (mArcSplitLeft != null && e.getActionMasked() == MotionEvent.ACTION_SCROLL) {
 +            Tab pane = mArcSplitHost.tabAt(e.getX(), e.getY());
-+            java.util.function.IntConsumer activate = mArcSplitActivation;
++            IntConsumer activate = mArcSplitActivation;
 +            if (pane != null && activate != null) activate.accept(pane.getId());
 +        }
          if (mLayoutManager != null && mLayoutManager.dispatchGenericMotionEvent(e)) {
              return true;
          }
-@@ -1035,6 +1055,12 @@
+@@ -1035,6 +1056,12 @@
 
      @Override
      public boolean dispatchTouchEvent(MotionEvent e) {
 +        if (mArcSplitInputBlocked) return true;
 +        if (mArcSplitLeft != null && e.getActionMasked() == MotionEvent.ACTION_DOWN) {
 +            Tab pane = mArcSplitHost.tabAt(e.getX(), e.getY());
-+            java.util.function.IntConsumer activate = mArcSplitActivation;
++            IntConsumer activate = mArcSplitActivation;
 +            if (pane != null && activate != null) activate.accept(pane.getId());
 +        }
          assert e != null : "The motion event dispatched shouldn't be null!";
          if (mNativeInitialized) {
              InputHintChecker.onCompositorViewHolderTouchEvent();
-@@ -1178,8 +1204,8 @@
+@@ -1178,8 +1205,8 @@
              horizontalViewportInsets =
                      sideUiLeftMargin + sideUiSpecs.getReservedWidth(AnchorSide.RIGHT);
          }
@@ -997,7 +1006,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
 
          // The view size takes into account of the browser controls whose height should be
          // subtracted from the view if they are visible, therefore shrink Blink-side view size.
-@@ -1201,7 +1227,8 @@
+@@ -1201,7 +1228,8 @@
          int webContentsHeightInset = getEffectiveWebContentsHeightInset();
          int verticalViewportInsets = controlsInsets + webContentsHeightInset;
 
@@ -1007,7 +1016,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
          int webContentsHeight = height - verticalViewportInsets;
 
          if (ChromeFeatureList.sVirtualKeyboardTransientInnerHeightFix.isEnabled()
-@@ -1688,11 +1715,138 @@
+@@ -1688,11 +1716,138 @@
       * Shifts the composited web contents and its touch coordinate space to sit next to the Side UI
       * on the left, without resizing the web contents.
       */
@@ -1029,7 +1038,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
 +                && mLayoutManager.getActiveLayout() instanceof StaticLayout;
 +    }
 +
-+    public void setArcSplitActivation(@Nullable java.util.function.IntConsumer activate) {
++    public void setArcSplitActivation(@Nullable IntConsumer activate) {
 +        mArcSplitActivation = activate;
 +    }
 +
@@ -1147,7 +1156,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
      }
 
      // View.OnHierarchyChangeListener implementation
-@@ -2043,6 +2197,11 @@
+@@ -2043,6 +2198,11 @@
      }
 
      private void updateContentOverlayVisibility(boolean show) {
@@ -1159,7 +1168,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
          if (mView == null) return;
          WebContents webContents = getWebContents();
          if (show) {
-@@ -2133,7 +2292,8 @@
+@@ -2133,7 +2293,8 @@
 
          // TODO(dtrainor): Look into changing this only if the views differ, but still parse the
          // WebContents list even if they're the same.
@@ -1169,7 +1178,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
 
          if (mTabVisible != tab) {
              // Reset the geometrychange event flag so it can fire on the current active tab.
-@@ -2153,7 +2313,7 @@
+@@ -2153,7 +2314,7 @@
          mTabVisible = tab;
          mView = newView;
 
@@ -1178,7 +1187,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
 
          if (mTabVisible != null) initializeTab(mTabVisible);
 
-@@ -2165,6 +2325,11 @@
+@@ -2165,6 +2326,11 @@
              mOnscreenContentProvider.onWebContentsChanged(assumeNonNull(getWebContents()));
          }
 
@@ -1190,7 +1199,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
          // Clear drop permissions when tab changes unless this is a new tab loading from the drop.
          if (mDropUri == null
                  || tab == null
-@@ -2221,8 +2386,10 @@
+@@ -2221,8 +2387,10 @@
                      webContents, mCompositorView.getWidth(), mCompositorView.getHeight());
              onControlsResizeViewChanged(webContents, mControlsResizeView);
 

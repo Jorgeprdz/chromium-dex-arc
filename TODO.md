@@ -288,3 +288,16 @@ Informe de implementación y límites: [R5.3](docs/validation/R5_3_SPLIT_VIEW.md
 
 - [x] ~~Corregir los cinco hallazgos importantes de revisión del split~~ — recuperación, foco, teclado activo, arranque diferido y mínimos por panel con RED/GREEN; se incluye rollback de entrada fallida.
 - [ ] Medir coste de mantener dos pestañas visibles y ejecutar la matriz de IME, TalkBack, permisos y Surface con la nueva APK; no cerrado por tests host.
+
+## R5.3 — reparación de build y monitor (20-oct-2026)
+
+- [x] ~~Reproducir y corregir los cuatro errores Java TYPE_USE `@Nullable` del run 39362104801~~ — imports de Consumer/IntConsumer, sin cambiar comportamiento; regresión compilada RED/GREEN.
+- [x] ~~Preparar reintento desde el checkpoint más reciente del run fallido~~ — `archium-checkpoint-39362104801-1`, 733 outputs conservados; manifiesto/inventario verificados. Hashes completos/restauración se exigen en CI.
+- [x] ~~Desactivar QEMU para este despacho por petición expresa~~ — `run_qemu=false`; no declarar PASS de QEMU ni aceptación Android.
+- [x] ~~Implementar monitor de sólo observación con panel ASCII, colores y limpieza antes del refresco~~ — consulta inmediata y cada 600s; mantiene ventana abierta al finalizar, sin reparaciones/relanzamientos/instalación automática.
+- [ ] Completar el nuevo build incremental y verificar la nueva APK. RUN_ID/SHA se guardan en el registro persistente.
+- [ ] Instalar manualmente y validar split, omnibox, foco, diálogos y adaptación móvil; sin GREEN visual por tests host.
+
+[Reparación y monitor](docs/validation/R5_3_BUILD_REPAIR_MONITOR.md).
+
+- [x] ~~Superar gates locales de la reparación y monitor~~ — 352/352 host, 13/13 dirigidas, preparación API37, actionlint y sintaxis shell/Python PASS. El build Chromium real se valida en CI.

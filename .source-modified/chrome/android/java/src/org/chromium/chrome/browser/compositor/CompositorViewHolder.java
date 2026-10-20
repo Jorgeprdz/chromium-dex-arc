@@ -131,6 +131,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
+import java.util.function.IntConsumer;
 
 /**
  * This class holds a {@link CompositorView}. This level of indirection is needed to benefit from
@@ -245,7 +246,7 @@ public class CompositorViewHolder extends FrameLayout
     private @Nullable Tab mArcSplitLeft;
     private @Nullable Tab mArcSplitRight;
     private @Nullable StaticLayout mArcSplitLayout;
-    private @Nullable java.util.function.IntConsumer mArcSplitActivation;
+    private @Nullable IntConsumer mArcSplitActivation;
     private float mArcSplitRatio = .5f;
     private boolean mArcSplitUpdating;
     private boolean mArcSplitInputBlocked;
@@ -972,7 +973,7 @@ public class CompositorViewHolder extends FrameLayout
         if (mArcSplitInputBlocked) return true;
         if (mArcSplitLeft != null && e.getActionMasked() == MotionEvent.ACTION_SCROLL) {
             Tab pane = mArcSplitHost.tabAt(e.getX(), e.getY());
-            java.util.function.IntConsumer activate = mArcSplitActivation;
+            IntConsumer activate = mArcSplitActivation;
             if (pane != null && activate != null) activate.accept(pane.getId());
         }
         if (mLayoutManager != null && mLayoutManager.dispatchGenericMotionEvent(e)) {
@@ -1058,7 +1059,7 @@ public class CompositorViewHolder extends FrameLayout
         if (mArcSplitInputBlocked) return true;
         if (mArcSplitLeft != null && e.getActionMasked() == MotionEvent.ACTION_DOWN) {
             Tab pane = mArcSplitHost.tabAt(e.getX(), e.getY());
-            java.util.function.IntConsumer activate = mArcSplitActivation;
+            IntConsumer activate = mArcSplitActivation;
             if (pane != null && activate != null) activate.accept(pane.getId());
         }
         assert e != null : "The motion event dispatched shouldn't be null!";
@@ -1733,7 +1734,7 @@ public class CompositorViewHolder extends FrameLayout
                 && mLayoutManager.getActiveLayout() instanceof StaticLayout;
     }
 
-    public void setArcSplitActivation(@Nullable java.util.function.IntConsumer activate) {
+    public void setArcSplitActivation(@Nullable IntConsumer activate) {
         mArcSplitActivation = activate;
     }
 

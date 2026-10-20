@@ -137,6 +137,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 import java.util.function.IntPredicate;
 import java.util.function.Supplier;
 
@@ -2133,11 +2134,11 @@ public class VerticalTabListCoordinator {
         return menuShown;
     }
 
-    private @Nullable java.util.function.Consumer<Tab> mArcSplitRequest;
+    private @Nullable Consumer<Tab> mArcSplitRequest;
     private java.util.function.BooleanSupplier mArcSplitEnabled = () -> false;
 
     /** Adds an optional Arc action while retaining the native context menu and drag handlers. */
-    public void setArcSplitRequest(@Nullable java.util.function.Consumer<Tab> request,
+    public void setArcSplitRequest(@Nullable Consumer<Tab> request,
             java.util.function.BooleanSupplier enabled) {
         mArcSplitRequest = request;
         mArcSplitEnabled = request == null ? () -> false : enabled;
@@ -2301,7 +2302,7 @@ public class VerticalTabListCoordinator {
         var anchorInfo = new AnchorInfo(tabId, allTabIds);
         if (allTabIds.size() == 1 && mArcSplitRequest != null && mArcSplitEnabled.getAsBoolean()) {
             anchorInfo.setArcSplitAction(() -> {
-                java.util.function.Consumer<Tab> request = mArcSplitRequest;
+                Consumer<Tab> request = mArcSplitRequest;
                 Tab live = mTabModelSelector.getCurrentModel().getTabById(tabId);
                 if (request != null && mArcSplitEnabled.getAsBoolean() && live != null && live == tab
                         && !live.isDestroyed() && !live.isClosing()) request.accept(live);

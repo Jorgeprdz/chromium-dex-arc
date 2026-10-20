@@ -8,6 +8,11 @@ on:
         required: false
         default: manual
         type: string
+      run_qemu:
+        description: Optional Android QEMU validation; disabled by user request
+        required: false
+        default: false
+        type: boolean
       skip_preflight:
         description: Reuse same-source preflight only with a verified controlled checkpoint
         required: false
@@ -95,7 +100,7 @@ jobs:
       source_run_id: ${{ inputs.source_run_id }}
   qemu:
     needs: build
-    if: ${{ needs.build.result == 'success' }}
+    if: ${{ needs.build.result == 'success' && inputs.run_qemu }}
     uses: ./.github/workflows/archium-r5-qemu.yml
     with:
       expected_sha: ${{ inputs.expected_sha }}
