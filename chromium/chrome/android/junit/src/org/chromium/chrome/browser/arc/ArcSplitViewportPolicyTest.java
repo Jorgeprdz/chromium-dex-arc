@@ -5,7 +5,16 @@ package org.chromium.chrome.browser.arc;
 import static org.junit.Assert.*;
 import static org.mockito.Mockito.*;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
+import org.robolectric.annotation.GraphicsMode;
+import org.robolectric.annotation.SQLiteMode;
 import org.chromium.content_public.browser.NavigationController;
+@RunWith(RobolectricTestRunner.class)
+@Config(manifest=Config.NONE,sdk={30,36})
+@GraphicsMode(GraphicsMode.Mode.LEGACY)
+@SQLiteMode(SQLiteMode.Mode.LEGACY)
 public class ArcSplitViewportPolicyTest {
     private NavigationController desktop() {
         NavigationController n=mock(NavigationController.class);

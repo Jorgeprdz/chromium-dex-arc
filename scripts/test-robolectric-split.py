@@ -18,8 +18,8 @@ if a.host or a.controller:
  for name,text in adapters.items():
   path=a.work/name;path.write_text(text);sources.append(path)
 if a.controller:
- sources += [arc/'ArcSplitState.java',arc/'ArcSplitViewCoordinator.java',test/'ArcSplitViewCoordinatorTest.java']
- tests += ['org.chromium.chrome.browser.arc.ArcSplitViewCoordinatorTest']
+ sources += [arc/'ArcSplitState.java',test/'ArcSplitStateTest.java',arc/'ArcSplitViewCoordinator.java',test/'ArcSplitViewCoordinatorTest.java']
+ tests += ['org.chromium.chrome.browser.arc.ArcSplitStateTest','org.chromium.chrome.browser.arc.ArcSplitViewCoordinatorTest']
  extra={
  'R.java':'package org.chromium.chrome; public class R {public static class id {public static final int tab_modal_dialog_container=2001,tab_modal_dialog_container_stub=2002;}}',
  'Profile.java':'package org.chromium.chrome.browser.profiles; public class Profile {}',

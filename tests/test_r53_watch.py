@@ -72,3 +72,22 @@ class WatchTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as d:
             w.run_loop(s,Path(d),query=query,draw=lambda s:None,sleep=sleep,monotonic=lambda:0.,wall=lambda:1000.)
         query.assert_not_called()
+    def test_authorized_adb_update_requires_success_receipt_and_mandatory_jobs(self):
+        s=self.state();s.update(auto_install='ADB_VERIFIED_UPDATE')
+        jobs=[dict(name=n,status='completed',conclusion='success',steps=[]) for n in ('authorize','preflight / preflight','build / build')]
+        receipt=dict(schema=1,outcome='BUILD_SUCCESS',**{k:s[k] for k in ('expected_sha','run_id','source_checkpoint','source_commit','source_run_id')})
+        call=Mock(side_effect=[self.github_run('success'),{'jobs':jobs},{'artifacts':[{'name':'Archium-for-Android-arm64','expired':False,'size_in_bytes':100},{'name':'Archium-R5-stage-receipt','expired':False}]}])
+        with patch.object(w,'install_success',create=True) as install:
+            w.refresh(s,call=call,read_receipt=lambda s:receipt)
+            install.assert_called_once_with(s,jobs)
+    def test_missing_receipt_blocks_authorized_update(self):
+        s=self.state();s['auto_install']='ADB_VERIFIED_UPDATE'
+        call=Mock(side_effect=[self.github_run('success'),{'jobs':[]},{'artifacts':[{'name':'Archium-for-Android-arm64','expired':False,'size_in_bytes':100}]}])
+        with patch.object(w,'install_success',create=True) as install:
+            with self.assertRaisesRegex(ValueError,'receipt'):w.refresh(s,call=call)
+            install.assert_not_called()
+
+    def test_install_rejects_missing_mandatory_gates_before_download(self):
+        with patch.object(w.monitor,'download') as download:
+            with self.assertRaisesRegex(ValueError,'Mandatory'):w.install_success(self.state(),[])
+            download.assert_not_called()

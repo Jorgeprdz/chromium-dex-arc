@@ -5,8 +5,17 @@ package org.chromium.chrome.browser.arc;
 
 import static org.junit.Assert.*;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.robolectric.RobolectricTestRunner;
+import org.robolectric.annotation.Config;
+import org.robolectric.annotation.GraphicsMode;
+import org.robolectric.annotation.SQLiteMode;
 
 /** Identity/geometry state only: no claim of two WebContents rendered on Android. */
+@RunWith(RobolectricTestRunner.class)
+@Config(manifest=Config.NONE,sdk={30,36})
+@GraphicsMode(GraphicsMode.Mode.LEGACY)
+@SQLiteMode(SQLiteMode.Mode.LEGACY)
 public class ArcSplitStateTest {
     @Test public void pairStartsEqualWithFirstActive() {
         ArcSplitState state = new ArcSplitState();

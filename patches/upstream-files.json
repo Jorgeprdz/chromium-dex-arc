@@ -258,9 +258,9 @@
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcOmniboxPlacementTest.java": "8f648fd7a93b27b8d21a9f503717d3697ce4515c7b1095a29ee28d3201b81eff",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitContentHostTest.java": "3441d44d22ef7d9c312c0e55e426897b8dc4699e250d271f9dd982ee98fde4fa",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitControlsTest.java": "c7f963f1d1dbbcdba27fe07ebeac051394b4d9e498a8fff0ee0abf6c9f4fbbad",
-    "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitStateTest.java": "ce06fcc2a9fd72c0094ea3b59f1d88097b429d97b9a86782db0a4b18332ff9a1",
+    "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitStateTest.java": "d482407a305d2ca8bafd2922c6c95f4784079faf0dbf1fe4815b61ee4f36b84c",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitViewCoordinatorTest.java": "f1968dc0d0c508ba7826dfbfd2253f429cd4b587c6836c6f1f13e7bcc610556d",
-    "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitViewportPolicyTest.java": "365d161b80ee84d2df3d355ecbcc89dcf5fa65b23bab1f117b4dea723e739db2",
+    "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitViewportPolicyTest.java": "6fa8e3fc03ec4469c6b045e6b41cfed0def89b9265813cfa5c9c49a8d7309bb6",
     "chrome/android/junit/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/ArcTabSelectionTest.java": "2b92a67066622284bb2375dab920eabefaedb35745e6a3460acb9a38143a60a8",
     "chrome/android/junit/src/org/chromium/chrome/browser/toolbar/top/ArcToolbarReparentingTest.java": "8f246366eee0c5e5a5c430d5999c7563e0894e51e7d172b17a8259a1701b36b4",
     "chrome/android/junit/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearanceTest.java": "61958238aecc3faf306019993de4a04c58649cef22e6f97e0b792b5b644fb8ec",
@@ -292,5 +292,5 @@
     "components/password_manager/core/browser/password_store/password_store_backend.cc": "45764d4ad0e05acc5a216944a5a6763212f6c17e71bf689e9c973f12fb5c87d8",
     "components/password_manager/core/browser/password_store/password_store_interface.cc": "7e9dd5813ce8ece459ec66abdd3306028b7b3d6bbae048664872a34d8d097268"
   },
-  "patch_sha256": "019339ccfc5d3b2a4941d1e88f3408944f412c3c04041a91e4314e2aa54b8b86"
+  "patch_sha256": "77796ffa930bad905f85b7e75c11c3551c3befad784a8e46cfb78710a8b03069"
 }

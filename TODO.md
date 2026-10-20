@@ -294,10 +294,23 @@ Informe de implementación y límites: [R5.3](docs/validation/R5_3_SPLIT_VIEW.md
 - [x] ~~Reproducir y corregir los cuatro errores Java TYPE_USE `@Nullable` del run 39362104801~~ — imports de Consumer/IntConsumer, sin cambiar comportamiento; regresión compilada RED/GREEN.
 - [x] ~~Preparar reintento desde el checkpoint más reciente del run fallido~~ — `archium-checkpoint-39362104801-1`, 733 outputs conservados; manifiesto/inventario verificados. Hashes completos/restauración se exigen en CI.
 - [x] ~~Desactivar QEMU para este despacho por petición expresa~~ — `run_qemu=false`; no declarar PASS de QEMU ni aceptación Android.
-- [x] ~~Implementar monitor de sólo observación con panel ASCII, colores y limpieza antes del refresco~~ — consulta inmediata y cada 600s; mantiene ventana abierta al finalizar, sin reparaciones/relanzamientos/instalación automática.
+- [x] ~~Implementar monitor de sólo observación con panel ASCII, colores y limpieza antes del refresco~~ — consulta inmediata y cada 600s; mantiene ventana abierta al finalizar, sin reparaciones/relanzamientos automáticos. La solicitud posterior autoriza actualización ADB verificada al finalizar.
 - [ ] Completar el nuevo build incremental y verificar la nueva APK. RUN_ID/SHA se guardan en el registro persistente.
-- [ ] Instalar manualmente y validar split, omnibox, foco, diálogos y adaptación móvil; sin GREEN visual por tests host.
+- [ ] Confirmar actualización ADB de la nueva APK y validar split, omnibox, foco, diálogos y adaptación móvil; sin GREEN visual por tests host.
 
 [Reparación y monitor](docs/validation/R5_3_BUILD_REPAIR_MONITOR.md).
 
 - [x] ~~Superar gates locales de la reparación y monitor~~ — 352/352 host, 13/13 dirigidas, preparación API37, actionlint y sintaxis shell/Python PASS. El build Chromium real se valida en CI.
+
+
+## R5.3 — runner y actualización ADB (20-oct-2026)
+
+- [x] ~~Identificar el fallo del run 39370769321~~ — Chromium no descubre clases sin `@RunWith`; no fue un fallo de asserts ni motivo para eliminar el gate.
+- [x] ~~Corregir registro de ArcSplitStateTest y ArcSplitViewportPolicyTest~~ — RED en ambas; GREEN de descubrimiento y 86 tests JVM split.
+- [x] ~~Validar metadatos del checkpoint más reciente~~ — `archium-checkpoint-39370769321-1`, cuatro grupos/25 partes; restauración y hashes completos pendientes de CI.
+- [x] ~~Implementar actualización ADB autorizada y verificada en el monitor~~ — firma, versión, gates y hash del APK instalado; mantiene los datos y respeta confirmaciones Android.
+- [ ] Confirmar descubrimiento real de ambas suites y completar el reintento incremental en CI.
+- [ ] Confirmar INSTALL_SUCCESS con evidencia Android de la nueva APK; no confundir armado con instalación realizada.
+- [ ] Ejecutar aceptación visual de split, cápsula, transición, omnibox y viewport móvil en la nueva APK.
+
+[Diagnóstico, límites y actualización](docs/validation/R5_3_TEST_DISCOVERY_ADB_UPDATE.md).

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Watch a single authenticated run. No builds, QEMU, Codex resume or installation.
+"""Watch a single authenticated run. No builds, QEMU or Codex resume. Optional explicitly authorized ADB update.
 
 The terminal remains open after completion or blockage until Ctrl+C. Active
 queries start immediately then on 600-second slots; completed screens make no
@@ -46,7 +46,7 @@ def render(state, output=None, color=None, clear=None, width=None):
         for line in textwrap.wrap(clean(text),width-4,replace_whitespace=False) or ['']:
             lines.append(cyan+'|'+reset+'  '+paint+line.ljust(width-4)+reset+'  '+cyan+'|'+reset)
     border();row('ARCHIUM R5  /  PROGRESSIVE BUILD',cyan)
-    row('WATCH ONLY  |  CHECKPOINT REUSE  |  ARM64',dim);border()
+    row(('RUN MONITOR + VERIFIED ADB' if state.get('auto_install')=='ADB_VERIFIED_UPDATE' else 'WATCH ONLY')+'  |  CHECKPOINT REUSE  |  ARM64',dim);border()
     fields=[('RUN ACTUAL',state['run_id']),('SHA',state['expected_sha']),('WORKFLOW',monitor.WORKFLOW),
             ('STAGE',state['stage']),('CHECKPOINT ORIGEN',state['source_checkpoint']),
             ('RESTAURACION',state.get('restore_status','PENDING_CI')),
@@ -55,12 +55,13 @@ def render(state, output=None, color=None, clear=None, width=None):
             ('JOB / STEP',state.get('job_step','--')),('TRANSCURRIDO',state.get('elapsed','--')),
             ('ULTIMA CONSULTA',state.get('last_poll','--')),
             ('SIGUIENTE CONSULTA','FINAL - sin mas consultas' if state.get('terminal') else state.get('next_poll','--')),
-            ('APK STATUS',state.get('apk_status','PENDING_BUILD')),('QEMU','DISABLED BY USER')]
+            ('APK STATUS',state.get('apk_status','PENDING_BUILD')),('INSTALACION',state.get('installation',{}).get('status','PENDING_BUILD')),('QEMU','DISABLED BY USER')]
     for label,value in fields:row(f'{label:<19}: {value}')
     border();row('[ '+status+' ]',accent)
     if state.get('last_error'):row(state['last_error'],accent)
     row('Refresco: 600s  |  Ctrl+C: cerrar monitor',dim)
-    row('Sin relanzamientos, reparaciones ni instalacion automatica.',dim)
+    row('Sin relanzamientos ni reparaciones automaticas.',dim)
+    row('ADB: actualizar solo APK verificada.' if state.get('auto_install')=='ADB_VERIFIED_UPDATE' else 'Instalacion manual.',dim)
     if state.get('terminal'):row('Run finalizado. Esta ventana permanece abierta.',accent)
     border()
     output.write(('\x1b[2J\x1b[H' if clear else '')+('\x1b[40;37m' if color else '')+'\n'.join(lines)+('\x1b[0m' if color else '')+'\n');output.flush()
@@ -104,6 +105,7 @@ def refresh(state,call=None,read_receipt=None):
     state.update(status=('BUILD_SUCCESS' if len(apk)==1 else 'BUILD_SUCCESS_APK_MISSING') if success else 'BUILD_FAILED',
                  apk_status='ARTIFACT_AVAILABLE_NOT_DOWNLOADED' if success and len(apk)==1 else 'NO_APK',
                  installation={'status':'MANUAL_INSTALL_ONLY'},completed_at=run.get('updated_at'))
+    success_receipt=False
     if any(a['name']=='Archium-R5-stage-receipt' and not a.get('expired') for a in items):
         receipt=(read_receipt or load_receipt)(state)
         if receipt.get('schema')!=1 or any(str(receipt.get(k))!=str(state[k]) for k in
@@ -115,7 +117,29 @@ def refresh(state,call=None,read_receipt=None):
                          checkpoint_publication='CI_PACK_VERIFIED_NO_LOCAL_RESTORE')
         elif receipt.get('outcome')!='BUILD_FAILED':
             monitor.validate_receipt(receipt,state)
+            success_receipt=receipt.get('outcome')=='BUILD_SUCCESS'
+    if success and len(apk)==1 and state.get('auto_install')=='ADB_VERIFIED_UPDATE':
+        if not success_receipt:raise ValueError('Successful stage receipt required before ADB update')
+        install_success(state,jobs)
     state.update(terminal=True,next_poll='NONE_RUN_COMPLETED')
+
+
+def install_success(state,jobs):
+    gates={j['name']:j.get('conclusion') for j in jobs}
+    if any(gates.get(n)!='success' for n in ('authorize','preflight / preflight','build / build')):
+        raise ValueError('Mandatory GitHub jobs not all successful; ADB update blocked')
+    folder=Path(state['state_directory'])
+    cfg=state['adb_update']
+    apk_folder=monitor.download(folder/'watch-artifacts',state['run_id'],'Archium-for-Android-arm64')
+    apk,digest=monitor.verify_apk(apk_folder,state,cfg['apksigner'],cfg['aapt2'])
+    state.update(apk_path=str(apk),apk_sha256=digest,apk_status='APK_VERIFIED',installation={'status':'VERIFYING_DEVICE'})
+    monitor.save_state(folder,state)
+    module_spec=importlib.util.spec_from_file_location('adb_update',Path(__file__).with_name('archium-r5-adb-update.py'))
+    installer=importlib.util.module_from_spec(module_spec);module_spec.loader.exec_module(installer)
+    try:state['installation']=installer.update(state,folder/('adb-update-'+str(state['run_id'])))
+    except (ValueError,OSError,subprocess.SubprocessError) as error:
+        state['installation']={'status':'INSTALL_VERIFICATION_BLOCKED','reason':clean(error)}
+    monitor.save_state(folder,state)
 
 
 
@@ -160,10 +184,10 @@ def main():
     args=parser.parse_args();folder=args.state_dir
     lock=monitor.acquire_lock(folder);global_lock=monitor.acquire_lock(Path.home()/'.cache/archium-r5-monitor')
     try:
-        state=json.loads((folder/'state.json').read_text());monitor.validate_state(state,6)
+        state=json.loads((folder/'state.json').read_text());monitor.validate_state(state,int(state.get('max_new_runs',6)))
         state.update(monitor_pid=os.getpid(),monitor_ppid=os.getppid(),refresh_interval_seconds=600,
                      state_directory=str(folder.resolve()),monitoring_mode='WATCH_ONLY',terminal_output_tty=sys.stdout.isatty(),auto_repair='DISABLED_BY_USER',auto_continuation='DISABLED_BY_USER',
-                     auto_install='MANUAL_ONLY',codex_status='IDLE',ui_status='OPEN')
+                     auto_install=state.get('auto_install','MANUAL_ONLY'),codex_status='IDLE',ui_status='OPEN')
         monitor.save_state(folder,state);run_loop(state,folder)
     finally:
         lock.close();global_lock.close()
