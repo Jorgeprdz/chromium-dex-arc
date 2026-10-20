@@ -336,7 +336,9 @@ public final class ArcDesktopCoordinator {
                             activity.getString(R.string.arc_split_no_tabs),
                             activity.getString(R.string.arc_split_swap),
                             activity.getString(R.string.arc_split_dialog_open),
-                            activity.getString(R.string.arc_split_controls)));
+                            activity.getString(R.string.arc_split_controls),
+                            activity.getString(R.string.arc_split_focus),
+                            activity.getString(R.string.arc_split_restore)));
             mNativeTabListCoordinator.setArcSplitRequest(
                     tab -> { if (mSplitView != null) mSplitView.requestSplit(tab); },
                     () -> !mDestroyed && ArcDesktopAppearance.isDesktopWindow(mActivity));

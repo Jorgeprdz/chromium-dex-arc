@@ -24,6 +24,8 @@ chrome_java_sources = [
   "java/src/org/chromium/chrome/browser/arc/ArcSplitDividerView.java",
   "java/src/org/chromium/chrome/browser/arc/ArcSplitGeometry.java",
   "java/src/org/chromium/chrome/browser/arc/ArcSplitFrameView.java",
+  "java/src/org/chromium/chrome/browser/arc/ArcSplitResizePolicy.java",
+  "java/src/org/chromium/chrome/browser/arc/ArcSplitLinkRouter.java",
   "java/src/org/chromium/chrome/browser/arc/ArcSplitSwapAnimator.java",
   "java/src/org/chromium/chrome/browser/arc/ArcSplitViewCoordinator.java",
   "java/src/org/chromium/chrome/browser/arc/ArcOmniboxPlacement.java",

@@ -26,19 +26,27 @@ import org.chromium.chrome.browser.tabmodel.TabCreator;
 import org.chromium.chrome.browser.tabmodel.TabModel;
 import org.chromium.chrome.browser.tabmodel.TabModelObserver;
 import org.chromium.content_public.browser.LoadUrlParams;
+import org.chromium.content_public.browser.WebContents;
+import org.chromium.url.GURL;
 import org.chromium.ui.base.WindowAndroid;
 
 /** Coordinates two existing native tabs; one selected Tab remains authoritative for browser UI. */
 public final class ArcSplitViewCoordinator {
     private static final int MIN_PANE_DP = 240;
     public static final class Labels {
-        final String title, existing, newTab, exit, unsupported, noTabs, swap, blocked, controls;
+        final String title, existing, newTab, exit, unsupported, noTabs, swap, blocked, controls, focus, restore;
         public Labels(String title, String existing, String newTab, String exit,
                 String unsupported, String noTabs, String swap, String blocked) {
             this(title,existing,newTab,exit,unsupported,noTabs,swap,blocked,title);
         }
         public Labels(String title, String existing, String newTab, String exit,
                 String unsupported, String noTabs, String swap, String blocked, String controls) {
+            this(title,existing,newTab,exit,unsupported,noTabs,swap,blocked,controls,"Ampliar panel","Volver a división");
+        }
+        public Labels(String title, String existing, String newTab, String exit,
+                String unsupported, String noTabs, String swap, String blocked, String controls,
+                String focus, String restore) {
+            this.focus=focus; this.restore=restore;
             this.controls=controls;
             this.title=title; this.existing=existing; this.newTab=newTab; this.exit=exit;
             this.unsupported=unsupported; this.noTabs=noTabs; this.swap=swap; this.blocked=blocked;
@@ -57,6 +65,8 @@ public final class ArcSplitViewCoordinator {
     private final ArcSplitViewportPolicy mViewportPolicy = new ArcSplitViewportPolicy();
     private final ArcSplitState mState = new ArcSplitState();
     private final ArcSplitSwapAnimator mAnimation = new ArcSplitSwapAnimator();
+    private final ArcSplitSwapAnimator mResizeAnimation = new ArcSplitSwapAnimator();
+    private boolean mFocusedPane;
     private final ArcSplitDividerView mDivider;
     private final ArcSplitFrameView mFrame;
     private final String mStateKey;
@@ -79,9 +89,9 @@ public final class ArcSplitViewCoordinator {
         }
         @Override public void onHidden(Tab tab, int type) {
             if (mUpdating || !mState.isSplit() || type != TabHidingType.ACTIVITY_HIDDEN) return;
-            mAnimation.settle();mDivider.dismissActions();mLastViewport=null;
+            mDivider.dismissActions();mLastViewport=null;
             mBackground=true; mUpdating=true;
-            try {Tab peer=tab==mObservedLeft?mObservedRight:mObservedLeft;
+            try {mResizeAnimation.settle();mAnimation.settle();Tab peer=tab==mObservedLeft?mObservedRight:mObservedLeft;
                 if (peer!=null && !peer.isDestroyed()) peer.hide(type);
             } finally {mUpdating=false;}
             persist();
@@ -119,6 +129,9 @@ public final class ArcSplitViewCoordinator {
         mDivider=new ArcSplitDividerView(activity,this::swap,()->{
             if(mCanChangeLayout.getAsBoolean())exit();
         },this::resize,labels.controls,labels.swap,labels.exit);
+        mDivider.setBalanceAction(this::balance);
+        mDivider.setFocusAction(this::toggleFocusedPane,labels.focus);
+        ArcSplitLinkRouter.register(activity,this);
         mDivider.setVisibility(View.GONE);
         View boundary=activity.findViewById(R.id.tab_modal_dialog_container);
         if(boundary==null)boundary=activity.findViewById(R.id.tab_modal_dialog_container_stub);
@@ -220,6 +233,61 @@ public final class ArcSplitViewCoordinator {
         refresh(mDesktop);return true;
     }
 
+    public boolean canOpenLink(Tab source) {
+        TabModel model=mModelSupplier.get();
+        if(mDestroyed || mUpdating || !mDesktop || mBackground || !mCanChangeLayout.getAsBoolean()
+                || source==null || source!=mCurrent.get() || source.isDestroyed() || source.isClosing()
+                || source.isNativePage() || model==null || model!=mModel || model.getTabById(source.getId())!=source
+                || source.getProfile()==null || !Objects.equals(source.getProfile(),model.getProfile())
+                || !mHolder.canPresentArcSplit() || mHolder.getWindowVisibility()!=View.VISIBLE) return false;
+        WindowAndroid window=source.getWindowAndroid();
+        return window!=null && window.getActivity().get()==mActivity;
+    }
+    public boolean openLink(Tab source,LoadUrlParams params) {
+        if(params==null || !ArcSplitLinkRouter.isWebLink(new GURL(params.getUrl())) || !canOpenLink(source))return false;
+        mResizeAnimation.settle(); mAnimation.settle();
+        if(mState.isSplit() && (source.getId()==mState.leftId() || source.getId()==mState.rightId())) {
+            int targetId=source.getId()==mState.leftId()?mState.rightId():mState.leftId();
+            Tab target=mModel.getTabById(targetId);
+            if(!compatible(source,target))return false;
+            mFocusedPane=false;activate(targetId);
+            if(target.isDestroyed() || target.isClosing() || mModel.getTabById(targetId)!=target)return false;
+            // Standard Tab navigation owns beforeunload, downloads and external redirects.
+            target.loadUrl(params);return true;
+        }
+        TabCreator creator=mCreator.get();if(creator==null)return false;
+        Tab target;
+        mUpdating=true;
+        try { target=creator.createNewTab(params,TabLaunchType.FROM_LONGPRESS_FOREGROUND,source); }
+        finally { mUpdating=false; }
+        if(target==null)return false;
+        if(enter(source,target))activate(target.getId());
+        // A native tab was created even if presentation became unavailable; never load it twice.
+        return true;
+    }
+    public boolean adoptLink(Tab source,WebContents contents,BooleanSupplier create) {
+        if(!canOpenLink(source))return create.getAsBoolean();
+        boolean wasSplit=mState.isSplit();float ratio=mState.ratio();
+        boolean sourceOnRight=wasSplit && source.getId()==mState.rightId();
+        Tab priorPeer=wasSplit?mModel.getTabById(sourceOnRight?mState.leftId():mState.rightId()):null;
+        boolean created;
+        mUpdating=true;
+        try { created=create.getAsBoolean(); } finally { mUpdating=false; }
+        if(!created){refresh(mDesktop);return false;}
+        Tab target=null;
+        for(int i=0;i<mModel.getCount();i++) {
+            Tab candidate=mModel.getTabAt(i);
+            if(candidate!=null && !candidate.isDestroyed() && candidate.getWebContents()==contents){target=candidate;break;}
+        }
+        if(target!=null && enter(sourceOnRight?target:source,sourceOnRight?source:target)) {
+            if(wasSplit)mState.setRatio(ratio);
+            mFocusedPane=false;activate(target.getId());
+            if(priorPeer!=null && priorPeer!=source && priorPeer!=target && !priorPeer.isDestroyed() && !priorPeer.isHidden())
+                priorPeer.hide(TabHidingType.CHANGED_TABS);
+        } else { exit(); }
+        return true;
+    }
+
     private void select(Tab tab) {
         if(mModel==null || tab==null || tab.isDestroyed())return;
         for(int i=0;i<mModel.getCount();i++) {
@@ -242,10 +310,13 @@ public final class ArcSplitViewCoordinator {
         mDesktop=desktop;
         TabModel model=mModelSupplier.get();
         if(model!=mModel) {
+            // Finish callbacks against the old model; refresh from the final frame must not reenter.
+            mUpdating=true;
+            try {mResizeAnimation.settle();mAnimation.settle();} finally {mUpdating=false;}
             if(mModel!=null)persist();
             leavePresentation();unwatch();dismissPicker();
             if(mModel!=null)mModel.removeObserver(mModelObserver);
-            mState.exit();mModel=model;mRestored=false;mBackground=false;
+            mState.exit();mFocusedPane=false;mModel=model;mRestored=false;mBackground=false;
             if(model!=null)model.addObserver(mModelObserver);
         }
         if(model==null)return;
@@ -257,6 +328,16 @@ public final class ArcSplitViewCoordinator {
         Tab left=model.getTabById(mState.leftId()),right=model.getTabById(mState.rightId()),active=mCurrent.get();
         if(!compatible(left,right) || active==null || !mState.activate(active.getId())) {exit();return;}
         Rect viewport=mHolder.getArcSplitViewport();
+        if(mFocusedPane && desktop && !mBackground && !active.isHidden()
+                && mHolder.getWindowVisibility()==View.VISIBLE && mHolder.canPresentArcSplit()) {
+            leavePresentation();mDivider.setFocusedMode(true,mLabels.restore);
+            int[] at=new int[2],rootAt=new int[2];mHolder.getLocationInWindow(at);mRoot.getLocationInWindow(rootAt);
+            ViewGroup.LayoutParams raw=mDivider.getLayoutParams();
+            raw.width=dp(48);raw.height=mHolder.getHeight();mDivider.setLayoutParams(raw);
+            mDivider.setX(at[0]-rootAt[0]+viewport.right-dp(48));mDivider.setY(at[1]-rootAt[1]);
+            mDivider.setVisibility(View.VISIBLE);watch(left,right);return;
+        }
+        mDivider.setFocusedMode(false,mLabels.restore);
         if(!desktop || mBackground || active.isHidden() || mHolder.getWindowVisibility()!=View.VISIBLE
                 || viewport.width()<2*dp(MIN_PANE_DP)+2*dp(4)+dp(8) || viewport.height()<=2*dp(4) || !mHolder.canPresentArcSplit()) {
             mAnimation.settle();leavePresentation();return;
@@ -311,14 +392,25 @@ public final class ArcSplitViewCoordinator {
         mFrame.setGeometry(viewport,presentationRatio(viewport),mState.activeId()==mState.leftId());
         mFrame.setVisibility(View.VISIBLE);
     }
+    public void balance() {
+        if(mDestroyed || mFocusedPane || !mState.isSplit() || mLastViewport==null || !mCanChangeLayout.getAsBoolean())return;
+        mResizeAnimation.settle();mAnimation.settle();float start=mState.ratio();
+        mResizeAnimation.start(p->{if(!mDestroyed){mState.setRatio(start+(.5f-start)*p);refresh(mDesktop);}},this::persist);
+    }
+    public void toggleFocusedPane() {
+        if(mDestroyed || !mState.isSplit() || !mCanChangeLayout.getAsBoolean())return;
+        mResizeAnimation.settle();mAnimation.settle();mFocusedPane=!mFocusedPane;refresh(mDesktop);
+    }
+    boolean isFocusedForTesting() { return mFocusedPane; }
     private void resize(float ratio) {
-        if(!mState.isSplit() || mDestroyed)return;
+        if(!mState.isSplit() || mDestroyed || mFocusedPane || !mCanChangeLayout.getAsBoolean())return;
+        mResizeAnimation.settle();
         mAnimation.settle();mState.setRatio(ratio);refresh(mDesktop);
         mHolder.removeCallbacks(mDeferredSave);mHolder.postDelayed(mDeferredSave,150);
     }
     public void swap() {
         if(mDestroyed || !mState.isSplit() || mLastViewport==null || !mCanChangeLayout.getAsBoolean())return;
-        mAnimation.settle();mState.swap();refresh(mDesktop);persist();
+        mResizeAnimation.settle();mAnimation.settle();mState.swap();refresh(mDesktop);persist();
         mDivider.setBusy(true);mHolder.setArcSplitInputBlocked(true);
         mAnimation.start(p -> {if(!mDestroyed)mHolder.setArcSplitSwapProgress(p);},()->{
             mHolder.setArcSplitInputBlocked(false);mDivider.setBusy(false);
@@ -326,7 +418,7 @@ public final class ArcSplitViewCoordinator {
     }
     public void exit() {
         if(mDestroyed)return;
-        mAnimation.settle();leavePresentation();unwatch();mState.exit();persist();dismissPicker();
+        mResizeAnimation.settle();mAnimation.settle();mFocusedPane=false;leavePresentation();unwatch();mState.exit();persist();dismissPicker();
     }
     private void leavePresentation() {
         mViewportPolicy.clear();
@@ -400,10 +492,11 @@ public final class ArcSplitViewCoordinator {
     private void message(String text){if(!mDestroyed && !mActivity.isFinishing())Toast.makeText(mActivity,text,Toast.LENGTH_SHORT).show();}
     private int dp(int value){return Math.round(value*mActivity.getResources().getDisplayMetrics().density);}
     ArcSplitState stateForTesting(){return mState;}
-    void settleForTesting(){mAnimation.settle();}
+    void settleForTesting(){mAnimation.settle();mResizeAnimation.settle();}
     public void destroy() {
         if(mDestroyed)return;
-        persist();mDestroyed=true;mAnimation.destroy();
+        mResizeAnimation.settle();persist();mDestroyed=true;mAnimation.destroy();mResizeAnimation.destroy();
+        ArcSplitLinkRouter.unregister(mActivity,this);
         mHolder.removeCallbacks(mReconcile);mHolder.removeFrameRequestObserver(mFrameObserver);
         mHolder.removeCallbacks(mDeferredSave);mHolder.removeOnLayoutChangeListener(mLayoutListener);mRoot.removeOnLayoutChangeListener(mLayoutListener);
         mHolder.setArcSplitActivation(null);leavePresentation();unwatch();dismissPicker();

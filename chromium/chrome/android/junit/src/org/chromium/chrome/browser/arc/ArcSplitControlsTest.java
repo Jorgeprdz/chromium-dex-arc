@@ -102,6 +102,37 @@ public class ArcSplitControlsTest {
         d.buttonForTesting().performClick();assertTrue(d.isExpandedForTesting());d.destroy();
         d.buttonForTesting().performClick();assertFalse(d.isExpandedForTesting());controller.pause().stop().destroy();
     }
+    @Test public void magneticCenterCapturesAndReleasesWithoutForcingQuarterRatios() {
+        assertEquals(.5f,ArcSplitResizePolicy.snap(.48f,false),0f);
+        assertEquals(.5f,ArcSplitResizePolicy.snap(.54f,true),0f);
+        assertEquals(.55f,ArcSplitResizePolicy.snap(.55f,true),0f);
+        assertEquals(.25f,ArcSplitResizePolicy.snap(.25f,false),0f);
+        assertEquals(.75f,ArcSplitResizePolicy.snap(.75f,false),0f);
+    }
+    @Test public void expandedGripStaysUnderPointerWhenFocusActionIsPresent() {
+        var controller=Robolectric.buildActivity(Activity.class).setup();Activity a=controller.get();
+        FrameLayout root=new FrameLayout(a);a.setContentView(root);
+        ArcSplitDividerView d=new ArcSplitDividerView(a,()->{},()->{},r->{},"Options","Swap","Exit");
+        d.setFocusAction(()->{},"Focus");root.addView(d,new FrameLayout.LayoutParams(48,600));
+        root.measure(android.view.View.MeasureSpec.makeMeasureSpec(1000,1073741824),android.view.View.MeasureSpec.makeMeasureSpec(600,1073741824));
+        root.layout(0,0,1000,600);d.setX(136);d.buttonForTesting().performClick();
+        var params=(android.view.WindowManager.LayoutParams)d.swapForTesting().getRootView().getLayoutParams();
+        int[] at=new int[2];d.buttonForTesting().getLocationInWindow(at);
+        assertEquals(at[0]+d.buttonForTesting().getWidth()/2,params.x+60);
+        d.destroy();controller.pause().stop().destroy();
+    }
+    @Test public void doubleTapAcrossCompactAndExpandedGripBalancesOnce() {
+        var controller=Robolectric.buildActivity(Activity.class).setup();Activity a=controller.get();AtomicInteger balances=new AtomicInteger();
+        ArcSplitDividerView d=new ArcSplitDividerView(a,()->fail("swap"),()->fail("exit"),r->{},"Options","Swap","Exit");
+        d.setBalanceAction(balances::incrementAndGet);a.setContentView(d);d.layout(0,0,48,600);d.setGeometry(.7f,1000);
+        long t=android.os.SystemClock.uptimeMillis();
+        android.view.View compact=d.buttonForTesting();
+        for(int action:new int[]{0,1}){var e=android.view.MotionEvent.obtain(t,t+(action==0?0:10),action,14,22,0);compact.dispatchTouchEvent(e);e.recycle();}
+        assertTrue(d.isExpandedForTesting());
+        android.view.View expanded=((android.view.ViewGroup)d.swapForTesting().getParent()).getChildAt(1);
+        for(int action:new int[]{0,1}){var e=android.view.MotionEvent.obtain(t+80,t+(action==0?80:90),action,14,22,0);expanded.dispatchTouchEvent(e);e.recycle();}
+        assertEquals(1,balances.get());assertFalse(d.isExpandedForTesting());d.destroy();controller.pause().stop().destroy();
+    }
     @Test public void frameUsesThemeAndSharedGeometryWithoutInterceptingPageTouches() {
         Activity a=Robolectric.buildActivity(Activity.class).setup().get();ArcSplitFrameView frame=new ArcSplitFrameView(a);
         frame.setAppearance(0xff789abc);frame.setGeometry(new android.graphics.Rect(216,0,1216,600),.5f,true);

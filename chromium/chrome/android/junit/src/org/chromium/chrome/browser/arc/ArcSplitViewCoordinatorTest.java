@@ -35,7 +35,9 @@ public class ArcSplitViewCoordinatorTest {
         TabModel model=mock(TabModel.class);
         TabCreator creator=mock(TabCreator.class);
         Tab one=mock(Tab.class),two=mock(Tab.class),other=mock(Tab.class);
+        AtomicReference<TabModel> suppliedModel=new AtomicReference<>(model);
         AtomicReference<Tab> current=new AtomicReference<>(one);
+        java.util.concurrent.atomic.AtomicBoolean allowed=new java.util.concurrent.atomic.AtomicBoolean(true);
         ArcSplitViewCoordinator coordinator;
         android.content.SharedPreferences prefs=a.getSharedPreferences("split-fixture-"+System.nanoTime(),0);
         Fixture() {this(null,false);}
@@ -53,7 +55,7 @@ public class ArcSplitViewCoordinatorTest {
             when(holder.setArcSplitTabs(any(),any(),anyFloat(),anyInt())).thenReturn(true);
             doAnswer(call->{current.set(tabs[(int)call.getArgument(0)]);return null;}).when(model).setIndex(anyInt(),anyInt());
             if(saved!=null)prefs.edit().putString("arc_split_task_"+a.getTaskId(),saved).apply();
-            coordinator=new ArcSplitViewCoordinator(a,root,holder,()->model,()->creator,current::get,()->{},()->true,
+            coordinator=new ArcSplitViewCoordinator(a,root,holder,suppliedModel::get,()->creator,current::get,()->{},allowed::get,
                 prefs,new ArcSplitViewCoordinator.Labels("Split","Existing","New","Exit","Unsupported","No tabs","Swap","Close dialog first"));
             coordinator.refresh(true);
         }
@@ -93,6 +95,58 @@ public class ArcSplitViewCoordinatorTest {
         assertTrue(f.coordinator.stateForTesting().isSplit());
         when(f.holder.getArcSplitViewport()).thenReturn(new android.graphics.Rect(0,0,1100,800));f.coordinator.refresh(true);
         verify(f.holder).setArcSplitTabs(f.one,f.two,.5f,17);f.close();
+    }
+    @Test public void balanceAndTemporaryFocusPreservePairAndRatio() {
+        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));f.coordinator.stateForTesting().setRatio(.7f);
+        f.coordinator.activate(18);f.coordinator.toggleFocusedPane();assertTrue(f.coordinator.isFocusedForTesting());
+        assertTrue(f.coordinator.stateForTesting().isSplit());assertEquals(.7f,f.coordinator.stateForTesting().ratio(),.001f);
+        assertSame(f.two,f.current.get());verify(f.holder,atLeastOnce()).clearArcSplitTabs();
+        f.coordinator.toggleFocusedPane();assertFalse(f.coordinator.isFocusedForTesting());
+        assertEquals(.7f,f.coordinator.stateForTesting().ratio(),.001f);assertEquals(18,f.coordinator.stateForTesting().activeId());
+        f.coordinator.balance();f.coordinator.settleForTesting();assertEquals(.5f,f.coordinator.stateForTesting().ratio(),0f);
+        verify(f.one,never()).reload();verify(f.two,never()).reload();f.close();
+    }
+    @Test public void linkOpeningCreatesNativeTabOrNavigatesNeighborWithOriginalParams() {
+        Fixture f=new Fixture();var p=new org.chromium.content_public.browser.LoadUrlParams("https://example.test/item");
+        when(f.creator.createNewTab(same(p),anyInt(),eq(f.one))).thenReturn(f.other);
+        assertTrue(f.coordinator.openLink(f.one,p));assertEquals(19,f.coordinator.stateForTesting().rightId());assertSame(f.other,f.current.get());
+        clearInvocations(f.creator);var next=new org.chromium.content_public.browser.LoadUrlParams("https://example.test/second");
+        assertTrue(f.coordinator.openLink(f.other,next));verify(f.one).loadUrl(same(next));verifyNoInteractions(f.creator);
+        assertSame(f.one,f.current.get());assertEquals(19,f.coordinator.stateForTesting().rightId());f.close();
+    }
+    @Test public void staleOrBlockedSourceAndExternalSchemesCannotUseLinkRoute() {
+        Fixture f=new Fixture();var url=new org.chromium.url.GURL("https://example.test/item");
+        assertTrue(ArcSplitLinkRouter.canOpen(f.one,url));assertFalse(ArcSplitLinkRouter.canOpen(f.one,new org.chromium.url.GURL("mailto:test@example.test")));
+        f.allowed.set(false);assertFalse(f.coordinator.openLink(f.one,new org.chromium.content_public.browser.LoadUrlParams(url.getSpec())));
+        verifyNoInteractions(f.creator);f.allowed.set(true);f.current.set(f.two);
+        assertFalse(ArcSplitLinkRouter.canOpen(f.one,url));f.current.set(f.one);when(f.one.isClosing()).thenReturn(true);
+        assertFalse(ArcSplitLinkRouter.canOpen(f.one,url));f.close();assertFalse(ArcSplitLinkRouter.canOpen(f.two,url));
+    }
+    @Test public void balanceCannotOverwriteNewModelPairAfterModelSwitch() {
+        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));f.coordinator.stateForTesting().setRatio(.7f);f.coordinator.balance();
+        TabModel replacement=mock(TabModel.class);when(replacement.getProfile()).thenReturn(f.profile);
+        when(replacement.isTabModelRestored()).thenReturn(true);when(replacement.getCount()).thenReturn(2);
+        when(replacement.getTabAt(0)).thenReturn(f.one);when(replacement.getTabAt(1)).thenReturn(f.two);
+        when(replacement.getTabById(17)).thenReturn(f.one);when(replacement.getTabById(18)).thenReturn(f.two);
+        f.suppliedModel.set(replacement);f.coordinator.refresh(true);assertTrue(f.coordinator.stateForTesting().isSplit());
+        f.coordinator.stateForTesting().setRatio(.3f);f.coordinator.settleForTesting();
+        assertEquals(.3f,f.coordinator.stateForTesting().ratio(),.001f);f.close();
+    }
+    @Test public void nativeLinkPreservesHeadersBodyAndRendererFlag() {
+        Fixture f=new Fixture();var body=mock(org.chromium.content_public.common.ResourceRequestBody.class);
+        when(f.creator.createNewTab(any(),anyInt(),eq(f.one))).thenReturn(f.other);
+        assertTrue(ArcSplitLinkRouter.openNative(f.one,new org.chromium.url.GURL("https://example.test/item"),"X-Test: fixture",body,true));
+        ArgumentCaptor<org.chromium.content_public.browser.LoadUrlParams> params=ArgumentCaptor.forClass(org.chromium.content_public.browser.LoadUrlParams.class);
+        verify(f.creator).createNewTab(params.capture(),anyInt(),eq(f.one));
+        assertEquals("X-Test: fixture",params.getValue().getVerbatimHeaders());assertSame(body,params.getValue().getPostData());assertTrue(params.getValue().getIsRendererInitiated());f.close();
+    }
+    @Test public void rendererCreatedContentsKeepNativeIdentityAndPriorNeighborTabAlive() {
+        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));f.coordinator.stateForTesting().setRatio(.7f);
+        var contents=mock(org.chromium.content_public.browser.WebContents.class);when(f.other.getWebContents()).thenReturn(contents);
+        assertTrue(f.coordinator.adoptLink(f.one,contents,()->{f.current.set(f.other);return true;}));
+        assertEquals(17,f.coordinator.stateForTesting().leftId());assertEquals(19,f.coordinator.stateForTesting().rightId());
+        assertEquals(.7f,f.coordinator.stateForTesting().ratio(),.001f);assertSame(f.other,f.current.get());verifyNoInteractions(f.creator);
+        verify(f.two).hide(org.chromium.chrome.browser.tab.TabHidingType.CHANGED_TABS);verify(f.two,never()).reload();f.close();
     }
     @Test public void wrongProfileOrNativePageCannotReplaceExistingPair() {
         Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));

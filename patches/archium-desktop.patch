@@ -22,7 +22,7 @@ diff --git a/chrome/android/chrome_java_resources.gni b/chrome/android/chrome_ja
 diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java_sources.gni
 --- a/chrome/android/chrome_java_sources.gni
 +++ b/chrome/android/chrome_java_sources.gni
-@@ -5,6 +5,32 @@
+@@ -5,6 +5,34 @@
  import("//content/public/common/features.gni")
 
  chrome_java_sources = [
@@ -45,6 +45,8 @@ diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java
 +  "java/src/org/chromium/chrome/browser/arc/ArcSplitDividerView.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcSplitGeometry.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcSplitFrameView.java",
++  "java/src/org/chromium/chrome/browser/arc/ArcSplitResizePolicy.java",
++  "java/src/org/chromium/chrome/browser/arc/ArcSplitLinkRouter.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcSplitSwapAnimator.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcSplitViewCoordinator.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcOmniboxPlacement.java",
@@ -1413,6 +1415,55 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/scen
          void setTabContentManager(
                  long nativeStaticTabSceneLayer, TabContentManager tabContentManager);
      }
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/contextmenu/ChromeContextMenuPopulator.java b/chrome/android/java/src/org/chromium/chrome/browser/contextmenu/ChromeContextMenuPopulator.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/contextmenu/ChromeContextMenuPopulator.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/contextmenu/ChromeContextMenuPopulator.java
+@@ -80,6 +80,8 @@
+ import org.chromium.chrome.browser.share.qrcode.QrCodeCoordinator;
+ import org.chromium.chrome.browser.share.send_tab_to_self.SendTabToSelfAndroidBridge;
+ import org.chromium.chrome.browser.tab.Tab;
++import org.chromium.chrome.browser.arc.ArcSplitLinkRouter;
++import org.chromium.content_public.browser.LoadUrlParams;
+ import org.chromium.chrome.browser.tab.TabContextMenuItemDelegate;
+ import org.chromium.chrome.browser.tab.TabUtils;
+ import org.chromium.chrome.browser.translate.TranslateBridge;
+@@ -629,6 +631,11 @@
+                     ListItem openInNewTabInGroupItem =
+                             createManagedListItem(Item.OPEN_IN_NEW_TAB_IN_GROUP, isIncognitoForced);
+                     linkGroup.add(openInNewTabItem);
++                    if (!isIncognitoForced && ArcSplitLinkRouter.canOpen(getTab(), mParams.getUrl())) {
++                        linkGroup.add(new ListItem(ListItemType.MENU_ITEM,
++                                buildListItemModel(mContext.getString(R.string.arc_split_open_link),
++                                        R.id.arc_split_open_link, true)));
++                    }
+                     linkGroup.add(openInNewTabInGroupItem);
+                     if (!mItemDelegate.isIncognito()
+                             && mItemDelegate.isIncognitoSupported()
+@@ -991,6 +998,7 @@
+
+     @Override
+     public boolean onItemSelected(int itemId) {
++        if (itemId == R.id.arc_split_open_link) { openArcSplitLink(); return true; }
+         if (ChromeFeatureList.sCctContextualMenuItems.isEnabled()
+                 && mCustomActionMap.get(itemId) != null) {
+             final CustomContentAction action = mCustomActionMap.get(itemId);
+@@ -1701,6 +1709,16 @@
+         }
+     }
+
++    private void openArcSplitLink() {
++        Tab source = getTab();
++        if (!ArcSplitLinkRouter.canOpen(source, mParams.getUrl())) return;
++        LoadUrlParams params = new LoadUrlParams(mParams.getUrl().getSpec());
++        params.setReferrer(mParams.getReferrer());
++        params.setAdditionalNavigationParams(mParams.takeAdditionalNavigationParams());
++        params.setHasUserGesture(true);
++        ArcSplitLinkRouter.open(source, params);
++    }
++
+     private @Nullable Tab getTab() {
+         if (mItemDelegate instanceof TabContextMenuItemDelegate tabDelegate) {
+             return tabDelegate.getTab();
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/modaldialog/ChromeTabModalPresenter.java b/chrome/android/java/src/org/chromium/chrome/browser/modaldialog/ChromeTabModalPresenter.java
 --- a/chrome/android/java/src/org/chromium/chrome/browser/modaldialog/ChromeTabModalPresenter.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/modaldialog/ChromeTabModalPresenter.java
@@ -1675,6 +1726,42 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/settings/MainSe
      private void updateAppearancePreference() {
          Preference pref = findPreference(PREF_APPEARANCE);
          pref.setTitle(AppearanceSettingsFragment.getTitle(getContext()));
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tab/TabWebContentsDelegateAndroidImpl.java b/chrome/android/java/src/org/chromium/chrome/browser/tab/TabWebContentsDelegateAndroidImpl.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/tab/TabWebContentsDelegateAndroidImpl.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/tab/TabWebContentsDelegateAndroidImpl.java
+@@ -29,6 +29,8 @@
+ import org.chromium.build.annotations.NullMarked;
+ import org.chromium.build.annotations.Nullable;
+ import org.chromium.chrome.R;
++import org.chromium.chrome.browser.arc.ArcSplitLinkRouter;
++import org.chromium.ui.mojom.WindowOpenDisposition;
+ import org.chromium.chrome.browser.ZoomController;
+ import org.chromium.chrome.browser.app.bluetooth.BluetoothNotificationService;
+ import org.chromium.chrome.browser.app.serial.SerialNotificationService;
+@@ -147,6 +149,12 @@
+             WindowFeatures windowFeatures,
+             boolean userGesture,
+             @Nullable PictureInPictureWindowOptions pictureInPictureWindowOptions) {
++        if (disposition == WindowOpenDisposition.NEW_SPLIT_VIEW) {
++            return ArcSplitLinkRouter.create(mTab, targetUrl, webContents,
++                    () -> mDelegate.addNewContents(sourceWebContents, webContents, targetUrl,
++                            WindowOpenDisposition.NEW_FOREGROUND_TAB, windowFeatures, userGesture,
++                            pictureInPictureWindowOptions));
++        }
+         return mDelegate.addNewContents(
+                 sourceWebContents,
+                 webContents,
+@@ -171,6 +179,10 @@
+             ResourceRequestBody postData,
+             int disposition,
+             boolean isRendererInitiated) {
++        if (disposition == WindowOpenDisposition.NEW_SPLIT_VIEW) {
++            if (ArcSplitLinkRouter.openNative(mTab, url, extraHeaders, postData, isRendererInitiated)) return;
++            disposition = WindowOpenDisposition.NEW_FOREGROUND_TAB;
++        }
+         mDelegate.openNewTab(url, extraHeaders, postData, disposition, isRendererInitiated);
+     }
+
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java
 --- a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java
@@ -4200,6 +4287,29 @@ diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrom
          return ChromeSharedPreferences.getInstance()
                  .readBoolean(ChromePreferenceKeys.VERTICAL_TABS_ENABLED, defaultValue);
      }
+diff --git a/components/embedder_support/android/delegate/web_contents_delegate_android.cc b/components/embedder_support/android/delegate/web_contents_delegate_android.cc
+--- a/components/embedder_support/android/delegate/web_contents_delegate_android.cc
++++ b/components/embedder_support/android/delegate/web_contents_delegate_android.cc
+@@ -134,7 +134,8 @@
+   if (!source || (disposition != WindowOpenDisposition::CURRENT_TAB &&
+                   disposition != WindowOpenDisposition::NEW_FOREGROUND_TAB &&
+                   disposition != WindowOpenDisposition::NEW_BACKGROUND_TAB &&
+-                  disposition != WindowOpenDisposition::OFF_THE_RECORD)) {
++                  disposition != WindowOpenDisposition::OFF_THE_RECORD &&
++                  disposition != WindowOpenDisposition::NEW_SPLIT_VIEW)) {
+     NOTIMPLEMENTED();
+     return NULL;
+   }
+@@ -148,7 +149,8 @@
+
+   if (disposition == WindowOpenDisposition::NEW_FOREGROUND_TAB ||
+       disposition == WindowOpenDisposition::NEW_BACKGROUND_TAB ||
+-      disposition == WindowOpenDisposition::OFF_THE_RECORD) {
++      disposition == WindowOpenDisposition::OFF_THE_RECORD ||
++      disposition == WindowOpenDisposition::NEW_SPLIT_VIEW) {
+     ScopedJavaLocalRef<jobject> java_gurl =
+         url::GURLAndroid::FromNativeGURL(env, url);
+     ScopedJavaLocalRef<jstring> extra_headers =
 diff --git a/components/javascript_dialogs/android/java/src/org/chromium/components/javascript_dialogs/JavascriptModalDialog.java b/components/javascript_dialogs/android/java/src/org/chromium/components/javascript_dialogs/JavascriptModalDialog.java
 --- a/components/javascript_dialogs/android/java/src/org/chromium/components/javascript_dialogs/JavascriptModalDialog.java
 +++ b/components/javascript_dialogs/android/java/src/org/chromium/components/javascript_dialogs/JavascriptModalDialog.java
@@ -5471,7 +5581,7 @@ diff --git a/chrome/android/java/res/values/arc_strings.xml b/chrome/android/jav
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/res/values/arc_strings.xml
-@@ -0,0 +1,78 @@
+@@ -0,0 +1,82 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<resources>
 +    <string name="arc_about">Acerca de Archium</string>
@@ -5546,6 +5656,10 @@ new file mode 100644
 +    <string name="arc_split_exit">Salir de vista dividida</string>
 +    <string name="arc_split_unsupported">Esta combinación de páginas no admite vista dividida.</string>
 +    <string name="arc_split_no_tabs">No hay otra pestaña compatible abierta.</string>
++    <string name="arc_split_focus">Ampliar panel</string>
++    <string name="arc_split_restore">Volver a división</string>
++    <string name="arc_split_open_link">Abrir en pestaña dividida</string>
++    <item type="id" name="arc_split_open_link" />
 +    <string name="arc_split_controls">Arrastra para redimensionar; pulsa para ver opciones</string>
 +    <string name="arc_split_swap">Intercambiar paneles</string>
 +    <string name="arc_split_dialog_open">Cierra el diálogo actual antes de cambiar la vista.</string>
@@ -7125,7 +7239,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopC
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
-@@ -0,0 +1,1441 @@
+@@ -0,0 +1,1443 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -7464,7 +7578,9 @@ new file mode 100644
 +                            activity.getString(R.string.arc_split_no_tabs),
 +                            activity.getString(R.string.arc_split_swap),
 +                            activity.getString(R.string.arc_split_dialog_open),
-+                            activity.getString(R.string.arc_split_controls)));
++                            activity.getString(R.string.arc_split_controls),
++                            activity.getString(R.string.arc_split_focus),
++                            activity.getString(R.string.arc_split_restore)));
 +            mNativeTabListCoordinator.setArcSplitRequest(
 +                    tab -> { if (mSplitView != null) mSplitView.requestSplit(tab); },
 +                    () -> !mDestroyed && ArcDesktopAppearance.isDesktopWindow(mActivity));
@@ -9887,7 +10003,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitDiv
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitDividerView.java
-@@ -0,0 +1,269 @@
+@@ -0,0 +1,358 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -9904,6 +10020,8 @@ new file mode 100644
 +import android.graphics.drawable.Drawable;
 +import android.graphics.drawable.GradientDrawable;
 +import android.view.Gravity;
++import android.view.GestureDetector;
++import android.graphics.drawable.StateListDrawable;
 +import android.view.KeyEvent;
 +import android.view.PointerIcon;
 +import android.view.MotionEvent;
@@ -9921,6 +10039,13 @@ new file mode 100644
 +    private final ImageButton mButton;
 +    private final Consumer<Float> mResize;
 +    private final Runnable mSwap, mExit;
++    private Runnable mBalance, mFocus;
++    private String mFocusLabel;
++    private final String mControlsLabel;
++    private boolean mFocused, mMagnetic;
++    private final GestureDetector mTaps;
++    private View mTapTarget;
++    private ValueAnimator mGlow;
 +    private final String mSwapLabel, mExitLabel;
 +    private PopupWindow mPopup;
 +    private View mActions, mSwapButton, mExitButton;
@@ -9934,6 +10059,20 @@ new file mode 100644
 +            Consumer<Float> resize, String label, String swapLabel, String exitLabel) {
 +        super(context);
 +        mResize = resize; mSwap = swap; mExit = exit;
++        mControlsLabel = label; mBalance = () -> mResize.accept(.5f);
++        mTaps = new GestureDetector(context, new GestureDetector.SimpleOnGestureListener() {
++            @Override public boolean onDown(MotionEvent e) { return true; }
++            @Override public boolean onSingleTapUp(MotionEvent e) {
++                if (!mBusy && !mDestroyed && mTapTarget != null) mTapTarget.performClick();
++                return true;
++            }
++            @Override public boolean onDoubleTap(MotionEvent e) {
++                if (!mBusy && !mDestroyed && !mFocused) {
++                    dismissActions(); mBalance.run(); pulseCenter();
++                }
++                return true;
++            }
++        });
 +        mSwapLabel = swapLabel; mExitLabel = exitLabel;
 +        mSlop = ViewConfiguration.get(context).getScaledTouchSlop();
 +        mButton = new ImageButton(context);
@@ -9946,7 +10085,14 @@ new file mode 100644
 +        mButton.setContentDescription(label);
 +        mButton.setTooltipText(label);
 +        mButton.setElevation(dp(2));
-+        mButton.setOnClickListener(v -> { if (!mBusy && !mDestroyed) toggleActions(); });
++        mButton.setOnClickListener(v -> {
++            if (!mBusy && !mDestroyed) { if (mFocused && mFocus != null) mFocus.run(); else toggleActions(); }
++        });
++        mButton.setOnTouchListener(this::onGripTouch);
++        mButton.setOnHoverListener((v,e) -> {
++            capsule.setColor(e.getActionMasked()==MotionEvent.ACTION_HOVER_EXIT ? Color.WHITE : 0xfff3f4f6);
++            return false;
++        });
 +        mButton.setPointerIcon(PointerIcon.getSystemIcon(context, PointerIcon.TYPE_HORIZONTAL_DOUBLE_ARROW));
 +        setPointerIcon(PointerIcon.getSystemIcon(context, PointerIcon.TYPE_HORIZONTAL_DOUBLE_ARROW));
 +        addView(mButton, new LayoutParams(dp(28), dp(44), Gravity.CENTER));
@@ -9954,6 +10100,17 @@ new file mode 100644
 +        setClipToPadding(false);
 +    }
 +
++    public void setBalanceAction(Runnable balance) { mBalance = balance; }
++    public void setFocusAction(Runnable focus, String label) { mFocus = focus; mFocusLabel = label; }
++    public void setFocusedMode(boolean focused, String restoreLabel) {
++        if (mFocused == focused) return;
++        dismissActions(); mFocused = focused;
++        mButton.setImageDrawable(new ControlIcon(focused ? 3 : 0));
++        mButton.setContentDescription(focused ? restoreLabel : mControlsLabel);
++        mButton.setTooltipText(focused ? restoreLabel : mControlsLabel);
++        mButton.setPointerIcon(PointerIcon.getSystemIcon(getContext(), focused
++                ? PointerIcon.TYPE_HAND : PointerIcon.TYPE_HORIZONTAL_DOUBLE_ARROW));
++    }
 +    public void setGeometry(float ratio, int viewportWidth) {
 +        mRatio = ratio;
 +        mViewportWidth = viewportWidth;
@@ -9961,7 +10118,7 @@ new file mode 100644
 +    }
 +    public void setBusy(boolean busy) {
 +        mBusy = busy; mButton.setEnabled(!busy);
-+        if (busy) dismissActions();
++        if (busy) { dismissActions(); stopGlow(); }
 +    }
 +    private void toggleActions() {
 +        if (isExpanded()) { dismissActions(); return; }
@@ -9978,16 +10135,18 @@ new file mode 100644
 +        };
 +        actions.setGravity(Gravity.CENTER);
 +        GradientDrawable bg = new GradientDrawable(); bg.setColor(Color.WHITE); bg.setCornerRadius(dp(24));
-+        actions.setBackground(bg); actions.setElevation(dp(4));
++        actions.setBackground(bg); actions.setElevation(dp(4)); actions.setClipToOutline(true);
 +        mSwapButton = action(new ControlIcon(1), mSwapLabel, mSwap);
 +        mExitButton = action(new ControlIcon(2), mExitLabel, mExit);
 +        ImageButton grip = action(new ControlIcon(0), mButton.getContentDescription().toString(), () -> {});
-+        grip.setOnTouchListener((v, event) -> onExpandedGripTouch(event));
++        grip.setOnTouchListener(this::onGripTouch);
 +        actions.addView(mSwapButton, new LinearLayout.LayoutParams(dp(44), dp(48)));
 +        actions.addView(grip, new LinearLayout.LayoutParams(dp(32), dp(48)));
++        if (mFocus != null) actions.addView(action(new ControlIcon(3),mFocusLabel,mFocus),
++                new LinearLayout.LayoutParams(dp(44),dp(48)));
 +        actions.addView(mExitButton, new LinearLayout.LayoutParams(dp(44), dp(48)));
 +        mActions = actions;
-+        PopupWindow popup = new PopupWindow(actions, dp(120), dp(48), true);
++        PopupWindow popup = new PopupWindow(actions, actionWidth(), dp(48), true);
 +        mPopup = popup; popup.setBackgroundDrawable(bg); popup.setOutsideTouchable(true);
 +        popup.setElevation(dp(4)); popup.setAnimationStyle(0);
 +        actions.setFocusableInTouchMode(true);
@@ -10005,40 +10164,55 @@ new file mode 100644
 +            actions.animate().scaleX(1f).alpha(1f).setDuration(150).start();
 +        }
 +    }
++    private int actionWidth() { return dp(mFocus != null ? 164 : 120); }
 +    private int[] actionPosition() {
 +        int[] at = new int[2]; mButton.getLocationInWindow(at);
 +        int[] root = new int[2]; getRootView().getLocationInWindow(root);
 +        return new int[] {
 +            Math.max(root[0], Math.min(at[0] + mButton.getWidth()/2 - dp(60),
-+                    root[0] + getRootView().getWidth() - dp(120))),
++                    root[0] + getRootView().getWidth() - actionWidth())),
 +            Math.max(root[1], Math.min(at[1] + mButton.getHeight()/2 - dp(24),
 +                    root[1] + getRootView().getHeight() - dp(48)))
 +        };
 +    }
-+    private boolean onExpandedGripTouch(MotionEvent event) {
-+        if (mBusy || mDestroyed || mViewportWidth <= 0) return false;
-+        switch (event.getActionMasked()) {
-+            case MotionEvent.ACTION_DOWN:
-+                mDownX = event.getRawX(); mStartRatio = mRatio; mDragging = false;
-+                return false; // Preserve the button's normal click to collapse.
-+            case MotionEvent.ACTION_MOVE:
-+                if (mDragging || Math.abs(event.getRawX()-mDownX) > mSlop) {
-+                    mDragging = true; resizeTo(event.getRawX()); return true;
-+                }
-+                return false;
-+            case MotionEvent.ACTION_UP:
-+            case MotionEvent.ACTION_CANCEL:
-+                if (mDragging) { mDragging = false; dismissActions(); return true; }
-+                return false;
-+            default: return false;
++    private boolean onGripTouch(View grip, MotionEvent event) {
++        if (mBusy || mDestroyed) return false;
++        int action = event.getActionMasked();
++        if (action == MotionEvent.ACTION_DOWN) {
++            mTapTarget = grip; mDownX = event.getRawX(); mStartRatio = mRatio;
++            mDragging = false; mMagnetic = false; grip.setPressed(true);
 +        }
++        if (!mFocused && action == MotionEvent.ACTION_MOVE && mViewportWidth > 0
++                && (mDragging || Math.abs(event.getRawX()-mDownX) > mSlop)) {
++            mDragging = true; resizeTo(event.getRawX()); return true;
++        }
++        if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
++            grip.setPressed(false);
++            if (mDragging) {
++                mDragging = false;
++                MotionEvent cancel = MotionEvent.obtain(event); cancel.setAction(MotionEvent.ACTION_CANCEL);
++                mTaps.onTouchEvent(cancel); cancel.recycle(); dismissActions(); return true;
++            }
++        }
++        MotionEvent screen = MotionEvent.obtain(event);
++        screen.setLocation(event.getRawX(),event.getRawY());
++        boolean handled = mTaps.onTouchEvent(screen); screen.recycle(); return handled;
 +    }
 +    private void resizeTo(float rawX) {
-+        mResize.accept(Math.max(.2f, Math.min(.8f, mStartRatio + (rawX-mDownX)/mViewportWidth)));
++        float ratio = ArcSplitResizePolicy.snap(mStartRatio + (rawX-mDownX)/mViewportWidth,mMagnetic);
++        boolean capture = ratio == .5f;
++        if (capture && !mMagnetic) pulseCenter();
++        mMagnetic = capture; mResize.accept(ratio);
 +    }
 +    private ImageButton action(Drawable icon, String label, Runnable action) {
 +        ImageButton button = new ImageButton(getContext());
-+        button.setBackgroundColor(Color.TRANSPARENT); button.setImageDrawable(icon);
++        StateListDrawable states = new StateListDrawable();
++        for (int state : new int[]{android.R.attr.state_pressed,android.R.attr.state_focused,android.R.attr.state_hovered}) {
++            GradientDrawable highlight = new GradientDrawable(); highlight.setColor(0x12000000); highlight.setCornerRadius(dp(12));
++            states.addState(new int[]{state},highlight);
++        }
++        states.addState(new int[]{},new android.graphics.drawable.ColorDrawable(Color.TRANSPARENT));
++        button.setBackground(states); button.setImageDrawable(icon);
 +        button.setPadding(dp(12), dp(12), dp(12), dp(12));
 +        button.setContentDescription(label); button.setTooltipText(label);
 +        button.setPointerIcon(PointerIcon.getSystemIcon(getContext(), PointerIcon.TYPE_HAND));
@@ -10048,12 +10222,35 @@ new file mode 100644
 +        });
 +        return button;
 +    }
++    private void cancelGestures() {
++        if (mTaps != null) {
++            long now=android.os.SystemClock.uptimeMillis();
++            MotionEvent cancel=MotionEvent.obtain(now,now,MotionEvent.ACTION_CANCEL,0,0,0);
++            mTaps.onTouchEvent(cancel);cancel.recycle();
++        }
++        if(mButton!=null)mButton.setPressed(false);
++        mTapTarget=null;mDragging=false;
++    }
++    private void stopGlow() {
++        if (mGlow != null) { mGlow.cancel(); mGlow = null; }
++        if (mButton != null && mButton.getBackground() instanceof GradientDrawable bg) bg.setStroke(0,Color.TRANSPARENT);
++    }
++    private void pulseCenter() {
++        stopGlow();
++        if (!ValueAnimator.areAnimatorsEnabled()) return;
++        mGlow = ValueAnimator.ofInt(150,0); mGlow.setDuration(180);
++        mGlow.addUpdateListener(a -> {
++            if (mButton.getBackground() instanceof GradientDrawable bg)
++                bg.setStroke(dp(1),Color.argb((Integer)a.getAnimatedValue(),70,105,135));
++        });
++        mGlow.start();
++    }
 +    public void dismissActions() {
 +        if (mActions != null) mActions.animate().cancel();
 +        if (mPopup != null) mPopup.dismiss();
 +        mPopup = null; mActions = null;
 +    }
-+    public void destroy() { mDestroyed = true; dismissActions(); mButton.setOnClickListener(null); }
++    public void destroy() { mDestroyed = true; cancelGestures(); stopGlow(); dismissActions(); mButton.setOnClickListener(null); }
 +    boolean isExpanded() { return mPopup != null && mPopup.isShowing(); }
 +    boolean isExpandedForTesting() { return isExpanded(); }
 +    View swapForTesting() { return mSwapButton; }
@@ -10066,13 +10263,13 @@ new file mode 100644
 +    }
 +    @Override protected void onVisibilityChanged(View changed, int visibility) {
 +        super.onVisibilityChanged(changed, visibility);
-+        if (visibility != VISIBLE) dismissActions();
++        if (visibility != VISIBLE) { dismissActions(); stopGlow(); cancelGestures(); }
 +    }
 +    @Override protected void onWindowVisibilityChanged(int visibility) {
 +        super.onWindowVisibilityChanged(visibility);
-+        if (visibility != VISIBLE) dismissActions();
++        if (visibility != VISIBLE) { dismissActions(); stopGlow(); cancelGestures(); }
 +    }
-+    @Override protected void onDetachedFromWindow() { dismissActions(); super.onDetachedFromWindow(); }
++    @Override protected void onDetachedFromWindow() { dismissActions(); stopGlow(); cancelGestures(); super.onDetachedFromWindow(); }
 +    View buttonForTesting() { return mButton; }
 +
 +    @Override protected void onLayout(boolean changed, int l, int t, int r, int b) {
@@ -10081,13 +10278,14 @@ new file mode 100644
 +        mButton.getHitRect(target);
 +        target.inset(-dp(10), -dp(6));
 +        setTouchDelegate(new TouchDelegate(target, mButton));
++        if (isExpanded()) { int[] at=actionPosition(); mPopup.update(at[0],at[1],-1,-1); }
 +    }
 +
 +    @Override public boolean onInterceptTouchEvent(MotionEvent event) {
-+        if (mBusy || mDestroyed) return false;
++        if (mBusy || mDestroyed || mFocused) return false;
 +        switch (event.getActionMasked()) {
 +            case MotionEvent.ACTION_DOWN:
-+                mDownX = event.getRawX(); mStartRatio = mRatio; mDragging = false;
++                mDownX = event.getRawX(); mStartRatio = mRatio; mDragging = false; mMagnetic = false;
 +                mResizeTarget = Math.abs(event.getX()-getWidth()/2f) <= dp(4)
 +                        || (event.getY() >= mButton.getTop()-dp(6) && event.getY() <= mButton.getBottom()+dp(6));
 +                break;
@@ -10103,7 +10301,7 @@ new file mode 100644
 +    }
 +
 +    @Override public boolean onTouchEvent(MotionEvent event) {
-+        if (mBusy || mDestroyed || mViewportWidth <= 0) return false;
++        if (mBusy || mDestroyed || mFocused || mViewportWidth <= 0) return false;
 +        if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
 +            if (!mResizeTarget) return false;
 +            mDownX = event.getRawX(); mStartRatio = mRatio;
@@ -10135,6 +10333,13 @@ new file mode 100644
 +            if (mKind == 0) {
 +                canvas.drawLine(b.exactCenterX(), b.top+b.height()*.25f,
 +                        b.exactCenterX(), b.top+b.height()*.75f, mPaint); return;
++            }
++            if (mKind == 3) {
++                float pad=b.width()*.2f, size=b.width()*.25f;
++                canvas.drawLine(b.left+pad,b.top+pad,b.left+pad+size,b.top+pad,mPaint);
++                canvas.drawLine(b.left+pad,b.top+pad,b.left+pad,b.top+pad+size,mPaint);
++                canvas.drawLine(b.right-pad,b.bottom-pad,b.right-pad-size,b.bottom-pad,mPaint);
++                canvas.drawLine(b.right-pad,b.bottom-pad,b.right-pad,b.bottom-pad-size,mPaint); return;
 +            }
 +            if (mKind == 2) {
 +                float pad = b.width()*.24f;
@@ -10239,6 +10444,89 @@ new file mode 100644
 +            new Rect(middle + (gutter - gutter / 2), viewport.top + inset,
 +                    viewport.right - inset, viewport.bottom - inset)
 +        };
++    }
++}
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitLinkRouter.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitLinkRouter.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitLinkRouter.java
+@@ -0,0 +1,59 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++import android.app.Activity;
++import java.lang.ref.WeakReference;
++import java.util.WeakHashMap;
++import java.util.function.BooleanSupplier;
++import org.chromium.chrome.browser.tab.Tab;
++import org.chromium.content_public.browser.LoadUrlParams;
++import org.chromium.content_public.browser.WebContents;
++import org.chromium.url.GURL;
++import org.chromium.content_public.common.ResourceRequestBody;
++
++/** UI-thread routing by exact source window; neither activities nor coordinators are retained. */
++public final class ArcSplitLinkRouter {
++    private static final WeakHashMap<Activity,WeakReference<ArcSplitViewCoordinator>> WINDOWS = new WeakHashMap<>();
++    private ArcSplitLinkRouter() {}
++    static void register(Activity activity, ArcSplitViewCoordinator controller) {
++        WINDOWS.put(activity,new WeakReference<>(controller));
++    }
++    static void unregister(Activity activity, ArcSplitViewCoordinator controller) {
++        WeakReference<ArcSplitViewCoordinator> value=WINDOWS.get(activity);
++        if(value!=null && value.get()==controller)WINDOWS.remove(activity);
++    }
++    private static ArcSplitViewCoordinator controller(Tab tab) {
++        if(tab==null || tab.isDestroyed() || tab.getWindowAndroid()==null)return null;
++        Activity activity=tab.getWindowAndroid().getActivity().get();
++        if(activity==null || activity.isFinishing() || activity.isDestroyed())return null;
++        WeakReference<ArcSplitViewCoordinator> value=WINDOWS.get(activity);
++        return value==null?null:value.get();
++    }
++    public static boolean isWebLink(GURL url) {
++        return url!=null && url.isValid() && ("https".equals(url.getScheme()) || "http".equals(url.getScheme()));
++    }
++    public static boolean canOpen(Tab source,GURL url) {
++        ArcSplitViewCoordinator controller=controller(source);
++        return isWebLink(url) && controller!=null && controller.canOpenLink(source);
++    }
++    public static boolean open(Tab source,LoadUrlParams params) {
++        ArcSplitViewCoordinator controller=controller(source);
++        return params!=null && controller!=null && controller.openLink(source,params);
++    }
++    public static boolean openNative(Tab source,GURL url,String headers,ResourceRequestBody body,boolean renderer) {
++        if(!canOpen(source,url))return false;
++        LoadUrlParams params=new LoadUrlParams(url.getSpec());
++        params.setVerbatimHeaders(headers);
++        if(body!=null)params.setPostData(body);
++        params.setIsRendererInitiated(renderer);params.setHasUserGesture(true);
++        return open(source,params);
++    }
++    /** Keep the renderer-created WebContents and all opener/request metadata under native ownership. */
++    public static boolean create(Tab source,GURL url,WebContents contents,BooleanSupplier create) {
++        ArcSplitViewCoordinator controller=controller(source);
++        if(!isWebLink(url) || controller==null || !controller.canOpenLink(source))return create.getAsBoolean();
++        return controller.adoptLink(source,contents,create);
++    }
++}
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitResizePolicy.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitResizePolicy.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitResizePolicy.java
+@@ -0,0 +1,14 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++/** Center capture/release hysteresis; quarter layouts remain freely adjustable. */
++public final class ArcSplitResizePolicy {
++    private ArcSplitResizePolicy() {}
++    public static float snap(float ratio, boolean captured) {
++        if (!Float.isFinite(ratio)) throw new IllegalArgumentException("Non-finite ratio");
++        if (Math.abs(ratio-.5f) <= (captured ? .045f : .025f)) return .5f;
++        return Math.max(.2f, Math.min(.8f, ratio));
 +    }
 +}
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitState.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitState.java
@@ -10373,7 +10661,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitVie
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitViewCoordinator.java
-@@ -0,0 +1,415 @@
+@@ -0,0 +1,508 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -10402,19 +10690,27 @@ new file mode 100644
 +import org.chromium.chrome.browser.tabmodel.TabModel;
 +import org.chromium.chrome.browser.tabmodel.TabModelObserver;
 +import org.chromium.content_public.browser.LoadUrlParams;
++import org.chromium.content_public.browser.WebContents;
++import org.chromium.url.GURL;
 +import org.chromium.ui.base.WindowAndroid;
 +
 +/** Coordinates two existing native tabs; one selected Tab remains authoritative for browser UI. */
 +public final class ArcSplitViewCoordinator {
 +    private static final int MIN_PANE_DP = 240;
 +    public static final class Labels {
-+        final String title, existing, newTab, exit, unsupported, noTabs, swap, blocked, controls;
++        final String title, existing, newTab, exit, unsupported, noTabs, swap, blocked, controls, focus, restore;
 +        public Labels(String title, String existing, String newTab, String exit,
 +                String unsupported, String noTabs, String swap, String blocked) {
 +            this(title,existing,newTab,exit,unsupported,noTabs,swap,blocked,title);
 +        }
 +        public Labels(String title, String existing, String newTab, String exit,
 +                String unsupported, String noTabs, String swap, String blocked, String controls) {
++            this(title,existing,newTab,exit,unsupported,noTabs,swap,blocked,controls,"Ampliar panel","Volver a división");
++        }
++        public Labels(String title, String existing, String newTab, String exit,
++                String unsupported, String noTabs, String swap, String blocked, String controls,
++                String focus, String restore) {
++            this.focus=focus; this.restore=restore;
 +            this.controls=controls;
 +            this.title=title; this.existing=existing; this.newTab=newTab; this.exit=exit;
 +            this.unsupported=unsupported; this.noTabs=noTabs; this.swap=swap; this.blocked=blocked;
@@ -10433,6 +10729,8 @@ new file mode 100644
 +    private final ArcSplitViewportPolicy mViewportPolicy = new ArcSplitViewportPolicy();
 +    private final ArcSplitState mState = new ArcSplitState();
 +    private final ArcSplitSwapAnimator mAnimation = new ArcSplitSwapAnimator();
++    private final ArcSplitSwapAnimator mResizeAnimation = new ArcSplitSwapAnimator();
++    private boolean mFocusedPane;
 +    private final ArcSplitDividerView mDivider;
 +    private final ArcSplitFrameView mFrame;
 +    private final String mStateKey;
@@ -10455,9 +10753,9 @@ new file mode 100644
 +        }
 +        @Override public void onHidden(Tab tab, int type) {
 +            if (mUpdating || !mState.isSplit() || type != TabHidingType.ACTIVITY_HIDDEN) return;
-+            mAnimation.settle();mDivider.dismissActions();mLastViewport=null;
++            mDivider.dismissActions();mLastViewport=null;
 +            mBackground=true; mUpdating=true;
-+            try {Tab peer=tab==mObservedLeft?mObservedRight:mObservedLeft;
++            try {mResizeAnimation.settle();mAnimation.settle();Tab peer=tab==mObservedLeft?mObservedRight:mObservedLeft;
 +                if (peer!=null && !peer.isDestroyed()) peer.hide(type);
 +            } finally {mUpdating=false;}
 +            persist();
@@ -10495,6 +10793,9 @@ new file mode 100644
 +        mDivider=new ArcSplitDividerView(activity,this::swap,()->{
 +            if(mCanChangeLayout.getAsBoolean())exit();
 +        },this::resize,labels.controls,labels.swap,labels.exit);
++        mDivider.setBalanceAction(this::balance);
++        mDivider.setFocusAction(this::toggleFocusedPane,labels.focus);
++        ArcSplitLinkRouter.register(activity,this);
 +        mDivider.setVisibility(View.GONE);
 +        View boundary=activity.findViewById(R.id.tab_modal_dialog_container);
 +        if(boundary==null)boundary=activity.findViewById(R.id.tab_modal_dialog_container_stub);
@@ -10596,6 +10897,61 @@ new file mode 100644
 +        refresh(mDesktop);return true;
 +    }
 +
++    public boolean canOpenLink(Tab source) {
++        TabModel model=mModelSupplier.get();
++        if(mDestroyed || mUpdating || !mDesktop || mBackground || !mCanChangeLayout.getAsBoolean()
++                || source==null || source!=mCurrent.get() || source.isDestroyed() || source.isClosing()
++                || source.isNativePage() || model==null || model!=mModel || model.getTabById(source.getId())!=source
++                || source.getProfile()==null || !Objects.equals(source.getProfile(),model.getProfile())
++                || !mHolder.canPresentArcSplit() || mHolder.getWindowVisibility()!=View.VISIBLE) return false;
++        WindowAndroid window=source.getWindowAndroid();
++        return window!=null && window.getActivity().get()==mActivity;
++    }
++    public boolean openLink(Tab source,LoadUrlParams params) {
++        if(params==null || !ArcSplitLinkRouter.isWebLink(new GURL(params.getUrl())) || !canOpenLink(source))return false;
++        mResizeAnimation.settle(); mAnimation.settle();
++        if(mState.isSplit() && (source.getId()==mState.leftId() || source.getId()==mState.rightId())) {
++            int targetId=source.getId()==mState.leftId()?mState.rightId():mState.leftId();
++            Tab target=mModel.getTabById(targetId);
++            if(!compatible(source,target))return false;
++            mFocusedPane=false;activate(targetId);
++            if(target.isDestroyed() || target.isClosing() || mModel.getTabById(targetId)!=target)return false;
++            // Standard Tab navigation owns beforeunload, downloads and external redirects.
++            target.loadUrl(params);return true;
++        }
++        TabCreator creator=mCreator.get();if(creator==null)return false;
++        Tab target;
++        mUpdating=true;
++        try { target=creator.createNewTab(params,TabLaunchType.FROM_LONGPRESS_FOREGROUND,source); }
++        finally { mUpdating=false; }
++        if(target==null)return false;
++        if(enter(source,target))activate(target.getId());
++        // A native tab was created even if presentation became unavailable; never load it twice.
++        return true;
++    }
++    public boolean adoptLink(Tab source,WebContents contents,BooleanSupplier create) {
++        if(!canOpenLink(source))return create.getAsBoolean();
++        boolean wasSplit=mState.isSplit();float ratio=mState.ratio();
++        boolean sourceOnRight=wasSplit && source.getId()==mState.rightId();
++        Tab priorPeer=wasSplit?mModel.getTabById(sourceOnRight?mState.leftId():mState.rightId()):null;
++        boolean created;
++        mUpdating=true;
++        try { created=create.getAsBoolean(); } finally { mUpdating=false; }
++        if(!created){refresh(mDesktop);return false;}
++        Tab target=null;
++        for(int i=0;i<mModel.getCount();i++) {
++            Tab candidate=mModel.getTabAt(i);
++            if(candidate!=null && !candidate.isDestroyed() && candidate.getWebContents()==contents){target=candidate;break;}
++        }
++        if(target!=null && enter(sourceOnRight?target:source,sourceOnRight?source:target)) {
++            if(wasSplit)mState.setRatio(ratio);
++            mFocusedPane=false;activate(target.getId());
++            if(priorPeer!=null && priorPeer!=source && priorPeer!=target && !priorPeer.isDestroyed() && !priorPeer.isHidden())
++                priorPeer.hide(TabHidingType.CHANGED_TABS);
++        } else { exit(); }
++        return true;
++    }
++
 +    private void select(Tab tab) {
 +        if(mModel==null || tab==null || tab.isDestroyed())return;
 +        for(int i=0;i<mModel.getCount();i++) {
@@ -10618,10 +10974,13 @@ new file mode 100644
 +        mDesktop=desktop;
 +        TabModel model=mModelSupplier.get();
 +        if(model!=mModel) {
++            // Finish callbacks against the old model; refresh from the final frame must not reenter.
++            mUpdating=true;
++            try {mResizeAnimation.settle();mAnimation.settle();} finally {mUpdating=false;}
 +            if(mModel!=null)persist();
 +            leavePresentation();unwatch();dismissPicker();
 +            if(mModel!=null)mModel.removeObserver(mModelObserver);
-+            mState.exit();mModel=model;mRestored=false;mBackground=false;
++            mState.exit();mFocusedPane=false;mModel=model;mRestored=false;mBackground=false;
 +            if(model!=null)model.addObserver(mModelObserver);
 +        }
 +        if(model==null)return;
@@ -10633,6 +10992,16 @@ new file mode 100644
 +        Tab left=model.getTabById(mState.leftId()),right=model.getTabById(mState.rightId()),active=mCurrent.get();
 +        if(!compatible(left,right) || active==null || !mState.activate(active.getId())) {exit();return;}
 +        Rect viewport=mHolder.getArcSplitViewport();
++        if(mFocusedPane && desktop && !mBackground && !active.isHidden()
++                && mHolder.getWindowVisibility()==View.VISIBLE && mHolder.canPresentArcSplit()) {
++            leavePresentation();mDivider.setFocusedMode(true,mLabels.restore);
++            int[] at=new int[2],rootAt=new int[2];mHolder.getLocationInWindow(at);mRoot.getLocationInWindow(rootAt);
++            ViewGroup.LayoutParams raw=mDivider.getLayoutParams();
++            raw.width=dp(48);raw.height=mHolder.getHeight();mDivider.setLayoutParams(raw);
++            mDivider.setX(at[0]-rootAt[0]+viewport.right-dp(48));mDivider.setY(at[1]-rootAt[1]);
++            mDivider.setVisibility(View.VISIBLE);watch(left,right);return;
++        }
++        mDivider.setFocusedMode(false,mLabels.restore);
 +        if(!desktop || mBackground || active.isHidden() || mHolder.getWindowVisibility()!=View.VISIBLE
 +                || viewport.width()<2*dp(MIN_PANE_DP)+2*dp(4)+dp(8) || viewport.height()<=2*dp(4) || !mHolder.canPresentArcSplit()) {
 +            mAnimation.settle();leavePresentation();return;
@@ -10687,14 +11056,25 @@ new file mode 100644
 +        mFrame.setGeometry(viewport,presentationRatio(viewport),mState.activeId()==mState.leftId());
 +        mFrame.setVisibility(View.VISIBLE);
 +    }
++    public void balance() {
++        if(mDestroyed || mFocusedPane || !mState.isSplit() || mLastViewport==null || !mCanChangeLayout.getAsBoolean())return;
++        mResizeAnimation.settle();mAnimation.settle();float start=mState.ratio();
++        mResizeAnimation.start(p->{if(!mDestroyed){mState.setRatio(start+(.5f-start)*p);refresh(mDesktop);}},this::persist);
++    }
++    public void toggleFocusedPane() {
++        if(mDestroyed || !mState.isSplit() || !mCanChangeLayout.getAsBoolean())return;
++        mResizeAnimation.settle();mAnimation.settle();mFocusedPane=!mFocusedPane;refresh(mDesktop);
++    }
++    boolean isFocusedForTesting() { return mFocusedPane; }
 +    private void resize(float ratio) {
-+        if(!mState.isSplit() || mDestroyed)return;
++        if(!mState.isSplit() || mDestroyed || mFocusedPane || !mCanChangeLayout.getAsBoolean())return;
++        mResizeAnimation.settle();
 +        mAnimation.settle();mState.setRatio(ratio);refresh(mDesktop);
 +        mHolder.removeCallbacks(mDeferredSave);mHolder.postDelayed(mDeferredSave,150);
 +    }
 +    public void swap() {
 +        if(mDestroyed || !mState.isSplit() || mLastViewport==null || !mCanChangeLayout.getAsBoolean())return;
-+        mAnimation.settle();mState.swap();refresh(mDesktop);persist();
++        mResizeAnimation.settle();mAnimation.settle();mState.swap();refresh(mDesktop);persist();
 +        mDivider.setBusy(true);mHolder.setArcSplitInputBlocked(true);
 +        mAnimation.start(p -> {if(!mDestroyed)mHolder.setArcSplitSwapProgress(p);},()->{
 +            mHolder.setArcSplitInputBlocked(false);mDivider.setBusy(false);
@@ -10702,7 +11082,7 @@ new file mode 100644
 +    }
 +    public void exit() {
 +        if(mDestroyed)return;
-+        mAnimation.settle();leavePresentation();unwatch();mState.exit();persist();dismissPicker();
++        mResizeAnimation.settle();mAnimation.settle();mFocusedPane=false;leavePresentation();unwatch();mState.exit();persist();dismissPicker();
 +    }
 +    private void leavePresentation() {
 +        mViewportPolicy.clear();
@@ -10776,10 +11156,11 @@ new file mode 100644
 +    private void message(String text){if(!mDestroyed && !mActivity.isFinishing())Toast.makeText(mActivity,text,Toast.LENGTH_SHORT).show();}
 +    private int dp(int value){return Math.round(value*mActivity.getResources().getDisplayMetrics().density);}
 +    ArcSplitState stateForTesting(){return mState;}
-+    void settleForTesting(){mAnimation.settle();}
++    void settleForTesting(){mAnimation.settle();mResizeAnimation.settle();}
 +    public void destroy() {
 +        if(mDestroyed)return;
-+        persist();mDestroyed=true;mAnimation.destroy();
++        mResizeAnimation.settle();persist();mDestroyed=true;mAnimation.destroy();mResizeAnimation.destroy();
++        ArcSplitLinkRouter.unregister(mActivity,this);
 +        mHolder.removeCallbacks(mReconcile);mHolder.removeFrameRequestObserver(mFrameObserver);
 +        mHolder.removeCallbacks(mDeferredSave);mHolder.removeOnLayoutChangeListener(mLayoutListener);mRoot.removeOnLayoutChangeListener(mLayoutListener);
 +        mHolder.setArcSplitActivation(null);leavePresentation();unwatch();dismissPicker();
@@ -12237,7 +12618,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitCo
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitControlsTest.java
-@@ -0,0 +1,138 @@
+@@ -0,0 +1,169 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -12341,6 +12722,37 @@ new file mode 100644
 +        assertFalse(d.dispatchTouchEvent(e));e.recycle();
 +        d.buttonForTesting().performClick();assertTrue(d.isExpandedForTesting());d.destroy();
 +        d.buttonForTesting().performClick();assertFalse(d.isExpandedForTesting());controller.pause().stop().destroy();
++    }
++    @Test public void magneticCenterCapturesAndReleasesWithoutForcingQuarterRatios() {
++        assertEquals(.5f,ArcSplitResizePolicy.snap(.48f,false),0f);
++        assertEquals(.5f,ArcSplitResizePolicy.snap(.54f,true),0f);
++        assertEquals(.55f,ArcSplitResizePolicy.snap(.55f,true),0f);
++        assertEquals(.25f,ArcSplitResizePolicy.snap(.25f,false),0f);
++        assertEquals(.75f,ArcSplitResizePolicy.snap(.75f,false),0f);
++    }
++    @Test public void expandedGripStaysUnderPointerWhenFocusActionIsPresent() {
++        var controller=Robolectric.buildActivity(Activity.class).setup();Activity a=controller.get();
++        FrameLayout root=new FrameLayout(a);a.setContentView(root);
++        ArcSplitDividerView d=new ArcSplitDividerView(a,()->{},()->{},r->{},"Options","Swap","Exit");
++        d.setFocusAction(()->{},"Focus");root.addView(d,new FrameLayout.LayoutParams(48,600));
++        root.measure(android.view.View.MeasureSpec.makeMeasureSpec(1000,1073741824),android.view.View.MeasureSpec.makeMeasureSpec(600,1073741824));
++        root.layout(0,0,1000,600);d.setX(136);d.buttonForTesting().performClick();
++        var params=(android.view.WindowManager.LayoutParams)d.swapForTesting().getRootView().getLayoutParams();
++        int[] at=new int[2];d.buttonForTesting().getLocationInWindow(at);
++        assertEquals(at[0]+d.buttonForTesting().getWidth()/2,params.x+60);
++        d.destroy();controller.pause().stop().destroy();
++    }
++    @Test public void doubleTapAcrossCompactAndExpandedGripBalancesOnce() {
++        var controller=Robolectric.buildActivity(Activity.class).setup();Activity a=controller.get();AtomicInteger balances=new AtomicInteger();
++        ArcSplitDividerView d=new ArcSplitDividerView(a,()->fail("swap"),()->fail("exit"),r->{},"Options","Swap","Exit");
++        d.setBalanceAction(balances::incrementAndGet);a.setContentView(d);d.layout(0,0,48,600);d.setGeometry(.7f,1000);
++        long t=android.os.SystemClock.uptimeMillis();
++        android.view.View compact=d.buttonForTesting();
++        for(int action:new int[]{0,1}){var e=android.view.MotionEvent.obtain(t,t+(action==0?0:10),action,14,22,0);compact.dispatchTouchEvent(e);e.recycle();}
++        assertTrue(d.isExpandedForTesting());
++        android.view.View expanded=((android.view.ViewGroup)d.swapForTesting().getParent()).getChildAt(1);
++        for(int action:new int[]{0,1}){var e=android.view.MotionEvent.obtain(t+80,t+(action==0?80:90),action,14,22,0);expanded.dispatchTouchEvent(e);e.recycle();}
++        assertEquals(1,balances.get());assertFalse(d.isExpandedForTesting());d.destroy();controller.pause().stop().destroy();
 +    }
 +    @Test public void frameUsesThemeAndSharedGeometryWithoutInterceptingPageTouches() {
 +        Activity a=Robolectric.buildActivity(Activity.class).setup().get();ArcSplitFrameView frame=new ArcSplitFrameView(a);
@@ -12450,7 +12862,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitVi
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitViewCoordinatorTest.java
-@@ -0,0 +1,242 @@
+@@ -0,0 +1,296 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -12488,7 +12900,9 @@ new file mode 100644
 +        TabModel model=mock(TabModel.class);
 +        TabCreator creator=mock(TabCreator.class);
 +        Tab one=mock(Tab.class),two=mock(Tab.class),other=mock(Tab.class);
++        AtomicReference<TabModel> suppliedModel=new AtomicReference<>(model);
 +        AtomicReference<Tab> current=new AtomicReference<>(one);
++        java.util.concurrent.atomic.AtomicBoolean allowed=new java.util.concurrent.atomic.AtomicBoolean(true);
 +        ArcSplitViewCoordinator coordinator;
 +        android.content.SharedPreferences prefs=a.getSharedPreferences("split-fixture-"+System.nanoTime(),0);
 +        Fixture() {this(null,false);}
@@ -12506,7 +12920,7 @@ new file mode 100644
 +            when(holder.setArcSplitTabs(any(),any(),anyFloat(),anyInt())).thenReturn(true);
 +            doAnswer(call->{current.set(tabs[(int)call.getArgument(0)]);return null;}).when(model).setIndex(anyInt(),anyInt());
 +            if(saved!=null)prefs.edit().putString("arc_split_task_"+a.getTaskId(),saved).apply();
-+            coordinator=new ArcSplitViewCoordinator(a,root,holder,()->model,()->creator,current::get,()->{},()->true,
++            coordinator=new ArcSplitViewCoordinator(a,root,holder,suppliedModel::get,()->creator,current::get,()->{},allowed::get,
 +                prefs,new ArcSplitViewCoordinator.Labels("Split","Existing","New","Exit","Unsupported","No tabs","Swap","Close dialog first"));
 +            coordinator.refresh(true);
 +        }
@@ -12546,6 +12960,58 @@ new file mode 100644
 +        assertTrue(f.coordinator.stateForTesting().isSplit());
 +        when(f.holder.getArcSplitViewport()).thenReturn(new android.graphics.Rect(0,0,1100,800));f.coordinator.refresh(true);
 +        verify(f.holder).setArcSplitTabs(f.one,f.two,.5f,17);f.close();
++    }
++    @Test public void balanceAndTemporaryFocusPreservePairAndRatio() {
++        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));f.coordinator.stateForTesting().setRatio(.7f);
++        f.coordinator.activate(18);f.coordinator.toggleFocusedPane();assertTrue(f.coordinator.isFocusedForTesting());
++        assertTrue(f.coordinator.stateForTesting().isSplit());assertEquals(.7f,f.coordinator.stateForTesting().ratio(),.001f);
++        assertSame(f.two,f.current.get());verify(f.holder,atLeastOnce()).clearArcSplitTabs();
++        f.coordinator.toggleFocusedPane();assertFalse(f.coordinator.isFocusedForTesting());
++        assertEquals(.7f,f.coordinator.stateForTesting().ratio(),.001f);assertEquals(18,f.coordinator.stateForTesting().activeId());
++        f.coordinator.balance();f.coordinator.settleForTesting();assertEquals(.5f,f.coordinator.stateForTesting().ratio(),0f);
++        verify(f.one,never()).reload();verify(f.two,never()).reload();f.close();
++    }
++    @Test public void linkOpeningCreatesNativeTabOrNavigatesNeighborWithOriginalParams() {
++        Fixture f=new Fixture();var p=new org.chromium.content_public.browser.LoadUrlParams("https://example.test/item");
++        when(f.creator.createNewTab(same(p),anyInt(),eq(f.one))).thenReturn(f.other);
++        assertTrue(f.coordinator.openLink(f.one,p));assertEquals(19,f.coordinator.stateForTesting().rightId());assertSame(f.other,f.current.get());
++        clearInvocations(f.creator);var next=new org.chromium.content_public.browser.LoadUrlParams("https://example.test/second");
++        assertTrue(f.coordinator.openLink(f.other,next));verify(f.one).loadUrl(same(next));verifyNoInteractions(f.creator);
++        assertSame(f.one,f.current.get());assertEquals(19,f.coordinator.stateForTesting().rightId());f.close();
++    }
++    @Test public void staleOrBlockedSourceAndExternalSchemesCannotUseLinkRoute() {
++        Fixture f=new Fixture();var url=new org.chromium.url.GURL("https://example.test/item");
++        assertTrue(ArcSplitLinkRouter.canOpen(f.one,url));assertFalse(ArcSplitLinkRouter.canOpen(f.one,new org.chromium.url.GURL("mailto:test@example.test")));
++        f.allowed.set(false);assertFalse(f.coordinator.openLink(f.one,new org.chromium.content_public.browser.LoadUrlParams(url.getSpec())));
++        verifyNoInteractions(f.creator);f.allowed.set(true);f.current.set(f.two);
++        assertFalse(ArcSplitLinkRouter.canOpen(f.one,url));f.current.set(f.one);when(f.one.isClosing()).thenReturn(true);
++        assertFalse(ArcSplitLinkRouter.canOpen(f.one,url));f.close();assertFalse(ArcSplitLinkRouter.canOpen(f.two,url));
++    }
++    @Test public void balanceCannotOverwriteNewModelPairAfterModelSwitch() {
++        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));f.coordinator.stateForTesting().setRatio(.7f);f.coordinator.balance();
++        TabModel replacement=mock(TabModel.class);when(replacement.getProfile()).thenReturn(f.profile);
++        when(replacement.isTabModelRestored()).thenReturn(true);when(replacement.getCount()).thenReturn(2);
++        when(replacement.getTabAt(0)).thenReturn(f.one);when(replacement.getTabAt(1)).thenReturn(f.two);
++        when(replacement.getTabById(17)).thenReturn(f.one);when(replacement.getTabById(18)).thenReturn(f.two);
++        f.suppliedModel.set(replacement);f.coordinator.refresh(true);assertTrue(f.coordinator.stateForTesting().isSplit());
++        f.coordinator.stateForTesting().setRatio(.3f);f.coordinator.settleForTesting();
++        assertEquals(.3f,f.coordinator.stateForTesting().ratio(),.001f);f.close();
++    }
++    @Test public void nativeLinkPreservesHeadersBodyAndRendererFlag() {
++        Fixture f=new Fixture();var body=mock(org.chromium.content_public.common.ResourceRequestBody.class);
++        when(f.creator.createNewTab(any(),anyInt(),eq(f.one))).thenReturn(f.other);
++        assertTrue(ArcSplitLinkRouter.openNative(f.one,new org.chromium.url.GURL("https://example.test/item"),"X-Test: fixture",body,true));
++        ArgumentCaptor<org.chromium.content_public.browser.LoadUrlParams> params=ArgumentCaptor.forClass(org.chromium.content_public.browser.LoadUrlParams.class);
++        verify(f.creator).createNewTab(params.capture(),anyInt(),eq(f.one));
++        assertEquals("X-Test: fixture",params.getValue().getVerbatimHeaders());assertSame(body,params.getValue().getPostData());assertTrue(params.getValue().getIsRendererInitiated());f.close();
++    }
++    @Test public void rendererCreatedContentsKeepNativeIdentityAndPriorNeighborTabAlive() {
++        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));f.coordinator.stateForTesting().setRatio(.7f);
++        var contents=mock(org.chromium.content_public.browser.WebContents.class);when(f.other.getWebContents()).thenReturn(contents);
++        assertTrue(f.coordinator.adoptLink(f.one,contents,()->{f.current.set(f.other);return true;}));
++        assertEquals(17,f.coordinator.stateForTesting().leftId());assertEquals(19,f.coordinator.stateForTesting().rightId());
++        assertEquals(.7f,f.coordinator.stateForTesting().ratio(),.001f);assertSame(f.other,f.current.get());verifyNoInteractions(f.creator);
++        verify(f.two).hide(org.chromium.chrome.browser.tab.TabHidingType.CHANGED_TABS);verify(f.two,never()).reload();f.close();
 +    }
 +    @Test public void wrongProfileOrNativePageCannotReplaceExistingPair() {
 +        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));
