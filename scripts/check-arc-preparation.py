@@ -301,7 +301,7 @@ def main():
             body = definitions[name]; end = body.rfind('}')
             definitions[name] = body[:end] + members + body[end:]
         extend('org.chromium.chrome.browser.compositor.CompositorViewHolder',
-            ' public boolean setArcSplitTabs(org.chromium.chrome.browser.tab.Tab a,org.chromium.chrome.browser.tab.Tab b,float r,int id){return false;}'
+            ' public interface FrameRequestObserver {void onFrameRequested();} public void addFrameRequestObserver(FrameRequestObserver o){} public void removeFrameRequestObserver(FrameRequestObserver o){} public boolean setArcSplitTabs(org.chromium.chrome.browser.tab.Tab a,org.chromium.chrome.browser.tab.Tab b,float r,int id){return false;}'
             ' public void clearArcSplitTabs(){} public void setArcSplitActivation(java.util.function.IntConsumer c){}'
             ' public void setArcSplitSwapProgress(float p){} public void setArcSplitInputBlocked(boolean b){}'
             ' public android.graphics.Rect getArcSplitViewport(){return null;} public boolean canPresentArcSplit(){return false;} public void onContentChanged(){}')

@@ -78,6 +78,22 @@ public final class ArcSplitContentHost {
         }
     }
 
+    /** Synchronize native focus on selection without displacing address/modal editing. */
+    public boolean focus(Tab selected, View urlBar, boolean blocked) {
+        if(blocked || !contains(selected) || (urlBar!=null && urlBar.hasFocus())) return false;
+        ContentView target=selected.getContentView();
+        if(target==null || target.getParent()!=mParent)return false;
+        View focused=mParent.getRootView().findFocus();
+        if(focused instanceof android.widget.EditText && !isPaneDescendant(focused))return false;
+        return target.requestFocus();
+    }
+    private boolean isPaneDescendant(View view) {
+        for(View current=view;current!=null;) {
+            if(mSaved.containsKey(current))return true;
+            current=current.getParent() instanceof View parent?parent:null;
+        }
+        return false;
+    }
     public boolean contains(Tab tab) { return tab != null && (tab == mLeft || tab == mRight); }
     public RectF bounds(Tab tab) {
         return tab == mLeft ? new RectF(mLeftBounds) : tab == mRight ? new RectF(mRightBounds) : new RectF();

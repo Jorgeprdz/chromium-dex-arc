@@ -1754,7 +1754,11 @@ public class CompositorViewHolder extends FrameLayout
                 clearArcSplitTabs();
                 return false;
             }
-            initializeTab(left); initializeTab(right);
+            // Global IME/window policy belongs to the selected pane, before sizing either.
+            Tab active = activeId == left.getId() ? left : right;
+            initializeTab(active);
+            initializeTab(active == left ? right : left);
+            focusArcSplitTab(active);
             layout.setArcSplitTabs(left.getId(), right.getId(),
                     mArcSplitHost.bounds(left), mArcSplitHost.bounds(right));
             requestRender();
@@ -1767,7 +1771,10 @@ public class CompositorViewHolder extends FrameLayout
         if (left == null || right == null || mArcSplitUpdating) return;
         mArcSplitUpdating = true;
         try {
-            if (!mArcSplitHost.show(left, right, getArcSplitViewport(), mArcSplitRatio)) return;
+            if (!mArcSplitHost.show(left, right, getArcSplitViewport(), mArcSplitRatio)) {
+                clearArcSplitTabs();
+                return;
+            }
             updateWebContentsSize(left); updateWebContentsSize(right);
             if (mArcSplitLayout != null) mArcSplitLayout.setArcSplitTabs(left.getId(), right.getId(),
                     mArcSplitHost.bounds(left), mArcSplitHost.bounds(right));
@@ -1784,6 +1791,21 @@ public class CompositorViewHolder extends FrameLayout
         l.offsetTo(rx + (lx - rx) * p, l.top);
         r.offsetTo(lx + (rx - lx) * p, r.top);
         mArcSplitLayout.setArcSplitTabs(left.getId(), right.getId(), l, r);
+    }
+
+    private void focusArcSplitTab(@Nullable Tab tab) {
+        View modal = mActivity.findViewById(R.id.tab_modal_dialog_container);
+        boolean blocked = !hasWindowFocus() || (modal instanceof ViewGroup
+                && modal.isShown() && ((ViewGroup) modal).getChildCount() > 0);
+        if (mArcSplitHost.focus(tab, mUrlBar, blocked)) {
+            updateFocusability(/* focusable= */ false, /* blockDescendants= */ false);
+        }
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasWindowFocus) {
+        super.onWindowFocusChanged(hasWindowFocus);
+        if (hasWindowFocus && mArcSplitLeft != null) focusArcSplitTab(getCurrentTab());
     }
 
     public void setArcSplitInputBlocked(boolean blocked) { mArcSplitInputBlocked = blocked; }
@@ -2303,7 +2325,10 @@ public class CompositorViewHolder extends FrameLayout
             mOnscreenContentProvider.onWebContentsChanged(assumeNonNull(getWebContents()));
         }
 
-        if (keepArcPair && !mArcSplitUpdating) updateArcSplitPresentation();
+        if (keepArcPair && !mArcSplitUpdating) {
+            updateArcSplitPresentation();
+            focusArcSplitTab(tab);
+        }
 
         // Clear drop permissions when tab changes unless this is a new tab loading from the drop.
         if (mDropUri == null
@@ -2361,8 +2386,10 @@ public class CompositorViewHolder extends FrameLayout
                     webContents, mCompositorView.getWidth(), mCompositorView.getHeight());
             onControlsResizeViewChanged(webContents, mControlsResizeView);
 
-            updateVirtualKeyboardMode(webContents.getVirtualKeyboardMode());
-        } else if (tab.getView() != null) {
+            if (mArcSplitLeft == null || tab == getCurrentTab()) {
+                updateVirtualKeyboardMode(webContents.getVirtualKeyboardMode());
+            }
+        } else if (tab.getView() != null && (mArcSplitLeft == null || tab == getCurrentTab())) {
             updateVirtualKeyboardMode(VirtualKeyboardMode.UNSET);
         }
 

@@ -160,7 +160,7 @@
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabRailLayout.java": "977b4100eb5ea83993b87237bb3353e8a35ba48fc78486e80e3a98d6d01d8561",
     "chrome/android/java/res_chromium_base/values/channel_constants.xml": "e4909d3f5731496c09e1fb02be7f16c348a522d00c620346f95967df2ca68a83",
     "chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java": "408c3d8bec266c9659ce7774a8eef805ed0a25244107d50e4b1a2a8ffbc72808",
-    "chrome/android/java/src/org/chromium/chrome/browser/compositor/CompositorViewHolder.java": "b8e343ed3abfd55951c7c41cfa8aac29470eadf1e4736d64acdb0008b563c508",
+    "chrome/android/java/src/org/chromium/chrome/browser/compositor/CompositorViewHolder.java": "bb03b02ade865ec913b68e15ec4ce9dfd71a2370e243d00d384e045f7403230d",
     "chrome/android/java/src/org/chromium/chrome/browser/compositor/layouts/StaticLayout.java": "8f5d045913e82559b0b0067b843df95e38e307d5af4b0e52612e681c969df11c",
     "chrome/android/java/src/org/chromium/chrome/browser/compositor/overlays/strip/TabContextMenuCoordinator.java": "ec26884020f05a7a75ac18bca67af2705c74216f8f46cf052f66be1a5eb7b564",
     "chrome/android/java/src/org/chromium/chrome/browser/compositor/scene_layer/StaticTabSceneLayer.java": "68986b01e138ab9a1c5b799cfcea998dab38c7554c7025e5d9ea5bde7551566f",
@@ -241,11 +241,11 @@
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarProfiles.java": "16ca484649483c7255aac1d31e3e55a391f5c36cce8921509232cf8ac9ffb52c",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarState.java": "43bd8ddcb2a07b11dd326a97bd91a21cb738d115d70680c7f58bdc3831b679db",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarStore.java": "4e8f9f565079d87cdf8b5dccb4a780664618f7e3c77993edbaaf23d161b23a1b",
-    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitContentHost.java": "bc002379c050732433461f35f728a3ebc8475c746359294c77c3402c24a2c526",
+    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitContentHost.java": "f7b07f12c1101d538eb7d0f7e8d285dec470b80c457a6f9c53a54418b89fafbe",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitDividerView.java": "3b3f6c9b20ae5ea21da40b5a430ead33793712ba1e0d10cba190ad7d2d6711e1",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitState.java": "70df3e8288f5e1f59db02f258e389b160f2bb8bb409f7d7f2845c1cff652ca54",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitSwapAnimator.java": "4435530250bc3acc49eb54e7ac6b4af8b2d28c89a2ab6a97d647c52d575a2cf1",
-    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitViewCoordinator.java": "7c97d55f1032156cf53442752d33ef110f298c0c7628969364a8e4de05db8e3c",
+    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitViewCoordinator.java": "92c28fbe939abbd67144fb43ace58da52e6faaa7804c59b16e389433be22f8b2",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitViewportPolicy.java": "c5e2254187adf298e1dabecc9e7c5a697de3ab292fad6b643275a7310264266b",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcTabActions.java": "33d3ffcb067dbabae3cb992b394426253483efe4a3ae9286fe5f66d10a17eee3",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcAboutDialogTest.java": "322bc4b1a4a7129ce48e218357a51ab045aa45bf24dcca6db66c4ab27e4f4145",
@@ -256,10 +256,10 @@
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcFrameDispatchTest.java": "7c5ed7e3c17bad07f79cd203a4dfd01db9a4de6426af309f4e36e9355ab1285d",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcNavigationControlsTest.java": "7a5e682dcf3a867d54df11e8cde32db02e2e3c1a328712b94c3d9874696d6af1",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcOmniboxPlacementTest.java": "8f648fd7a93b27b8d21a9f503717d3697ce4515c7b1095a29ee28d3201b81eff",
-    "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitContentHostTest.java": "eb63dd7ce4605e5996be154257828bec54758403ea49464e67375c4ea5770496",
+    "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitContentHostTest.java": "3441d44d22ef7d9c312c0e55e426897b8dc4699e250d271f9dd982ee98fde4fa",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitControlsTest.java": "c7f963f1d1dbbcdba27fe07ebeac051394b4d9e498a8fff0ee0abf6c9f4fbbad",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitStateTest.java": "ce06fcc2a9fd72c0094ea3b59f1d88097b429d97b9a86782db0a4b18332ff9a1",
-    "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitViewCoordinatorTest.java": "b0868793b2e452f5869f10ef29647377bb17eea405051a4c5d76cfdbe7dae577",
+    "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitViewCoordinatorTest.java": "f1968dc0d0c508ba7826dfbfd2253f429cd4b587c6836c6f1f13e7bcc610556d",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitViewportPolicyTest.java": "365d161b80ee84d2df3d355ecbcc89dcf5fa65b23bab1f117b4dea723e739db2",
     "chrome/android/junit/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/ArcTabSelectionTest.java": "2b92a67066622284bb2375dab920eabefaedb35745e6a3460acb9a38143a60a8",
     "chrome/android/junit/src/org/chromium/chrome/browser/toolbar/top/ArcToolbarReparentingTest.java": "8f246366eee0c5e5a5c430d5999c7563e0894e51e7d172b17a8259a1701b36b4",
@@ -292,5 +292,5 @@
     "components/password_manager/core/browser/password_store/password_store_backend.cc": "45764d4ad0e05acc5a216944a5a6763212f6c17e71bf689e9c973f12fb5c87d8",
     "components/password_manager/core/browser/password_store/password_store_interface.cc": "7e9dd5813ce8ece459ec66abdd3306028b7b3d6bbae048664872a34d8d097268"
   },
-  "patch_sha256": "d722379b7f090cb8f57ff6e2c17ca2562cc02d7b7649ac4da0fc2a81f6e9315e"
+  "patch_sha256": "5b23633926619554dc3187cd050df440c8a23180443750103e9cbb57375ec641"
 }

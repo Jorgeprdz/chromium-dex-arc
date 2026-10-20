@@ -18,3 +18,18 @@ User authorization: finish all designed features first, then one incremental bui
 Tasks 3–5: native pair presentation, controller and native menu/divider wired; source implementation ready for final review. RED native method absent / controller absent; controls and view attachment implemented test-first. Recovery regression RED NPE -> GREEN guarded reattachment.
 Additional request: per-pane mobile behavior. Ruling: 600/640 dp hysteresis and temporary per-controller UA without reload — avoids destroying unsaved form state; server-only mobile layouts may require user navigation. Normal mobile preference remains mobile.
 Verification 2026-10-20: 50 split tests PASS, 44 R5 helpers PASS; native actual C++ scene/AnchorInfo probes PASS at explicit adapters. Real Chromium compilation/JNI and APK graphical acceptance are pending, not PASS. Full host suite and final review running before dispatch.
+
+Final review: fresh whole-branch reviewer /root/split_final_review at 4b69ca6, read-only; no Critical, five Important; no second review.
+Final: fixed stale view/foreground presentation — unchangedGeometryStillRebindsInactiveContentAndForeground RED->GREEN.
+Final: fixed focus divergence — selectionTransfersFocusButNeverStealsFromOmniboxOrModal API RED->GREEN, nativeFocusHelper real delivered body guards GREEN; native rail/initial focus call-site contracts checked.
+Final: fixed inactive keyboard mode overwrite — inactiveInitializationCannotOverwriteActiveKeyboardPolicy actual delivered initializeTab body RED->GREEN.
+Final: fixed transient restoration loss — savedPairSurvivesTransientStartupReadiness and sceneReadinessEventRetriesPendingRestoreWithoutLayoutChanges RED->GREEN.
+Final: fixed unusable pane minima — asymmetricRatioKeepsTwoUsablePanesWithoutLosingIntendedRatio RED->GREEN, fractional densities and RTL GREEN.
+Final: fixed failed-entry selection/peer visibility — failedFirstPresentationRestoresSelectionAndHidesUnattachedPeer / failedPresentationKeepsPreviousPairAndSelection RED4 -> GREEN.
+Final: whole split/controller/native-body suite 68/68 PASS; preparation PASS after last source changes. Full corrected Python host suite running; original failed only stale filter inventory, focused inventory test now PASS2.
+Final: Ruling: follow active-pane IME policy for the shared Android window, apply mode only from active Tab and initialize it before peer sizing — prevents inactive overwrite; mixed IME behavior requires APK validation.
+Final: minor (deferred): UpdateVisibleIds called for two tabs per frame; preserve fallback correctness, measure cost later.
+Final: minor (deferred): compact lifecycle formatting; no polish edits in the correction pass.
+Final: Ruling: real GPU/Surface/IME/TalkBack/permissions/performance remain APK/device gates, GN/JNI are incremental-build gates — no host/adapter equivalence; cost if wrong: code cannot be accepted visually until actual validation.
+Final: Ruling: no speculative NavigationController crash fix — same-pin implementation has pointer-zero getter/setter guards, additional source hash in report; no crash established.
+Final: Ruling: Amazon remains outside this implementation and UNRESOLVED_GRAPHICS_BLOCKER — user excluded it from this batch; cost: Amazon still not repaired.

@@ -119,7 +119,8 @@ public class ArcSplitViewCoordinatorTest {
         Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));f.coordinator.activate(18);
         when(f.holder.setArcSplitTabs(eq(f.one),eq(f.other),anyFloat(),anyInt())).thenReturn(false);
         assertFalse(f.coordinator.enter(f.one,f.other));assertEquals(17,f.coordinator.stateForTesting().leftId());
-        assertEquals(18,f.coordinator.stateForTesting().rightId());assertSame(f.two,f.current.get());f.close();
+        assertEquals(18,f.coordinator.stateForTesting().rightId());assertSame(f.two,f.current.get());
+        verify(f.other).hide(org.chromium.chrome.browser.tab.TabHidingType.CHANGED_TABS);f.close();
     }
     @Test public void existingPickerAndCancellationNeverCreateTab() {
         Fixture f=new Fixture();f.coordinator.requestSplit(f.one);
@@ -155,5 +156,58 @@ public class ArcSplitViewCoordinatorTest {
         Fixture f=new Fixture("17,18,18,0.65",true);assertFalse(f.coordinator.stateForTesting().isSplit());
         assertTrue(f.coordinator.enter(f.one,f.two));f.coordinator.swap();f.coordinator.settleForTesting();f.coordinator.exit();
         assertEquals("17,18,18,0.65",f.prefs.getString("arc_split_task_"+f.a.getTaskId(),null));f.close();
+    }
+    @Test public void unchangedGeometryStillRebindsInactiveContentAndForeground() {
+        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));
+        ArgumentCaptor<TabObserver> one=ArgumentCaptor.forClass(TabObserver.class),two=ArgumentCaptor.forClass(TabObserver.class);
+        verify(f.one).addObserver(one.capture());verify(f.two).addObserver(two.capture());clearInvocations(f.holder);
+        two.getValue().onContentChanged(f.two);verify(f.holder).setArcSplitTabs(f.one,f.two,.5f,17);
+        clearInvocations(f.holder);one.getValue().onHidden(f.one,org.chromium.chrome.browser.tab.TabHidingType.ACTIVITY_HIDDEN);
+        one.getValue().onShown(f.one,1);verify(f.holder).setArcSplitTabs(f.one,f.two,.5f,17);f.close();
+    }
+    @Test public void savedPairSurvivesTransientStartupReadiness() {
+        Fixture f=new Fixture();String key="arc_split_task_"+f.a.getTaskId();
+        f.coordinator.destroy();f.prefs.edit().putString(key,"17,18,18,0.65").apply();when(f.holder.canPresentArcSplit()).thenReturn(false);
+        f.coordinator=new ArcSplitViewCoordinator(f.a,f.root,f.holder,()->f.model,()->f.creator,f.current::get,()->{},()->true,f.prefs,
+            new ArcSplitViewCoordinator.Labels("Split","Existing","New","Exit","Unsupported","No tabs","Swap","Blocked"));
+        f.current.set(null);f.coordinator.refresh(false);assertEquals("17,18,18,0.65",f.prefs.getString(key,null));
+        f.current.set(f.one);f.coordinator.refresh(true);assertEquals("17,18,18,0.65",f.prefs.getString(key,null));
+        when(f.holder.canPresentArcSplit()).thenReturn(true);f.coordinator.refresh(true);
+        assertTrue(f.coordinator.stateForTesting().isSplit());assertSame(f.two,f.current.get());verifyNoInteractions(f.creator);f.close();
+    }
+    @Test public void asymmetricRatioKeepsTwoUsablePanesWithoutLosingIntendedRatio() {
+        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));f.coordinator.stateForTesting().setRatio(.2f);
+        when(f.holder.getArcSplitViewport()).thenReturn(new android.graphics.Rect(0,0,500,800));f.coordinator.refresh(true);
+        verify(f.holder).setArcSplitTabs(f.one,f.two,.48f,17);assertEquals(.2f,f.coordinator.stateForTesting().ratio(),.001f);
+        when(f.holder.getArcSplitViewport()).thenReturn(new android.graphics.Rect(0,0,2000,800));f.coordinator.refresh(true);
+        verify(f.holder).setArcSplitTabs(f.one,f.two,.2f,17);f.close();
+    }
+    @Test public void sceneReadinessEventRetriesPendingRestoreWithoutLayoutChanges() {
+        Fixture f=new Fixture();f.coordinator.destroy();f.prefs.edit().putString("arc_split_task_"+f.a.getTaskId(),"17,18,18,0.65").apply();
+        when(f.holder.canPresentArcSplit()).thenReturn(false);clearInvocations(f.holder);
+        f.coordinator=new ArcSplitViewCoordinator(f.a,f.root,f.holder,()->f.model,()->f.creator,f.current::get,()->{},()->true,f.prefs,
+            new ArcSplitViewCoordinator.Labels("Split","Existing","New","Exit","Unsupported","No tabs","Swap","Blocked"));
+        f.coordinator.refresh(true);assertFalse(f.coordinator.stateForTesting().isSplit());
+        ArgumentCaptor<CompositorViewHolder.FrameRequestObserver> frame=ArgumentCaptor.forClass(CompositorViewHolder.FrameRequestObserver.class);
+        verify(f.holder).addFrameRequestObserver(frame.capture());when(f.holder.canPresentArcSplit()).thenReturn(true);
+        frame.getValue().onFrameRequested();ArgumentCaptor<Runnable> posted=ArgumentCaptor.forClass(Runnable.class);verify(f.holder).post(posted.capture());
+        posted.getValue().run();assertTrue(f.coordinator.stateForTesting().isSplit());f.close();verify(f.holder).removeFrameRequestObserver(frame.getValue());
+    }
+    @Test public void minimumPanePixelsRemainUsableAtFractionalDensityAndRtl() {
+        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));f.root.setLayoutDirection(android.view.View.LAYOUT_DIRECTION_RTL);
+        for(float density:new float[]{1f,1.5f,2.625f}) {
+            f.a.getResources().getDisplayMetrics().density=density;f.coordinator.stateForTesting().setRatio(.8f);
+            int width=Math.round(500*density),minimum=Math.round(240*density);
+            when(f.holder.getArcSplitViewport()).thenReturn(new android.graphics.Rect(0,0,width,800));clearInvocations(f.holder);f.coordinator.refresh(true);
+            ArgumentCaptor<Float> ratio=ArgumentCaptor.forClass(Float.class);verify(f.holder).setArcSplitTabs(eq(f.one),eq(f.two),ratio.capture(),eq(17));
+            int left=Math.round(width*ratio.getValue());assertTrue(left>=minimum);assertTrue(width-left>=minimum);
+            assertEquals(17,f.coordinator.stateForTesting().leftId());assertEquals(.8f,f.coordinator.stateForTesting().ratio(),.001f);
+        }
+        f.a.getResources().getDisplayMetrics().density=1f;f.close();
+    }
+    @Test public void failedFirstPresentationRestoresSelectionAndHidesUnattachedPeer() {
+        Fixture f=new Fixture();when(f.holder.setArcSplitTabs(any(),any(),anyFloat(),anyInt())).thenReturn(false);
+        assertFalse(f.coordinator.enter(f.two,f.other));assertSame(f.one,f.current.get());
+        verify(f.other).hide(org.chromium.chrome.browser.tab.TabHidingType.CHANGED_TABS);assertFalse(f.coordinator.stateForTesting().isSplit());f.close();
     }
 }

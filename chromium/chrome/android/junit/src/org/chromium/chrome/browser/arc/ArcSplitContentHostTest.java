@@ -53,4 +53,15 @@ public class ArcSplitContentHostTest {
         when(two.getContentView()).thenReturn(null);when(two.getView()).thenReturn(null);
         host.setAttached(true);assertEquals(0,parent.getChildCount());host.clear();a.finish();
     }
+    @Test public void selectionTransfersFocusButNeverStealsFromOmniboxOrModal() {
+        Activity a=Robolectric.buildActivity(Activity.class).setup().get();FrameLayout parent=new FrameLayout(a);a.setContentView(parent);
+        Tab one=tab(a,17),two=tab(a,42);ArcSplitContentHost host=new ArcSplitContentHost(parent);
+        one.getContentView().setFocusableInTouchMode(true);two.getContentView().setFocusableInTouchMode(true);
+        assertTrue(host.show(one,two,new Rect(0,0,1000,600),.5f));one.getContentView().requestFocus();
+        assertTrue(host.focus(two,null,false));assertTrue(two.getContentView().hasFocus());assertFalse(one.getContentView().hasFocus());
+        assertFalse(host.focus(one,null,true));assertTrue(two.getContentView().hasFocus());
+        android.widget.EditText address=new android.widget.EditText(a);parent.addView(address);address.requestFocus();
+        assertFalse(host.focus(one,address,false));assertTrue(address.hasFocus());
+        host.clear();a.finish();
+    }
 }

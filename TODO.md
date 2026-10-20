@@ -279,8 +279,11 @@ Plan aprobado: `docs/superpowers/plans/2026-10-20-arc-split-view.md`.
 
 - [x] ~~Conectar menú de pestaña a selector existente/nueva y salida~~ — usa TabModel/TabCreator reales; pruebas del controlador en adaptadores nativos PASS.
 - [x] ~~Implementar viewport por panel y preferencia móvil temporal al estrechar~~ — umbrales 600/640 dp, sin recarga ni cambio de zoom/preferencia global. Variantes de servidor pueden requerir navegación explícita.
-- [x] ~~Regresiones de recuperación de ContentView, restauración de IDs e incógnito~~ — 50 casos split/controlador/puente Java con límites nativos explícitos; no son GREEN gráfico.
+- [x] ~~Regresiones de recuperación de ContentView, restauración de IDs e incógnito~~ — 68 casos split/controlador/puente Java con límites nativos explícitos; no son GREEN gráfico.
 - [ ] Verificar en APK: adaptación móvil por panel, sugerencias, ambos contenidos vivos, IME, diálogos, cierre, TalkBack, persistencia y transición suave.
 - [ ] Build progresivo del conjunto completo tras revisión/gates/checkpoint; no hay run nuevo todavía.
 
 Informe de implementación y límites: [R5.3](docs/validation/R5_3_SPLIT_VIEW.md).
+
+- [x] ~~Corregir los cinco hallazgos importantes de revisión del split~~ — recuperación, foco, teclado activo, arranque diferido y mínimos por panel con RED/GREEN; se incluye rollback de entrada fallida.
+- [ ] Medir coste de mantener dos pestañas visibles y ejecutar la matriz de IME, TalkBack, permisos y Surface con la nueva APK; no cerrado por tests host.
