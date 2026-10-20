@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
-"""Actual split controls/animator Android Views; native Tab/compositor execution is separate."""
-import argparse,subprocess,sys
+"""Split JVM probe; explicit native adapters, not Chromium's full native runner."""
+import argparse,hashlib,subprocess,sys
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser(description=__doc__)
+p.add_argument('--test-class',action='append',help='Run only a named class from this probe (repeatable)')
 p.add_argument('--controller',action='store_true');p.add_argument('--host',action='store_true');p.add_argument('--classpath-file',type=Path,required=True);p.add_argument('--java-home',type=Path,required=True);p.add_argument('--work',type=Path,required=True)
 a=p.parse_args();a.work.mkdir(parents=True,exist_ok=True);cp=a.classpath_file.read_text().strip();classes=a.work/'classes';classes.mkdir(exist_ok=True)
 arc=ROOT/'chromium/chrome/android/java/src/org/chromium/chrome/browser/arc';test=ROOT/'chromium/chrome/android/junit/src/org/chromium/chrome/browser/arc'
+# Match Chromium CI: final classes must not be silently mocked by inline Mockito.
+mockmaker=classes/'mockito-extensions/org.mockito.plugins.MockMaker';mockmaker.parent.mkdir(parents=True,exist_ok=True);mockmaker.write_text('mock-maker-subclass\n')
 sources=[arc/'ArcSplitResizePolicy.java',arc/'ArcSplitGeometry.java',arc/'ArcSplitFrameView.java',arc/'ArcSplitViewportPolicy.java',test/'ArcSplitViewportPolicyTest.java',arc/'ArcSplitDividerView.java',arc/'ArcSplitSwapAnimator.java',test/'ArcSplitControlsTest.java']
 tests=['org.chromium.chrome.browser.arc.ArcSplitControlsTest','org.chromium.chrome.browser.arc.ArcSplitViewportPolicyTest']
 nav=a.work/'NavigationController.java';nav.write_text('package org.chromium.content_public.browser; public interface NavigationController {boolean getUseDesktopUserAgent(); void setUseDesktopUserAgent(boolean override,boolean reloadOnChange,boolean skipOnInitialNavigation);}')
@@ -23,7 +26,7 @@ if a.controller:
  extra={
  'R.java':'package org.chromium.chrome; public class R {public static class id {public static final int tab_modal_dialog_container=2001,tab_modal_dialog_container_stub=2002;}}',
  'Profile.java':'package org.chromium.chrome.browser.profiles; public class Profile {}',
- 'GURL.java':'package org.chromium.url; public class GURL {private String value="https://example.test/";public GURL(){}public GURL(String s){value=s;}public String getSpec(){return value;}public boolean isValid(){return value.contains(":");}public String getScheme(){return value.split(":",2)[0];}}',
+ 'GURL.java':'package org.chromium.url; public class GURL {private String value="https://example.test/";public GURL(){}public static boolean nativeTestContext;public GURL(String s){if(!nativeTestContext)throw new AssertionError("Chromium native test context not initialized; use BaseRobolectricTestRunner");value=s;}public String getSpec(){return value;}public boolean isValid(){return value.contains(":");}public String getScheme(){return value.split(":",2)[0];}}',
  'WindowAndroid.java':'package org.chromium.ui.base; public class WindowAndroid {public java.lang.ref.WeakReference<android.app.Activity> getActivity(){return null;}}',
  'Tab.java':'package org.chromium.chrome.browser.tab; public interface Tab {int INVALID_TAB_ID=-1; int getId(); boolean isDestroyed(); org.chromium.content_public.browser.WebContents getWebContents(); boolean isClosing(); boolean isNativePage(); boolean isHidden(); boolean isIncognito(); org.chromium.chrome.browser.profiles.Profile getProfile(); org.chromium.ui.base.WindowAndroid getWindowAndroid(); org.chromium.components.embedder_support.view.ContentView getContentView(); android.view.View getView(); String getTitle(); org.chromium.url.GURL getUrl(); void show(int type); void hide(int type); void reload(); int loadUrl(org.chromium.content_public.browser.LoadUrlParams p); void addObserver(TabObserver o); void removeObserver(TabObserver o);}',
  'TabObserver.java':'package org.chromium.chrome.browser.tab; public interface TabObserver {default void onShown(Tab t,int type){} default void onHidden(Tab t,int type){} default void onDestroyed(Tab t){} default void onContentChanged(Tab t){} default void onActivityAttachmentChanged(Tab t,org.chromium.ui.base.WindowAndroid w){} }',
@@ -31,7 +34,25 @@ if a.controller:
  'TabModelObserver.java':'package org.chromium.chrome.browser.tabmodel; import org.chromium.chrome.browser.tab.Tab; public interface TabModelObserver {default void didSelectTab(Tab t,int type,int last){} default void willCloseTabs(java.util.List<Tab> tabs,boolean all,boolean undo){} default void willCloseTab(Tab t,boolean alone){} default void tabRemoved(Tab t){} default void restoreCompleted(){} default void onDidActiveStateChange(TabModel model,boolean active){} }',
  'TabCreator.java':'package org.chromium.chrome.browser.tabmodel; public interface TabCreator {org.chromium.chrome.browser.tab.Tab createNewTab(org.chromium.content_public.browser.LoadUrlParams params,int type,org.chromium.chrome.browser.tab.Tab parent);}',
  'WebContents.java':'package org.chromium.content_public.browser; public interface WebContents {boolean isDestroyed(); int getVirtualKeyboardMode(); NavigationController getNavigationController();}',
- 'ResourceRequestBody.java':'package org.chromium.content_public.common; public class ResourceRequestBody {}',
+ 'BaseRobolectricTestRunner.java':'''package org.chromium.base.test;
+ public class BaseRobolectricTestRunner extends org.robolectric.RobolectricTestRunner {
+  public BaseRobolectricTestRunner(Class<?> c) throws org.junit.runners.model.InitializationError {super(c);}
+  @Override protected Class<? extends org.robolectric.TestLifecycle> getTestLifecycleClass(){return Lifecycle.class;}
+  public static class Lifecycle extends org.robolectric.DefaultTestLifecycle {
+   @Override public void beforeTest(java.lang.reflect.Method method){super.beforeTest(method);org.chromium.url.GURL.nativeTestContext=true;}
+   @Override public void afterTest(java.lang.reflect.Method method){org.chromium.url.GURL.nativeTestContext=false;super.afterTest(method);}
+  }
+ }''',
+ 'ResourceRequestBodyJni.java':'''package org.chromium.content_public.common;
+ public class ResourceRequestBodyJni {private static ResourceRequestBody.Natives instance;
+ public static ResourceRequestBody.Natives get(){if(instance==null)throw new AssertionError("Native body factory missing");return instance;}
+ public static void setInstanceForTesting(ResourceRequestBody.Natives n){instance=n;}}
+ ''',
+ 'CalledByNative.java':'package org.jni_zero; public @interface CalledByNative {}',
+ 'JNINamespace.java':'package org.jni_zero; public @interface JNINamespace {String value();}',
+ 'NativeMethods.java':'package org.jni_zero; public @interface NativeMethods {}',
+ 'VisibleForTesting.java':'package androidx.annotation; public @interface VisibleForTesting {int PACKAGE_PRIVATE=3;int otherwise() default 2;}',
+ 'NullMarked.java':'package org.chromium.build.annotations; public @interface NullMarked {}',
  'LoadUrlParams.java':'package org.chromium.content_public.browser; public class LoadUrlParams {private final String url;public LoadUrlParams(String value){url=value;}public String getUrl(){return url;}public void setHasUserGesture(boolean value){} private String headers;private org.chromium.content_public.common.ResourceRequestBody body;private boolean renderer;public void setVerbatimHeaders(String h){headers=h;}public String getVerbatimHeaders(){return headers;}public void setPostData(org.chromium.content_public.common.ResourceRequestBody b){body=b;}public org.chromium.content_public.common.ResourceRequestBody getPostData(){return body;}public void setIsRendererInitiated(boolean r){renderer=r;}public boolean getIsRendererInitiated(){return renderer;}}',
  'TabLaunchType.java':'package org.chromium.chrome.browser.tab; public class TabLaunchType {public static final int FROM_CHROME_UI=0,FROM_LONGPRESS_FOREGROUND=1;}',
  'TabSelectionType.java':'package org.chromium.chrome.browser.tab; public class TabSelectionType {public static final int FROM_USER=1;}',
@@ -42,6 +63,10 @@ if a.controller:
   path=a.work/name;path.write_text(text)
   if path not in sources:sources.append(path)
 if a.controller:
+ # Preserve the real final class, private constructor and JNI factory contract.
+ body_source=ROOT/'tests/pinned/ResourceRequestBody.java'
+ assert hashlib.sha256(body_source.read_bytes()).hexdigest()=='f4fbbdceaa3e3ec44eeaca903782fc172090ce34112f8296acc7810cdcdeaaec', 'Pinned ResourceRequestBody changed'
+ sources.append(body_source)
  sys.path.insert(0,str(ROOT/'tests'))
  from arc_toolbar_probe import method_body
  scene=(ROOT/'.source-modified/chrome/android/java/src/org/chromium/chrome/browser/compositor/scene_layer/StaticTabSceneLayer.java').read_text()
@@ -144,5 +169,10 @@ if a.controller:
  assert 'focusArcSplitTab(active);' in method_body(holder_source,r'public boolean setArcSplitTabs\('), 'Initial presentation must transfer pane focus'
  tests.append('org.chromium.chrome.browser.arc.NativeSplitBridgeTest')
 subprocess.run([str(a.java_home/'bin/javac'),'-cp',cp,'-d',str(classes),*map(str,sources)],check=True)
+if a.test_class:
+ assert set(a.test_class)<=set(tests), 'Unknown test class'
+ tests=a.test_class
 r=subprocess.run([str(a.java_home/'bin/java'),'-ea','-Drobolectric.conscryptMode=OFF','-Drobolectric.dependency.repo.url=https://repo.maven.apache.org/maven2','-cp',str(classes)+':'+cp,'org.junit.runner.JUnitCore',*tests])
-print('SCOPE=ACTUAL_ANDROID_CONTROLS_AND_ANIMATOR_NOT_WEB_COMPOSITION');raise SystemExit(r.returncode)
+print('SCOPE=ACTUAL_ANDROID_CONTROLS_AND_ANIMATOR_NOT_WEB_COMPOSITION');
+if a.controller:print('NATIVE_BOUNDARIES=BASE_RUNNER_AND_GURL_ADAPTERS; REAL_PINNED_RESOURCE_REQUEST_BODY; CI_NATIVE_GATE_REQUIRED')
+raise SystemExit(r.returncode)

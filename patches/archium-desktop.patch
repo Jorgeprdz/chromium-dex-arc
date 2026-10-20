@@ -12862,7 +12862,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitVi
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitViewCoordinatorTest.java
-@@ -0,0 +1,296 @@
+@@ -0,0 +1,306 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -12876,7 +12876,7 @@ new file mode 100644
 +import org.junit.Test;
 +import org.junit.runner.RunWith;
 +import org.robolectric.Robolectric;
-+import org.robolectric.RobolectricTestRunner;
++import org.chromium.base.test.BaseRobolectricTestRunner;
 +import org.robolectric.annotation.*;
 +import org.chromium.chrome.browser.compositor.CompositorViewHolder;
 +import org.chromium.chrome.browser.profiles.Profile;
@@ -12887,7 +12887,7 @@ new file mode 100644
 +import org.chromium.chrome.browser.tabmodel.TabModelObserver;
 +import org.chromium.ui.base.WindowAndroid;
 +import org.mockito.ArgumentCaptor;
-+@RunWith(RobolectricTestRunner.class)
++@RunWith(BaseRobolectricTestRunner.class)
 +@Config(manifest=Config.NONE,sdk={30,36})
 +@GraphicsMode(GraphicsMode.Mode.LEGACY)
 +@SQLiteMode(SQLiteMode.Mode.LEGACY)
@@ -12998,12 +12998,22 @@ new file mode 100644
 +        assertEquals(.3f,f.coordinator.stateForTesting().ratio(),.001f);f.close();
 +    }
 +    @Test public void nativeLinkPreservesHeadersBodyAndRendererFlag() {
-+        Fixture f=new Fixture();var body=mock(org.chromium.content_public.common.ResourceRequestBody.class);
-+        when(f.creator.createNewTab(any(),anyInt(),eq(f.one))).thenReturn(f.other);
-+        assertTrue(ArcSplitLinkRouter.openNative(f.one,new org.chromium.url.GURL("https://example.test/item"),"X-Test: fixture",body,true));
-+        ArgumentCaptor<org.chromium.content_public.browser.LoadUrlParams> params=ArgumentCaptor.forClass(org.chromium.content_public.browser.LoadUrlParams.class);
-+        verify(f.creator).createNewTab(params.capture(),anyInt(),eq(f.one));
-+        assertEquals("X-Test: fixture",params.getValue().getVerbatimHeaders());assertSame(body,params.getValue().getPostData());assertTrue(params.getValue().getIsRendererInitiated());f.close();
++        // ResourceRequestBody is final: use its real factory with a scoped JNI boundary.
++        var nativeBody=mock(org.chromium.content_public.common.ResourceRequestBody.Natives.class);
++        byte[] encoded={1,2,3};
++        when(nativeBody.createResourceRequestBodyFromBytes(any())).thenReturn(encoded);
++        org.chromium.content_public.common.ResourceRequestBody.setNativesForTesting(nativeBody);
++        try {
++            Fixture f=new Fixture();var body=org.chromium.content_public.common.ResourceRequestBody.createFromBytes(new byte[]{42});
++            assertSame(encoded,body.getEncodedNativeForm());
++            when(f.creator.createNewTab(any(),anyInt(),eq(f.one))).thenReturn(f.other);
++            assertTrue(ArcSplitLinkRouter.openNative(f.one,new org.chromium.url.GURL("https://example.test/item"),"X-Test: fixture",body,true));
++            ArgumentCaptor<org.chromium.content_public.browser.LoadUrlParams> params=ArgumentCaptor.forClass(org.chromium.content_public.browser.LoadUrlParams.class);
++            verify(f.creator).createNewTab(params.capture(),anyInt(),eq(f.one));
++            assertEquals("X-Test: fixture",params.getValue().getVerbatimHeaders());assertSame(body,params.getValue().getPostData());assertTrue(params.getValue().getIsRendererInitiated());f.close();
++        } finally {
++            org.chromium.content_public.common.ResourceRequestBody.setNativesForTesting(null);
++        }
 +    }
 +    @Test public void rendererCreatedContentsKeepNativeIdentityAndPriorNeighborTabAlive() {
 +        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));f.coordinator.stateForTesting().setRatio(.7f);
