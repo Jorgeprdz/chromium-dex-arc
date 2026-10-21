@@ -1,0 +1,14 @@
+test_changed_apk_bytes_cannot_use_old_checksum (test_r5_qemu.QemuTests.test_changed_apk_bytes_cannot_use_old_checksum) ... ok
+test_cli_stale_artifact_writes_failure_receipt_without_runtime (test_r5_qemu.QemuTests.test_cli_stale_artifact_writes_failure_receipt_without_runtime) ... ok
+test_missing_kvm_and_x86_hosts_are_blocked (test_r5_qemu.QemuTests.test_missing_kvm_and_x86_hosts_are_blocked) ... ok
+test_mixed_or_wrong_native_abi_is_rejected (test_r5_qemu.QemuTests.test_mixed_or_wrong_native_abi_is_rejected) ... ok
+test_native_arm64_kvm_requires_api36_arm64_image (test_r5_qemu.QemuTests.test_native_arm64_kvm_requires_api36_arm64_image) ... ok
+test_one_smoke_pass_never_implies_matrix_pass (test_r5_qemu.QemuTests.test_one_smoke_pass_never_implies_matrix_pass) ... ok
+test_package_comparison_ignores_aapt_platform_format_but_rejects_wrong_version (test_r5_qemu.QemuTests.test_package_comparison_ignores_aapt_platform_format_but_rejects_wrong_version) ... ok
+test_stale_source_or_run_is_rejected_before_android_tools (test_r5_qemu.QemuTests.test_stale_source_or_run_is_rejected_before_android_tools) ... ok
+test_valid_identity_returns_actual_hash (test_r5_qemu.QemuTests.test_valid_identity_returns_actual_hash) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.197s
+
+OK

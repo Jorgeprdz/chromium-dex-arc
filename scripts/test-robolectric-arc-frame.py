@@ -27,6 +27,7 @@ def main():
     appearance = ROOT / 'chromium/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs'
     coordinator = (arc / 'ArcDesktopCoordinator.java').read_text()
     body = method_body(coordinator, r'private void applyFrameGeometry\(')
+    outline = method_body(coordinator, r'public void getOutline\(')
     frame = method_body(coordinator, r'private int frameSurface\(')
     if args.white_rail_mutant:
         mutation = ('        if (!(mRail.getBackground() instanceof ColorDrawable railColor)\n'
@@ -75,20 +76,25 @@ public class FramePaletteProbe {
     static final class Incognito { boolean isIncognitoSelected() { return false; } }
     static final class Frame {
         final Activity mActivity;
-        final FrameLayout mRail, mCompositorViewHolder, mFrameRoot;
+        static class Compositor extends FrameLayout {
+            Compositor(android.content.Context c){super(c);}
+            void setArcContentOffsetForRail(int n) {} // offset method is exercised in transition probe.
+        }
+        final FrameLayout mRail, mFrameRoot;
+        final Compositor mCompositorViewHolder;
         final int mOriginalRailPaddingLeft=0,mOriginalRailPaddingRight=0;
         final int mOriginalContentMarginLeft=0,mOriginalContentMarginTop=0;
         final int mOriginalContentMarginRight=0,mOriginalContentMarginBottom=0;
         final Incognito mIncognitoStateProvider=new Incognito();
         final ViewOutlineProvider mArcContentOutlineProvider=new ViewOutlineProvider() {
-            public void getOutline(View v,Outline o) { o.setRect(0,0,v.getWidth(),v.getHeight()); }
+            public void getOutline(View view,Outline outline) __OUTLINE__
         };
-        boolean mDestroyed,mArcFrameActive;
+        boolean mDestroyed,mArcFrameActive,mRailViewportTransition;
         Integer mPreviewFrameColor;
         Frame(Activity a) {
             mActivity=a;
             mFrameRoot=new FrameLayout(a);mRail=new FrameLayout(a);
-            mCompositorViewHolder=new FrameLayout(a);
+            mCompositorViewHolder=new Compositor(a);
             mRail.setBackgroundColor(Color.WHITE);
             mFrameRoot.addView(mRail,new FrameLayout.LayoutParams(52,480));
             mFrameRoot.addView(mCompositorViewHolder,new FrameLayout.LayoutParams(320,480));
@@ -96,6 +102,7 @@ public class FramePaletteProbe {
         }
         int dp(int n) { return n; }
         int reservedLeftWidth() { return 52; }
+        int arcClipLeftForView(View v) {return reservedLeftWidth();}
         void applyActiveSurfaceClip() {} // Native compositor is outside this bounded view probe.
         int frameSurface(boolean incognito) __FRAME__
         void applyFrameGeometry() __BODY__
@@ -137,6 +144,13 @@ public class FramePaletteProbe {
         f.applyFrameGeometry();
         assertEquals(new Rect(52,0,320,480),f.mCompositorViewHolder.getClipBounds());
     }
+    @Test public void surfaceOutlineSupportsNativeClippingAndLowerCropIsSquare() {
+        Frame f=new Frame(activity());f.mCompositorViewHolder.layout(0,0,320,480);
+        Outline outline=new Outline();f.mArcContentOutlineProvider.getOutline(f.mCompositorViewHolder,outline);
+        Rect bounds=new Rect();assertTrue(outline.canClip());assertTrue(outline.getRect(bounds));
+        assertEquals(new Rect(52,0,320,496),bounds);
+        assertTrue(ArcDesktopPolicy.containsArcContentPoint(319,479,52,0,320,480,16));
+    }
     @Test public void chosenPaletteKeepsVisibleHueAndContrast() {
         Activity a=activity();
         try {
@@ -147,7 +161,7 @@ public class FramePaletteProbe {
         } finally { a.finish(); }
     }
 }
-'''.replace('__BODY__', body).replace('__FRAME__', frame)
+'''.replace('__BODY__', body).replace('__FRAME__', frame).replace('__OUTLINE__',outline)
     test = args.work / 'FramePaletteProbe.java'
     test.write_text(source)
     metrics = args.work / 'ArchiumWindowMetrics.java'

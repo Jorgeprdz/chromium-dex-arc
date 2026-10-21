@@ -8,6 +8,7 @@ import static org.mockito.Mockito.*;
 
 import android.app.Activity;
 import android.widget.ImageButton;
+import android.view.View;
 
 import org.junit.Test;
 import org.junit.runner.RunWith;
@@ -29,9 +30,70 @@ import java.util.concurrent.atomic.AtomicReference;
 @GraphicsMode(GraphicsMode.Mode.LEGACY)
 @SQLiteMode(SQLiteMode.Mode.LEGACY)
 public class ArcNavigationControlsTest {
+    @Test
+    public void collapsedBackRemainsVisibleAndDispatchesToSelectedNativeTab() {
+        Tab tab = mock(Tab.class);
+        ImageButton[] buttons = buttons();
+        ArcNavigationControls controls = new ArcNavigationControls(() -> tab, buttons[0], buttons[1], buttons[2]);
+        controls.setExpanded(false);
+        controls.refresh();
+        assertEquals(View.VISIBLE, buttons[0].getVisibility());
+        assertFalse(buttons[0].isEnabled());
+        assertEquals(View.GONE, buttons[1].getVisibility());
+        assertEquals(View.GONE, buttons[2].getVisibility());
+        when(tab.canGoBack()).thenReturn(true);
+        controls.refresh();
+        buttons[0].performClick();
+        verify(tab).goBack();
+        controls.setExpanded(true);
+        for (ImageButton button : buttons) assertEquals(View.VISIBLE, button.getVisibility());
+        controls.destroy();
+        buttons[0].performClick();
+        verify(tab, times(1)).goBack();
+    }
+    @Test public void longPressHistoryUsesDirectionAndKeepsSimpleNavigation() {
+        Tab tab = mock(Tab.class); when(tab.canGoBack()).thenReturn(true); when(tab.canGoForward()).thenReturn(true);
+        ImageButton[] buttons = buttons();
+        ArcNavigationControls controls = new ArcNavigationControls(() -> tab, buttons[0], buttons[1], buttons[2]);
+        java.util.List<Boolean> directions = new java.util.ArrayList<>();
+        controls.setHistoryActions((anchor, forward) -> {directions.add(forward); return true;}, () -> {});
+        controls.refresh();
+        assertTrue(buttons[0].performLongClick()); assertTrue(buttons[1].performLongClick());
+        assertEquals(java.util.List.of(false, true), directions);
+        buttons[0].performClick(); buttons[1].performClick(); verify(tab).goBack(); verify(tab).goForward();
+        controls.destroy(); assertFalse(buttons[0].performLongClick());
+    }
+    @Test public void historyDismissesOnHideMutationSelectionAndDestroy() {
+        Tab tab = mock(Tab.class); when(tab.canGoBack()).thenReturn(true);
+        AtomicReference<Tab> current = new AtomicReference<>(tab);
+        ImageButton[] buttons = buttons();
+        ArcNavigationControls controls = new ArcNavigationControls(current::get, buttons[0], buttons[1], buttons[2]);
+        java.util.concurrent.atomic.AtomicInteger dismissed = new java.util.concurrent.atomic.AtomicInteger();
+        controls.setHistoryActions((v, forward) -> true, dismissed::incrementAndGet);
+        controls.refresh();
+        ArgumentCaptor<TabObserver> observer = ArgumentCaptor.forClass(TabObserver.class);
+        verify(tab).addObserver(observer.capture()); int before = dismissed.get();
+        observer.getValue().onHidden(tab, 0); assertEquals(before + 1, dismissed.get());
+        observer.getValue().onNavigationEntriesDeleted(tab); assertEquals(before + 2, dismissed.get());
+        current.set(null); controls.refresh(); assertEquals(before + 3, dismissed.get());
+        controls.destroy(); assertEquals(before + 4, dismissed.get());
+    }
+    @Test public void disabledOrDestroyedTabCannotOpenHistory() {
+        Tab tab = mock(Tab.class); ImageButton[] buttons = buttons();
+        ArcNavigationControls controls = new ArcNavigationControls(() -> tab, buttons[0], buttons[1], buttons[2]);
+        java.util.concurrent.atomic.AtomicInteger opens = new java.util.concurrent.atomic.AtomicInteger();
+        controls.setHistoryActions((v, forward) -> {opens.incrementAndGet(); return true;}, () -> {});
+        controls.refresh(); assertFalse(buttons[0].performLongClick()); assertEquals(0, opens.get());
+        when(tab.canGoBack()).thenReturn(true); when(tab.isDestroyed()).thenReturn(true);
+        assertFalse(buttons[0].performLongClick()); assertEquals(0, opens.get()); controls.destroy();
+    }
     private ImageButton[] buttons() {
         Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
-        return new ImageButton[] {new ImageButton(activity), new ImageButton(activity), new ImageButton(activity)};
+        ImageButton[] result = {new ImageButton(activity), new ImageButton(activity), new ImageButton(activity)};
+        android.widget.LinearLayout row = new android.widget.LinearLayout(activity);
+        for (ImageButton button : result) row.addView(button);
+        activity.setContentView(row);
+        return result;
     }
 
     @Test

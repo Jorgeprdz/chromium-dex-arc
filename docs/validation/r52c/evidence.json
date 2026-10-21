@@ -1,0 +1,156 @@
+{
+  "installed_apk_sha256": "08da74aa96c34d414d9f96324f65a8be1df69067288f4079531c6de73a802b31",
+  "source_run_id": "39296066030",
+  "source_sha": "3db367adff50d423b8c4475d10165d2790f6065a",
+  "dialog_fix_present": false,
+  "dialog_fix_sha": "51847556e761ca0600a4aa824531e40d200fdf17",
+  "backend": "GraphiteDawnVulkan",
+  "gpu": "Adreno 830 / ANGLE Vulkan 1.3.284",
+  "amazon_root_cause": "NOT_PROVEN",
+  "amazon_visual": "FAIL_REPRODUCED",
+  "amazon_image_network": {
+    "response_records": 168,
+    "http_or_transport_failures": 0
+  },
+  "controlled_repaint": {
+    "A_scroll": {
+      "pixels": 1002320,
+      "changed_pixels": 0,
+      "changed_fraction": 0.0,
+      "max_rgb_delta": 0
+    },
+    "B_scroll": {
+      "pixels": 1002320,
+      "changed_pixels": 0,
+      "changed_fraction": 0.0,
+      "max_rgb_delta": 0
+    },
+    "phase_change": {
+      "pixels": 1002320,
+      "changed_pixels": 539139,
+      "changed_fraction": 0.5378910926650171,
+      "max_rgb_delta": 238
+    },
+    "physical_mapping": {
+      "offset_x": 224,
+      "offset_y": 8,
+      "sample_abs_rgb_error": 0,
+      "sample_points": 100,
+      "derived_from_fixture": true
+    },
+    "A-before_physical_vs_web": {
+      "pixels": 1002320,
+      "changed_pixels": 0,
+      "changed_fraction": 0.0,
+      "max_rgb_delta": 0
+    },
+    "A-after-scroll_physical_vs_web": {
+      "pixels": 1002320,
+      "changed_pixels": 0,
+      "changed_fraction": 0.0,
+      "max_rgb_delta": 0
+    },
+    "B-before_physical_vs_web": {
+      "pixels": 1002320,
+      "changed_pixels": 0,
+      "changed_fraction": 0.0,
+      "max_rgb_delta": 0
+    },
+    "B-after-scroll_physical_vs_web": {
+      "pixels": 1002320,
+      "changed_pixels": 0,
+      "changed_fraction": 0.0,
+      "max_rgb_delta": 0
+    },
+    "scope": "32 visible image-element ROIs, two phases/two scroll cycles only; not Amazon PASS"
+  },
+  "controlled_avif_png": {
+    "cases": 12,
+    "decoded": 12,
+    "samples": 3,
+    "visual": "VISIBLE_NORMAL_AND_MULTIPLY",
+    "scope": "Three actual downloaded samples, AVIF/CPU-PNG, simple composition only"
+  },
+  "trace_capture": {
+    "perfetto_exit": 0,
+    "pull_exit": 0,
+    "bytes": 8383068,
+    "sha256": "52bcd56670f4e917a9d59dd7f52c4f4fd6c78159ade3f94d8ae048a2a0b31694",
+    "correlation": {
+      "correlation": "NOT_CORRELATED",
+      "reason": "Trace finished before the first screenshot and requested scroll",
+      "trace_start_unix": 1792438508.9017363,
+      "trace_end_unix": 1792438516.997956,
+      "before_capture_utc": "2026-10-19T19:35:22.763Z",
+      "after_capture_utc": "2026-10-19T19:35:26.942Z",
+      "foreground_interruption_observed": true,
+      "device_ui_automation_stopped": true,
+      "no_root_cause_claim": true
+    }
+  },
+  "collector_fix": {
+    "red_tests": 15,
+    "red_failures": 1,
+    "green_tests": 15,
+    "green_failures": 0
+  },
+  "evidence": [
+    {
+      "private_basename": "amazon-initial.web.PRIVATE.png",
+      "sha256": "68875258521756b3218cdc90b6ca9c2f2f673e7a130715aab19529b323c489ab",
+      "bytes": 832328
+    },
+    {
+      "private_basename": "amazon-initial.physical.PRIVATE.png",
+      "sha256": "1928237125d1a4f352dca882a1a2757182d6b72181774ba375dac0856bf903ec",
+      "bytes": 1023540
+    },
+    {
+      "private_basename": "amazon-scrolled.web.PRIVATE.png",
+      "sha256": "a1f724d28161e807132b95c4bd7a02c8e971e144302f6b0f987b3eb923cf5f8d",
+      "bytes": 1070637
+    },
+    {
+      "private_basename": "amazon-scrolled.physical.PRIVATE.png",
+      "sha256": "26c3efa0c09e957a63d4fcba762e0009a0c01aa53a43a372e055e254c5a17773",
+      "bytes": 1296112
+    },
+    {
+      "private_basename": "amazon-original-images.json",
+      "sha256": "c5b4606e0d72b7739a864f7d24fcc7cfc7a187397e864c9e9c893ecdd0b0d407",
+      "bytes": 7381
+    },
+    {
+      "private_basename": "avif-probe.web.PRIVATE.png",
+      "sha256": "50076ff2d53892753a00505d8fdeacd99e11ab2d8b58453e33ca7257f4e9d630",
+      "bytes": 655842
+    },
+    {
+      "private_basename": "gpu-info.json",
+      "sha256": "9e4b614fd9c6b0303e77eb36c6386b49f2c59671df93bb9453c48c32c09c9a23",
+      "bytes": 7608
+    },
+    {
+      "private_basename": "trace-path-red.log",
+      "sha256": "7087b1cabc0b1c6d917d4d6f32de27037bdfb0e73138a8366d332d7283b3d2b3",
+      "bytes": 3961
+    },
+    {
+      "private_basename": "trace-path-green.log",
+      "sha256": "1c2c96ab76f42a168685b87b26fa8eea8b5dbcbca92c10a24d37500d442bb0e7",
+      "bytes": 3317
+    }
+  ],
+  "amazon-initial": {
+    "utc": "2026-10-19T19:27:21.459Z",
+    "visible": 53,
+    "decoded": 53,
+    "failed": 0
+  },
+  "amazon-scrolled": {
+    "utc": "2026-10-19T19:27:26.409Z",
+    "visible": 48,
+    "decoded": 48,
+    "failed": 0
+  }
+}

@@ -4053,6 +4053,33 @@ public class VerticalTabListCoordinatorUnitTest {
         assertEquals(4, mTabModel.getCount());
     }
 
+    // Real coordinator/model adapter, mocked TabModel; visual/GPU acceptance remains separate.
+    @Test
+    public void testArcStandaloneReordersKeepRowIdentityExpandedAndCollapsed() {
+        List<Tab> tabs = setupMockTabModelWithPinnedAndRegularTabs(0, 3);
+        createCoordinator();
+        mCoordinator.setTabVisibilityPredicate(tabId -> true);
+        TabListRecyclerView recycler =
+                mCoordinator.getView().findViewById(R.id.tab_list_recycler_view);
+        SimpleRecyclerViewAdapter adapter = (SimpleRecyclerViewAdapter) recycler.getAdapter();
+        List<PropertyModel> original = new ArrayList<>();
+        for (int i = 0; i < 3; i++) original.add(adapter.getModelList().get(i).model);
+        for (int state : new int[] {RailCollapseState.EXPANDED, RailCollapseState.COLLAPSED}) {
+            mCoordinator.setRailCollapseState(state);
+            for (int repeat = 0; repeat < 12; repeat++) {
+                Collections.rotate(tabs, 1);
+                mCoordinator.refreshTabPresentation();
+                assertEquals(3, adapter.getModelList().size());
+                for (int i = 0; i < 3; i++) {
+                    PropertyModel row = adapter.getModelList().get(i).model;
+                    int id = tabs.get(i).getId();
+                    assertEquals(id, row.get(TabProperties.TAB_ID));
+                    org.junit.Assert.assertSame(original.get(id - 1), row);
+                }
+            }
+        }
+    }
+
     // SIMULATED_BOUNDARY: pinned/regular production projection with a mocked Chromium TabModel.
     @Test
     public void testTabVisibilityPredicate_FiltersPinnedAndRegularWithoutClosingGlobalTabs() {

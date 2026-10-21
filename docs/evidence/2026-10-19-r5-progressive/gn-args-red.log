@@ -1,0 +1,26 @@
+test_incompatible_gn_args_stop_before_transition_without_overwrite (test_r5_build_routing.R5BuildRoutingTests.test_incompatible_gn_args_stop_before_transition_without_overwrite) ... FAIL
+
+======================================================================
+FAIL: test_incompatible_gn_args_stop_before_transition_without_overwrite (test_r5_build_routing.R5BuildRoutingTests.test_incompatible_gn_args_stop_before_transition_without_overwrite)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/Archium-R5/tests/test_r5_build_routing.py", line 115, in test_incompatible_gn_args_stop_before_transition_without_overwrite
+    self.assert_blocked(r,2)
+  File "/workspace/Archium-R5/tests/test_r5_build_routing.py", line 100, in assert_blocked
+    self.assertEqual(r.returncode,code,r.stdout+r.stderr)
+AssertionError: 0 != 2 : FASE=S1 SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb RUN=123456
+FASE=S2 SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb RUN=123456
+NINJA_QUERY=PASS manifests=1 graph_source=/tmp/tmp3nmqp88c/runner/chromium-archium/checkout/src/out/Archium scope=isolated_manifest_query
+PASSWORD_FEATURE=DEPRECATED effective_flag=false apk_dependencies=ABSENT
+ROBOLECTRIC_PASS=PASS scope=early_Chromium_suites
+JNI_LINK_PASS=PASS scope=real_APK_libchrome_link_and_symbols
+FASE=S3 SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb RUN=123456
+PASSWORD_TESTS=DEPRECATED OUT_OF_SCOPE; no native test PASS claimed
+FASE=S4 SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb RUN=123456
+FASE=S5 SHA=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb RUN=123456
+
+
+----------------------------------------------------------------------
+Ran 1 test in 8.556s
+
+FAILED (failures=1)

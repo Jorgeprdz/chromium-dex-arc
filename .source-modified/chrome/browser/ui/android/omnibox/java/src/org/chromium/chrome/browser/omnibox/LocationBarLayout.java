@@ -7,11 +7,13 @@ package org.chromium.chrome.browser.omnibox;
 import android.content.Context;
 import android.content.res.ColorStateList;
 import android.content.res.Resources;
+import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.os.Parcelable;
 import android.util.AttributeSet;
 import android.util.SparseArray;
 import android.view.LayoutInflater;
+import android.view.MotionEvent;
 import android.view.View;
 import android.widget.ImageButton;
 
@@ -44,6 +46,8 @@ import org.chromium.components.browser_ui.widget.CompositeTouchDelegate;
 import org.chromium.components.browser_ui.widget.chips.ChipView;
 import org.chromium.ui.base.DeviceFormFactor;
 import org.chromium.ui.base.WindowAndroid;
+
+import java.util.function.BooleanSupplier;
 
 /** This class represents the location bar where the user types in URLs and search terms. */
 @NullMarked
@@ -233,6 +237,93 @@ public class LocationBarLayout extends ConstraintLayout {
 
     /** Optional window palette; phone layouts retain their native appearance. */
     public void setArcSurfaceColor(@Nullable Integer color) {}
+
+    /** Rectangular address row when the Arc shell places it above the page. */
+    public void setArcTopBar(boolean active) {}
+
+    private @Nullable BooleanSupplier mArcAddressPopupOpener;
+    private boolean mArcConsumesAddressGesture;
+
+    /** Optional Arc entry; returning false keeps Chromium's original touch dispatch. */
+    public void setArcAddressPopupOpener(@Nullable BooleanSupplier opener) {
+        mArcAddressPopupOpener = opener;
+        if (opener == null) mArcConsumesAddressGesture = false;
+    }
+
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent event) {
+        int action = event.getActionMasked();
+        // DOWN begins a new stream. Reparenting this editor into the popup can leave the old
+        // stream without a local UP/CANCEL; never let its latch consume a fresh click.
+        if (action == MotionEvent.ACTION_DOWN) mArcConsumesAddressGesture = false;
+        if (mArcConsumesAddressGesture) {
+            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
+                mArcConsumesAddressGesture = false;
+            }
+            return true;
+        }
+        if (action == MotionEvent.ACTION_DOWN && mArcAddressPopupOpener != null
+                && (event.getButtonState() == 0
+                        || event.getButtonState() == MotionEvent.BUTTON_PRIMARY)
+                && isArcAddressEntryTarget(event) && mArcAddressPopupOpener.getAsBoolean()) {
+            // Moving the same editor into the popup must not deliver a stray release to it.
+            mArcConsumesAddressGesture = true;
+            return true;
+        }
+        return super.dispatchTouchEvent(event);
+    }
+
+    private boolean isArcAddressEntryTarget(MotionEvent event) {
+        float x = event.getX(), y = event.getY();
+        if (x < 0 || y < 0 || x >= getWidth() || y >= getHeight()) return false;
+        Rect bounds = new Rect();
+        for (int i = 0; i < getChildCount(); i++) {
+            View child = getChildAt(i);
+            if (child == mUrlBar || child == mFocusThief || child.getVisibility() != View.VISIBLE) {
+                continue;
+            }
+            // Preserve entire auxiliary segments, including buttons in non-clickable groups.
+            child.getHitRect(bounds);
+            if (bounds.contains((int) x, (int) y)) return false;
+        }
+        return true;
+    }
+
+    private @Nullable Rect mArcCommandResults;
+    private boolean mArcCommandActions;
+    private boolean mArcCommandEditingAddress;
+    private @Nullable Runnable mArcBeforeCommandNavigation;
+    private @Nullable Runnable mArcCommandInputEnd;
+
+    /** Optional desktop shell bounds; no extra editor/autocomplete state is created. */
+    public void setArcCommandBar(@Nullable Rect results, boolean actions,
+            @Nullable Runnable beforeNavigation, @Nullable Runnable inputEnd) {
+        if (java.util.Objects.equals(mArcCommandResults, results) && mArcCommandActions == actions) return;
+        mArcCommandResults = results == null ? null : new Rect(results);
+        mArcCommandActions = actions;
+        if (results == null) mArcCommandEditingAddress = false;
+        mArcBeforeCommandNavigation = results == null ? null : beforeNavigation;
+        mArcCommandInputEnd = results == null ? null : inputEnd;
+        requestLayout();
+    }
+
+    public @Nullable Rect getArcCommandResults() { return mArcCommandResults; }
+    public boolean isArcCommandActions() { return mArcCommandActions; }
+    public void setArcCommandEditingAddress(boolean editingAddress) {
+        mArcCommandEditingAddress = mArcCommandResults != null && editingAddress;
+    }
+    public boolean isArcCommandEditingAddress() { return mArcCommandEditingAddress; }
+    public void finishArcCommandNavigation() {
+        Runnable before = mArcBeforeCommandNavigation;
+        if (before != null) before.run();
+    }
+    public boolean closeArcCommandBarForInputEnd() {
+        Runnable close = mArcCommandInputEnd;
+        mArcCommandInputEnd = null;
+        if (close == null) return false;
+        close.run();
+        return true;
+    }
 
     /* package */ void updateVisualsForState(@BrandedColorScheme int brandedColorScheme) {
         updateActivationChipVisuals(brandedColorScheme);

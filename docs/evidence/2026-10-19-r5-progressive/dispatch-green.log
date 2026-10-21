@@ -1,0 +1,11 @@
+test_workflow_env_drives_real_restore_then_pack_without_release_fallback (test_r5_dispatch.R5ActionsCheckpointCliTests.test_workflow_env_drives_real_restore_then_pack_without_release_fallback) ... ok
+test_native_stage_selects_actions_backend_for_restore_and_pack (test_r5_dispatch.R5ArtifactBackendTests.test_native_stage_selects_actions_backend_for_restore_and_pack) ... ok
+test_missing_checkpoint_never_allows_clean_fallback (test_r5_dispatch.R5DispatchTests.test_missing_checkpoint_never_allows_clean_fallback) ... ok
+test_protected_branch_rejected_before_restore (test_r5_dispatch.R5DispatchTests.test_protected_branch_rejected_before_restore) ... ok
+test_unbounded_native_slices_rejected_before_restore (test_r5_dispatch.R5DispatchTests.test_unbounded_native_slices_rejected_before_restore) ... ok
+test_unpinned_dispatch_rejected_before_restore (test_r5_dispatch.R5DispatchTests.test_unpinned_dispatch_rejected_before_restore) ... ok
+
+----------------------------------------------------------------------
+Ran 6 tests in 0.608s
+
+OK

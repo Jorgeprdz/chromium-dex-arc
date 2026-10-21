@@ -273,6 +273,7 @@ import org.chromium.chrome.browser.ui.side_panel.SidePanelContainerCoordinatorFa
 import org.chromium.chrome.browser.ui.side_panel.dev.SidePanelDevFeature;
 import org.chromium.chrome.browser.ui.side_panel.dev.SidePanelDevFeatureFactory;
 import org.chromium.chrome.browser.ui.side_ui.SideUiCoordinator;
+import org.chromium.chrome.browser.ui.side_ui.SideUiObserver;
 import org.chromium.chrome.browser.ui.side_ui.SideUiCoordinator.SideUiId;
 import org.chromium.chrome.browser.ui.side_ui.SideUiCoordinatorFactory;
 import org.chromium.chrome.browser.ui.side_ui.SideUiStateProvider;
@@ -399,6 +400,7 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
     protected @Nullable InstantMessageDelegateImpl mInstantMessageDelegateImpl;
     private @Nullable ArcDesktopCoordinator mArcDesktopCoordinator;
     private @Nullable ArcDesktopWindowObserver mArcWindowObserver;
+    private @Nullable SideUiObserver mArcSideUiObserver;
     private boolean mArcToolbarSuppressed;
     private int mArcToolbarOriginalVisibility = View.VISIBLE;
     private int mArcToolbarHairlineOriginalVisibility = View.VISIBLE;
@@ -894,7 +896,11 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
             Log.w(TAG, "Error getting application info", e);
             mApplicationLabel = mActivity.getResources().getString(R.string.app_name);
         }
-        mArcWindowObserver = new ArcDesktopWindowObserver(mActivity, mActivityLifecycleDispatcher);
+        mArcWindowObserver = new ArcDesktopWindowObserver(mActivity, mActivityLifecycleDispatcher,
+                this::prepareArcMobileNavigation, () -> {
+                    View controls = mActivity.findViewById(R.id.control_container);
+                    if (controls != null) org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.applyUiFont(controls);
+                });
     }
 
     @Override
@@ -903,6 +909,10 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
         if (mArcWindowObserver != null) {
             mArcWindowObserver.destroy();
             mArcWindowObserver = null;
+        }
+        if (mSideUiCoordinator != null && mArcSideUiObserver != null) {
+            mSideUiCoordinator.removeObserver(mArcSideUiObserver);
+            mArcSideUiObserver = null;
         }
         if (mArcDesktopCoordinator != null) {
             mArcDesktopCoordinator.destroy();
@@ -1997,6 +2007,24 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
         return mGlicPromoCoordinator != null;
     }
 
+    private void prepareArcMobileNavigation() {
+        if (org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.isDesktopWindow(mActivity)) return;
+        var selector = mTabModelSelectorSupplier.get();
+        if (selector == null) return;
+        for (boolean incognito : new boolean[] {false, true}) {
+            var model = selector.getModel(incognito);
+            for (int i = 0; i < model.getCount(); i++) {
+                Tab tab = model.getTabAt(i);
+                if (tab == null || tab.isDestroyed()) continue;
+                tab.setUserAgent(org.chromium.chrome.browser.tab.TabUserAgent.MOBILE);
+                if (tab.getWebContents() != null
+                        && org.chromium.chrome.browser.tab.TabUtils.isUsingDesktopUserAgent(tab.getWebContents())) {
+                    org.chromium.chrome.browser.tab.TabUtils.switchUserAgent(tab, false);
+                }
+            }
+        }
+    }
+
     private void setArcToolbarSuppressed(boolean suppressed) {
         if (mToolbarManager == null || mArcToolbarSuppressed == suppressed) return;
         View toolbarView = mActivity.findViewById(R.id.toolbar);
@@ -2590,7 +2618,37 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
                     () -> mTabCreatorManagerSupplier.asNonNull().get().getTabCreator(
                             mTabModelSelectorSupplier.asNonNull().get().isIncognitoSelected()),
                     () -> mActivityTabProvider.get());
+            mArcSideUiObserver = new SideUiObserver() {
+                @Override
+                public void onTransitionBegun(SideUiCoordinator.SideUiSpecs specs,
+                        SideUiCoordinator.UiUpdateRequest request) {
+                    if (mArcDesktopCoordinator != null) mArcDesktopCoordinator.onSideUiTransition(
+                            specs.getReservedWidth(SideUiCoordinator.AnchorSide.LEFT),
+                            specs.getRenderedWidth(SideUiCoordinator.AnchorSide.LEFT));
+                }
+                @Override
+                public void onSideUiSpecsChanged(SideUiCoordinator.SideUiSpecs specs,
+                        SideUiCoordinator.UiUpdateRequest request) {
+                    if (mArcDesktopCoordinator != null) mArcDesktopCoordinator.onSideUiChanged();
+                }
+                @Override
+                public void onTransitionEnded(SideUiCoordinator.SideUiSpecs specs,
+                        SideUiCoordinator.UiUpdateRequest request) {
+                    if (mArcDesktopCoordinator != null) mArcDesktopCoordinator.onSideUiChanged();
+                }
+            };
+            mSideUiCoordinator.addObserver(mArcSideUiObserver);
             if (mToolbarManager != null) {
+                mArcDesktopCoordinator.configureCommands(
+                        () -> assumeNonNull(mToolbarManager).getOmniboxStub().beginInput(
+                                new org.chromium.components.omnibox.AutocompleteInput(
+                                        org.chromium.components.omnibox.OmniboxFocusReason.MENU_OR_KEYBOARD_ACTION)
+                                        .setUserText("")),
+                        () -> assumeNonNull(mToolbarManager).getOmniboxStub().endInput(),
+                        () -> assumeNonNull(mToolbarManager).getOmniboxStub().focusAndSelectAllText(
+                                org.chromium.components.omnibox.OmniboxFocusReason.MENU_OR_KEYBOARD_ACTION),
+                        () -> SettingsNavigationFactory.createSettingsNavigation().startSettings(
+                                mActivity, org.chromium.chrome.browser.settings.MainSettings.class));
                 mToolbarManager.setVerticalTabsAutoHiddenSupplier(
                         mVerticalTabsSideUiCoordinator.getIsAutoHiddenSupplier());
             }
@@ -3273,6 +3331,14 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
 
     /* package */ void initializeBookmarkBarCoordinatorForTesting() {
         createBookmarkBarIfNecessary();
+    }
+
+    public boolean dispatchArcKeyEvent(android.view.KeyEvent event) {
+        return mArcDesktopCoordinator != null && mArcDesktopCoordinator.dispatchKeyEvent(event);
+    }
+
+    public boolean openArcCommandBar() {
+        return mArcDesktopCoordinator != null && mArcDesktopCoordinator.openCommandBar();
     }
 
     // MenuOrKeyboardActionHandler implementation

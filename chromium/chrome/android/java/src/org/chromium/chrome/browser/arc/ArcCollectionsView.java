@@ -57,7 +57,11 @@ public final class ArcCollectionsView extends LinearLayout {
     private final class BoundedScrollView extends ScrollView {
         private int mBudget = -1;
         BoundedScrollView(Activity activity) { super(activity); }
-        void setBudget(int pixels) { mBudget = Math.max(0, pixels); requestLayout(); }
+        void setBudget(int pixels) {
+            int budget = Math.max(0, pixels);
+            if (mBudget == budget) return;
+            mBudget = budget; requestLayout();
+        }
         @Override
         protected void onMeasure(int widthSpec, int heightSpec) {
             int cap = mBudget < 0 ? dp(112) : mBudget;
@@ -236,7 +240,13 @@ public final class ArcCollectionsView extends LinearLayout {
             mLoadIcon.accept(entry, favorite);
         }
         for (ArcSidebarState.Space space : state.spaces()) {
-            if (space.id.equals(state.selectedSpace())) mSpace.setText(space.name + "  ▾");
+            if (space.id.equals(state.selectedSpace())) {
+                mSpace.setText(space.name + "  ▾");
+                mSpace.setSelected(true);
+                String description = mActivity.getString(R.string.arc_current_space, space.name);
+                mSpace.setContentDescription(description);
+                mSpace.setTooltipText(description);
+            }
         }
         mEntries.removeAllViews();
         List<ArcSidebarState.Folder> folders = state.folders(state.selectedSpace());
@@ -310,7 +320,11 @@ public final class ArcCollectionsView extends LinearLayout {
         List<ArcSidebarState.Space> spaces = state.spaces();
         PopupMenu menu = new PopupMenu(mActivity, mSpace);
         mMenu = menu;
-        for (int i = 0; i < spaces.size(); i++) menu.getMenu().add(0, i, i, spaces.get(i).name);
+        for (int i = 0; i < spaces.size(); i++) {
+            menu.getMenu().add(0, i, i, spaces.get(i).name)
+                    .setCheckable(true)
+                    .setChecked(spaces.get(i).id.equals(state.selectedSpace()));
+        }
         menu.getMenu().add(0, spaces.size(), spaces.size(), R.string.arc_new_space);
         menu.getMenu().add(0, spaces.size() + 1, spaces.size() + 1, R.string.arc_delete_space)
                 .setEnabled(spaces.size() > 1);

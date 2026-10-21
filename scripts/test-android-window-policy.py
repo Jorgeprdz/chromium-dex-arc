@@ -16,11 +16,14 @@ def run(*args):
 
 def main():
     parser = argparse.ArgumentParser()
+    parser.add_argument('--application-id', default='app.archium.windowtests')
     parser.add_argument('--device', required=True, help='Explicit ADB serial; do not infer an emulator from its name')
     parser.add_argument('--sdk', type=Path, required=True)
     parser.add_argument('--platform-version', required=True)
     parser.add_argument('--build-tools-version', required=True)
     args = parser.parse_args()
+    if args.application_id != 'app.archium.windowtests' and not args.application_id.startswith('app.archium.windowtests.'):
+        parser.error('Only disposable window-test application IDs are allowed')
     work = ROOT / '.test-build/window-policy'
     work.mkdir(parents=True, exist_ok=True)
     classes = work / 'classes'
@@ -44,7 +47,12 @@ def main():
     aapt2 = str(tools / 'aapt2')
     run(aapt2, 'compile', '--dir', ROOT / 'chromium/chrome/android/java/res', '-o', resource)
     apk = work / 'unsigned.apk'
-    run(aapt2, 'link', '-I', android, '--manifest', ROOT / 'tests/android/window/AndroidManifest.xml',
+    manifest = work / 'AndroidManifest.xml'
+    manifest.write_text((ROOT / 'tests/android/window/AndroidManifest.xml').read_text()
+                        .replace('package="app.archium.windowtests"', 'package="' + args.application_id + '"')
+                        .replace('android:targetPackage="app.archium.windowtests"',
+                                 'android:targetPackage="' + args.application_id + '"'))
+    run(aapt2, 'link', '-I', android, '--manifest', manifest,
         '--custom-package', 'org.chromium.chrome', '--java', generated, '-o', apk, resource)
     sources = list((ROOT / 'tests/android/window').glob('*.java'))
     module = ROOT / ('chromium/chrome/browser/desktop_policy/android/java/src/'
@@ -68,7 +76,7 @@ def main():
         source = passwords / (name + '.java')
         if source.exists(): sources.append(source)
     protocol_stubs = {
-        'org/chromium/chrome/browser/profiles/Profile.java': 'package org.chromium.chrome.browser.profiles; public class Profile {}',
+        'org/chromium/chrome/browser/profiles/Profile.java': 'package org.chromium.chrome.browser.profiles; public class Profile { public boolean isOffTheRecord(){return false;} }',
         'org/jni_zero/CalledByNative.java': 'package org.jni_zero; public @interface CalledByNative {}',
         'org/jni_zero/NativeMethods.java': 'package org.jni_zero; public @interface NativeMethods {}',
         'org/jni_zero/JniType.java': 'package org.jni_zero; public @interface JniType { String value(); }',
@@ -111,10 +119,10 @@ def main():
     run('adb', '-s', args.device, 'install', '-r', signed)
     for phase in ('suite', 'reopen'):
         if phase == 'reopen':
-            run('adb', '-s', args.device, 'shell', 'am', 'force-stop', 'app.archium.windowtests')
+            run('adb', '-s', args.device, 'shell', 'am', 'force-stop', args.application_id)
         result = subprocess.run(['adb', '-s', args.device, 'shell', 'am', 'instrument', '-w',
                                  '-e', 'phase', phase,
-                                 'app.archium.windowtests/app.archium.windowtests.ArchiumWindowMetricsTest'],
+                                 args.application_id + '/app.archium.windowtests.ArchiumWindowMetricsTest'],
                                 capture_output=True, text=True, check=True)
         print(result.stdout)
         if 'PASS:' not in result.stdout or 'FAIL:' in result.stdout:

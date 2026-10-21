@@ -39,7 +39,8 @@ class NativeGroupProjectionBoundaryTests(unittest.TestCase):
         visibility = (method(mediator, 'boolean isTabHiddenForPresentation(')
                       if 'boolean isTabHiddenForPresentation(' in mediator
                       else 'boolean isTabHiddenForPresentation(Tab tab) { return mTabVisibilityPredicate != null && !mTabVisibilityPredicate.test(tab.getId()); }')
-        java = '''import java.util.*;
+        java = '''import org.chromium.chrome.browser.ui.vertical_tabs.ArcSplitPairProjection;
+import java.util.*;
 import java.util.function.IntPredicate;
 class Token { final int id; Token(int id){this.id=id;} }
 class Key<T> {}
@@ -76,6 +77,7 @@ class TabModel {
 }
 class Mediator {
     final TabModel tabs; final TabListModel rows; IntPredicate mTabVisibilityPredicate;
+    final ArcSplitPairProjection mArcSplitPairs=new ArcSplitPairProjection();
     Mediator(TabModel tabs,TabListModel rows){this.tabs=tabs;this.rows=rows;}
     TabModel getCurrentTabModelChecked(){return tabs;}
     void addTabInfoToModelForTab(Tab tab,int index){PropertyModel m=new PropertyModel();m.set(TabProperties.TAB_ID,tab.id);m.set(TabProperties.TAB_GROUP_ID,tab.group);rows.add(index,new ListItem(m));}
@@ -105,6 +107,11 @@ public class GroupProjectionBoundaryProbe {
                 mediator.addTabInfoToModelForTab(c,1);
                 equal(1,mediator.insertChildTabs(GROUP,0));
                 equal(List.of(0,1,3),ids(rows));break;
+            case "pair":
+                mediator.mTabVisibilityPredicate=null;
+                mediator.mArcSplitPairs.set(List.of(new int[]{1,1,2,2}),id->true);
+                equal(1,mediator.insertChildTabs(GROUP,0));equal(List.of(0,1),ids(rows));
+                equal(2,mediator.mArcSplitPairs.actionId(1));break;
             case "collapse":
                 mediator.addTabInfoToModelForTab(a,1);mediator.addTabInfoToModelForTab(c,2);
                 nested.collapse(GROUP);equal(List.of(0,3),ids(rows));break;
@@ -129,7 +136,7 @@ public class GroupProjectionBoundaryProbe {
 '''
         source = cls.work / 'GroupProjectionBoundaryProbe.java'
         source.write_text(java)
-        compiled = subprocess.run(['javac', '-d', str(cls.work), str(source)], capture_output=True, text=True)
+        compiled = subprocess.run(['javac', '-d', str(cls.work), str(ROOT/'chromium/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcSplitPairProjection.java'), str(source)], capture_output=True, text=True)
         if compiled.returncode:
             raise AssertionError(compiled.stderr)
 
@@ -142,3 +149,5 @@ public class GroupProjectionBoundaryProbe {
     def test_group_move_counts_presented_children(self): self.probe('move')
     def test_group_move_skips_hidden_native_anchor(self): self.probe('move-hidden-anchor')
     def test_null_predicate_keeps_original_group_behavior(self): self.probe('unfiltered')
+
+    def test_same_group_pair_emits_one_child_with_active_second_member(self): self.probe('pair')

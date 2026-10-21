@@ -76,9 +76,14 @@ class ArcVisualStaticContractTest(unittest.TestCase):
         self.assertIn('activeSurface.setClipToOutline(true)', self.arc)
         self.assertIn('new TouchEventObserver()', self.arc)
         self.assertIn('mayInterceptTouchSequenceInWebContents()', self.arc)
-        self.assertIn('ArcDesktopPolicy.containsRoundedRectPoint', self.arc)
-        self.assertNotIn('Canvas', self.arc)
-        self.assertNotIn('drawRoundRect', self.arc)
+        self.assertIn('ArcDesktopPolicy.containsArcContentPoint', self.arc)
+        # Frame clipping must stay native. The sidebar's one-pixel separators are a separate
+        # View foreground and may draw their own decoration without covering web content.
+        start = self.arc.index('    private void applyFrameGeometry()')
+        end = self.arc.index('    private void restoreFrameGeometry()', start)
+        self.assertNotIn('Canvas', self.arc[start:end])
+        self.assertNotIn('drawRoundRect', self.arc[start:end])
+        self.assertNotIn('mCompositorViewHolder.setForeground', self.arc)
         self.assertNotIn('mCompositorViewHolder.setBackgroundColor', self.arc)
 
 

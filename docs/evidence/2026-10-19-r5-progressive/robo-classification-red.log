@@ -1,0 +1,17 @@
+test_infrastructure_never_wakes_codex (test_r5_supervisor.SupervisorTests.test_infrastructure_never_wakes_codex) ... FAIL
+
+======================================================================
+FAIL: test_infrastructure_never_wakes_codex (test_r5_supervisor.SupervisorTests.test_infrastructure_never_wakes_codex)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/Archium-R5/tests/test_r5_supervisor.py", line 18, in test_infrastructure_never_wakes_codex
+    self.assertEqual(m.classify('java.lang.NullPointerException in Robolectric suite')[0],'REPAIR')
+AssertionError: 'BLOCKED' != 'REPAIR'
+- BLOCKED
++ REPAIR
+
+
+----------------------------------------------------------------------
+Ran 1 test in 0.028s
+
+FAILED (failures=1)

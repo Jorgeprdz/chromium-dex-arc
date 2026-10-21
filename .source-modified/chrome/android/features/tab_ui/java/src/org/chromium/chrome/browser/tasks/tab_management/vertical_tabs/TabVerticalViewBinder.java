@@ -39,6 +39,7 @@ import org.chromium.chrome.browser.tasks.tab_management.TabUiThemeUtil;
 import org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabItemHoverController.TabHoverListener;
 import org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabListProperties.RailCollapseState;
 import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance;
+import org.chromium.chrome.browser.ui.vertical_tabs.ArcSplitPairVisuals;
 import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy;
 import org.chromium.chrome.browser.ui.vertical_tabs.VerticalTabUtils;
 import org.chromium.chrome.tab_ui.R;
@@ -225,6 +226,9 @@ class TabVerticalViewBinder {
             if (button == null) button = view.findViewById(R.id.menu_button);
             if (button != null) {
                 TabListViewBinderUtils.updateActionButtonContentDescription(model, button);
+                button.setTooltipText(model.containsKey(TabProperties.ARC_SPLIT_PAIR)
+                        && model.get(TabProperties.ARC_SPLIT_PAIR) != null
+                        ? button.getContentDescription() : null);
             }
         }
     }
@@ -241,7 +245,19 @@ class TabVerticalViewBinder {
             PropertyModel model, VerticalTabItemLayout view, @Nullable PropertyKey propertyKey) {
         bindCommonProperties(model, view, propertyKey);
 
-        if (TabProperties.TITLE == propertyKey) {
+        if (TabProperties.TAB_ID == propertyKey) {
+            // A recycled holder must not finish the previous native tab's selection transition.
+            ArcDesktopAppearance.clearSidebarRowState(view);
+            if (ArcDesktopAppearance.isDesktopWindow(view.getContext())) {
+                ArcDesktopAppearance.applySidebarRowState(view, model.get(TabProperties.IS_SELECTED),
+                        model.get(TabProperties.IS_MULTI_SELECTED), isIncognito(model),
+                        view.isHovered() || view.hasFocus());
+            }
+        }
+        if (TabProperties.ARC_SPLIT_PAIR == propertyKey) {
+            updateTitle(R.id.tab_title, model, view);
+            updateFaviconImage(model, view);
+        } else if (TabProperties.TITLE == propertyKey) {
             updateTitle(R.id.tab_title, model, view);
             updateParentPadding(model, view);
         } else if (TabProperties.FAVICON_FETCHER == propertyKey) {
@@ -299,8 +315,43 @@ class TabVerticalViewBinder {
         @Nullable ImageView faviconView = view.findViewById(R.id.tab_favicon);
         if (faviconView == null) return;
 
-        TabListViewBinderUtils.updateFaviconImage(model, faviconView);
+        if (ArcDesktopAppearance.isDesktopWindow(view.getContext())) {
+            ArcDesktopAppearance.normalizeSidebarFavicon(faviconView);
+        }
+        TabProperties.ArcSplitPair pair = model.get(TabProperties.ARC_SPLIT_PAIR);
+        if (pair != null) {
+            bindArcSplitPairIcons(model, faviconView, pair);
+        } else {
+            TabListViewBinderUtils.updateFaviconImage(model, faviconView);
+        }
         updateIcons(model, view);
+    }
+
+    private static void bindArcSplitPairIcons(PropertyModel model, ImageView faviconView,
+            TabProperties.ArcSplitPair pair) {
+        Object generation = new Object();
+        faviconView.setTag(generation); // Invalidate the native single-icon callback as well.
+        int rowId = model.get(TabProperties.TAB_ID);
+        Drawable[] icons = {pair.defaultIcon, pair.defaultIcon};
+        int divider = ArcDesktopAppearance.foreground(faviconView.getContext(), isIncognito(model));
+        faviconView.setImageTintList(null);
+        faviconView.setImageDrawable(ArcSplitPairVisuals.icons(icons[0], icons[1], divider));
+        pair.leftIcon.fetch(favicon -> {
+            if (faviconView.getTag() != generation
+                    || model.get(TabProperties.ARC_SPLIT_PAIR) != pair
+                    || model.get(TabProperties.TAB_ID) != rowId) return;
+            icons[0] = favicon == null || favicon.getDefaultDrawable() == null
+                    ? pair.defaultIcon : favicon.getDefaultDrawable();
+            faviconView.setImageDrawable(ArcSplitPairVisuals.icons(icons[0], icons[1], divider));
+        });
+        pair.rightIcon.fetch(favicon -> {
+            if (faviconView.getTag() != generation
+                    || model.get(TabProperties.ARC_SPLIT_PAIR) != pair
+                    || model.get(TabProperties.TAB_ID) != rowId) return;
+            icons[1] = favicon == null || favicon.getDefaultDrawable() == null
+                    ? pair.defaultIcon : favicon.getDefaultDrawable();
+            faviconView.setImageDrawable(ArcSplitPairVisuals.icons(icons[0], icons[1], divider));
+        });
     }
 
     private static void updateIcons(PropertyModel model, VerticalTabItemLayout view) {
@@ -327,7 +378,8 @@ class TabVerticalViewBinder {
                         && actionButton != null
                         && actionData != null
                         && (showIconOnly
-                                ? (isSelected && (!DeviceInfo.isDesktop() || isHovered))
+                                ? (isSelected && (isHovered || (!DeviceInfo.isDesktop()
+                                        && !ArcDesktopAppearance.isDesktopWindow(view.getContext()))))
                                 : (!DeviceInfo.isDesktop() || isSelected || isHovered));
         @TabAlert
         int alertState =
@@ -352,6 +404,14 @@ class TabVerticalViewBinder {
                 loadingWanted = false;
                 faviconWanted = false;
             }
+        }
+
+        // A compact pair is identified by both logos; closing its active panel stays in the menu.
+        if (model.get(TabProperties.ARC_SPLIT_PAIR) != null && showIconOnly) {
+            actionWanted = false;
+            alertWanted = false;
+            loadingWanted = false;
+            faviconWanted = faviconView != null;
         }
 
         // 3. Apply to views, handle animations/bindings and view constraints
@@ -487,6 +547,12 @@ class TabVerticalViewBinder {
         if (bg != null) {
             bg.mutate();
             ViewCompat.setBackgroundTintList(view, tintList);
+        }
+        if (ArcDesktopAppearance.isDesktopWindow(context)) {
+            ArcDesktopAppearance.applySidebarRowState(view, isSelected, isMultiSelected,
+                    isIncognito, view.isHovered() || view.hasFocus());
+        } else {
+            ArcDesktopAppearance.clearSidebarRowState(view);
         }
         updateFaviconImage(model, view);
         updateTabAlertIndicatorTint(model, view);
@@ -642,13 +708,59 @@ class TabVerticalViewBinder {
         TextView titleView = view.findViewById(titleViewId);
         if (titleView == null) return;
 
-        if (shouldShowIconOnly(model, view)) {
-            titleView.setVisibility(View.GONE);
-        } else {
-            titleView.setVisibility(View.VISIBLE);
-            titleView.setText(model.get(TabProperties.TITLE));
+        TabProperties.ArcSplitPair pair = model.get(TabProperties.ARC_SPLIT_PAIR);
+        if (pair != null) {
+            updatePairTitle(model, view, titleView, pair);
+            return;
         }
+        // Replacing a pair with a normal row removes its deferred title formatter.
+        if (titleView.getTag(R.id.tab_title) instanceof View.OnLayoutChangeListener listener) {
+            titleView.removeOnLayoutChangeListener(listener);
+            titleView.setTag(R.id.tab_title, null);
+        }
+        View close = view.findViewById(R.id.action_button);
+        if (close != null) {
+            close.setTooltipText(null);
+            TabListViewBinderUtils.updateActionButtonContentDescription(model, close);
+        }
+        // Always replace recycled text, including while collapsed or pinned.
+        String title = model.get(TabProperties.TITLE);
+        titleView.setText(title);
+        if (ArcDesktopAppearance.isDesktopWindow(view.getContext())) {
+            view.setTooltipText(TextUtils.isEmpty(title) ? null : title);
+        } else {
+            view.setTooltipText(null);
+        }
+        titleView.setVisibility(shouldShowIconOnly(model, view) ? View.GONE : View.VISIBLE);
         updateContentDescription(model, view);
+    }
+
+    private static void updatePairTitle(PropertyModel model, ViewGroup view,
+            TextView titleView, TabProperties.ArcSplitPair pair) {
+        if (titleView.getTag(R.id.tab_title) instanceof View.OnLayoutChangeListener old) {
+            titleView.removeOnLayoutChangeListener(old);
+        }
+        Runnable format = () -> {
+            if (model.get(TabProperties.ARC_SPLIT_PAIR) != pair) return;
+            int width = titleView.getWidth() - titleView.getCompoundPaddingLeft()
+                    - titleView.getCompoundPaddingRight();
+            titleView.setText(width > 0 ? ArcSplitPairVisuals.title(pair.leftTitle, pair.rightTitle,
+                    titleView.getPaint(), width) : pair.title());
+        };
+        View.OnLayoutChangeListener listener = (v, l, t, r, b, ol, ot, or, ob) -> {
+            if (r - l != or - ol) format.run();
+        };
+        titleView.setTag(R.id.tab_title, listener);
+        titleView.addOnLayoutChangeListener(listener);
+        format.run();
+        titleView.setVisibility(shouldShowIconOnly(model, view) ? View.GONE : View.VISIBLE);
+        view.setTooltipText(pair.title());
+        view.setContentDescription(pair.title());
+        View close = view.findViewById(R.id.action_button);
+        if (close != null) {
+            TabListViewBinderUtils.updateActionButtonContentDescription(model, close);
+            close.setTooltipText(close.getContentDescription());
+        }
     }
 
     /**
@@ -657,6 +769,12 @@ class TabVerticalViewBinder {
      * {@code "<Title> [ - Gemini is working...], [Pinned] [Media] Tab"}.
      */
     private static void updateContentDescription(PropertyModel model, View view) {
+        TabProperties.ArcSplitPair pair = model.containsKey(TabProperties.ARC_SPLIT_PAIR)
+                ? model.get(TabProperties.ARC_SPLIT_PAIR) : null;
+        if (pair != null) {
+            view.setContentDescription(pair.title());
+            return;
+        }
         Context context = view.getContext();
         @Nullable TextResolver contentDescriptionTextResolver =
                 model.get(TabProperties.CONTENT_DESCRIPTION_TEXT_RESOLVER);
@@ -909,6 +1027,11 @@ class TabVerticalViewBinder {
             @Nullable ColorStateList defaultBackgroundColor) {
         boolean isSelected = model.get(TabProperties.IS_SELECTED);
         boolean isMultiSelected = model.get(TabProperties.IS_MULTI_SELECTED);
+        if (ArcDesktopAppearance.isDesktopWindow(view.getContext())) {
+            ArcDesktopAppearance.applySidebarRowState(view, isSelected, isMultiSelected,
+                    isIncognito(model), isHovered);
+            return;
+        }
 
         @Nullable Drawable bg = view.getBackground();
         if (bg != null) {

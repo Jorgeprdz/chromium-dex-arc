@@ -1,0 +1,306 @@
+{
+  "result": "NO-GO",
+  "amazon": "UNRESOLVED_GRAPHICS_BLOCKER",
+  "base_sha": "20da9cd994bf0f5f0548ba36864373004ab8741f",
+  "dialog_fix_sha": "51847556e761ca0600a4aa824531e40d200fdf17",
+  "hard_deadline_utc": "2026-10-19T21:38:59Z",
+  "experiments_stopped_utc": "2026-10-19T20:19:29Z",
+  "root_cause": "NOT_PROVEN",
+  "product_fix": "NONE",
+  "green_product": "NOT_TESTED",
+  "buffer_pixels": "NOT_CAPTURED",
+  "gpu_tile_pixels": "NOT_CAPTURED",
+  "native_scope": {
+    "initial_capture": "AMAZON_VISIBLE_FAIL",
+    "pass2": "EXCLUDED_OTHER_APP_FOREGROUND",
+    "static_boundary": "EXCLUDED_OTHER_APP_FOREGROUND",
+    "atomic_final": "AMAZON_VISIBLE_BLACK_IMAGES_PERSIST_GHOSTING_REDUCED_NOT_GREEN"
+  },
+  "surface_metadata": [
+    {
+      "observation": "surface-before.PRIVATE.txt",
+      "layer_id": 397690,
+      "buffer_id": "6773163425957",
+      "frame": 490,
+      "pixels_captured": false
+    },
+    {
+      "observation": "surface-after.PRIVATE.txt",
+      "layer_id": 397690,
+      "buffer_id": "6773163425957",
+      "frame": 502,
+      "pixels_captured": false
+    }
+  ],
+  "trace": {
+    "trace_events": 84192,
+    "dataLossOccurred": false,
+    "eof": true,
+    "bytes": 16887705,
+    "selected_event_counts": {
+      "RasterTask": 237,
+      "GpuRasterBuffer::Playback": 237,
+      "RasterDecoderImpl::DoRasterCHROMIUM": 237,
+      "DirectRenderer::DrawRenderPass": 227,
+      "SkiaOutputSurfaceImplOnGpu::FinishPaintRenderPass": 226,
+      "SkiaRenderer::SwapBuffers": 101,
+      "SkiaOutputSurfaceImplOnGpu::SwapBuffers": 101,
+      "SkiaOutputSurfaceImplOnGpu::CopyOutput": 2
+    },
+    "pixel_payloads_from_live_tiles": "NOT_CAPTURED"
+  },
+  "fixture": {
+    "sha256": "00d8724a974ca13568586250b0462e8cb939bb052b8cee2eb6164107640a9587",
+    "oracle": [
+      {
+        "browser": "archium",
+        "state": "before",
+        "viewport": [
+          1799,
+          900,
+          0.9998598817740785
+        ],
+        "images": 14,
+        "samples": 672,
+        "mismatches": 129,
+        "fraction": 0.19196428571428573,
+        "status": "SAMPLE_MISMATCH",
+        "tolerance": 12
+      },
+      {
+        "browser": "archium",
+        "state": "after-cycle",
+        "viewport": [
+          1799,
+          900,
+          0.9998598817740785
+        ],
+        "images": 14,
+        "samples": 672,
+        "mismatches": 138,
+        "fraction": 0.20535714285714285,
+        "status": "SAMPLE_MISMATCH",
+        "tolerance": 12
+      },
+      {
+        "browser": "archium",
+        "state": "restored",
+        "viewport": [
+          1799,
+          900,
+          0.9998598817740785
+        ],
+        "images": 14,
+        "samples": 672,
+        "mismatches": 55,
+        "fraction": 0.0818452380952381,
+        "status": "SAMPLE_MISMATCH",
+        "tolerance": 12
+      },
+      {
+        "browser": "chrome",
+        "state": "before",
+        "viewport": [
+          1800,
+          900,
+          1.000000015894571
+        ],
+        "images": 14,
+        "samples": 672,
+        "mismatches": 0,
+        "fraction": 0.0,
+        "status": "SAMPLES_MATCH",
+        "tolerance": 12
+      },
+      {
+        "browser": "chrome",
+        "state": "after-cycle",
+        "viewport": [
+          1800,
+          900,
+          1.000000015894571
+        ],
+        "images": 14,
+        "samples": 672,
+        "mismatches": 0,
+        "fraction": 0.0,
+        "status": "SAMPLES_MATCH",
+        "tolerance": 12
+      },
+      {
+        "browser": "chrome",
+        "state": "restored",
+        "viewport": [
+          1800,
+          900,
+          1.000000015894571
+        ],
+        "images": 14,
+        "samples": 672,
+        "mismatches": 0,
+        "fraction": 0.0,
+        "status": "SAMPLES_MATCH",
+        "tolerance": 12
+      }
+    ],
+    "reference_comparison": "APPROXIMATE_GEOMETRY_DIFFERENT_CHROMIUM_VERSION_AND_GPU_BACKEND_NOT_CAUSAL_PROOF",
+    "reference_version": "149.0.7827.102",
+    "reference_backend": "GaneshGL",
+    "archium_version": "157.0.8086.0",
+    "archium_backend": "GraphiteDawnVulkan"
+  },
+  "artifacts": {
+    "deadline.json": {
+      "bytes": 156,
+      "sha256": "448bcd77e1b1ed0d043f701f2f7932b51933bac63f46cd53d5f5b9163a1f7a4f"
+    },
+    "receipt.json": {
+      "bytes": 1216,
+      "sha256": "6f385fd2f351e982fafee56d7a1b83a9fb704cc3bb01cb98b508d54e375cc85f"
+    },
+    "native-before.PRIVATE.png": {
+      "bytes": 1247126,
+      "sha256": "c31af85c674b454b4680c0daa665a25ce6c9cdd4ec18fd2d13477c3f6fd3281c"
+    },
+    "native-after.PRIVATE.png": {
+      "bytes": 1225142,
+      "sha256": "1278fe21205d4ecefd4db4ba26dcfbccad36a14c165d85e3e87e4c52c22a455b"
+    },
+    "surface-before.PRIVATE.txt": {
+      "bytes": 1013268,
+      "sha256": "91772a713afb7db912a1234d0e75894ab999add5c75e3d063c44d8c6e1bab859"
+    },
+    "surface-after.PRIVATE.txt": {
+      "bytes": 1013194,
+      "sha256": "f32a0adaf509ca7d5ad036b21a312885cb8e7a3426afc2b25dd071e8190a3d24"
+    },
+    "owned-trace-stop.json": {
+      "bytes": 91,
+      "sha256": "2f23d51d26c8598137e1369b251643378e00460db98aa7cd01cae8723219cb6e"
+    },
+    "pass2/receipt.json": {
+      "bytes": 1394,
+      "sha256": "4d3b1ed9287610a78de34a72dd1916c580d99701242b397e57bb985cfbc211d4"
+    },
+    "pass2/chromium.PRIVATE.json": {
+      "bytes": 16887705,
+      "sha256": "29ee2d732653898ac5b37e58540675937fa62d6d387deb2d8dd07ccfde71b098"
+    },
+    "pass2/layer-probe/receipt.json": {
+      "bytes": 411,
+      "sha256": "f19b924d59e4835c9ac99eb7920b4bbd8f8d773954acadf3ebacf533f9e6f01f"
+    },
+    "pass2/layer-probe/before.PRIVATE.png": {
+      "bytes": 927603,
+      "sha256": "715454cfba8d0cb43ba9245005f7ed8d5f0db49dbfa21d943cd3a9aaa6b4c46a"
+    },
+    "pass2/layer-probe/after.PRIVATE.png": {
+      "bytes": 922300,
+      "sha256": "f7c0972faa7665206ce6a3094f896af54d1ad690f71058cf3122cfc28b953aa4"
+    },
+    "static-boundary/receipt.json": {
+      "bytes": 1130,
+      "sha256": "2c6fe582018791746df86bb50fe1387dfdb7624e1bbbeaf793d6759c0de05542"
+    },
+    "static-boundary/layer-probe/receipt.json": {
+      "bytes": 411,
+      "sha256": "e0e9d6cc44ec7450cd22d4f4413db157230708ca81e6d228e40fee18a9c24aa8"
+    },
+    "static-boundary/layer-probe/layer-71.PRIVATE.png": {
+      "bytes": 22776,
+      "sha256": "58befe52d7a0ad9394c1b45586d3dc5f54e1ac9e5b251cbdac69b2dbd0b18e54"
+    },
+    "atomic-native.json": {
+      "bytes": 305,
+      "sha256": "8e3e973eb1aaab168080bc59dc1a4cf81e6f761ae1bf261ac0c6893860052e96"
+    },
+    "atomic-native.PRIVATE.png": {
+      "bytes": 990558,
+      "sha256": "2f19e8f76f9008afc728a352fcbc3fa5633a13a33061f4d1095c7e93ca958c10"
+    },
+    "fixture-aligned/receipt.json": {
+      "bytes": 2453,
+      "sha256": "53c5e75aa699f4484b1e35d64d9ea3032bff0b285cc6cf455284f0e5d818a97b"
+    },
+    "fixture-aligned/oracle-summary.json": {
+      "bytes": 1640,
+      "sha256": "3a572e744bce25b08421ca22036df85b8958af723b940f403b13826cca1d6106"
+    },
+    "fixture-oracle-aligned.py": {
+      "bytes": 1607,
+      "sha256": "7eda088c8a73d79d0a53eeba8b2d851ff1b456581eec2d38cc3e6ac26a67599c"
+    },
+    "fixture-comparison.cjs": {
+      "bytes": 4554,
+      "sha256": "5ac243548ed23b0b0e903b297a63d8940f29e88707c1b67de638b21b76e0a79a"
+    },
+    "fixture-aligned.cjs": {
+      "bytes": 5537,
+      "sha256": "af380a62530f498d88cdd2a625cc06a9433e4b1170aa9b1fd107913229cd8280"
+    },
+    "layer-probe-final.cjs": {
+      "bytes": 6493,
+      "sha256": "fcc03ab2070be884dc63f0c91e07c65db9c958d75c830bcac1456245fea9fa57"
+    },
+    "final-capture.cjs": {
+      "bytes": 5340,
+      "sha256": "70046b75e67155f5cf4a123850dd57bcb451c08812636bea38c04dab33fe611b"
+    },
+    "final-capture-pass2.cjs": {
+      "bytes": 5347,
+      "sha256": "c41bc3b4982591838170755031fc011ab42a82bc6f8c8dd311d6bd82e59005b1"
+    },
+    "static-boundary.cjs": {
+      "bytes": 4596,
+      "sha256": "494a506592d4095037eebfc7d324f1549a4adaf3232a6781356eb98c290ea066"
+    },
+    "fixture-aligned/archium-before.png": {
+      "bytes": 195315,
+      "sha256": "8394e68678c2e3ab52e41fc8349fd43dffbd8a5b8a881ebe4af4d75542878524"
+    },
+    "fixture-aligned/archium-before.json": {
+      "bytes": 20498,
+      "sha256": "08219e6dfc84ef7c620f9ea1ac47e5da6c16f5c44c0f7ade77693aacff0c01f6"
+    },
+    "fixture-aligned/archium-after-cycle.png": {
+      "bytes": 178809,
+      "sha256": "0c5a7dc286d1b5d370b03e6a08d3c343c0562dce585150fd3a1649ed1a3ee2ab"
+    },
+    "fixture-aligned/archium-after-cycle.json": {
+      "bytes": 20498,
+      "sha256": "a44bd52cf80670084337d7a9a9fa501f854f62f38146feac9039f85157ec12f4"
+    },
+    "fixture-aligned/archium-restored.png": {
+      "bytes": 177053,
+      "sha256": "c6f1fac2b983e3a716e2642f2f63286accfa8d39ccd6fe9c233102f01ba43019"
+    },
+    "fixture-aligned/archium-restored.json": {
+      "bytes": 20498,
+      "sha256": "2865874777dc107ea8196464dc70c682e1024100e1ccfdc046f6a1d0cc6d7ede"
+    },
+    "fixture-aligned/chrome-before.png": {
+      "bytes": 218122,
+      "sha256": "499a11e8d206e4f28e21dd43c765b83e31864402b0c8226522220ec8630e2a35"
+    },
+    "fixture-aligned/chrome-before.json": {
+      "bytes": 18436,
+      "sha256": "b4a297e670b2eee6b8e069ab934ae060924210fdfbe47ae39c31c9156f5238e4"
+    },
+    "fixture-aligned/chrome-after-cycle.png": {
+      "bytes": 215766,
+      "sha256": "9144eb45dd419c79c042aaeb76ccd6c03c032b05771a9b851dac4f20aea14d35"
+    },
+    "fixture-aligned/chrome-after-cycle.json": {
+      "bytes": 18436,
+      "sha256": "657bf006c2d9a1f31348e25d659dc8a71f93183334945a641526a615de6b2c10"
+    },
+    "fixture-aligned/chrome-restored.png": {
+      "bytes": 215962,
+      "sha256": "af52a3b18985e31b8c59117d9c1b2135b1c54c9c2f53cd17780f3a045c34129f"
+    },
+    "fixture-aligned/chrome-restored.json": {
+      "bytes": 18436,
+      "sha256": "5d23e89ca3c096af2e329dabcb75442551f13b6fd3a655a4a24ba94d6668d240"
+    }
+  }
+}

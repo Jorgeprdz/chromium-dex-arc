@@ -54,9 +54,10 @@ def synthetic_chromium_r(values_xml: Path) -> str:
     # Android views compiled by the isolated adapter gate.
     id_names = (
         'toolbar', 'desktop_window_spacer', 'location_bar',
-        'location_bar_holder', 'collapse_button', 'menu_button_wrapper',
-        'extensions_toolbar_container', 'coordinator', 'new_tab_button',
+        'control_container', 'location_bar_holder', 'collapse_button', 'menu_button_wrapper',
+        'extensions_toolbar_container', 'coordinator', 'new_tab_button', 'omnibox_suggestions_dropdown',
         'location_bar_status', 'location_bar_status_icon', 'url_bar', 'focus_thief',
+        'tab_modal_dialog_container', 'tab_modal_dialog_container_stub',
     )
 
     def klass(kind, members):
@@ -69,7 +70,7 @@ def synthetic_chromium_r(values_xml: Path) -> str:
 
     return ('public final class R { ' +
             klass('string', string_names) +
-            klass('id', id_names) +
+            klass('id', list(id_names) + [n.attrib['name'] for n in root if n.tag == 'item' and n.get('type') == 'id']) +
             klass('array', array_names) +
             klass('drawable', ['btn_back', 'btn_forward', 'btn_reload_stop', 'ic_add_24dp']) +
             '}')
@@ -138,12 +139,14 @@ def main():
         pure += list((ROOT / 'chromium').rglob('ArcSidebarStore.java'))
         pure += list((ROOT / 'chromium').rglob('ArcTabActions.java'))
         pure += list((ROOT / 'chromium').rglob('ArcCollectionsController.java'))
+        pure += list((ROOT / 'chromium').rglob('ArcSplitPairProjection.java'))
         run('javac', '-cp', str(window_jar), '-d', str(classes), *map(str, pure), str(ROOT / 'tests/java/ArcDesktopPolicyTest.java'),
             str(ROOT / 'tests/java/ArchiumAutofillPolicyTest.java'), str(ROOT / 'tests/java/ArchiumWindowClassTest.java'),
             str(ROOT / 'tests/java/ArchiumPasswordCsvTest.java'),
-            str(ROOT / 'tests/java/ArcSidebarStateTest.java'), str(ROOT / 'tests/java/ArcSidebarStoreTest.java'), str(ROOT / 'tests/java/ArcTabActionsTest.java'), str(ROOT / 'tests/java/ArcCollectionsControllerTest.java'))
+            str(ROOT / 'tests/java/ArcSplitPairProjectionTest.java'), str(ROOT / 'tests/java/ArcSidebarStateTest.java'), str(ROOT / 'tests/java/ArcSidebarStoreTest.java'), str(ROOT / 'tests/java/ArcTabActionsTest.java'), str(ROOT / 'tests/java/ArcCollectionsControllerTest.java'))
         run('java', '-cp', str(classes), 'ArchiumWindowClassTest')
         run('java', '-cp', str(classes), 'ArcDesktopPolicyTest')
+        run('java', '-cp', str(classes), 'ArcSplitPairProjectionTest')
         run('java', '-cp', str(classes), 'ArcSidebarStateTest')
         run('java', '-cp', str(classes), 'ArcSidebarStoreTest')
         run('java', '-cp', str(classes), 'ArcTabActionsTest')
@@ -157,7 +160,7 @@ def main():
             'org.chromium.chrome.R': 'public final class R { public static final class string { public static final int arc_bookmarks=1, arc_frame_color=2, arc_bookmark_root=3, arc_google_login=4, arc_autofill=5, arc_reset_color=6, arc_color_format=7, arc_interface=8, arc_interface_auto=9, arc_interface_arc=10, arc_interface_mobile=11; } public static final class id { public static final int toolbar=1, desktop_window_spacer=2; } }',
             'org.chromium.chrome.browser.profiles.Profile': 'public class Profile { public boolean isOffTheRecord(){return false;} public boolean shutdownStarted(){return false;} public Profile getOriginalProfile(){return this;} }',
             'org.chromium.components.bookmarks.BookmarkId': 'public class BookmarkId {}',
-            'org.chromium.url.GURL': 'public class GURL { public GURL(){} public GURL(String url){} public String getSpec() { return ""; } }',
+            'org.chromium.url.GURL': 'public class GURL { public GURL(){} public GURL(String url){} public String getSpec() { return ""; } public boolean isValid(){return true;} public String getScheme(){return "https";} }',
             'org.chromium.components.bookmarks.BookmarkItem': 'public class BookmarkItem { public String getTitle(){return "";} public boolean isFolder(){return false;} public org.chromium.url.GURL getUrl(){return null;} }',
             'org.chromium.chrome.browser.bookmarks.BookmarkModelObserver': 'public abstract class BookmarkModelObserver { public abstract void bookmarkModelChanged(); }',
             'org.chromium.chrome.browser.bookmarks.BookmarkModel': 'public class BookmarkModel { public void addObserver(BookmarkModelObserver o){} public void removeObserver(BookmarkModelObserver o){} public boolean isBookmarkModelLoaded(){return true;} public boolean finishLoadingBookmarkModel(Runnable r){return false;} public org.chromium.components.bookmarks.BookmarkId getDesktopFolderId(){return null;} public java.util.List<org.chromium.components.bookmarks.BookmarkId> getChildIds(org.chromium.components.bookmarks.BookmarkId id){return null;} public java.util.List<org.chromium.components.bookmarks.BookmarkId> getTopLevelFolderIds(){return null;} public org.chromium.components.bookmarks.BookmarkItem getBookmarkById(org.chromium.components.bookmarks.BookmarkId id){return null;} }',
@@ -165,7 +168,7 @@ def main():
             'org.chromium.components.favicon.LargeIconBridge': 'public class LargeIconBridge { public interface LargeIconCallback { void onLargeIconAvailable(android.graphics.Bitmap icon, int color, boolean fallback, int type); } public LargeIconBridge(org.chromium.chrome.browser.profiles.Profile p){} public boolean getLargeIconForUrl(org.chromium.url.GURL url,int size,LargeIconCallback cb){return true;} public void destroy(){} }',
             'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabRailLayout': 'public class VerticalTabRailLayout extends android.view.View { public VerticalTabRailLayout(android.content.Context c){super(c);} public void setDesktopWindowSpacerHost(android.view.View v){} }',
             'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabListViewBinder': 'public class VerticalTabListViewBinder { public static void refreshArcAppearance(VerticalTabRailLayout v,boolean i){} }',
-            'org.chromium.chrome.browser.toolbar.top.ToolbarTablet': 'public class ToolbarTablet extends android.view.View { public ToolbarTablet(android.content.Context c){super(c);} public void onThemeColorChanged(int color,boolean animate){} }',
+            'org.chromium.chrome.browser.toolbar.top.ToolbarTablet': 'public class ToolbarTablet extends android.view.View { public ToolbarTablet(android.content.Context c){super(c);} public void onThemeColorChanged(int color,boolean animate){} public void updateArcExtensionsWidth(int width){} public void clearArcExtensionsWidth(){} }',
             'org.chromium.chrome.browser.lifecycle.ConfigurationChangedObserver': 'public interface ConfigurationChangedObserver { void onConfigurationChanged(android.content.res.Configuration c); }',
             'org.chromium.chrome.browser.lifecycle.ActivityLifecycleDispatcher': 'public interface ActivityLifecycleDispatcher { void register(ConfigurationChangedObserver o); void unregister(ConfigurationChangedObserver o); }',
             'androidx.recyclerview.widget.RecyclerView': 'public class RecyclerView extends android.view.ViewGroup { public RecyclerView(android.content.Context c){super(c);} public abstract static class Adapter<T> { public void notifyDataSetChanged(){} } public Adapter<?> getAdapter(){return null;} protected void onLayout(boolean c,int l,int t,int r,int b){} }',
@@ -202,19 +205,28 @@ def main():
              'vertical_tab_layout.xml').read_text())
         definitions['org.chromium.chrome.R'] = synthetic_chromium_r(
             ROOT / 'chromium/chrome/android/java/res/values/arc_strings.xml')
+        native_spec = importlib.util.spec_from_file_location(
+            'r5_native_command_api', ROOT / 'tests/test_r5_native_command_api.py')
+        native_module = importlib.util.module_from_spec(native_spec)
+        native_spec.loader.exec_module(native_module)
+        native_location_bar = (
+            checkout / 'chrome/browser/ui/android/omnibox/java/src/org/chromium/'
+            'chrome/browser/omnibox/LocationBarLayout.java').read_text()
+        if not re.search(r'public\s+void\s+setArcAddressPopupOpener\s*\(\s*@Nullable\s+BooleanSupplier\s+opener\s*\)', native_location_bar):
+            raise RuntimeError('Delivered LocationBarLayout lacks address popup callback authority')
         definitions.update({
             # Type-only adapter for the public base hook shipped in the same patch.
             # Actual color/focus behavior is verified separately with Android/Chromium tests.
-            'org.chromium.chrome.browser.omnibox.LocationBarLayout': '''public class LocationBarLayout extends android.widget.FrameLayout {
-                public LocationBarLayout(android.content.Context c){super(c);}
-                public void setArcSurfaceColor(Integer color){}
-            }''',
+            'org.chromium.chrome.browser.omnibox.LocationBarLayout':
+                    native_module.native_definition(native_location_bar).replace('\n}', '\npublic void setArcTopBar(boolean active) {}\npublic void setArcAddressPopupOpener(java.util.function.BooleanSupplier opener) {}\n}'),
             # Minimal type contracts from cfd94726's CompositorViewHolder,
             # TouchEventObserver and NullableObservableSupplier. Stub bodies are
             # never used as evidence of compositor/touch/browser runtime behavior.
             'org.chromium.chrome.browser.compositor.CompositorViewHolder': '''public class CompositorViewHolder extends android.widget.FrameLayout {
                 public CompositorViewHolder(android.content.Context c, android.util.AttributeSet attrs){super(c, attrs);}
                 public android.view.View getActiveSurfaceView(){return null;}
+                public void setArcContentOffsetForRail(int width){}
+                public void beginArcRailViewportResize(int width){}
                 public void addTouchEventObserver(org.chromium.components.browser_ui.widget.TouchEventObserver o){}
                 public void removeTouchEventObserver(org.chromium.components.browser_ui.widget.TouchEventObserver o){}
             }''',
@@ -231,16 +243,29 @@ def main():
                 public void setTabVisibilityPredicate(java.util.function.IntPredicate predicate){}
                 public void refreshTabPresentation(){}
             }''',
-            'org.chromium.chrome.browser.tab.Tab': 'public class Tab { public int getId(){return 1;} public org.chromium.url.GURL getUrl(){return new org.chromium.url.GURL();} public String getTitle(){return "Title";} public boolean isDestroyed(){return false;} public boolean canGoBack(){return false;} public void goBack(){} public boolean canGoForward(){return false;} public void goForward(){} public void reload(){} public void addObserver(TabObserver o){} public void removeObserver(TabObserver o){} }',
+            'org.chromium.chrome.browser.tab.Tab': 'public class Tab { public int getId(){return 1;} public org.chromium.url.GURL getUrl(){return new org.chromium.url.GURL();} public String getTitle(){return "Title";} public boolean isDestroyed(){return false;} public boolean canGoBack(){return false;} public void goBack(){} public boolean canGoForward(){return false;} public void goForward(){} public void reload(){} public void addObserver(TabObserver o){} public void removeObserver(TabObserver o){} public org.chromium.chrome.browser.profiles.Profile getProfile(){return null;} public org.chromium.content_public.browser.WebContents getWebContents(){return null;} }',
             'org.chromium.chrome.browser.tab.TabObserver': ('public interface TabObserver { '
                  'default void onUrlUpdated(Tab tab){} '
                  'default void onNavigationEntriesDeleted(Tab tab){} '
                  'default void onLoadStarted(Tab tab,boolean differentDocument){} '
                  'default void onLoadStopped(Tab tab,boolean differentDocument){} '
-                 'default void onDestroyed(Tab tab){} }'),
-            'org.chromium.chrome.browser.tab.TabLaunchType': 'public class TabLaunchType { public static final int FROM_CHROME_UI=1; }',
+                 'default void onHidden(Tab tab,int type){} default void onDestroyed(Tab tab){} }'),
+            'org.chromium.content_public.browser.NavigationController': 'public interface NavigationController {}',
+            'org.chromium.content_public.browser.WebContents': 'public interface WebContents { boolean isDestroyed(); NavigationController getNavigationController(); }',
+            # NavigationPopup and HistoryManagerUtils signatures match pinned Chromium; this gate
+            # checks types only. Native history implementation is reused, not simulated in product.
+            'org.chromium.chrome.browser.toolbar.top.NavigationPopup': '''public class NavigationPopup {
+                public @interface Type { int TABLET_BACK=0; int TABLET_FORWARD=1; }
+                public interface HistoryDelegate { void show(org.chromium.chrome.browser.tab.Tab tab); }
+                public NavigationPopup(org.chromium.chrome.browser.profiles.Profile profile, android.content.Context context,
+                    org.chromium.content_public.browser.NavigationController controller, int type,
+                    java.util.function.Supplier<org.chromium.chrome.browser.tab.Tab> current, HistoryDelegate history){}
+                public void show(android.view.View anchor){} public void dismiss(){} public void setOnDismissCallback(Runnable callback){}
+            }''',
+            'org.chromium.chrome.browser.history.HistoryManagerUtils': 'public class HistoryManagerUtils { public static void showHistoryManager(android.app.Activity activity,org.chromium.chrome.browser.tab.Tab tab,org.chromium.chrome.browser.profiles.Profile profile){} }',
+            'org.chromium.chrome.browser.tab.TabLaunchType': 'public class TabLaunchType { public static final int FROM_CHROME_UI=1, FROM_LONGPRESS_FOREGROUND=2; }',
             'org.chromium.chrome.browser.tab.TabSelectionType': 'public class TabSelectionType { public static final int FROM_USER=1; }',
-            'org.chromium.content_public.browser.LoadUrlParams': 'public class LoadUrlParams { public LoadUrlParams(String url){} }',
+            'org.chromium.content_public.browser.LoadUrlParams': 'public class LoadUrlParams { public LoadUrlParams(String url){} public String getUrl(){return "https://example.test/";} public void setHasUserGesture(boolean value){} public void setVerbatimHeaders(String value){} public void setPostData(org.chromium.content_public.common.ResourceRequestBody value){} public void setIsRendererInitiated(boolean value){} }',
             'org.chromium.chrome.browser.tabmodel.TabCreator': 'public interface TabCreator { org.chromium.chrome.browser.tab.Tab createNewTab(org.chromium.content_public.browser.LoadUrlParams p,int type,org.chromium.chrome.browser.tab.Tab parent); }',
             'org.chromium.chrome.browser.tabmodel.TabClosureParams': 'public class TabClosureParams { public static Builder closeTab(org.chromium.chrome.browser.tab.Tab t){return new Builder();} public static class Builder { public Builder allowUndo(boolean b){return this;} public TabClosureParams build(){return new TabClosureParams();} } }',
             'org.chromium.chrome.browser.tabmodel.TabRemover': 'public interface TabRemover { void closeTabs(TabClosureParams p,boolean allowDialog); }',
@@ -265,8 +290,52 @@ def main():
                 'org.chromium.chrome.browser.tabwindow.TabWindowManager',
                 'org.chromium.chrome.browser.app.tabwindow.TabWindowManagerSingleton'):
             definitions[name] = arc_module.DEFINITIONS[name]
+        # Type-only split API adapters. These compile Arc callers, not native implementation.
+        # Source contract authority is the delivered holder/vertical coordinator and pinned
+        # NavigationController, Tab, WindowAndroid and ContentView, exercised separately.
+        holder_source = (ROOT / '.source-modified/chrome/android/java/src/org/chromium/'
+            'chrome/browser/compositor/CompositorViewHolder.java').read_text()
+        for method in ('setArcSplitTabs', 'clearArcSplitTabs', 'setArcSplitActivation',
+                'setArcSplitSwapProgress', 'setArcSplitInputBlocked', 'setArcSplitFrameSpacing', 'getArcSplitViewport', 'canPresentArcSplit'):
+            if not re.search(r'public\s+[^;{}]+\b' + method + r'\s*\(', holder_source):
+                raise RuntimeError('Missing delivered split holder API: ' + method)
+        def extend(name, members):
+            body = definitions[name]; end = body.rfind('}')
+            definitions[name] = body[:end] + members + body[end:]
+        extend('org.chromium.chrome.browser.compositor.CompositorViewHolder',
+            ' public interface FrameRequestObserver {void onFrameRequested();} public void addFrameRequestObserver(FrameRequestObserver o){} public void removeFrameRequestObserver(FrameRequestObserver o){} public boolean setArcSplitTabs(org.chromium.chrome.browser.tab.Tab a,org.chromium.chrome.browser.tab.Tab b,float r,int id){return false;}'
+            ' public void clearArcSplitTabs(){} public void setArcSplitActivation(java.util.function.IntConsumer c){}'
+            ' public void setArcSplitSwapProgress(float p){} public void setArcSplitInputBlocked(boolean b){} public void setArcSplitFrameSpacing(int inset,int gutter){}'
+            ' public android.graphics.Rect getArcSplitViewport(){return null;} public boolean canPresentArcSplit(){return false;} public void onContentChanged(){}')
+        extend('org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabListCoordinator',
+            ' public void setArcSplitRequest(java.util.function.Consumer<org.chromium.chrome.browser.tab.Tab> c,java.util.function.BooleanSupplier enabled){}'
+            ' public void setArcSplitPairs(java.util.List<int[]> pairs){} public void setArcSplitSeparateRequest(java.util.function.Consumer<org.chromium.chrome.browser.tab.Tab> c){}'
+            ' public boolean isArcSplitPairCompatible(org.chromium.chrome.browser.tab.Tab left, org.chromium.chrome.browser.tab.Tab right){return false;}')
+        extend('org.chromium.chrome.browser.tab.Tab',
+            ' public boolean isClosing(){return false;} public boolean isNativePage(){return false;} public boolean isHidden(){return false;} public boolean isIncognito(){return false;}'
+            ' public android.view.View getView(){return null;} public org.chromium.components.embedder_support.view.ContentView getContentView(){return null;}'
+            ' public org.chromium.ui.base.WindowAndroid getWindowAndroid(){return null;} public void show(int type){} public void hide(int type){}')
+        extend('org.chromium.chrome.browser.tab.TabObserver',
+            ' default void onShown(Tab tab,int type){} default void onContentChanged(Tab tab){} default void onActivityAttachmentChanged(Tab tab,org.chromium.ui.base.WindowAndroid window){}')
+        extend('org.chromium.chrome.browser.tabmodel.TabModelObserver',
+            ' default void willCloseTabs(java.util.List<org.chromium.chrome.browser.tab.Tab> tabs,boolean all,boolean undo){}'
+            ' default void willCloseTab(org.chromium.chrome.browser.tab.Tab tab,boolean alone){}'
+            ' default void tabRemoved(org.chromium.chrome.browser.tab.Tab tab){}'
+            ' default void onDidActiveStateChange(TabModel model,boolean active){}')
+        if ' loadUrl(' not in definitions['org.chromium.chrome.browser.tab.Tab']:
+            extend('org.chromium.chrome.browser.tab.Tab', ' public int loadUrl(org.chromium.content_public.browser.LoadUrlParams params){return 0;}')
+        definitions['org.chromium.content_public.common.ResourceRequestBody'] = 'public class ResourceRequestBody {}'
+        definitions['org.chromium.ui.base.WindowAndroid'] = 'public class WindowAndroid {public java.lang.ref.WeakReference<android.app.Activity> getActivity(){return null;}}'
+        definitions['org.chromium.chrome.browser.tab.TabHidingType'] = 'public class TabHidingType {public static final int CHANGED_TABS=0,ACTIVITY_HIDDEN=1;}'
+        definitions['org.chromium.components.embedder_support.view.ContentView'] = 'public class ContentView extends android.widget.FrameLayout {public ContentView(android.content.Context c){super(c);} public int getContentOffsetXPix(){return 0;} public void setContentOffsetXPix(int x){}}'
+        definitions['org.chromium.content_public.browser.NavigationController'] = 'public interface NavigationController {boolean getUseDesktopUserAgent(); void setUseDesktopUserAgent(boolean override,boolean reloadOnChange,boolean skipOnInitialNavigation);}'
         for annotation in ['Nullable', 'NullMarked', 'NullUnmarked']:
             definitions['org.chromium.build.annotations.' + annotation] = '@java.lang.annotation.Target({java.lang.annotation.ElementType.TYPE_USE,java.lang.annotation.ElementType.TYPE,java.lang.annotation.ElementType.METHOD,java.lang.annotation.ElementType.PACKAGE}) public @interface ' + annotation + ' {}'
+        # Nullable is strictly TYPE_USE in Chromium; declaration targets can mask javac errors.
+        definitions['org.chromium.build.annotations.Nullable'] = (
+            '@java.lang.annotation.Target(java.lang.annotation.ElementType.TYPE_USE) '
+            '@java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.CLASS) '
+            'public @interface Nullable {}')
         for name, body in definitions.items():
             file = stubs / (name.replace('.', '/') + '.java')
             file.parent.mkdir(parents=True, exist_ok=True)

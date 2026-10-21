@@ -1,0 +1,35 @@
+test_approved_repair_restarts_dispatch_without_polling_old_run (test_r5_supervisor.SupervisorReviewRegressions.test_approved_repair_restarts_dispatch_without_polling_old_run) ... ERROR
+test_audit_result_can_replay_after_interruption (test_r5_supervisor.SupervisorReviewRegressions.test_audit_result_can_replay_after_interruption) ... ERROR
+test_unrelated_system_text_cannot_authorize_install_success (test_r5_supervisor.SupervisorReviewRegressions.test_unrelated_system_text_cannot_authorize_install_success) ... FAIL
+
+======================================================================
+ERROR: test_approved_repair_restarts_dispatch_without_polling_old_run (test_r5_supervisor.SupervisorReviewRegressions.test_approved_repair_restarts_dispatch_without_polling_old_run)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/Archium-R5/tests/test_r5_supervisor.py", line 99, in test_approved_repair_restarts_dispatch_without_polling_old_run
+    self.assertFalse(m.poll_owned_phase(s,Path('/fixture'),None))
+                     ^^^^^^^^^^^^^^^^^^
+AttributeError: module 'sup' has no attribute 'poll_owned_phase'
+
+======================================================================
+ERROR: test_audit_result_can_replay_after_interruption (test_r5_supervisor.SupervisorReviewRegressions.test_audit_result_can_replay_after_interruption)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/Archium-R5/tests/test_r5_supervisor.py", line 93, in test_audit_result_can_replay_after_interruption
+    m.finish_build(args,state,folder)
+  File "/workspace/Archium-R5/scripts/archium-r5-supervisor.py", line 260, in finish_build
+    raise ValueError('CODEX_RESUME_BLOCKED: final audit already claimed for this installation')
+ValueError: CODEX_RESUME_BLOCKED: final audit already claimed for this installation
+
+======================================================================
+FAIL: test_unrelated_system_text_cannot_authorize_install_success (test_r5_supervisor.SupervisorReviewRegressions.test_unrelated_system_text_cannot_authorize_install_success)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/Archium-R5/tests/test_r5_supervisor.py", line 109, in test_unrelated_system_text_cannot_authorize_install_success
+    with self.assertRaises(ValueError):m.validate_installation(r,s,folder,'aapt2','apksigner')
+AssertionError: ValueError not raised
+
+----------------------------------------------------------------------
+Ran 3 tests in 0.052s
+
+FAILED (failures=1, errors=2)

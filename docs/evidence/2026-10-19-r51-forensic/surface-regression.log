@@ -1,0 +1,9 @@
+Note: /tmp/archium-r51-surface/SurfaceClipProbe.java uses or overrides a deprecated API.
+Note: Recompile with -Xlint:deprecation for details.
+JUnit version 4.13.2
+....
+Time: 8.864
+
+OK (4 tests)
+
+SCOPE=delivered_clip_lifecycle_Robolectric_NOT_GPU_OR_APK_RUNTIME

@@ -133,6 +133,7 @@ public class MainSettings extends ChromeBaseSettingsFragment
     public static final String PREF_AUTOFILL_PAYMENTS = "autofill_payment_methods";
     public static final String PREF_SAFETY_HUB = "safety_hub";
     public static final String PREF_ADDRESS_BAR = "address_bar";
+    private static final String PREF_ARC_UI_FONT = "archium_ui_font";
     private static final String PREF_ARC_INTERFACE = "archium_interface";
     private @Nullable AlertDialog mArcAppearanceDialog;
 
@@ -252,6 +253,9 @@ public class MainSettings extends ChromeBaseSettingsFragment
     @Override
     public void onViewCreated(View view, @Nullable Bundle savedInstanceState) {
         super.onViewCreated(view, savedInstanceState);
+        view.getViewTreeObserver().addOnGlobalLayoutListener(() -> {
+            if (isAdded() && getView() == view) ArcDesktopAppearance.applyUiFont(view);
+        });
 
         // Disable animations of preference changes.
         getListView().setItemAnimator(null);
@@ -393,6 +397,18 @@ public class MainSettings extends ChromeBaseSettingsFragment
             return true;
         });
         getPreferenceScreen().addPreference(arcInterface);
+        ChromeBasePreference uiFont = new ChromeBasePreference(requireContext());
+        uiFont.setKey(PREF_ARC_UI_FONT);
+        uiFont.setTitle(R.string.arc_ui_font);
+        uiFont.setOrder(arcInterface.getOrder() + 1);
+        uiFont.setOnPreferenceClickListener(preference -> {
+            if (mArcAppearanceDialog != null) mArcAppearanceDialog.dismiss();
+            mArcAppearanceDialog = ArcAppearanceDialog.createUiFont(requireContext(),
+                    this::updateArcAppearancePreference);
+            mArcAppearanceDialog.show();
+            return true;
+        });
+        getPreferenceScreen().addPreference(uiFont);
         updateArcAppearancePreference();
 
         IdentityManager identityManager =
@@ -879,6 +895,11 @@ public class MainSettings extends ChromeBaseSettingsFragment
     }
 
     private void updateArcAppearancePreference() {
+        Preference font = findPreference(PREF_ARC_UI_FONT);
+        if (font != null) font.setSummary(ArcAppearanceDialog.fontLabel(
+                ArcDesktopAppearance.getUiFont(requireContext())));
+        View settingsView = getView();
+        if (settingsView != null) ArcDesktopAppearance.applyUiFont(settingsView);
         Preference pref = findPreference(PREF_ARC_INTERFACE);
         pref.setSummary(ArcAppearanceDialog.labelForMode(
                 ArcDesktopAppearance.getUiMode(requireContext())));

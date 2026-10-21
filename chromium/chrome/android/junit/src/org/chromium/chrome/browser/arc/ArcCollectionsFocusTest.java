@@ -101,6 +101,17 @@ public class ArcCollectionsFocusTest {
     }
 
     @Test
+    public void stableCollectionBudgetDoesNotRequestAnotherBrowserLayout() {
+        Fixture f = new Fixture(); f.view.setCollectionHeight(240); f.measure();
+        View scroll = f.view.findViewWithTag("arc-collection-scroll");
+        assertFalse(scroll.isLayoutRequested());
+        f.view.setCollectionHeight(240);
+        assertFalse(scroll.isLayoutRequested());
+        f.view.setCollectionHeight(100);
+        assertTrue(scroll.isLayoutRequested());
+    }
+
+    @Test
     public void favoriteIsSquareRoundedTileAndKeepsFaviconColors() throws Exception {
         Fixture f = new Fixture();
         String id = f.controller.rememberTab(7, "https://example.test", "Saved", true);

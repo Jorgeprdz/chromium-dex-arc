@@ -1,0 +1,45 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>R5.2D synthetic layer reuse</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#eef1f3;color:#132638;font:16px sans-serif}
+header{position:sticky;top:0;background:#ffd5bf;padding:12px;z-index:10}
+button{padding:8px;margin:3px}main{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:12px;padding:16px}
+article{background:#fff;padding:8px;border:2px solid #354657;overflow:hidden;min-height:250px}
+.layered article{transform:translate3d(.375px,.25px,0);will-change:transform}
+.layered article:nth-child(3n){contain:paint}.layered img{mix-blend-mode:multiply;transform:translateZ(0)}
+img{width:100%;height:185px;object-fit:contain}strong,p{display:block;margin:4px 0}
+aside{position:fixed;right:0;bottom:0;background:#ffd5bf;padding:8px;z-index:11}
+</style>
+<header>R5.2D — synthetic images, no remote resources
+<button id="layers">Toggle composited/blended cards</button><button id="cycle">Scroll and recycle</button>
+<button id="reset">Reset phase</button><output id="status"></output></header>
+<main id="cards"></main><aside>Fixed anchor 0123456789</aside>
+<script>
+'use strict';
+// Sixteen shared 768² sources: bounded pressure, not an out-of-memory test.
+const sources=Array.from({length:16},(_,n)=>{const c=document.createElement('canvas');c.width=c.height=768;
+ const x=c.getContext('2d'),colors=['#ef4963','#10a6c2','#f3c838','#34ae68'];
+ for(let y=0;y<8;y++)for(let k=0;k<8;k++){x.fillStyle=colors[(y+k+n)%4];x.fillRect(k*96,y*96,96,96)}
+ x.fillStyle='#fff';x.fillRect(64,290,640,160);x.fillStyle='#14283c';x.font='64px monospace';x.fillText('SOURCE '+n,80,395);return c.toDataURL('image/png')});
+const cards=document.querySelector('#cards'),state={phase:0,cycles:0,busy:false};
+for(let n=0;n<96;n++){const a=document.createElement('article');a.dataset.slot=n;
+ const title=document.createElement('strong'),img=document.createElement('img'),p=document.createElement('p');
+ p.textContent='One glyph row / ÁÉ ñ / 0123456789';a.append(title,img,p);cards.append(a)}
+async function paint(phase){state.phase=phase;for(const [n,a]of[...cards.children].entries()){
+ a.firstChild.textContent=`Slot ${n} / phase ${phase}`;a.querySelector('img').src=sources[(n+phase)%sources.length]}
+ await Promise.all([...document.images].map(i=>i.decode()));await frames();}
+function frames(){return new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)))}
+function metadata(){return {fixture:'R52D_LAYER_REUSE',...state,viewport:[innerWidth,innerHeight,devicePixelRatio],scrollY,
+ visible:document.visibilityState,focused:document.hasFocus(),images:[...document.images].map((i,index)=>{const r=i.getBoundingClientRect();
+ return {index,complete:i.complete,nw:i.naturalWidth,nh:i.naturalHeight,x:r.x,y:r.y,w:r.width,h:r.height}})}}
+async function cycle(){if(state.busy)throw Error('Cycle already active');state.busy=true;const start=scrollY,phase=state.phase;
+ try{for(let step=0;step<12;step++){scrollTo(0,step%2?0:document.documentElement.scrollHeight);await paint((phase+step+1)%16);
+ await new Promise(r=>setTimeout(r,120))}await paint(phase);scrollTo(0,start);await frames();state.cycles++}
+ finally{state.busy=false}return metadata()}
+document.querySelector('#layers').onclick=()=>document.body.classList.toggle('layered');
+document.querySelector('#cycle').onclick=()=>cycle();document.querySelector('#reset').onclick=()=>paint(0);
+window.r52d={metadata,paint,cycle,ready:paint(0)};
+addEventListener('resize',()=>{document.querySelector('#status').textContent=` ${innerWidth} × ${innerHeight}`});
+</script>

@@ -1,0 +1,24 @@
+test_group_keeps_group_projection (test_r51_reorder_projection.ReorderProjectionTests.test_group_keeps_group_projection) ... ok
+test_new_tab_keeps_structural_reset (test_r51_reorder_projection.ReorderProjectionTests.test_new_tab_keeps_structural_reset) ... ok
+test_pinned_keeps_pinned_projection (test_r51_reorder_projection.ReorderProjectionTests.test_pinned_keeps_pinned_projection) ... ok
+test_repeated_abc_reorder_preserves_models_and_selected_identity (test_r51_reorder_projection.ReorderProjectionTests.test_repeated_abc_reorder_preserves_models_and_selected_identity) ... FAIL
+test_unfiltered_keeps_upstream_path (test_r51_reorder_projection.ReorderProjectionTests.test_unfiltered_keeps_upstream_path) ... ok
+
+======================================================================
+FAIL: test_repeated_abc_reorder_preserves_models_and_selected_identity (test_r51_reorder_projection.ReorderProjectionTests.test_repeated_abc_reorder_preserves_models_and_selected_identity)
+----------------------------------------------------------------------
+Traceback (most recent call last):
+  File "/workspace/Archium-R5/tests/test_r51_reorder_projection.py", line 70, in test_repeated_abc_reorder_preserves_models_and_selected_identity
+    def test_repeated_abc_reorder_preserves_models_and_selected_identity(self):self.run_case('reorder')
+                                                                               ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/workspace/Archium-R5/tests/test_r51_reorder_projection.py", line 69, in run_case
+    self.assertEqual(result.returncode,0,result.stderr)
+AssertionError: 1 != 0 : Exception in thread "main" java.lang.AssertionError: reorder replaced native row model while drag owns holder
+	at ReorderProjectionProbe.check(ReorderProjectionProbe.java:26)
+	at ReorderProjectionProbe.main(ReorderProjectionProbe.java:40)
+
+
+----------------------------------------------------------------------
+Ran 5 tests in 0.907s
+
+FAILED (failures=1)

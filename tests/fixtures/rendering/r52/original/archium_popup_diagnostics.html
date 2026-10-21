@@ -1,0 +1,205 @@
+<!doctype html>
+<html lang="es-MX">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#151a21">
+  <title>Archium R5 · Popup & Dialog Diagnostics</title>
+  <style>
+    :root{font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;color-scheme:dark;--bg:#10151b;--panel:#1a222b;--panel2:#242e38;--line:#34404a;--ink:#eef2f5;--muted:#b3c1cd;--accent:#f3b58e;--good:#87deb8;--bad:#ff8e94;--mono:ui-monospace,SFMono-Regular,Consolas,monospace}
+    *{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--bg);color:var(--ink);min-height:100vh;padding:22px 14px 100px}
+    main{max-width:970px;margin:0 auto}header{margin:6px 0 22px}h1{font-size:clamp(25px,4vw,36px);letter-spacing:-.04em;line-height:1.1;margin:8px 0}p{color:var(--muted);line-height:1.55;margin:8px 0}h2{margin:0 0 8px;font-size:18px}h3{font-size:14px;font-weight:650;margin:0 0 3px}.kicker{font-size:11px;color:var(--accent);font-weight:800;letter-spacing:.16em;text-transform:uppercase}
+    .chip{border:1px solid var(--line);padding:5px 9px;border-radius:99px;font-size:12px;color:var(--muted);display:inline-flex;align-items:center;gap:6px}.dot{background:var(--good);border-radius:100%;width:7px;height:7px}
+    .status-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:15px}.section{margin:16px 0;padding:18px;background:var(--panel);border:1px solid var(--line);border-radius:16px}
+    .grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin-top:14px}
+    button{cursor:pointer;border:1px solid #4a5662;color:var(--ink);border-radius:12px;background:var(--panel2);min-height:72px;text-align:left;padding:12px;display:flex;flex-direction:column;align-items:flex-start;justify-content:center;gap:5px;font:inherit;-webkit-tap-highlight-color:transparent}
+    button:hover,button:focus-visible{border-color:var(--accent);outline:none}button:active{transform:translateY(1px)}button b{font-size:14px}button small{color:var(--muted);line-height:1.3;font-size:12px}button.primary{background:#41372f;border-color:#b87e5d}button.primary b{color:#ffdbbe}
+    .toolbar{display:flex;flex-wrap:wrap;gap:8px}.toolbar button,.inline-button{min-height:0;padding:9px 12px;text-align:center;display:inline-block;border-radius:9px;font-size:13px}
+    .row{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap}.muted{color:var(--muted);font-size:12px}.logbox{background:#0b1116;border:1px solid #35434d;border-radius:12px;height:335px;overflow:auto;margin-top:10px;padding:10px;font-family:var(--mono);font-size:11.5px;line-height:1.6;white-space:pre-wrap;overflow-wrap:anywhere}.entry{border-bottom:1px solid #1d2b33;padding:3px 0}.entry:last-child{border:0}.when{color:#7fa2b4}.level-OK .typ{color:var(--good)}.level-ERROR .typ{color:var(--bad)}.level-INFO .typ{color:var(--accent)}.badge{display:inline-flex;align-items:center;font-size:11px;padding:5px 9px;border:1px solid var(--line);border-radius:6px;background:#12181e}
+    .test-result{font-family:var(--mono);font-size:12px;color:var(--accent);margin-top:8px;min-height:20px}.overlay{display:none;position:fixed;inset:0;z-index:5000;background:rgba(0,0,0,.66);align-items:center;justify-content:center;padding:20px}.overlay.visible{display:flex}.popcard{background:#222b35;border:1px solid #7d8591;border-radius:15px;padding:20px;max-width:410px;width:100%;box-shadow:0 15px 70px #0007}.popcard h2{margin:0 0 7px}.dialog-actions{display:flex;gap:10px;margin-top:14px}.dialog-actions button{flex:1;min-height:45px;align-items:center;text-align:center;display:block}.native-dialog{border:1px solid #8d99a6;background:#212a33;color:var(--ink);border-radius:16px;max-width:min(90vw,430px);padding:20px;box-shadow:0 18px 65px #0009}.native-dialog::backdrop{background:#0009}
+    label{display:flex;align-items:center;gap:7px;color:var(--muted);font-size:12px}input[type=checkbox]{accent-color:var(--accent)}input[type=file]{font-size:12px;max-width:100%}.footnote{margin:14px 0;font-size:12px;color:var(--muted)}strong{color:#f4d0b9}code{font-family:var(--mono);background:#2b3741;padding:2px 4px;border-radius:3px}
+    @media(min-width:700px){.grid{grid-template-columns:repeat(3,minmax(0,1fr))}body{padding:30px 24px 100px}.section{padding:24px}.logbox{height:390px}}@media(max-width:360px){.grid{grid-template-columns:1fr}button{min-height:60px}}
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <div class="kicker">ARCHIUM · R5 / ANDROID</div>
+    <h1>Prueba de pop-ups y diálogos</h1>
+    <p>Prueba los cuadros nativos de Chromium y las capas HTML para investigar el fallo donde la pantalla se oscurece y el mensaje no aparece.</p>
+    <div class="status-row">
+      <span class="chip"><span class="dot"></span> Diagnóstico local</span>
+      <span class="chip" id="clock">Preparando…</span>
+      <span class="chip" id="res">Ventana…</span>
+      <span class="chip" id="events">0 eventos</span>
+    </div>
+  </header>
+
+  <section class="section">
+    <div class="row"><h2>1. Diálogos nativos del navegador</h2><span class="badge">JavaScript / Chromium</span></div>
+    <p>Estos cuadros dependen de la implementación nativa del navegador. Si el fondo se oscurece pero el mensaje no sale, toma una captura.</p>
+    <div class="grid">
+      <button id="test-alert"><b>⚠️ Alert</b><small>Mensaje simple con botón Aceptar</small></button>
+      <button id="test-confirm"><b>✅ Confirmar acción</b><small>Aceptar o Cancelar</small></button>
+      <button id="test-prompt"><b>✏️ Prompt</b><small>Cuadro con campo de texto</small></button>
+      <button id="test-download"><b>⬇️ Confirmar descarga</b><small>Confirmación nativa y archivo TXT</small></button>
+      <button id="test-favorite"><b>⭐ Agregar a favoritos</b><small>Confirmación nativa; guarda estado de prueba</small></button>
+      <button id="test-chain" class="primary"><b>▶ Secuencia nativa</b><small>Alert → Confirm → Prompt en un toque</small></button>
+    </div>
+    <div class="test-result" id="native-result" role="status" aria-live="polite">Esperando prueba…</div>
+  </section>
+
+  <section class="section">
+    <div class="row"><h2>2. Ventanas y capas HTML</h2><span class="badge">DOM / Surface / Z-order</span></div>
+    <p>Ayudan a distinguir un diálogo web de uno generado por Android o Chromium.</p>
+    <div class="grid">
+      <button id="test-modal"><b>🗔 &lt;dialog&gt; modal</b><small>Modal con fondo oscurecido real</small></button>
+      <button id="test-nonmodal"><b>🗔 &lt;dialog&gt; no modal</b><small>Diálogo sin bloquear la página</small></button>
+      <button id="test-overlay"><b>▧ Overlay personalizado</b><small>Scrim + tarjeta con z-index alto</small></button>
+      <button id="test-window"><b>↗ window.open()</b><small>Ventana o nueva pestaña (puede bloquearse)</small></button>
+      <button id="test-file"><b>📁 Selector de archivo</b><small>Abre el selector nativo Android</small></button>
+      <button id="test-all-html" class="primary"><b>▶ Comprobar capa HTML</b><small>Abre un diálogo modal para confirmar</small></button>
+    </div>
+    <div class="test-result" id="html-result" role="status" aria-live="polite">Esperando prueba…</div>
+    <input id="file-pick" type="file" style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none" aria-label="Seleccionar archivo para probar picker">
+  </section>
+
+  <section class="section">
+    <div class="row"><h2>3. Registro de eventos web</h2><span class="badge" id="logcount">0 líneas</span></div>
+    <p>Es un registro <strong>JavaScript</strong> de eventos del navegador, no Android logcat. Cada diálogo registra inicio y resultado; también se capturan foco, visibilidad, errores y cambios de pantalla.</p>
+    <div class="toolbar">
+      <button id="save-log">Guardar registro TXT</button>
+      <button id="copy-log">Copiar log</button>
+      <button id="clear-log">Limpiar</button>
+      <button id="load-logcat">Importar logcat TXT</button>
+    </div>
+    <input id="logcat-file" type="file" accept=".txt,.log,text/plain" style="display:none" aria-label="Importar logcat de Android">
+    <div id="log" class="logbox" role="log" aria-live="off" tabindex="0"></div>
+    <label style="margin-top:10px"><input type="checkbox" id="auto-scroll" checked> Desplazar el registro automáticamente</label>
+    <div class="footnote">La lectura directa de Android <code>logcat</code> desde una página web está restringida por seguridad. El script de Termux adjunto captura logs de Chromium/Android para importarlos aquí. <strong>No compartas registros sin revisar datos personales.</strong></div>
+  </section>
+  <p class="footnote">Pruebas locales · No envía información a ningún servidor · Archium Popup Diagnostics v1.0 · Para resultados comparables, abrir desde <code>http://127.0.0.1</code> cuando sea posible.</p>
+</main>
+
+<dialog id="modal" class="native-dialog">
+  <h2>Diálogo HTML modal</h2>
+  <p>Si lees esto, el &lt;dialog&gt; HTML y su capa superior funcionan. El fondo debe estar oscurecido.</p>
+  <div class="dialog-actions"><button id="modal-no">Cancelar</button><button id="modal-yes" class="primary">Confirmar</button></div>
+</dialog>
+<dialog id="nonmodal" class="native-dialog">
+  <h2>Diálogo HTML no modal</h2><p>Este no oscurece el fondo. Puedes cerrar este cuadro.</p>
+  <div class="dialog-actions"><button id="nonmodal-close">Cerrar</button></div>
+</dialog>
+<div id="overlay" class="overlay" role="presentation">
+  <div class="popcard" role="dialog" aria-modal="true" aria-labelledby="overlay-title" tabindex="-1">
+    <h2 id="overlay-title">Overlay personalizado</h2><p>Esta capa es HTML/CSS, no un diálogo nativo. Deberías ver un fondo oscurecido y esta tarjeta.</p>
+    <div class="dialog-actions"><button id="overlay-no">Cancelar</button><button id="overlay-yes" class="primary">Confirmar</button></div>
+  </div>
+</div>
+<script>
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const logEl = $('log');
+  const logLines = [];
+  let total = 0;
+  let busy = false;
+  const maxLines = 600;
+  const t0 = performance.now();
+  const date = () => new Date().toLocaleString('es-MX',{hour12:false});
+  const trim = (v,n=240) => String(v).replace(/[\r\n\t]+/g,' ').slice(0,n);
+  function event(type, message, data) {
+    const elapsed = ((performance.now()-t0)/1000).toFixed(2);
+    const extra = data===undefined?'':' | '+(typeof data==='string'?trim(data):trim(JSON.stringify(data)));
+    const str=`[${date()}] [+${elapsed}s] ${type}: ${message}${extra}`;
+    const item=document.createElement('div'); item.className='entry level-'+type;
+    const stamp=document.createElement('span');stamp.className='when';stamp.textContent=`[+${elapsed}s] `;
+    const tag=document.createElement('span');tag.className='typ';tag.textContent=type+' ';
+    item.append(stamp,tag,document.createTextNode(message+extra));
+    logEl.append(item); logLines.push(str); total++;
+    if(logLines.length>maxLines){ logLines.shift(); logEl.firstElementChild?.remove(); }
+    $('events').textContent=total+' eventos';$('logcount').textContent=logLines.length+' líneas';
+    if($('auto-scroll').checked) logEl.scrollTop=logEl.scrollHeight;
+  }
+  const status = (id,text)=>{$(id).textContent=text;};
+  function getText(){return `ARCHIUM POPUP DIAGNOSTICS\nGenerated: ${new Date().toISOString()}\nURL: ${location.href}\nUA: ${navigator.userAgent}\nSize: ${innerWidth}x${innerHeight}; dpr=${devicePixelRatio}\n\n`+logLines.join('\n')+'\n';}
+  function download(name,contents){
+    const blob=new Blob([contents],{type:'text/plain;charset=utf-8'});const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),30000);
+    event('INFO','Descarga solicitada al navegador: '+name);
+  }
+  function nativeCall(kind,fn,after){
+    if(busy){event('ERROR','Prueba nativa bloqueada: ya hay otra en curso');return;}
+    busy=true; event('INFO','INICIO '+kind+' (si sólo aparece scrim, tomar captura)');
+    const start=performance.now();
+    try { const result=fn(); const sec=((performance.now()-start)/1000).toFixed(2);event('OK',`FIN ${kind} después de ${sec}s`,result===null?'null':result);after?.(result);status('native-result',`${kind}: finalizó (${sec}s)`); }
+    catch(e){event('ERROR',`${kind}: ${e.name}: ${e.message}`);status('native-result',`${kind}: ERROR`);}
+    finally{busy=false;}
+  }
+  $('test-alert').onclick=()=>nativeCall('alert',()=>{alert('ARCHIUM TEST: ¿Ves este diálogo nativo? Pulsa Aceptar.');return 'accepted';});
+  $('test-confirm').onclick=()=>nativeCall('confirm',()=>confirm('ARCHIUM TEST: ¿Confirmas esta operación?'));
+  $('test-prompt').onclick=()=>nativeCall('prompt',()=>prompt('ARCHIUM TEST: Escribe PRUEBA y confirma:','PRUEBA'));
+  $('test-download').onclick=()=>nativeCall('confirm-download',()=>confirm('Archium: ¿Quieres descargar un archivo de diagnóstico TXT?'),res=>{
+    if(res){download('archium-descarga-de-prueba.txt','ARCHIUM R5: Archivo de descarga de prueba.\n'+new Date().toISOString()+'\n');event('OK','Usuario confirmó descarga');}
+    else event('INFO','Descarga cancelada por usuario');
+  });
+  $('test-favorite').onclick=()=>nativeCall('confirm-favorites',()=>confirm('Archium: ¿Agregar esta página de PRUEBA a favoritos?'),res=>{
+    if(res){try{localStorage.setItem('archium-test-favorite','true');event('OK','Favorito de prueba guardado en localStorage');}catch(e){event('ERROR','localStorage bloqueado: '+e.message);} }
+    else event('INFO','No se agregó el favorito de prueba');
+  });
+  $('test-chain').onclick=()=>nativeCall('NATIVE-SEQUENCE',()=>{
+    alert('1/3 · ALERT: ¿Se ve?');
+    const yes=confirm('2/3 · CONFIRM: ¿Aceptar?');
+    const value=prompt('3/3 · PROMPT: escribe cualquier texto:','Archium');
+    return {confirm:yes,prompt:value};
+  });
+  const modal=$('modal'),nonmodal=$('nonmodal'),overlay=$('overlay');
+  function showModal(){try{modal.showModal();event('INFO','showModal() ejecutado; modal.open='+modal.open);status('html-result','Diálogo modal abierto');}catch(e){event('ERROR','showModal: '+e.message);}}
+  $('test-modal').onclick=showModal;
+  $('test-all-html').onclick=showModal;
+  $('modal-yes').onclick=()=>{event('OK','Modal HTML: Confirmar');modal.close('confirm');};
+  $('modal-no').onclick=()=>{event('INFO','Modal HTML: Cancelar');modal.close('cancel');};
+  modal.addEventListener('close',()=>{event('INFO','Modal HTML cerrado',modal.returnValue);status('html-result','Diálogo modal cerrado');});
+  modal.addEventListener('cancel',()=>event('INFO','Modal HTML recibió Escape/cancel'));
+  $('test-nonmodal').onclick=()=>{try{nonmodal.show();event('INFO','show() no modal ejecutado');status('html-result','Diálogo no modal abierto');}catch(e){event('ERROR','show(): '+e.message);}};
+  $('nonmodal-close').onclick=()=>{nonmodal.close('closed');event('OK','Diálogo no modal cerrado');};
+  $('test-overlay').onclick=()=>{overlay.classList.add('visible');overlay.querySelector('.popcard').focus();event('INFO','Overlay CSS visible');status('html-result','Overlay abierto');};
+  function closeOverlay(reason){overlay.classList.remove('visible');event('OK','Overlay CSS cerrado: '+reason);status('html-result','Overlay cerrado');}
+  $('overlay-no').onclick=()=>closeOverlay('cancel');$('overlay-yes').onclick=()=>closeOverlay('confirm');
+  overlay.addEventListener('click',e=>{if(e.target===overlay)closeOverlay('outside');});
+  document.addEventListener('keydown',e=>{if(e.key==='Escape'&&overlay.classList.contains('visible'))closeOverlay('escape');});
+  $('test-window').onclick=()=>{event('INFO','Solicitando window.open()');try{const win=window.open('about:blank','_blank','popup=yes,width=460,height=380');if(win){event('OK','window.open devolvió referencia; puede abrir pestaña según el navegador');try{win.document.title='Archium popup test';win.document.body.innerHTML='<main style="font-family:system-ui;padding:24px"><h1>Archium: ventana emergente</h1><p>Si ves esto, window.open funcionó.</p><button onclick="window.close()">Cerrar</button></main>';}catch(err){event('INFO','La ventana no permitió escribir contenido: '+err.message);}}else event('ERROR','window.open bloqueado por el navegador');}catch(e){event('ERROR','window.open: '+e.message);}};
+  $('test-file').onclick=()=>{event('INFO','Abriendo selector nativo de archivos');$('file-pick').click();};
+  $('file-pick').addEventListener('change',e=>{const files=e.target.files;event('INFO','Selector completado',files?.length?`${files.length} archivo(s) elegido(s)`:'ninguno');status('html-result',files?.length?'Archivo seleccionado':'Sin selección');});
+  $('save-log').onclick=()=>download('archium-popup-log-'+new Date().toISOString().replace(/[:.]/g,'-')+'.txt',getText());
+  $('copy-log').onclick=async()=>{try{await navigator.clipboard.writeText(getText());event('OK','Registro copiado al portapapeles');}catch(e){event('ERROR','No se pudo copiar (permiso/contexto seguro): '+e.message);download('archium-popup-log.txt',getText());}};
+  $('clear-log').onclick=()=>{logLines.length=0;logEl.replaceChildren();total=0;$('events').textContent='0 eventos';$('logcount').textContent='0 líneas';event('INFO','Registro reiniciado');};
+  $('load-logcat').onclick=()=>$('logcat-file').click();
+  $('logcat-file').addEventListener('change',async e=>{
+    const f=e.target.files?.[0];if(!f)return;
+    if(f.size>10*1024*1024){event('ERROR','Archivo demasiado grande (>10 MB); recórtalo primero');return;}
+    const content=await f.text();event('INFO',`Logcat importado: ${f.name}, ${f.size} bytes`);
+    const arr=content.split(/\r?\n/);for(const line of arr.slice(-Math.min(arr.length,250))){if(line)event('LOGCAT',trim(line,500));}
+    event('INFO','Importación completada; se muestran como máximo las últimas 250 líneas');
+  });
+  const size=()=>`${innerWidth}×${innerHeight} / DPR ${devicePixelRatio}`;
+  function sizeUpdate(){ $('res').textContent=size(); }
+  sizeUpdate();$('clock').textContent='Hora '+new Date().toLocaleTimeString('es-MX');
+  setInterval(()=>{$('clock').textContent='Hora '+new Date().toLocaleTimeString('es-MX');},60000);
+  window.addEventListener('resize',()=>{sizeUpdate();event('INFO','resize',size());});
+  window.addEventListener('focus',()=>event('INFO','window focus'));
+  window.addEventListener('blur',()=>event('INFO','window blur'));
+  document.addEventListener('visibilitychange',()=>event('INFO','visibilitychange: '+document.visibilityState));
+  window.addEventListener('pageshow',e=>event('INFO','pageshow persisted='+e.persisted));
+  window.addEventListener('pagehide',e=>event('INFO','pagehide persisted='+e.persisted));
+  window.addEventListener('online',()=>event('INFO','network online'));
+  window.addEventListener('offline',()=>event('INFO','network offline'));
+  window.addEventListener('error',e=>event('ERROR','window error: '+(e.message||'unknown')));
+  window.addEventListener('unhandledrejection',e=>event('ERROR','Promise rejection: '+String(e.reason)));
+  window.visualViewport?.addEventListener('resize',()=>event('INFO','visualViewport resize',`${visualViewport.width}x${visualViewport.height}`));
+  event('INFO','Página lista',{ua:navigator.userAgent,dpr:devicePixelRatio,viewport:size(),secure:window.isSecureContext});
+})();
+</script>
+</body>
+</html>

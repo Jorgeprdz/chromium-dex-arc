@@ -1,0 +1,21 @@
+Actions 38511423805, source 0abfc9f03e34c23762190365ccb0cf6f9e5c3260
+Full native suite, actual merged Chromium resources, SDK29/37.
+
+ 0| android.view.InflateException: Binary XML file line #24 in app.archium.android:layout/location_bar: Failed to resolve attribute at index 1: TypedValue{t=0x2/d=0x7f0503ff a=-1}
+ 0| Caused by: java.lang.UnsupportedOperationException: Failed to resolve attribute at index 1: TypedValue{t=0x2/d=0x7f0503ff a=-1}
+ 1| android.view.InflateException: Binary XML file line #24 in app.archium.android:layout/location_bar: Failed to resolve attribute at index 1: TypedValue{t=0x2/d=0x7f0503ff a=-1}, theme={InheritanceMap=[id=0x7f150469app.archium.android:style/Theme.AppCompat.Light], Themes=[app.archium.android:style/Theme.AppCompat.Light, forced, android:style/Theme.DeviceDefault, forced]}
+ 1| Caused by: java.lang.UnsupportedOperationException: Failed to resolve attribute at index 1: TypedValue{t=0x2/d=0x7f0503ff a=-1}, theme={InheritanceMap=[id=0x7f150469app.archium.android:style/Theme.AppCompat.Light], Themes=[app.archium.android:style/Theme.AppCompat.Light, forced, android:style/Theme.DeviceDefault, forced]}
+C 05:10:11.601    8.695s Main   0| android.view.InflateException: Binary XML file line #24 in app.archium.android:layout/location_bar: Failed to resolve attribute at index 1: TypedValue{t=0x2/d=0x7f0503ff a=-1}
+C 05:10:11.601    8.695s Main   0| Caused by: java.lang.UnsupportedOperationException: Failed to resolve attribute at index 1: TypedValue{t=0x2/d=0x7f0503ff a=-1}
+C 05:10:11.603    8.696s Main   1| android.view.InflateException: Binary XML file line #24 in app.archium.android:layout/location_bar: Failed to resolve attribute at index 1: TypedValue{t=0x2/d=0x7f0503ff a=-1}, theme={InheritanceMap=[id=0x7f150469app.archium.android:style/Theme.AppCompat.Light], Themes=[app.archium.android:style/Theme.AppCompat.Light, forced, android:style/Theme.DeviceDefault, forced]}
+C 05:10:11.603    8.696s Main   1| Caused by: java.lang.UnsupportedOperationException: Failed to resolve attribute at index 1: TypedValue{t=0x2/d=0x7f0503ff a=-1}, theme={InheritanceMap=[id=0x7f150469app.archium.android:style/Theme.AppCompat.Light], Themes=[app.archium.android:style/Theme.AppCompat.Light, forced, android:style/Theme.DeviceDefault, forced]}
+C 05:10:11.604    8.698s Main   0| android.view.InflateException: Binary XML file line #24 in app.archium.android:layout/location_bar: Failed to resolve attribute at index 1: TypedValue{t=0x2/d=0x7f0503ff a=-1}
+C 05:10:11.604    8.698s Main   0| Caused by: java.lang.UnsupportedOperationException: Failed to resolve attribute at index 1: TypedValue{t=0x2/d=0x7f0503ff a=-1}
+C 05:10:11.605    8.699s Main   1| android.view.InflateException: Binary XML file line #24 in app.archium.android:layout/location_bar: Failed to resolve attribute at index 1: TypedValue{t=0x2/d=0x7f0503ff a=-1}, theme={InheritanceMap=[id=0x7f150469app.archium.android:style/Theme.AppCompat.Light], Themes=[app.archium.android:style/Theme.AppCompat.Light, forced, android:style/Theme.DeviceDefault, forced]}
+C 05:10:11.605    8.699s Main   1| Caused by: java.lang.UnsupportedOperationException: Failed to resolve attribute at index 1: TypedValue{t=0x2/d=0x7f0503ff a=-1}, theme={InheritanceMap=[id=0x7f150469app.archium.android:style/Theme.AppCompat.Light], Themes=[app.archium.android:style/Theme.AppCompat.Light, forced, android:style/Theme.DeviceDefault, forced]}
+C 05:10:11.606    8.700s Main  [==========] 51 tests ran.
+C 05:10:11.606    8.700s Main  [  PASSED  ] 47 tests.
+C 05:10:11.606    8.700s Main  [  FAILED  ] org.chromium.chrome.browser.omnibox.OmniboxSuggestionsDropdownEmbedderImplUnitTest#testArcCommandSuggestionsAccountForSideUiOffsetRtl[29]
+C 05:10:11.607    8.700s Main  [  FAILED  ] org.chromium.chrome.browser.omnibox.OmniboxSuggestionsDropdownEmbedderImplUnitTest#testArcCommandSuggestionsAccountForSideUiOffsetRtl[37]
+C 05:10:11.607    8.700s Main  [  FAILED  ] org.chromium.chrome.browser.omnibox.OmniboxSuggestionsDropdownEmbedderImplUnitTest#testArcCommandSuggestionsAccountForSideUiOffset[29]
+C 05:10:11.607    8.700s Main  [  FAILED  ] org.chromium.chrome.browser.omnibox.OmniboxSuggestionsDropdownEmbedderImplUnitTest#testArcCommandSuggestionsAccountForSideUiOffset[37]

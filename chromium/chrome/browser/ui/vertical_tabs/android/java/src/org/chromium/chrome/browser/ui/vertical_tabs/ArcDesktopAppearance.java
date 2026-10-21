@@ -19,14 +19,58 @@ import org.chromium.chrome.browser.desktop_policy.ArchiumWindowMetrics;
 
 /** Arc styling follows the current usable window; independent of vendor or desktop service. */
 public final class ArcDesktopAppearance {
+    public static final String UI_FONT_KEY = "ui_font";
     public static final String COLOR_KEY = "frame_color";
     public static final String UI_MODE_KEY = "ui_mode";
+    public static final String ADDRESS_BAR_POSITION_KEY = "address_bar_position";
+    public static final int ADDRESS_SIDEBAR = 0;
+    public static final int ADDRESS_TOP = 1;
     public static final int DEFAULT_COLOR = 0xff53657b;
 
     // UI-thread only. A draft belongs to its Activity, never another window or saved profile.
     private static final WeakHashMap<Context, Integer> PREVIEW_COLORS = new WeakHashMap<>();
 
     private ArcDesktopAppearance() {}
+
+    public static int getAddressBarPosition(Context context) {
+        return preferences(context).getInt(ADDRESS_BAR_POSITION_KEY, ADDRESS_SIDEBAR) == ADDRESS_TOP
+                ? ADDRESS_TOP : ADDRESS_SIDEBAR;
+    }
+
+    public static void setAddressBarPosition(Context context, int position) {
+        if (position != ADDRESS_SIDEBAR && position != ADDRESS_TOP) {
+            throw new IllegalArgumentException("Invalid address bar position");
+        }
+        preferences(context).edit().putInt(ADDRESS_BAR_POSITION_KEY, position).apply();
+    }
+
+    public static int getUiFont(Context context) {
+        int font = preferences(context).getInt(UI_FONT_KEY, 0);
+        return font >= 0 && font <= 3 ? font : 0;
+    }
+
+    public static void setUiFont(Context context, int font) {
+        if (font < 0 || font > 3) throw new IllegalArgumentException("Invalid UI font");
+        preferences(context).edit().putInt(UI_FONT_KEY, font).apply();
+    }
+
+    /** Apply only to browser controls/settings, never a page or compositor subtree. */
+    public static void applyUiFont(android.view.View controls) {
+        String[] families = {"sans-serif", "sans-serif-medium", "serif", "monospace"};
+        applyUiFont(controls, families[getUiFont(controls.getContext())]);
+    }
+
+    private static void applyUiFont(android.view.View view, String family) {
+        if (view instanceof android.widget.TextView text) {
+            android.graphics.Typeface current = text.getTypeface();
+            android.graphics.Typeface selected = android.graphics.Typeface.create(
+                    family, current == null ? 0 : current.getStyle());
+            if (!selected.equals(current)) text.setTypeface(selected);
+        }
+        if (view instanceof android.view.ViewGroup group) {
+            for (int i = 0; i < group.getChildCount(); i++) applyUiFont(group.getChildAt(i), family);
+        }
+    }
 
     private static Context visualContext(Context context) {
         while (!(context instanceof Activity) && context instanceof ContextWrapper wrapper) {
@@ -120,4 +164,133 @@ public final class ArcDesktopAppearance {
     public static int selection(Context context, boolean incognito) {
         return ArcDesktopPolicy.selection(surface(context, incognito));
     }
+
+    /** Retains native favicon/fallback artwork and its existing box, including asynchronous results. */
+    public static void normalizeSidebarFavicon(android.widget.ImageView favicon) {
+        favicon.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        favicon.setImageTintList(null);
+    }
+
+    /** UI-only feedback; selection comes from the native row model, never another selection store. */
+    public static void applySidebarRowState(android.view.View row, boolean active,
+            boolean multiSelected, boolean incognito, boolean hoveredOrFocused) {
+        int fill = active ? activeTabSurface(row.getContext(), incognito)
+                : multiSelected || hoveredOrFocused ? selection(row.getContext(), incognito)
+                : android.graphics.Color.TRANSPARENT;
+        int disabledFill = (fill & 0x00ffffff)
+                | (Math.round(android.graphics.Color.alpha(fill) * .4f) << 24);
+        row.setBackgroundTintList(new android.content.res.ColorStateList(
+                new int[][] {{-android.R.attr.state_enabled}, {}},
+                new int[] {disabledFill, fill}));
+        SidebarRowOutline outline;
+        if (row.getForeground() instanceof SidebarRowOutline existing) {
+            outline = existing;
+        } else {
+            outline = new SidebarRowOutline(row);
+            row.setForeground(outline);
+        }
+        outline.update(active, foreground(row.getContext(), incognito));
+    }
+
+    /** Removes only our decoration when a window switches back to the native mobile layout. */
+    public static void clearSidebarRowState(android.view.View row) {
+        if (row.getForeground() instanceof SidebarRowOutline outline) {
+            outline.dispose();
+            row.setForeground(null);
+        }
+    }
+
+    /** One physical pixel, drawn inside the native capsule; no padding, size or radius changes. */
+    private static final class SidebarRowOutline extends android.graphics.drawable.Drawable
+            implements android.view.View.OnAttachStateChangeListener {
+        final android.view.View row;
+        final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+        final android.graphics.RectF bounds = new android.graphics.RectF();
+        boolean active;
+        boolean initialized;
+        int color;
+        int alpha;
+        android.animation.ValueAnimator animator;
+
+        SidebarRowOutline(android.view.View row) {
+            this.row = row;
+            paint.setStyle(android.graphics.Paint.Style.STROKE);
+            paint.setStrokeWidth(1f);
+            row.addOnAttachStateChangeListener(this);
+        }
+
+        void update(boolean active, int color) {
+            this.color = color;
+            int target = active ? 64 : 0;
+            boolean changed = this.active != active;
+            this.active = active;
+            if (!initialized || !row.isAttachedToWindow()
+                    || !android.animation.ValueAnimator.areAnimatorsEnabled()) {
+                cancelAnimation();
+                alpha = target;
+                initialized = true;
+            } else if (changed) {
+                cancelAnimation();
+                if (alpha != target) {
+                    animator = android.animation.ValueAnimator.ofInt(alpha, target);
+                    animator.setDuration(100);
+                    animator.addUpdateListener(value -> {
+                        alpha = (int) value.getAnimatedValue();
+                        invalidateSelf();
+                    });
+                    animator.start();
+                }
+            }
+            invalidateSelf();
+        }
+
+        void cancelAnimation() {
+            if (animator == null) return;
+            animator.cancel();
+            animator.removeAllUpdateListeners();
+            animator = null;
+        }
+
+        void dispose() {
+            cancelAnimation();
+            row.removeOnAttachStateChangeListener(this);
+        }
+
+        @Override public void onViewAttachedToWindow(android.view.View view) {}
+        @Override public void onViewDetachedFromWindow(android.view.View view) {
+            cancelAnimation();
+            alpha = active ? 64 : 0;
+            invalidateSelf();
+        }
+
+        @Override public boolean isStateful() { return true; }
+        @Override protected boolean onStateChange(int[] state) { invalidateSelf(); return true; }
+        @Override public void draw(android.graphics.Canvas canvas) {
+            boolean focused = row.hasFocus();
+            for (int state : getState()) focused |= state == android.R.attr.state_focused;
+            int opacity = row.isEnabled() ? focused ? 192 : alpha : Math.round(alpha * .4f);
+            if (opacity == 0) return;
+            android.graphics.drawable.Drawable background = row.getBackground();
+            // Follow the innermost native shape, including its existing vertical insets.
+            while (background != null) {
+                android.graphics.drawable.Drawable current = background.getCurrent();
+                if (current != background) { background = current; continue; }
+                if (background instanceof android.graphics.drawable.InsetDrawable inset) {
+                    background = inset.getDrawable();
+                } else break;
+            }
+            android.graphics.Rect nativeBounds = background == null ? getBounds() : background.getBounds();
+            bounds.set(nativeBounds.isEmpty() ? getBounds() : nativeBounds);
+            bounds.inset(.5f, .5f);
+            float radius = background instanceof android.graphics.drawable.GradientDrawable gradient
+                    ? Math.max(0f, gradient.getCornerRadius() - .5f) : 0f;
+            paint.setColor(color);
+            paint.setAlpha(opacity);
+            canvas.drawRoundRect(bounds, radius, radius, paint);
+        }
+        @Override public void setAlpha(int alpha) { /* State supplies the outline opacity. */ }
+        @Override public void setColorFilter(android.graphics.ColorFilter filter) { paint.setColorFilter(filter); }
+        @Override public int getOpacity() { return android.graphics.PixelFormat.TRANSLUCENT; }
+    }
+
 }

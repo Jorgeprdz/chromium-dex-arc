@@ -1129,6 +1129,46 @@ public class LocationBarTabletUnitTest {
     // Arc moves the complete holder into a sidebar sibling of the toolbar. These regressions
     // attach a genuine Android window so a mistaken ancestor walk reaches ViewRootImpl.
     // BEGIN ARC HOLDER FOCUS REGRESSIONS
+
+    @Test
+    public void testArcCommandHeaderUsesPanelGeometryAndRestoresNativeBackground() {
+        mLocationBarTablet.setLayoutParams(new FrameLayout.LayoutParams(280, 100));
+        mHolderView.setLayoutParams(new LinearLayout.LayoutParams(0, 56, 1));
+        mLocationBarTablet.setArcCommandBar(new android.graphics.Rect(100, 100, 800, 400),
+                false, () -> {}, () -> {});
+        mLocationBarTablet.onFuseboxStateChanged(FuseboxState.COMPACT);
+        assertTrue(mLocationBarTablet.getBackground() instanceof android.graphics.drawable.ColorDrawable);
+        assertEquals(android.graphics.Color.TRANSPARENT,
+                ((android.graphics.drawable.ColorDrawable) mLocationBarTablet.getBackground()).getColor());
+        assertEquals(LayoutParams.MATCH_PARENT, mHolderView.getLayoutParams().height);
+        assertEquals(0, mLocationBarTablet.getPaddingTop());
+        mLocationBarTablet.setArcCommandBar(null, false, null, null);
+        mLocationBarTablet.onFuseboxStateChanged(FuseboxState.DISABLED);
+        assertFalse(mLocationBarTablet.getBackground() instanceof android.graphics.drawable.ColorDrawable);
+        assertNotEquals(LayoutParams.MATCH_PARENT, mHolderView.getLayoutParams().height);
+        assertEquals(280, mLocationBarTablet.getLayoutParams().width);
+        assertEquals(100, mLocationBarTablet.getLayoutParams().height);
+    }
+    @Test
+    public void arcTopBarIsRectangularAndStaysInsideItsNativeHolder() {
+        setupArcSidebarHierarchy();
+        mLocationBarTablet.setArcTopBar(true);
+        mLocationBarTablet.onFuseboxStateChanged(FuseboxState.EXPANDED);
+        LinearLayout.LayoutParams holder = (LinearLayout.LayoutParams) mHolderView.getLayoutParams();
+        assertEquals(0, holder.leftMargin);
+        assertEquals(0, holder.rightMargin);
+        assertEquals(0, holder.topMargin);
+        assertEquals(ViewGroup.LayoutParams.MATCH_PARENT, mLocationBarTablet.getLayoutParams().height);
+        assertEquals(0f, mHolderView.getTranslationZ(), 0f);
+        assertTrue(mLocationBarTablet.getBackground() instanceof android.graphics.drawable.ColorDrawable);
+        assertEquals(android.graphics.Color.TRANSPARENT,
+                ((android.graphics.drawable.ColorDrawable) mLocationBarTablet.getBackground()).getColor());
+        mLocationBarTablet.setArcTopBar(false);
+        mLocationBarTablet.onFuseboxStateChanged(FuseboxState.DISABLED);
+        assertTrue(mLocationBarTablet.getBackground() instanceof android.graphics.drawable.GradientDrawable
+                || mLocationBarTablet.getBackground() instanceof LocationBarBackgroundDrawable);
+    }
+
     private ActivityController<Activity> mArcActivityController;
 
     @After
@@ -1302,6 +1342,85 @@ public class LocationBarTabletUnitTest {
         assertFalse(((ViewGroup) mHolderView.getParent()).getClipChildren());
     }
     // END ARC HOLDER FOCUS REGRESSIONS
+
+    @Test
+    public void arcTopBarHoverKeepsRectangularSurface() {
+        setupArcSidebarHierarchy();
+        mLocationBarTablet.setArcTopBar(true);
+        UrlBar urlBar = mLocationBarTablet.findViewById(R.id.url_bar);
+        MotionEvent hover = MotionEvent.obtain(0, 0, MotionEvent.ACTION_HOVER_ENTER, 8, 8, 0);
+        hover.setSource(InputDevice.SOURCE_MOUSE);
+        try {
+            urlBar.dispatchGenericMotionEvent(hover);
+            assertNull(mLocationBarTablet.getForeground());
+        } finally {
+            hover.recycle();
+        }
+    }
+
+
+    @Test
+    @Config(sdk = {30, 36})
+    public void arcFreshAddressDownAfterLostReleaseCanReopen() {
+        setupArcAddressTouch();
+        for (int buttons : new int[] {0, MotionEvent.BUTTON_PRIMARY}) {
+            int[] opens = {0};
+            mLocationBarTablet.setArcAddressPopupOpener(() -> { opens[0]++; return true; });
+            dispatchArcAddressTouch(MotionEvent.ACTION_DOWN, buttons);
+            // The old parent can lose the release after the same editor is reparented.
+            dispatchArcAddressTouch(MotionEvent.ACTION_DOWN, buttons);
+            dispatchArcAddressTouch(MotionEvent.ACTION_UP, 0);
+            assertEquals(2, opens[0]);
+        }
+    }
+
+    @Test
+    @Config(sdk = {30, 36})
+    public void arcPopupEditorAcceptsFirstFreshGestureAfterLostRelease() {
+        UrlBar editor = setupArcAddressTouch();
+        int[] nativeEvents = {0};
+        mLocationBarTablet.setArcAddressPopupOpener(() -> true);
+        dispatchArcAddressTouch(MotionEvent.ACTION_DOWN, 0);
+        mLocationBarTablet.setArcAddressPopupOpener(() -> false);
+        editor.setOnTouchListener((view, event) -> { nativeEvents[0]++; return true; });
+        dispatchArcAddressTouch(MotionEvent.ACTION_DOWN, 0);
+        dispatchArcAddressTouch(MotionEvent.ACTION_UP, 0);
+        assertEquals(2, nativeEvents[0]);
+    }
+
+    private UrlBar setupArcAddressTouch() {
+        setupArcSidebarHierarchy();
+        UrlBar editor = mLocationBarTablet.findViewById(R.id.url_bar);
+        // Exclude action segments from this address-only hit test, preserving the real editor.
+        for (int i = 0; i < mLocationBarTablet.getChildCount(); i++) {
+            View child = mLocationBarTablet.getChildAt(i);
+            if (child != editor) child.setVisibility(View.GONE);
+        }
+        mLocationBarTablet.layout(0, 0, 400, 100);
+        editor.setVisibility(View.VISIBLE);
+        editor.layout(0, 0, 400, 100);
+        return editor;
+    }
+
+    private boolean mArcTouchUsesMouse;
+
+    private void dispatchArcAddressTouch(int action, int buttons) {
+        if (action == MotionEvent.ACTION_DOWN) mArcTouchUsesMouse = buttons != 0;
+        MotionEvent.PointerProperties pointer = new MotionEvent.PointerProperties();
+        pointer.id = 0;
+        pointer.toolType = mArcTouchUsesMouse ? MotionEvent.TOOL_TYPE_MOUSE : MotionEvent.TOOL_TYPE_FINGER;
+        MotionEvent.PointerCoords at = new MotionEvent.PointerCoords();
+        at.x = 100; at.y = 50; at.pressure = 1; at.size = 1;
+        MotionEvent event = MotionEvent.obtain(0, 1, action, 1,
+                new MotionEvent.PointerProperties[] {pointer}, new MotionEvent.PointerCoords[] {at},
+                0, buttons, 1, 1, 0, 0,
+                mArcTouchUsesMouse ? InputDevice.SOURCE_MOUSE : InputDevice.SOURCE_TOUCHSCREEN, 0);
+        try {
+            mLocationBarTablet.dispatchTouchEvent(event);
+        } finally {
+            event.recycle();
+        }
+    }
 
     private void setupContainerAndMeasure(int containerWidth, int prefocusWidth, int leftPosition) {
         LinearLayout container = new LinearLayout(mActivity);

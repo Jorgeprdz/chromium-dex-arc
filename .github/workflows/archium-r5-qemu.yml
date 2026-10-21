@@ -1,0 +1,80 @@
+name: Archium R5 QEMU validation
+
+# The parent workflow must call this job with needs: [the successful native job].
+# Download-artifact without run-id is deliberately bound to this exact run.
+on:
+  workflow_call:
+    inputs:
+      expected_sha:
+        description: Exact source SHA built by the successful native job
+        required: true
+        type: string
+    outputs:
+      status:
+        description: Honest QEMU execution status; ABI blocked is not a test pass
+        value: ${{ jobs.qemu.outputs.status }}
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  qemu:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    outputs:
+      status: ${{ steps.validate.outputs.status }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - name: Download exact current-run native ARM64 artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: Archium-for-Android-arm64
+          path: qemu-input
+      - name: Verify provenance, package, ABI and signing identity; probe QEMU
+        id: validate
+        env:
+          EXPECTED_SOURCE_SHA: ${{ inputs.expected_sha }}
+          EXPECTED_RUN_ID: ${{ github.run_id }}
+          CURRENT_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          test "$EXPECTED_SOURCE_SHA" = "$CURRENT_SOURCE_SHA"
+          python3 scripts/validate-r5-qemu.py \
+            --artifact-dir qemu-input \
+            --source-sha "$EXPECTED_SOURCE_SHA" \
+            --run-id "$EXPECTED_RUN_ID" \
+            --output-dir qemu-output
+      - name: Publish exact report path
+        if: always()
+        env:
+          EXPECTED_SOURCE_SHA: ${{ inputs.expected_sha }}
+          EXPECTED_RUN_ID: ${{ github.run_id }}
+        run: |
+          mkdir -p qemu-output/docs/validation
+          if test -f qemu-output/R5_QEMU_REPORT.md; then
+            cp qemu-output/R5_QEMU_REPORT.md qemu-output/docs/validation/R5_QEMU_REPORT.md
+            cat qemu-output/R5_QEMU_REPORT.md >> "$GITHUB_STEP_SUMMARY"
+          else
+            printf '%s\n' 'FAIL: validator did not produce a receipt; artifact download or job infrastructure failed.' > qemu-output/docs/validation/R5_QEMU_REPORT.md
+            python3 - <<'PYRECEIPT'
+          import json, os
+          from pathlib import Path
+          Path('qemu-output/qemu-receipt.json').write_text(json.dumps({
+              'schema_version': 1, 'status': 'FAIL',
+              'source_sha': os.environ['EXPECTED_SOURCE_SHA'],
+              'run_id': os.environ['EXPECTED_RUN_ID'], 'apk_sha256': None,
+              'device_validation': 'PENDING_DEVICE_VALIDATION',
+              'artifact_verification': 'FAIL', 'cases': [],
+              'reason': 'Artifact download or validator infrastructure failed; no runtime execution claimed.'
+          }, indent=2) + '\n')
+          PYRECEIPT
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Archium-R5-QEMU
+          path: qemu-output/
+          if-no-files-found: error

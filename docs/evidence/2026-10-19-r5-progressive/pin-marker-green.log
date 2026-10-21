@@ -1,0 +1,7 @@
+test_wrong_chromium_pin_blocks_transition (test_r5_build_routing.R5BuildRoutingTests.test_wrong_chromium_pin_blocks_transition) ... ok
+test_wrong_depot_pin_blocks_transition (test_r5_build_routing.R5BuildRoutingTests.test_wrong_depot_pin_blocks_transition) ... ok
+
+----------------------------------------------------------------------
+Ran 2 tests in 0.971s
+
+OK
