@@ -532,3 +532,9 @@ Corrección: imports explícitos de RunWith/Robolectric/Config/GraphicsMode/SQLi
 Verificación local de esta corrección: gate de discovery RED antes y GREEN después; viewport Robolectric 4 PASS; aplicación/transición de parche 24 PASS; preparación SDK37.2 PASS. Evidencia: `/workspace/archium-evidence/r5-final-mobile/continuation/`, archivos `run-39628600358-preflight.log`, `discovery-{red,green}.log`, `viewport-annotation-green.log`, `patch-fix.log`, `preparation-fix.log`. No se repite la suite completa local ni se atribuye aceptación gráfica a estos resultados.
 
 Intentos remotos consumidos: **1/1**. Otro intento incremental requiere autorización nueva del usuario; no se despacha ni relanza automáticamente. Si se autoriza, utilizar el mismo checkpoint `archium-checkpoint-39551668868-1`/SHA35747e28fec81d80c6b97f82f366fc97809aa339/run39551668868 con el nuevo SHA corregido, y actualizar la sesión de monitor/instalador al nuevo run sin borrar evidencia anterior. QEMU desactivado; APK sólo tras gates y validación de firma/versión/dispositivo.
+
+## Nuevo intento autorizado — 39634608887
+
+El usuario autorizó otro único intento con «go». Run [39634608887](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/39634608887), código `b51d9b0494a379a58b808d3b4fbf5b3566890fb0`, rama `assistant/archium-r5-final-mobile`. Estado al registrar: in_progress; resultado/APK pendientes. Se reutiliza `archium-checkpoint-39551668868-1`; preflight completo habilitado y QEMU desactivado. Autorización nueva: **1/1 intento consumido**, sin relanzamientos automáticos.
+
+Monitor e instalador: sesión Termux independiente, estado `/workspace/.local/state/archium-r5-final-mobile-39634608887/`. Refresco 600s; instalación únicamente después de gates, identidad del run, checksum, firma, package/ABI, versión y dispositivo, con comprobación posterior de bytes instalados. Evidencia del fallo anterior conservada. No se declara APK ni aceptación física por lanzar este run.
