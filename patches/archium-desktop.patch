@@ -1663,6 +1663,43 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
      }
 
      /** Sets the listener that receives the raw pointer events dispatched to the rail. */
+diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabsSideUiCoordinator.java b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabsSideUiCoordinator.java
+--- a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabsSideUiCoordinator.java
++++ b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabsSideUiCoordinator.java
+@@ -264,10 +264,8 @@
+
+     @Override
+     public @Px Integer getResizeHandleWidthPx() {
+-        // Match the rail's inner padding so that the handle doesn't overlap the tabs.
+-        return mRootView
+-                .getResources()
+-                .getDimensionPixelSize(R.dimen.vertical_tabs_rail_horizontal_margin);
++        // Invisible hit target only; the native separator keeps its thin visual treatment.
++        return Math.round(16 * mRootView.getResources().getDisplayMetrics().density);
+     }
+
+     @Override
+diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabsSideUiCoordinatorUnitTest.java b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabsSideUiCoordinatorUnitTest.java
+--- a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabsSideUiCoordinatorUnitTest.java
++++ b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabsSideUiCoordinatorUnitTest.java
+@@ -393,14 +393,9 @@
+     }
+
+     @Test
+-    public void testResizeHandleWidth_MatchesRailHorizontalPadding() {
+-        assertEquals(
+-                Integer.valueOf(
+-                        mActivity
+-                                .getResources()
+-                                .getDimensionPixelSize(
+-                                        R.dimen.vertical_tabs_rail_horizontal_margin)),
+-                mCoordinator.getResizeHandleWidthPx());
++    public void testResizeHandleWidth_ProvidesSixteenDpTarget() {
++        assertEquals(Integer.valueOf(Math.round(16 * mActivity.getResources()
++                .getDisplayMetrics().density)), mCoordinator.getResizeHandleWidthPx());
+     }
+
+     @Test
 diff --git a/chrome/android/java/res_chromium_base/values/channel_constants.xml b/chrome/android/java/res_chromium_base/values/channel_constants.xml
 --- a/chrome/android/java/res_chromium_base/values/channel_constants.xml
 +++ b/chrome/android/java/res_chromium_base/values/channel_constants.xml
@@ -6748,7 +6785,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollecti
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java
-@@ -0,0 +1,433 @@
+@@ -0,0 +1,517 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -6766,7 +6803,7 @@ new file mode 100644
 +import android.view.View;
 +import android.widget.Button;
 +import android.widget.EditText;
-+import android.widget.HorizontalScrollView;
++import android.widget.GridLayout;
 +import android.widget.ImageButton;
 +import android.widget.LinearLayout;
 +import android.widget.PopupMenu;
@@ -6795,11 +6832,13 @@ new file mode 100644
 +    private final ArcCollectionsController mController;
 +    private final Supplier<CurrentTab> mCurrentTab;
 +    private final BiConsumer<ArcSidebarState.Entry, ImageButton> mLoadIcon;
-+    private final LinearLayout mFavorites;
++    private final GridLayout mFavorites;
++    private final Button mFavoritesMenu;
 +    private final LinearLayout mEntries;
++    private final LinearLayout mControls;
 +    private final Button mSpace;
 +    private final BoundedScrollView mScroll;
-+    private final HorizontalScrollView mFavoritesScroll;
++    private final BoundedScrollView mFavoritesScroll;
 +    private int mSurface = Color.rgb(238, 238, 238);
 +    private int mForeground = Color.rgb(32, 32, 32);
 +    private int mInteraction = Color.rgb(204, 204, 204);
@@ -6838,13 +6877,21 @@ new file mode 100644
 +        mLoadIcon = loadIcon;
 +        setOrientation(VERTICAL);
 +        setPadding(dp(8), dp(4), dp(8), dp(4));
-+        mFavorites = new LinearLayout(activity);
++        mFavorites = new GridLayout(activity);
++        mFavorites.setColumnCount(2);
 +        mFavorites.setContentDescription(activity.getString(R.string.arc_favorites));
-+        mFavoritesScroll = new HorizontalScrollView(activity);
-+        mFavoritesScroll.setHorizontalScrollBarEnabled(false);
++        mFavoritesScroll = new BoundedScrollView(activity);
++        mFavoritesScroll.setBudget(dp(216));
 +        mFavoritesScroll.setTag("arc-favorites-mosaic");
 +        mFavoritesScroll.addView(mFavorites);
-+        addView(mFavoritesScroll, new LayoutParams(-1, dp(72)));
++        addView(mFavoritesScroll, new LayoutParams(-1, LayoutParams.WRAP_CONTENT));
++        mFavoritesMenu = button(activity.getString(R.string.arc_favorites) + " ▾", this::showFavorites);
++        mFavoritesMenu.setTag("arc-favorites-menu");
++        mFavoritesMenu.setText("");
++        mFavoritesMenu.setGravity(Gravity.CENTER);
++        mFavoritesMenu.setCompoundDrawablesRelativeWithIntrinsicBounds(android.R.drawable.star_big_on, 0, 0, 0);
++        mFavoritesMenu.setVisibility(GONE);
++        addView(mFavoritesMenu, new LayoutParams(-1, dp(44)));
 +        mSpace = button("", this::showSpaces);
 +        mSpace.setTag("arc-current-space");
 +        mSpace.setContentDescription(activity.getString(R.string.arc_spaces));
@@ -6857,6 +6904,7 @@ new file mode 100644
 +        mScroll.addView(mEntries);
 +        addView(mScroll, new LayoutParams(-1, LayoutParams.WRAP_CONTENT));
 +        LinearLayout controls = new LinearLayout(activity);
++        mControls = controls;
 +        Button pin = button(activity.getString(R.string.arc_pin_current), () -> remember(false));
 +        pin.setTag("arc-pin-current");
 +        Button favorite = button(activity.getString(R.string.arc_favorite_current), () -> remember(true));
@@ -6867,6 +6915,65 @@ new file mode 100644
 +        refresh();
 +    }
 +
++    /** Zero denotes the accessible menu; a mosaic never has a single column. */
++    static int favoriteColumns(int availablePx, int slotPx) {
++        if (slotPx <= 0 || availablePx / slotPx < 2) return 0;
++        return availablePx / slotPx;
++    }
++
++    @Override
++    protected void onMeasure(int widthSpec, int heightSpec) {
++        int available = Math.max(0, MeasureSpec.getSize(widthSpec) - getPaddingLeft() - getPaddingRight());
++        int columns = favoriteColumns(available, dp(72));
++        boolean empty = mFavorites.getChildCount() == 0;
++        mFavoritesScroll.setVisibility(!empty && columns >= 2 ? VISIBLE : GONE);
++        mFavoritesMenu.setVisibility(!empty && columns == 0 ? VISIBLE : GONE);
++        if (columns >= 2 && columns != mFavorites.getColumnCount()) {
++            // Clear previous explicit column constraints before shrinking the grid.
++            for (int i = 0; i < mFavorites.getChildCount(); i++) {
++                GridLayout.LayoutParams params = (GridLayout.LayoutParams) mFavorites.getChildAt(i).getLayoutParams();
++                params.columnSpec = GridLayout.spec(GridLayout.UNDEFINED);
++                params.rowSpec = GridLayout.spec(GridLayout.UNDEFINED);
++                mFavorites.getChildAt(i).setLayoutParams(params);
++            }
++            mFavorites.setColumnCount(columns);
++            for (int i = 0; i < mFavorites.getChildCount(); i++) {
++                View tile = mFavorites.getChildAt(i);
++                GridLayout.LayoutParams params = (GridLayout.LayoutParams) tile.getLayoutParams();
++                params.rowSpec = GridLayout.spec(i / columns);
++                params.columnSpec = GridLayout.spec(i % columns);
++                tile.setLayoutParams(params);
++            }
++        }
++        compactAction(findViewWithTag("arc-pin-current"), R.string.arc_pin_current,
++                android.R.drawable.ic_menu_save, available / 2 < dp(144));
++        compactAction(findViewWithTag("arc-favorite-current"), R.string.arc_favorite_current,
++                android.R.drawable.star_big_off, available / 2 < dp(144));
++        super.onMeasure(widthSpec, heightSpec);
++    }
++
++    private void compactAction(Button action, int label, int icon, boolean compact) {
++        String text = compact ? "" : mActivity.getString(label);
++        if (!text.contentEquals(action.getText())) {
++            action.setText(text);
++            action.setGravity((compact ? Gravity.CENTER : Gravity.START | Gravity.CENTER_VERTICAL));
++            action.setCompoundDrawablesRelativeWithIntrinsicBounds(compact ? icon : 0, 0, 0, 0);
++        }
++    }
++
++    private void showFavorites() {
++        if (mDestroyed) return;
++        List<ArcSidebarState.Entry> entries = mController.state().favorites();
++        PopupMenu menu = new PopupMenu(mActivity, mFavoritesMenu);
++        mMenu = menu;
++        for (int i = 0; i < entries.size(); i++) menu.getMenu().add(0, i, i, entries.get(i).title);
++        menu.setOnMenuItemClickListener(item -> {
++            runCommand(() -> open(entries.get(item.getItemId()).id));
++            return true;
++        });
++        menu.show();
++    }
++
 +    private int dp(int value) {
 +        return Math.round(value * getResources().getDisplayMetrics().density);
 +    }
@@ -6874,6 +6981,8 @@ new file mode 100644
 +    private Button button(String text, Runnable action) {
 +        Button result = new Button(mActivity);
 +        result.setText(text);
++        result.setContentDescription(text);
++        result.setTooltipText(text);
 +        result.setAllCaps(false);
 +        result.setTextSize(12);
 +        result.setMinWidth(0); result.setMinimumWidth(0);
@@ -6891,6 +7000,13 @@ new file mode 100644
 +        catch (RuntimeException failure) {
 +            Toast.makeText(mActivity, R.string.arc_collection_error, Toast.LENGTH_SHORT).show();
 +        }
++    }
++
++    /** Compact native rail keeps favorites accessible without expanded collection chrome. */
++    public void setCompact(boolean compact) {
++        mSpace.setVisibility(compact ? GONE : VISIBLE);
++        mScroll.setVisibility(compact ? GONE : VISIBLE);
++        mControls.setVisibility(compact ? GONE : VISIBLE);
 +    }
 +
 +    public void setCollectionHeight(int height) {
@@ -6958,6 +7074,7 @@ new file mode 100644
 +            // must not crash browser startup or silently replace a user's data.
 +            mFavorites.removeAllViews();
 +            mFavoritesScroll.setVisibility(GONE);
++            mFavoritesMenu.setVisibility(GONE);
 +            mEntries.removeAllViews();
 +            mSpace.setText(R.string.arc_collection_error);
 +            findViewWithTag("arc-pin-current").setEnabled(false);
@@ -6985,7 +7102,11 @@ new file mode 100644
 +            favorite.setOnClickListener(view -> runCommand(() -> open(entry.id)));
 +            favorite.setOnLongClickListener(view -> { showEntryMenu(view, entry); return true; });
 +            favorite.setOnContextClickListener(view -> { showEntryMenu(view, entry); return true; });
-+            LayoutParams tileParams = new LayoutParams(dp(64), dp(64));
++            GridLayout.LayoutParams tileParams = new GridLayout.LayoutParams();
++            tileParams.width = dp(64); tileParams.height = dp(64);
++            int index = mFavorites.getChildCount(), columns = mFavorites.getColumnCount();
++            tileParams.rowSpec = GridLayout.spec(index / columns);
++            tileParams.columnSpec = GridLayout.spec(index % columns);
 +            tileParams.setMargins(dp(4), dp(4), dp(4), dp(4));
 +            mFavorites.addView(favorite, tileParams);
 +            mLoadIcon.accept(entry, favorite);
@@ -7046,13 +7167,13 @@ new file mode 100644
 +        restoreFocus(mEntries, entryFocus);
 +    }
 +
-+    private static String focusedTag(LinearLayout group) {
++    private static String focusedTag(android.view.ViewGroup group) {
 +        View focused = group.findFocus();
 +        return focused != null && focused.getTag() instanceof String
 +                ? (String) focused.getTag() : null;
 +    }
 +
-+    private static void restoreFocus(LinearLayout group, String tag) {
++    private static void restoreFocus(android.view.ViewGroup group, String tag) {
 +        if (tag == null) return;
 +        View replacement = group.findViewWithTag(tag);
 +        if (replacement != null) replacement.requestFocus();
@@ -8074,7 +8195,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopC
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
-@@ -0,0 +1,1487 @@
+@@ -0,0 +1,1488 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -9195,7 +9316,8 @@ new file mode 100644
 +        }
 +        if (mCollectionsView != null) {
 +            mCollectionsView.setVisibility(
-+                    expanded && collectionBudget >= dp(80) ? View.VISIBLE : View.GONE);
++                    collectionBudget >= dp(80) ? View.VISIBLE : View.GONE);
++            mCollectionsView.setCompact(!expanded);
 +        }
 +        applyFrameGeometry();
 +        if (expanded && mCollectionsView != null) {
@@ -12231,47 +12353,21 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitVie
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitViewportPolicy.java
-@@ -0,0 +1,41 @@
+@@ -0,0 +1,15 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
 +package org.chromium.chrome.browser.arc;
 +
-+import java.util.IdentityHashMap;
-+import java.util.Map;
 +import org.chromium.content_public.browser.NavigationController;
 +
-+/** Temporary per-pane UA overrides; responsive layout uses the actual WebContents viewport.
-+ * Never reloads a document or changes the profile/site preference. Server-specific mobile
-+ * variants may require a later user-initiated navigation. */
++/** Responsive sizing belongs to WebContents, without changing the user's site mode. */
 +public final class ArcSplitViewportPolicy {
-+    private static final float MOBILE_DP = 600, DESKTOP_DP = 640;
-+    // true: we own a desktop -> mobile override; false: user explicitly restored desktop.
-+    private final Map<NavigationController, Boolean> mOverrides = new IdentityHashMap<>();
-+
-+    public void update(NavigationController controller, float widthDp) {
-+        if (controller == null || !Float.isFinite(widthDp) || widthDp <= 0) return;
-+        if (widthDp >= DESKTOP_DP) { release(controller); return; }
-+        Boolean owned = mOverrides.get(controller);
-+        if (owned != null) {
-+            if (owned && controller.getUseDesktopUserAgent()) mOverrides.put(controller, false);
-+            return;
-+        }
-+        if (widthDp < MOBILE_DP && controller.getUseDesktopUserAgent()) {
-+            mOverrides.put(controller, true);
-+            controller.setUseDesktopUserAgent(false, false, false);
-+        }
-+    }
-+    public void retain(NavigationController first, NavigationController second) {
-+        for (NavigationController controller : new java.util.ArrayList<>(mOverrides.keySet()))
-+            if (controller != first && controller != second) release(controller);
-+    }
-+    private void release(NavigationController controller) {
-+        Boolean owned = mOverrides.remove(controller);
-+        if (Boolean.TRUE.equals(owned) && !controller.getUseDesktopUserAgent())
-+            controller.setUseDesktopUserAgent(true, false, false);
-+    }
-+    public void clear() { retain(null, null); }
++    // Compatibility hook for callers/probes. CompositorViewHolder owns physical pane sizing;
++    // NavigationController must not be used to implement responsive layout or page-scale repair.
++    public void update(NavigationController controller, float widthDp) {}
++    public void retain(NavigationController first, NavigationController second) {}
++    public void clear() {}
 +}
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcTabActions.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcTabActions.java
 new file mode 100644
@@ -12428,7 +12524,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCollect
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCollectionsFocusTest.java
-@@ -0,0 +1,217 @@
+@@ -0,0 +1,266 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -12618,6 +12714,55 @@ new file mode 100644
 +        assertFalse(org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu().getMenu().findItem(2).isEnabled());
 +        verify(f.tabs, never()).close(anyInt());
 +        verify(f.tabs, never()).unpin(anyInt());
++    }
++
++    @Test
++    public void favoritesReflowWithoutDroppingOrReplacingTiles() {
++        Fixture f = new Fixture();
++        java.util.List<String> ids = new java.util.ArrayList<>();
++        for (int i = 0; i < 4; i++) ids.add(f.controller.rememberTab(7 + i,
++                "https://example.test/" + i, "Favorite " + i, true));
++        f.view.refresh();
++        View[] original = new View[4];
++        for (int i = 0; i < 4; i++) original[i] = f.view.findViewWithTag("arc-entry:" + ids.get(i));
++        float density = f.activity.getResources().getDisplayMetrics().density;
++        for (int widthDp : new int[] {304, 160, 120, 304, 160}) {
++            int width = Math.round(widthDp * density);
++            f.view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
++                    View.MeasureSpec.makeMeasureSpec(1600, View.MeasureSpec.AT_MOST));
++            f.view.layout(0, 0, width, f.view.getMeasuredHeight());
++            View menu = f.view.findViewWithTag("arc-favorites-menu");
++            assertEquals(widthDp == 120 ? View.VISIBLE : View.GONE, menu.getVisibility());
++            for (int i = 0; i < 4; i++) assertSame(original[i], f.view.findViewWithTag("arc-entry:" + ids.get(i)));
++            if (widthDp != 120) {
++                assertEquals(widthDp == 304 ? original[0].getTop() : original[0].getBottom() + Math.round(8 * density),
++                        original[2].getTop());
++                assertTrue(original[3].getRight() <= width);
++            }
++            assertEquals(4, f.controller.state().favorites().size());
++        }
++    }
++
++    @Test
++    public void narrowMenuExposesEveryFavoriteInStoredOrder() {
++        Fixture f = new Fixture();
++        for (int i = 0; i < 4; i++) f.controller.rememberTab(7+i,
++                "https://example.test/"+i, "Favorite "+i, true);
++        f.view.refresh();
++        int width = Math.round(120 * f.activity.getResources().getDisplayMetrics().density);
++        f.view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
++                View.MeasureSpec.makeMeasureSpec(1600, View.MeasureSpec.AT_MOST));
++        f.view.layout(0,0,width,f.view.getMeasuredHeight());
++        f.view.setCompact(true);
++        assertEquals(View.GONE, f.view.findViewWithTag("arc-current-space").getVisibility());
++        assertEquals(View.VISIBLE, f.view.findViewWithTag("arc-favorites-menu").getVisibility());
++        assertTrue(f.view.findViewWithTag("arc-favorites-menu").performClick());
++        android.widget.PopupMenu menu = org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu();
++        assertEquals(4,menu.getMenu().size());
++        java.util.List<ArcSidebarState.Entry> stored = f.controller.state().favorites();
++        for (int i=0;i<4;i++) assertEquals(stored.get(i).title,menu.getMenu().getItem(i).getTitle());
++        assertTrue(menu.getMenu().performIdentifierAction(3,0));
++        verify(f.tabs).select(stored.get(3).tabId);
 +    }
 +
 +    private void checkFocus(boolean favorite) {
@@ -13919,7 +14064,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitVi
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitViewCoordinatorTest.java
-@@ -0,0 +1,454 @@
+@@ -0,0 +1,450 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -14252,28 +14397,24 @@ new file mode 100644
 +        f.coordinator.settleForTesting();verify(f.holder).setArcSplitInputBlocked(true);verify(f.holder,atLeastOnce()).setArcSplitInputBlocked(false);
 +        verify(f.one,never()).reload();verify(f.two,never()).reload();f.close();
 +    }
-+    @Test public void nativeViewportSwitchesEachDesktopControllerWithoutReloadAndRestoresOnExit() {
++    @Test public void nativeViewportResizePreservesUserAgentWithoutReload() {
 +        Fixture f=new Fixture();
 +        var first=mock(org.chromium.content_public.browser.NavigationController.class);
 +        var second=mock(org.chromium.content_public.browser.NavigationController.class);
 +        var a=mock(org.chromium.content_public.browser.WebContents.class);
 +        var b=mock(org.chromium.content_public.browser.WebContents.class);
-+        java.util.concurrent.atomic.AtomicBoolean firstDesktop=new java.util.concurrent.atomic.AtomicBoolean(true);
-+        java.util.concurrent.atomic.AtomicBoolean secondDesktop=new java.util.concurrent.atomic.AtomicBoolean(true);
-+        when(first.getUseDesktopUserAgent()).thenAnswer(c->firstDesktop.get());
-+        when(second.getUseDesktopUserAgent()).thenAnswer(c->secondDesktop.get());
-+        doAnswer(c->{firstDesktop.set(c.getArgument(0));return null;}).when(first).setUseDesktopUserAgent(anyBoolean(),anyBoolean(),anyBoolean());
-+        doAnswer(c->{secondDesktop.set(c.getArgument(0));return null;}).when(second).setUseDesktopUserAgent(anyBoolean(),anyBoolean(),anyBoolean());
 +        when(a.getNavigationController()).thenReturn(first);when(b.getNavigationController()).thenReturn(second);
 +        when(f.one.getWebContents()).thenReturn(a);when(f.two.getWebContents()).thenReturn(b);
 +        assertTrue(f.coordinator.enter(f.one,f.two));
-+        assertFalse(firstDesktop.get());assertFalse(secondDesktop.get());
-+        when(f.holder.getArcSplitViewport()).thenReturn(new android.graphics.Rect(0,0,1600,800));f.coordinator.refresh(true);
-+        assertTrue(firstDesktop.get());assertTrue(secondDesktop.get());
-+        when(f.holder.getArcSplitViewport()).thenReturn(new android.graphics.Rect(0,0,1100,800));f.coordinator.refresh(true);
-+        f.coordinator.exit();assertTrue(firstDesktop.get());assertTrue(secondDesktop.get());
-+        verify(first,never()).setUseDesktopUserAgent(anyBoolean(),eq(true),anyBoolean());
-+        verify(second,never()).setUseDesktopUserAgent(anyBoolean(),eq(true),anyBoolean());f.close();
++        for(int width:new int[]{1600,1100,1600,1100,1600}) {
++            when(f.holder.getArcSplitViewport()).thenReturn(new android.graphics.Rect(0,0,width,800));
++            f.coordinator.refresh(true);
++            assertTrue(f.coordinator.stateForTesting().isSplit());
++        }
++        f.coordinator.exit();
++        verifyNoInteractions(first,second);
++        verify(f.one,never()).reload();verify(f.two,never()).reload();
++        f.close();
 +    }
 +    @Test public void failedPresentationKeepsPreviousPairAndSelection() {
 +        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));f.coordinator.activate(18);
@@ -14378,64 +14519,35 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitVi
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitViewportPolicyTest.java
-@@ -0,0 +1,59 @@
+@@ -0,0 +1,30 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
 +package org.chromium.chrome.browser.arc;
-+import static org.junit.Assert.*;
 +import static org.mockito.Mockito.*;
 +import org.junit.Test;
-+import org.junit.runner.RunWith;
-+import org.robolectric.RobolectricTestRunner;
-+import org.robolectric.annotation.Config;
-+import org.robolectric.annotation.GraphicsMode;
-+import org.robolectric.annotation.SQLiteMode;
 +import org.chromium.content_public.browser.NavigationController;
-+@RunWith(RobolectricTestRunner.class)
-+@Config(manifest=Config.NONE,sdk={30,36})
-+@GraphicsMode(GraphicsMode.Mode.LEGACY)
-+@SQLiteMode(SQLiteMode.Mode.LEGACY)
++@org.junit.runner.RunWith(org.robolectric.RobolectricTestRunner.class)
++@org.robolectric.annotation.Config(manifest=org.robolectric.annotation.Config.NONE,sdk={30,36})
++@org.robolectric.annotation.GraphicsMode(org.robolectric.annotation.GraphicsMode.Mode.LEGACY)
++@org.robolectric.annotation.SQLiteMode(org.robolectric.annotation.SQLiteMode.Mode.LEGACY)
 +public class ArcSplitViewportPolicyTest {
-+    private NavigationController desktop() {
-+        NavigationController n=mock(NavigationController.class);
-+        java.util.concurrent.atomic.AtomicBoolean value=new java.util.concurrent.atomic.AtomicBoolean(true);
-+        when(n.getUseDesktopUserAgent()).thenAnswer(c->value.get());
-+        doAnswer(c->{value.set(c.getArgument(0));return null;}).when(n).setUseDesktopUserAgent(anyBoolean(),anyBoolean(),anyBoolean());
-+        return n;
++    @Test public void repeatedResizeNeverOverridesSiteModeOrReloads() {
++        ArcSplitViewportPolicy policy = new ArcSplitViewportPolicy();
++        NavigationController controller = mock(NavigationController.class);
++        for (int i = 0; i < 10; i++) {
++            policy.update(controller, 800); policy.update(controller, 400);
++            policy.update(controller, 800);
++        }
++        policy.retain(null, null); policy.clear();
++        verifyNoInteractions(controller);
 +    }
-+    @Test public void eachPaneChoosesMobileIndependentlyWithoutReload() {
-+        ArcSplitViewportPolicy p=new ArcSplitViewportPolicy();NavigationController a=desktop(),b=desktop();
-+        p.update(a,420);p.update(b,800);
-+        assertFalse(a.getUseDesktopUserAgent());assertTrue(b.getUseDesktopUserAgent());
-+        verify(a).setUseDesktopUserAgent(false,false,false);verify(b,never()).setUseDesktopUserAgent(anyBoolean(),anyBoolean(),anyBoolean());
-+        p.clear();assertTrue(a.getUseDesktopUserAgent());verify(a).setUseDesktopUserAgent(true,false,false);
-+    }
-+    @Test public void hysteresisPreventsResizeFlappingAndRestoresOriginalMode() {
-+        ArcSplitViewportPolicy p=new ArcSplitViewportPolicy();NavigationController a=desktop();
-+        p.update(a,599);p.update(a,610);p.update(a,639);assertFalse(a.getUseDesktopUserAgent());
-+        p.update(a,640);assertTrue(a.getUseDesktopUserAgent());
-+        verify(a,times(2)).setUseDesktopUserAgent(anyBoolean(),eq(false),eq(false));
-+    }
-+    @Test public void mobilePreferenceIsNeverUpgradedToDesktop() {
-+        ArcSplitViewportPolicy p=new ArcSplitViewportPolicy();NavigationController a=mock(NavigationController.class);
-+        p.update(a,400);p.update(a,1000);p.clear();verify(a,never()).setUseDesktopUserAgent(anyBoolean(),anyBoolean(),anyBoolean());
-+    }
-+    @Test public void explicitDesktopOverrideWinsUntilPaneWidens() {
-+        ArcSplitViewportPolicy p=new ArcSplitViewportPolicy();NavigationController a=desktop();
-+        p.update(a,400);a.setUseDesktopUserAgent(true,false,false);p.update(a,400);p.update(a,500);
-+        assertTrue(a.getUseDesktopUserAgent());p.clear();
-+        verify(a,times(1)).setUseDesktopUserAgent(false,false,false);
-+    }
-+    @Test public void invalidWidthsAndNullControllersDoNothing() {
-+        ArcSplitViewportPolicy p=new ArcSplitViewportPolicy();NavigationController a=desktop();
-+        p.update(a,Float.NaN);p.update(a,-1);p.update(null,400);p.update(a,Float.POSITIVE_INFINITY);
-+        verify(a,never()).setUseDesktopUserAgent(anyBoolean(),anyBoolean(),anyBoolean());
-+    }
-+    @Test public void replacementReleasesOnlyTheRetiredController() {
-+        ArcSplitViewportPolicy p=new ArcSplitViewportPolicy();NavigationController a=desktop(),b=desktop();
-+        p.update(a,400);p.update(b,400);p.retain(b,null);
-+        assertTrue(a.getUseDesktopUserAgent());assertFalse(b.getUseDesktopUserAgent());p.clear();assertTrue(b.getUseDesktopUserAgent());
++    @Test public void invalidWidthsNeverReachNavigation() {
++        ArcSplitViewportPolicy policy = new ArcSplitViewportPolicy();
++        NavigationController controller = mock(NavigationController.class);
++        policy.update(controller, Float.NaN); policy.update(controller, -1);
++        policy.update(null, 400); policy.update(controller, Float.POSITIVE_INFINITY);
++        policy.clear(); verifyNoInteractions(controller);
 +    }
 +}
 diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/ArcTabSelectionTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/ArcTabSelectionTest.java

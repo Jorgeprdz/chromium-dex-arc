@@ -485,3 +485,21 @@ Se conserva la propuesta; **fuera de la próxima tanda y sin implementación por
 - [ ] Evaluar conjuntamente tarjeta enriquecida y snapshot como alternativas explícitas, sin sustituir automáticamente la preview real. Las miniaturas existentes tienen GO técnico limitado, pero también quedan pospuestas junto con toda la funcionalidad Hover Preview. Un destino nuevo no debe cargarse silenciosamente por un cache miss.
 
 No se descarta la preview real ni se altera su retardo acordado. Requiere autorización futura; no añade dependencias, builds ni cambios gráficos a la tanda actual.
+
+## Desktop final + Mobile — checkpoint de Bloque A (21-oct-2026)
+
+Alcance nuevo autorizado: D1–D10 y M1–M11 según especificación del usuario. Prioridad A→B→C→D, sin subagentes ni nuevas dependencias; máximo un workflow integrado, sin reintentos automáticos. **0/1 workflows consumidos.** Rama aislada `assistant/archium-r5-final-mobile`; base instalada a2ad646/run39562759522 conservada.
+
+- [x] D1 parcial: retirar overrides de UA por ancho. Contrato sin navegación/recarga y conjunto split: 140 PASS locales. **Zoom/viewport Blink 50→25→50 pendiente; D1 no cerrado.**
+- [x] D2 implementación local: grid según ancho útil, mínimo dos columnas o menú; conservación de orden, objetos y datos. Colecciones Android: 20 PASS. Política de columnas con densidades fraccionales PASS. Aceptación APK pendiente.
+- [x] D3 código: target invisible 16dp; sin cambiar límites ni persistencia. **Suite nativa del coordinador, habilitación manual_resize, mouse/hover/cursor/touch/stylus pendientes.**
+- [x] D4 implementación local: acciones Fijar/Favorito compactas con descripción/tooltip; sin forzar ancho. Compilación SDK aislada PASS; aceptación física pendiente.
+- [ ] D10: cerrar matriz completa en Galaxy/DeX; geometría Android del shell 18 PASS no equivale a validación manual.
+- [ ] Bloque B D5–D9: revisar deltas y aceptación sobre base instalada, preservando primer clic y parejas.
+- [ ] Bloque C M1–M5: no iniciado; omnibox arriba, cuatro acciones abajo, bottom sheet, switcher/Spaces según diseño aprobado.
+- [ ] Bloque D M6–M11: no iniciado; NTP propia, branding/gestos/adaptación y regresiones de Chromium/rendimiento.
+- [ ] Build/APK nueva: NOT RUN; no se consume el intento remoto con la tanda incompleta. No hay PASS gráfico, de memoria ni rendimiento nuevo.
+
+[Estado, límites y continuación exacta](docs/validation/R5_FINAL_MOBILE_CHECKPOINT.md). Evidencia local en `/workspace/archium-evidence/r5-final-mobile/`. Parche/preparación y pruebas adicionales: ver resultados finales del checkpoint; no usar casillas de implementación como aceptación visual.
+
+Verificación final de este checkpoint: parche reproducible de 159 archivos y preparación SDK37.2 PASS; aplicación/transición de parche 24 PASS; proyección 17 PASS; drag 3 PASS; cobertura del orquestador 2 PASS. No se ejecutó la suite host completa ni el compilador Chromium nativo de este candidato.

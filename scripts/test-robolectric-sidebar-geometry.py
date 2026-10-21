@@ -29,7 +29,7 @@ def main():
     source = (arc / 'ArcDesktopCoordinator.java').read_text()
     expanded = re.search(r'boolean expanded =\s*(.*?);', source, re.S).group(1)
     budget = re.search(r'tablet.updateArcExtensionsWidth\((.*?)\);', source, re.S).group(1)
-    collections = re.search(r'mCollectionsView.setVisibility\(\s*(expanded.*?)\);', source, re.S).group(1)
+    collections = re.search(r'mCollectionsView.setVisibility\(\s*(collectionBudget.*?)\);', source, re.S).group(1)
     test = r'''
 import static org.junit.Assert.*;
 import android.app.Activity;
@@ -81,7 +81,7 @@ public class SidebarGeometryProbe {
     @Test public void zeroCollectionBudgetDoesNotReintroduceFixedCollectionChrome(){
         Shell s=new Shell(activity);assertEquals(View.GONE,s.collectionVisibility(true,0));
         assertEquals(View.VISIBLE,s.collectionVisibility(true,120));
-        assertEquals(View.GONE,s.collectionVisibility(false,120));
+        assertEquals(View.VISIBLE,s.collectionVisibility(false,120));
     }
     @Test public void extensionBudgetFitsRealMenuAndRailInsets(){
         Shell s=new Shell(activity);s.mRail.layout(0,0,216,800);s.mRail.setPadding(4,0,4,0);

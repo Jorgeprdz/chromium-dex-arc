@@ -189,6 +189,55 @@ public class ArcCollectionsFocusTest {
         verify(f.tabs, never()).unpin(anyInt());
     }
 
+    @Test
+    public void favoritesReflowWithoutDroppingOrReplacingTiles() {
+        Fixture f = new Fixture();
+        java.util.List<String> ids = new java.util.ArrayList<>();
+        for (int i = 0; i < 4; i++) ids.add(f.controller.rememberTab(7 + i,
+                "https://example.test/" + i, "Favorite " + i, true));
+        f.view.refresh();
+        View[] original = new View[4];
+        for (int i = 0; i < 4; i++) original[i] = f.view.findViewWithTag("arc-entry:" + ids.get(i));
+        float density = f.activity.getResources().getDisplayMetrics().density;
+        for (int widthDp : new int[] {304, 160, 120, 304, 160}) {
+            int width = Math.round(widthDp * density);
+            f.view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(1600, View.MeasureSpec.AT_MOST));
+            f.view.layout(0, 0, width, f.view.getMeasuredHeight());
+            View menu = f.view.findViewWithTag("arc-favorites-menu");
+            assertEquals(widthDp == 120 ? View.VISIBLE : View.GONE, menu.getVisibility());
+            for (int i = 0; i < 4; i++) assertSame(original[i], f.view.findViewWithTag("arc-entry:" + ids.get(i)));
+            if (widthDp != 120) {
+                assertEquals(widthDp == 304 ? original[0].getTop() : original[0].getBottom() + Math.round(8 * density),
+                        original[2].getTop());
+                assertTrue(original[3].getRight() <= width);
+            }
+            assertEquals(4, f.controller.state().favorites().size());
+        }
+    }
+
+    @Test
+    public void narrowMenuExposesEveryFavoriteInStoredOrder() {
+        Fixture f = new Fixture();
+        for (int i = 0; i < 4; i++) f.controller.rememberTab(7+i,
+                "https://example.test/"+i, "Favorite "+i, true);
+        f.view.refresh();
+        int width = Math.round(120 * f.activity.getResources().getDisplayMetrics().density);
+        f.view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(1600, View.MeasureSpec.AT_MOST));
+        f.view.layout(0,0,width,f.view.getMeasuredHeight());
+        f.view.setCompact(true);
+        assertEquals(View.GONE, f.view.findViewWithTag("arc-current-space").getVisibility());
+        assertEquals(View.VISIBLE, f.view.findViewWithTag("arc-favorites-menu").getVisibility());
+        assertTrue(f.view.findViewWithTag("arc-favorites-menu").performClick());
+        android.widget.PopupMenu menu = org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu();
+        assertEquals(4,menu.getMenu().size());
+        java.util.List<ArcSidebarState.Entry> stored = f.controller.state().favorites();
+        for (int i=0;i<4;i++) assertEquals(stored.get(i).title,menu.getMenu().getItem(i).getTitle());
+        assertTrue(menu.getMenu().performIdentifierAction(3,0));
+        verify(f.tabs).select(stored.get(3).tabId);
+    }
+
     private void checkFocus(boolean favorite) {
         Activity activity = createActivity();
         ArcTabActions.NativeTabs tabs = mock(ArcTabActions.NativeTabs.class);

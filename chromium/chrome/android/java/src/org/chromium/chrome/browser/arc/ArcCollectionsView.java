@@ -15,7 +15,7 @@ import android.view.Gravity;
 import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.HorizontalScrollView;
+import android.widget.GridLayout;
 import android.widget.ImageButton;
 import android.widget.LinearLayout;
 import android.widget.PopupMenu;
@@ -44,11 +44,13 @@ public final class ArcCollectionsView extends LinearLayout {
     private final ArcCollectionsController mController;
     private final Supplier<CurrentTab> mCurrentTab;
     private final BiConsumer<ArcSidebarState.Entry, ImageButton> mLoadIcon;
-    private final LinearLayout mFavorites;
+    private final GridLayout mFavorites;
+    private final Button mFavoritesMenu;
     private final LinearLayout mEntries;
+    private final LinearLayout mControls;
     private final Button mSpace;
     private final BoundedScrollView mScroll;
-    private final HorizontalScrollView mFavoritesScroll;
+    private final BoundedScrollView mFavoritesScroll;
     private int mSurface = Color.rgb(238, 238, 238);
     private int mForeground = Color.rgb(32, 32, 32);
     private int mInteraction = Color.rgb(204, 204, 204);
@@ -87,13 +89,21 @@ public final class ArcCollectionsView extends LinearLayout {
         mLoadIcon = loadIcon;
         setOrientation(VERTICAL);
         setPadding(dp(8), dp(4), dp(8), dp(4));
-        mFavorites = new LinearLayout(activity);
+        mFavorites = new GridLayout(activity);
+        mFavorites.setColumnCount(2);
         mFavorites.setContentDescription(activity.getString(R.string.arc_favorites));
-        mFavoritesScroll = new HorizontalScrollView(activity);
-        mFavoritesScroll.setHorizontalScrollBarEnabled(false);
+        mFavoritesScroll = new BoundedScrollView(activity);
+        mFavoritesScroll.setBudget(dp(216));
         mFavoritesScroll.setTag("arc-favorites-mosaic");
         mFavoritesScroll.addView(mFavorites);
-        addView(mFavoritesScroll, new LayoutParams(-1, dp(72)));
+        addView(mFavoritesScroll, new LayoutParams(-1, LayoutParams.WRAP_CONTENT));
+        mFavoritesMenu = button(activity.getString(R.string.arc_favorites) + " ▾", this::showFavorites);
+        mFavoritesMenu.setTag("arc-favorites-menu");
+        mFavoritesMenu.setText("");
+        mFavoritesMenu.setGravity(Gravity.CENTER);
+        mFavoritesMenu.setCompoundDrawablesRelativeWithIntrinsicBounds(android.R.drawable.star_big_on, 0, 0, 0);
+        mFavoritesMenu.setVisibility(GONE);
+        addView(mFavoritesMenu, new LayoutParams(-1, dp(44)));
         mSpace = button("", this::showSpaces);
         mSpace.setTag("arc-current-space");
         mSpace.setContentDescription(activity.getString(R.string.arc_spaces));
@@ -106,6 +116,7 @@ public final class ArcCollectionsView extends LinearLayout {
         mScroll.addView(mEntries);
         addView(mScroll, new LayoutParams(-1, LayoutParams.WRAP_CONTENT));
         LinearLayout controls = new LinearLayout(activity);
+        mControls = controls;
         Button pin = button(activity.getString(R.string.arc_pin_current), () -> remember(false));
         pin.setTag("arc-pin-current");
         Button favorite = button(activity.getString(R.string.arc_favorite_current), () -> remember(true));
@@ -116,6 +127,65 @@ public final class ArcCollectionsView extends LinearLayout {
         refresh();
     }
 
+    /** Zero denotes the accessible menu; a mosaic never has a single column. */
+    static int favoriteColumns(int availablePx, int slotPx) {
+        if (slotPx <= 0 || availablePx / slotPx < 2) return 0;
+        return availablePx / slotPx;
+    }
+
+    @Override
+    protected void onMeasure(int widthSpec, int heightSpec) {
+        int available = Math.max(0, MeasureSpec.getSize(widthSpec) - getPaddingLeft() - getPaddingRight());
+        int columns = favoriteColumns(available, dp(72));
+        boolean empty = mFavorites.getChildCount() == 0;
+        mFavoritesScroll.setVisibility(!empty && columns >= 2 ? VISIBLE : GONE);
+        mFavoritesMenu.setVisibility(!empty && columns == 0 ? VISIBLE : GONE);
+        if (columns >= 2 && columns != mFavorites.getColumnCount()) {
+            // Clear previous explicit column constraints before shrinking the grid.
+            for (int i = 0; i < mFavorites.getChildCount(); i++) {
+                GridLayout.LayoutParams params = (GridLayout.LayoutParams) mFavorites.getChildAt(i).getLayoutParams();
+                params.columnSpec = GridLayout.spec(GridLayout.UNDEFINED);
+                params.rowSpec = GridLayout.spec(GridLayout.UNDEFINED);
+                mFavorites.getChildAt(i).setLayoutParams(params);
+            }
+            mFavorites.setColumnCount(columns);
+            for (int i = 0; i < mFavorites.getChildCount(); i++) {
+                View tile = mFavorites.getChildAt(i);
+                GridLayout.LayoutParams params = (GridLayout.LayoutParams) tile.getLayoutParams();
+                params.rowSpec = GridLayout.spec(i / columns);
+                params.columnSpec = GridLayout.spec(i % columns);
+                tile.setLayoutParams(params);
+            }
+        }
+        compactAction(findViewWithTag("arc-pin-current"), R.string.arc_pin_current,
+                android.R.drawable.ic_menu_save, available / 2 < dp(144));
+        compactAction(findViewWithTag("arc-favorite-current"), R.string.arc_favorite_current,
+                android.R.drawable.star_big_off, available / 2 < dp(144));
+        super.onMeasure(widthSpec, heightSpec);
+    }
+
+    private void compactAction(Button action, int label, int icon, boolean compact) {
+        String text = compact ? "" : mActivity.getString(label);
+        if (!text.contentEquals(action.getText())) {
+            action.setText(text);
+            action.setGravity((compact ? Gravity.CENTER : Gravity.START | Gravity.CENTER_VERTICAL));
+            action.setCompoundDrawablesRelativeWithIntrinsicBounds(compact ? icon : 0, 0, 0, 0);
+        }
+    }
+
+    private void showFavorites() {
+        if (mDestroyed) return;
+        List<ArcSidebarState.Entry> entries = mController.state().favorites();
+        PopupMenu menu = new PopupMenu(mActivity, mFavoritesMenu);
+        mMenu = menu;
+        for (int i = 0; i < entries.size(); i++) menu.getMenu().add(0, i, i, entries.get(i).title);
+        menu.setOnMenuItemClickListener(item -> {
+            runCommand(() -> open(entries.get(item.getItemId()).id));
+            return true;
+        });
+        menu.show();
+    }
+
     private int dp(int value) {
         return Math.round(value * getResources().getDisplayMetrics().density);
     }
@@ -123,6 +193,8 @@ public final class ArcCollectionsView extends LinearLayout {
     private Button button(String text, Runnable action) {
         Button result = new Button(mActivity);
         result.setText(text);
+        result.setContentDescription(text);
+        result.setTooltipText(text);
         result.setAllCaps(false);
         result.setTextSize(12);
         result.setMinWidth(0); result.setMinimumWidth(0);
@@ -140,6 +212,13 @@ public final class ArcCollectionsView extends LinearLayout {
         catch (RuntimeException failure) {
             Toast.makeText(mActivity, R.string.arc_collection_error, Toast.LENGTH_SHORT).show();
         }
+    }
+
+    /** Compact native rail keeps favorites accessible without expanded collection chrome. */
+    public void setCompact(boolean compact) {
+        mSpace.setVisibility(compact ? GONE : VISIBLE);
+        mScroll.setVisibility(compact ? GONE : VISIBLE);
+        mControls.setVisibility(compact ? GONE : VISIBLE);
     }
 
     public void setCollectionHeight(int height) {
@@ -207,6 +286,7 @@ public final class ArcCollectionsView extends LinearLayout {
             // must not crash browser startup or silently replace a user's data.
             mFavorites.removeAllViews();
             mFavoritesScroll.setVisibility(GONE);
+            mFavoritesMenu.setVisibility(GONE);
             mEntries.removeAllViews();
             mSpace.setText(R.string.arc_collection_error);
             findViewWithTag("arc-pin-current").setEnabled(false);
@@ -234,7 +314,11 @@ public final class ArcCollectionsView extends LinearLayout {
             favorite.setOnClickListener(view -> runCommand(() -> open(entry.id)));
             favorite.setOnLongClickListener(view -> { showEntryMenu(view, entry); return true; });
             favorite.setOnContextClickListener(view -> { showEntryMenu(view, entry); return true; });
-            LayoutParams tileParams = new LayoutParams(dp(64), dp(64));
+            GridLayout.LayoutParams tileParams = new GridLayout.LayoutParams();
+            tileParams.width = dp(64); tileParams.height = dp(64);
+            int index = mFavorites.getChildCount(), columns = mFavorites.getColumnCount();
+            tileParams.rowSpec = GridLayout.spec(index / columns);
+            tileParams.columnSpec = GridLayout.spec(index % columns);
             tileParams.setMargins(dp(4), dp(4), dp(4), dp(4));
             mFavorites.addView(favorite, tileParams);
             mLoadIcon.accept(entry, favorite);
@@ -295,13 +379,13 @@ public final class ArcCollectionsView extends LinearLayout {
         restoreFocus(mEntries, entryFocus);
     }
 
-    private static String focusedTag(LinearLayout group) {
+    private static String focusedTag(android.view.ViewGroup group) {
         View focused = group.findFocus();
         return focused != null && focused.getTag() instanceof String
                 ? (String) focused.getTag() : null;
     }
 
-    private static void restoreFocus(LinearLayout group, String tag) {
+    private static void restoreFocus(android.view.ViewGroup group, String tag) {
         if (tag == null) return;
         View replacement = group.findViewWithTag(tag);
         if (replacement != null) replacement.requestFocus();

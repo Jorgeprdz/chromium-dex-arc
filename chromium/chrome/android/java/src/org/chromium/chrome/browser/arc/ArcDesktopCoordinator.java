@@ -1118,7 +1118,8 @@ public final class ArcDesktopCoordinator {
         }
         if (mCollectionsView != null) {
             mCollectionsView.setVisibility(
-                    expanded && collectionBudget >= dp(80) ? View.VISIBLE : View.GONE);
+                    collectionBudget >= dp(80) ? View.VISIBLE : View.GONE);
+            mCollectionsView.setCompact(!expanded);
         }
         applyFrameGeometry();
         if (expanded && mCollectionsView != null) {

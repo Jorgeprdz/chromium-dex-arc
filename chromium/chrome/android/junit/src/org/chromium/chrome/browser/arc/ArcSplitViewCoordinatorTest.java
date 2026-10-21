@@ -330,28 +330,24 @@ public class ArcSplitViewCoordinatorTest {
         f.coordinator.settleForTesting();verify(f.holder).setArcSplitInputBlocked(true);verify(f.holder,atLeastOnce()).setArcSplitInputBlocked(false);
         verify(f.one,never()).reload();verify(f.two,never()).reload();f.close();
     }
-    @Test public void nativeViewportSwitchesEachDesktopControllerWithoutReloadAndRestoresOnExit() {
+    @Test public void nativeViewportResizePreservesUserAgentWithoutReload() {
         Fixture f=new Fixture();
         var first=mock(org.chromium.content_public.browser.NavigationController.class);
         var second=mock(org.chromium.content_public.browser.NavigationController.class);
         var a=mock(org.chromium.content_public.browser.WebContents.class);
         var b=mock(org.chromium.content_public.browser.WebContents.class);
-        java.util.concurrent.atomic.AtomicBoolean firstDesktop=new java.util.concurrent.atomic.AtomicBoolean(true);
-        java.util.concurrent.atomic.AtomicBoolean secondDesktop=new java.util.concurrent.atomic.AtomicBoolean(true);
-        when(first.getUseDesktopUserAgent()).thenAnswer(c->firstDesktop.get());
-        when(second.getUseDesktopUserAgent()).thenAnswer(c->secondDesktop.get());
-        doAnswer(c->{firstDesktop.set(c.getArgument(0));return null;}).when(first).setUseDesktopUserAgent(anyBoolean(),anyBoolean(),anyBoolean());
-        doAnswer(c->{secondDesktop.set(c.getArgument(0));return null;}).when(second).setUseDesktopUserAgent(anyBoolean(),anyBoolean(),anyBoolean());
         when(a.getNavigationController()).thenReturn(first);when(b.getNavigationController()).thenReturn(second);
         when(f.one.getWebContents()).thenReturn(a);when(f.two.getWebContents()).thenReturn(b);
         assertTrue(f.coordinator.enter(f.one,f.two));
-        assertFalse(firstDesktop.get());assertFalse(secondDesktop.get());
-        when(f.holder.getArcSplitViewport()).thenReturn(new android.graphics.Rect(0,0,1600,800));f.coordinator.refresh(true);
-        assertTrue(firstDesktop.get());assertTrue(secondDesktop.get());
-        when(f.holder.getArcSplitViewport()).thenReturn(new android.graphics.Rect(0,0,1100,800));f.coordinator.refresh(true);
-        f.coordinator.exit();assertTrue(firstDesktop.get());assertTrue(secondDesktop.get());
-        verify(first,never()).setUseDesktopUserAgent(anyBoolean(),eq(true),anyBoolean());
-        verify(second,never()).setUseDesktopUserAgent(anyBoolean(),eq(true),anyBoolean());f.close();
+        for(int width:new int[]{1600,1100,1600,1100,1600}) {
+            when(f.holder.getArcSplitViewport()).thenReturn(new android.graphics.Rect(0,0,width,800));
+            f.coordinator.refresh(true);
+            assertTrue(f.coordinator.stateForTesting().isSplit());
+        }
+        f.coordinator.exit();
+        verifyNoInteractions(first,second);
+        verify(f.one,never()).reload();verify(f.two,never()).reload();
+        f.close();
     }
     @Test public void failedPresentationKeepsPreviousPairAndSelection() {
         Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));f.coordinator.activate(18);
