@@ -932,7 +932,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 
          // If the tab is hidden inside a collapsed group, find the group header's index instead.
          if (uiIndex == TabModel.INVALID_TAB_INDEX) {
-@@ -1116,6 +1207,199 @@
+@@ -1116,6 +1207,201 @@
          if (mTabModelSelector.isTabStateInitialized()) {
              resetWithListOfTabs(tabModel);
          }
@@ -1097,7 +1097,9 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 +            int id = representative.getTabGroupId() != null ? representative.getId()
 +                    : mArcSplitPairs.representative(representative.getId());
 +            if (!emitted.add(id)) continue;
-+            Tab row = tabModel.getTabById(id);
++            // Representatives already belong to this model. Resolve only a changed pair ID;
++            // ordinary tabs and group headers retain the native object supplied above.
++            Tab row = id == representative.getId() ? representative : tabModel.getTabById(id);
 +            if (row != null) visible.add(row);
 +        }
 +        return visible;
@@ -1132,7 +1134,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
      }
 
      /**
-@@ -1124,11 +1408,14 @@
+@@ -1124,11 +1410,14 @@
       */
      private void resetWithListOfTabs(@Nullable TabModel tabModel) {
          if (tabModel == null) return;
@@ -1148,7 +1150,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          mPinnedTabsMediator.updateTabModel(tabModel);
          boolean isIncognito =
                  !IncognitoUtils.shouldOpenIncognitoAsWindow() && tabModel.isIncognitoBranded();
-@@ -1196,6 +1483,7 @@
+@@ -1196,6 +1485,7 @@
          if (mMainTouchHelperCallback == null) {
              mMainTouchHelperCallback = touchHelperCallback;
          }
@@ -1156,7 +1158,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          mTouchHelperCallbacks.add(touchHelperCallback);
 
          // Handles long-presses for tab item/group context menus. Long-presses for empty space
-@@ -1960,6 +2248,16 @@
+@@ -1960,6 +2250,16 @@
          return menuShown;
      }
 
@@ -1173,7 +1175,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
      private boolean showMenuForItemView(RectProvider rectProvider, View itemView) {
          if (!(itemView.getParent() instanceof RecyclerView recyclerView)) return false;
          int position = recyclerView.getChildAdapterPosition(itemView);
-@@ -2104,8 +2402,10 @@
+@@ -2104,8 +2404,10 @@
          TabModel tabModel = mTabModelSelector.getCurrentModel();
          if (tabModel == null) return false;
 
@@ -1185,7 +1187,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 
          List<Integer> allTabIds;
          if (TabMultiSelectHelper.hasMultipleTabsSelected(tabModel)
-@@ -2116,6 +2416,23 @@
+@@ -2116,6 +2418,23 @@
          }
 
          var anchorInfo = new AnchorInfo(tabId, allTabIds);
@@ -1209,7 +1211,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 
          if (mTabContextMenuCoordinator == null) {
              TabGroupCreationCallback tabGroupCreationCallback =
-@@ -2135,13 +2452,7 @@
+@@ -2135,13 +2454,7 @@
                              mWindowAndroid,
                              activity,
                              /* tabBookmarkerSupplier= */ null,
@@ -1224,7 +1226,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
                              mSnackbarManager,
                              mActivityResultTracker,
                              /* modalDialogManager= */ mWindowAndroid.getModalDialogManager(),
-@@ -2154,6 +2465,33 @@
+@@ -2154,6 +2467,33 @@
          mTabItemHoverController.hideHoverCard();
          mTabContextMenuCoordinator.showMenu(rectProvider, anchorInfo);
          return true;
@@ -1258,7 +1260,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
      }
 
      private void showEmptySpaceContextMenu(RectProvider rectProvider, Activity activity) {
-@@ -2373,9 +2711,21 @@
+@@ -2373,9 +2713,21 @@
                                  mContainerModel.get(VerticalTabListProperties.COLLAPSE_STATE));
 
          TabModel model = mTabModelSelector.getCurrentModel();

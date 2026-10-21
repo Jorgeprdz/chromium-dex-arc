@@ -1368,7 +1368,9 @@ public class VerticalTabListCoordinator {
             int id = representative.getTabGroupId() != null ? representative.getId()
                     : mArcSplitPairs.representative(representative.getId());
             if (!emitted.add(id)) continue;
-            Tab row = tabModel.getTabById(id);
+            // Representatives already belong to this model. Resolve only a changed pair ID;
+            // ordinary tabs and group headers retain the native object supplied above.
+            Tab row = id == representative.getId() ? representative : tabModel.getTabById(id);
             if (row != null) visible.add(row);
         }
         return visible;

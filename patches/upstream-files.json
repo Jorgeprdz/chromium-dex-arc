@@ -169,7 +169,7 @@
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/TabProperties.java": "f24391135023c2b2545186faa6f9fceaa18b00a9a3b5bf247c456b3fb3f79827",
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinder.java": "3e13d56e64245b5a7d4486d55c41a5245e0cd6300ef5f1a8014e22056f1c5a14",
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinderUnitTest.java": "e998e80e46775206d3f24ca9a71351de7d271e1505b666a1c8b354b4c7ebe42f",
-    "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinator.java": "aa008cee753d6b4d7df3d13c9e248f85d5b8087ad7acc09e5d158668b7ad2ef9",
+    "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinator.java": "e26961d56c8c12ddab993c3399874c19ec0bbe5c1fdec38b7ca22423f044c73f",
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinatorUnitTest.java": "89590c93caca6f28c87ec7704a7812a281d53a1f3b767b57a8a7bb493c10bdd8",
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListItemTouchHelperCallback.java": "489b362952a86ffd51b63a43a5df4eba3fa4beedf12c085051ae655cde1aeeab",
     "chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListViewBinder.java": "885459c89678f9f24ad2ab853778bd2b273bf377a77f6e562e5d65390049a803",
@@ -318,5 +318,5 @@
     "components/password_manager/core/browser/password_store/password_store_backend.cc": "45764d4ad0e05acc5a216944a5a6763212f6c17e71bf689e9c973f12fb5c87d8",
     "components/password_manager/core/browser/password_store/password_store_interface.cc": "7e9dd5813ce8ece459ec66abdd3306028b7b3d6bbae048664872a34d8d097268"
   },
-  "patch_sha256": "dd7e106b930a2b44c49629b407e5b309d1792576f56984e42f591204b0be6468"
+  "patch_sha256": "9ae7eda8e32d8835e68c7ffec5b37fc774ca64e446c958539d84fba7ac43c833"
 }
