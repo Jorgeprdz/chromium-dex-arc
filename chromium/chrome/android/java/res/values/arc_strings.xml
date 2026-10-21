@@ -82,4 +82,16 @@
     <string name="arc_split_controls">Arrastra para redimensionar; pulsa para ver opciones</string>
     <string name="arc_split_swap">Intercambiar paneles</string>
     <string name="arc_split_dialog_open">Cierra el diálogo actual antes de cambiar la vista.</string>
+    <string name="arc_mobile_home">Inicio</string>
+    <string name="arc_mobile_tabs">Pestañas</string>
+    <string name="arc_mobile_menu">Menú</string>
+    <string name="arc_mobile_site_info">Información del sitio</string>
+    <string name="arc_mobile_find">Buscar en la página</string>
+    <string name="arc_mobile_share">Compartir</string>
+    <string name="arc_mobile_translate">Traducir</string>
+    <string name="arc_mobile_desktop_site">Sitio de escritorio</string>
+    <string name="arc_mobile_zoom">Zoom</string>
+    <string name="arc_mobile_more">Más herramientas</string>
+    <string name="arc_mobile_recent">Recientes en esta pestaña</string>
+    <string name="arc_mobile_settings">Configuración</string>
 </resources>

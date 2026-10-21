@@ -26,24 +26,32 @@ Evidencia privada: /workspace/archium-evidence/r5-final-mobile/.
 
 El primer intento local con JDK17 no compiló jars Android para Java21; no se cuenta como RED del producto. Se usó el JDK21 ya instalado, sin descargas ni cambios al toolchain de producción. Dos expectativas anteriores del controlador que exigían cambiar UA fueron sustituidas por el contrato aprobado: resize no modifica el modo de sitio ni recarga. Se conservó RunWith/Config para descubrimiento nativo.
 
-## Continuación exacta
+## Continuación implementada sobre 239750c
 
-1. D1: usar fixture local responsive con meta viewport y registrar innerWidth, clientWidth, visualViewport.width/scale, devicePixelRatio y eventos resize al alternar 50→25→50 varias veces. Comparar con geometría real de cada WebContents. No introducir reset de zoom ni reload sin demostrar causa. No tocar páginas externas.
-2. D3: localizar el handler de resize que consume getResizeHandleWidthPx mediante SideUiCoordinator del pin, comprobar habilitación manual_resize en el dispositivo, cursor y hover, captura/cancelación del drag y persistencia. Conservar límites 92–500dp. Probar favoritos durante resize.
-3. Cerrar D4/D10 con mouse/teclado/touch y ventana baja/estrecha antes de marcar aceptación. Revisar el presupuesto vertical con muchas filas de favoritos.
-4. Bloque B D5–D9: revisar sólo deltas necesarios sobre la base instalada; no reabrir primer clic ni decoración ya implementados sin fallo reproducido.
-5. Bloques C/D Mobile: **NO IMPLEMENTADOS en este checkpoint**. Mantener diseño aprobado (omnibox superior y cuatro acciones inferiores); reutilizar bottom sheet, thumbnails, NTP y Spaces nativos. Punto de entrada actual: TabbedRootUiCoordinator y prepareArcMobileNavigation. Este último cambia UA de pestañas al volver a ventana móvil: revisar su conflicto con M9 (solicitar sitio escritorio no debe cambiar interfaz ni perder preferencia). No añadir controles falsos de resumen/traducción ni un segundo store de Spaces.
-6. Al tener conjunto listo y gates específicos verdes, regenerar parche y usar checkpoint compatible. Esta solicitud tiene **0/1 workflows remotos consumidos**. No se publicó ni instaló APK nueva. No reintentar automáticamente tras el único intento autorizado.
+Desktop: foco de 2dp, prioridad de foco sobre hover en colecciones y encabezados accesibles. Se conserva el primer clic, las proporciones/selección de Split View y las dimensiones elegidas. El pulido visual completo D5–D9 sigue sujeto a aceptación.
 
-Comandos específicos (usar cwd de este worktree):
+Mobile: ArcMobileControls conserva la omnibox superior nativa y observa su foco sin sustituir listeners. Añade cuatro acciones inferiores, + con contraste por luminancia, contador real, haptic, visibilidad según modo/fullscreen/IME e insets. La reserva inferior se libera conservando cambios de margen ajenos. Su controlador persiste al cambiar de tamaño de ventana.
 
-```sh
-python3 scripts/test-robolectric-collections.py --classpath-file /workspace/macdesk-maintenance/archium-r53/classpath-with-mockito.txt --java-home /root/.gradle/jdks/amazon_com_inc_-21-aarch64-linux.2 --work /workspace/archium-evidence/r5-final-mobile/collections
-python3 scripts/test-robolectric-split.py --classpath-file /workspace/macdesk-maintenance/archium-r53/classpath-with-mockito.txt --java-home /root/.gradle/jdks/amazon_com_inc_-21-aarch64-linux.2 --work /workspace/archium-evidence/r5-final-mobile/split --controller
-python3 scripts/test-robolectric-sidebar-geometry.py --classpath-file /workspace/macdesk-maintenance/archium-r53/classpath-with-mockito.txt --java-home /root/.gradle/jdks/amazon_com_inc_-21-aarch64-linux.2 --work /workspace/archium-evidence/r5-final-mobile/geometry
-python3 -m unittest discover -s tests -p test_favorites_grid.py
-python3 scripts/generate-arc-patch.py
-python3 scripts/check-arc-preparation.py --android-jar /opt/android-sdk/platforms/android-37.2/android.jar
-```
+El menú inferior usa Dialog nativo, cierre Back/exterior y swipe de cabecera; sólo despacha acciones reales Chromium (información del sitio, buscar, compartir, traducir, sitio desktop, zoom cuando existe el ID, menú completo), fijar y Spaces reales. No hay IA falsa ni métricas de bloqueo. La cabecera de seguridad/favicon, agrupación premium y controles zoom +/- quedan pendientes.
 
-Las rutas históricas de classpath contienen herramientas host reutilizadas; no son el repositorio de implementación.
+Las pestañas abren el Hub/switcher nativo con sus snapshots, sin duplicar bitmaps. Spaces usa ArcNativeTabSession y el store existente, accesible en menú y long press del contador. Se conserva la pestaña seleccionada al adjuntar/restaurar Mobile; una selección explícita pendiente se aplica al terminar restore. Selector dentro del Hub, filtrado visual del switcher y tarjetas específicas pendientes.
+
+ArcMobileHomeView se inserta exclusivamente dentro del FrameLayout de la NTP regular. Se ocultan/restauran sus hijos conservando cambios posteriores de Chromium; no existe overlay sobre webs ni inyección. Usa icono oficial, Space actual, búsqueda nativa, favoritos reales, cinco entradas HTTP(S) del historial de esta pestaña y configuración. Historial nulo se tolera. Otros contenedores o perfil no disponible conservan la NTP Chromium. Colores individuales por Space y personalización propia pendientes; el modelo actual no guarda colores por Space.
+
+## Evidencia adicional
+
+Directorio: /workspace/archium-evidence/r5-final-mobile/continuation/.
+- mobile.log: 18 PASS, SDK30/36; callbacks del Host son frontera sintética, no prueba de integración Activity/Blink.
+- collections.log: 22 PASS, incluida prioridad de foco sobre hover.
+- geometry.log: 18 PASS; transitions.log: 12 PASS (rail no split; split cubierto por su suite previa).
+- native-session.log: 12 escenarios PASS del adapter real con contratos nativos sintéticos; incluye selección conservada y petición explícita durante restore.
+- gate.log: 2 PASS; patch.log: 24 PASS. Preparación SDK37.2 PASS (162 archivos); routing y guards del runner PASS (ver routing.log y dispatch.log).
+- Las firmas NavigationController/NavigationHistory/NavigationEntry y el contenedor FrameLayout de FeedSurfaceCoordinator se contrastaron con el pin exacto. Esto no sustituye el compilador nativo.
+
+## Build y continuación exacta
+
+Único intento integrado autorizado; utilizar checkpoint archium-checkpoint-39551668868-1, SHA35747e28fec81d80c6b97f82f366fc97809aa339, run39551668868. El run exitoso39562759522 conserva APK/receipt pero no publicó checkpoint nuevo. Se comprobaron cuatro grupos no expirados del checkpoint anterior; integridad de bytes se verifica durante restauración en CI. Sin clean fallback, cambios de GN/toolchain/dependencias ni QEMU.
+
+El runner queda restringido a assistant/archium-r5-final-mobile y SHA exacto; no se modifica el monitor histórico de la APK instalada. Registrar ID/SHA/URL del único dispatch tras lanzarlo. No repetir automáticamente si falla: primer error causal, fix localizado y nueva autorización para otro run.
+
+Pendientes físicos: viewport/zoom 50→25→50; favoritos durante drag, target de sidebar y menú estrecho; primer clic omnibox, navegación, diálogos, teclado/IME/gestos y adaptación; seguridad Chromium, memoria y rendimiento. Todos NOT RUN en este candidato. No instalar/publicar APK sin sus verificaciones. Tras el build, completar los pendientes visuales del TODO y actualizar esta evidencia sin declarar aceptación por inspección.

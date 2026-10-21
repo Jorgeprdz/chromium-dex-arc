@@ -42,7 +42,7 @@ jobs:
           SOURCE_RUN_ID: ${{ inputs.source_run_id }}
         run: |
           set -euo pipefail
-          test "$GITHUB_REF_NAME" = assistant/archium-r5-arc-experience
+          test "$GITHUB_REF_NAME" = assistant/archium-r5-final-mobile
           test "$ARCHIUM_EXPECTED_SHA" = "$GITHUB_SHA"
           [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]
           [[ "$ARCHIUM_SOURCE_TAG" =~ ^archium-checkpoint-$SOURCE_RUN_ID-[0-9]+$ ]]

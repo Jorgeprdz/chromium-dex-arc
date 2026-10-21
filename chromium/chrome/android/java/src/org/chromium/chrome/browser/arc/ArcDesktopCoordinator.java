@@ -1423,6 +1423,8 @@ public final class ArcDesktopCoordinator {
             GradientDrawable active = new GradientDrawable();
             active.setColor(selection);
             active.setCornerRadius(dp(8));
+            // Keyboard focus has a structural cue, independent of the fill/hover color.
+            if (state == android.R.attr.state_focused) active.setStroke(dp(2), foreground);
             states.addState(new int[] {android.R.attr.state_enabled, state}, active);
         }
         GradientDrawable idle = new GradientDrawable();

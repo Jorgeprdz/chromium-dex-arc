@@ -8,6 +8,8 @@ chrome_java_sources = [
   "java/src/org/chromium/chrome/browser/arc/ArcAboutDialog.java",
   "java/src/org/chromium/chrome/browser/arc/ArcCollectionsController.java",
   "java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java",
+  "java/src/org/chromium/chrome/browser/arc/ArcMobileControls.java",
+  "java/src/org/chromium/chrome/browser/arc/ArcMobileHomeView.java",
   "java/src/org/chromium/chrome/browser/arc/ArcNativeTabSession.java",
   "java/src/org/chromium/chrome/browser/arc/ArcTabActions.java",
   "java/src/org/chromium/chrome/browser/arc/ArcSidebarProfiles.java",

@@ -92,6 +92,7 @@ public final class ArcCollectionsView extends LinearLayout {
         mFavorites = new GridLayout(activity);
         mFavorites.setColumnCount(2);
         mFavorites.setContentDescription(activity.getString(R.string.arc_favorites));
+        mFavorites.setAccessibilityHeading(true);
         mFavoritesScroll = new BoundedScrollView(activity);
         mFavoritesScroll.setBudget(dp(216));
         mFavoritesScroll.setTag("arc-favorites-mosaic");
@@ -106,11 +107,13 @@ public final class ArcCollectionsView extends LinearLayout {
         addView(mFavoritesMenu, new LayoutParams(-1, dp(44)));
         mSpace = button("", this::showSpaces);
         mSpace.setTag("arc-current-space");
+        mSpace.setAccessibilityHeading(true);
         mSpace.setContentDescription(activity.getString(R.string.arc_spaces));
         addView(mSpace, new LayoutParams(-1, dp(44)));
         mEntries = new LinearLayout(activity);
         mEntries.setOrientation(VERTICAL);
         mEntries.setContentDescription(activity.getString(R.string.arc_pinned_tabs));
+        mEntries.setAccessibilityHeading(true);
         mScroll = new BoundedScrollView(activity);
         mScroll.setTag("arc-collection-scroll");
         mScroll.addView(mEntries);
@@ -258,8 +261,10 @@ public final class ArcCollectionsView extends LinearLayout {
                 Button button = (Button) child;
                 button.setTextColor(mForeground);
                 StateListDrawable states = new StateListDrawable();
-                states.addState(new int[] {android.R.attr.state_hovered}, background(mInteraction, 10));
-                states.addState(new int[] {android.R.attr.state_focused}, background(mInteraction, 10));
+                GradientDrawable focus = background(mInteraction, 10);
+                focus.setStroke(dp(2), mForeground);
+                states.addState(new int[] {android.R.attr.state_enabled,android.R.attr.state_focused}, focus);
+                states.addState(new int[] {android.R.attr.state_enabled,android.R.attr.state_hovered}, background(mInteraction, 10));
                 states.addState(new int[] {}, background(Color.TRANSPARENT, 10));
                 button.setBackground(new RippleDrawable(ColorStateList.valueOf(mInteraction), states, null));
             } else if (child instanceof android.view.ViewGroup) {

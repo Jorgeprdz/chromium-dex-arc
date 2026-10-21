@@ -2008,21 +2008,8 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
     }
 
     private void prepareArcMobileNavigation() {
-        if (org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.isDesktopWindow(mActivity)) return;
-        var selector = mTabModelSelectorSupplier.get();
-        if (selector == null) return;
-        for (boolean incognito : new boolean[] {false, true}) {
-            var model = selector.getModel(incognito);
-            for (int i = 0; i < model.getCount(); i++) {
-                Tab tab = model.getTabAt(i);
-                if (tab == null || tab.isDestroyed()) continue;
-                tab.setUserAgent(org.chromium.chrome.browser.tab.TabUserAgent.MOBILE);
-                if (tab.getWebContents() != null
-                        && org.chromium.chrome.browser.tab.TabUtils.isUsingDesktopUserAgent(tab.getWebContents())) {
-                    org.chromium.chrome.browser.tab.TabUtils.switchUserAgent(tab, false);
-                }
-            }
-        }
+        // Recreating the native UI must preserve each tab's explicit site/UA preference.
+        // Mobile/Desktop chrome is selected from window policy, never page site mode.
     }
 
     private void setArcToolbarSuppressed(boolean suppressed) {

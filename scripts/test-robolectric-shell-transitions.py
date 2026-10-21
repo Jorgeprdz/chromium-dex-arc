@@ -62,6 +62,8 @@ public class ShellTransitionsProbe {
     static class LayoutManager {int offset;void setContentOffsetX(int n){offset=n;}}
     static class Compositor {
         LayoutManager mLayoutManager=new LayoutManager();ContentView content=new ContentView();int resizes;
+        Object mArcSplitLeft; // Non-split compositor boundary; split has its separate suite.
+        void updateArcSplitPresentation(){throw new AssertionError("Unexpected split branch in rail fixture");}
         void updateWebContentsSize(){resizes++;}
         void beginArcRailViewportResize(int currentInset) BEGIN_RESIZE
         ContentView getContentView(){return content;}
@@ -90,14 +92,14 @@ public class ShellTransitionsProbe {
         s.mRail.layout(0,0,52,800);assertEquals(152,s.reservedLeftWidth());
         s.onSideUiChanged();assertEquals(316,s.reservedLeftWidth());
     }
-    @Test public void mobileUpdatesLoadedAndFrozenTabsWithoutOpeningOrClosingTabs() {
+    @Test public void mobileUiTransitionPreservesLoadedFrozenAndPrivateSiteModes() {
         Root r=new Root();r.mActivity=activity();ArcDesktopAppearance.setUiMode(r.mActivity,ArcDesktopPolicy.MODE_MOBILE);
         Tab loaded=new Tab(true), frozen=new Tab(false), secret=new Tab(true), destroyed=new Tab(true);destroyed.destroyed=true;
         r.mTabModelSelectorSupplier=()->new Selector(new Model(loaded,frozen,destroyed),new Model(secret));
         r.prepareArcMobileNavigation();
-        assertEquals(TabUserAgent.MOBILE,loaded.ua);assertEquals(TabUserAgent.MOBILE,frozen.ua);assertEquals(TabUserAgent.MOBILE,secret.ua);
-        assertEquals(1,loaded.reloads);assertEquals(1,secret.reloads);assertEquals(0,frozen.reloads);assertEquals(0,destroyed.reloads);
-        r.prepareArcMobileNavigation();assertEquals("Already mobile must not reload",1,loaded.reloads);
+        assertEquals(2,loaded.ua);assertEquals(2,frozen.ua);assertEquals(2,secret.ua);
+        assertEquals(0,loaded.reloads);assertEquals(0,secret.reloads);assertEquals(0,frozen.reloads);assertEquals(0,destroyed.reloads);
+        r.prepareArcMobileNavigation();assertEquals("UI transition must not reload",0,loaded.reloads);
     }
     @Test public void compositorCanLoseItsSurfaceOrLayoutManagerDuringTeardown() {
         Compositor c=new Compositor();c.content=null;c.setArcContentOffsetForRail(-1);assertEquals(0,c.mLayoutManager.offset);

@@ -496,10 +496,21 @@ Alcance nuevo autorizado: D1–D10 y M1–M11 según especificación del usuario
 - [x] D4 implementación local: acciones Fijar/Favorito compactas con descripción/tooltip; sin forzar ancho. Compilación SDK aislada PASS; aceptación física pendiente.
 - [ ] D10: cerrar matriz completa en Galaxy/DeX; geometría Android del shell 18 PASS no equivale a validación manual.
 - [ ] Bloque B D5–D9: revisar deltas y aceptación sobre base instalada, preservando primer clic y parejas.
-- [ ] Bloque C M1–M5: no iniciado; omnibox arriba, cuatro acciones abajo, bottom sheet, switcher/Spaces según diseño aprobado.
-- [ ] Bloque D M6–M11: no iniciado; NTP propia, branding/gestos/adaptación y regresiones de Chromium/rendimiento.
+- [ ] Bloque C M1–M5: candidato implementado parcialmente; ver continuación abajo. Aceptación nativa y refinamientos visuales pendientes.
+- [ ] Bloque D M6–M11: inicio nativo implementado como candidato; adaptación, rendimiento y aceptación física pendientes.
 - [ ] Build/APK nueva: NOT RUN; no se consume el intento remoto con la tanda incompleta. No hay PASS gráfico, de memoria ni rendimiento nuevo.
 
 [Estado, límites y continuación exacta](docs/validation/R5_FINAL_MOBILE_CHECKPOINT.md). Evidencia local en `/workspace/archium-evidence/r5-final-mobile/`. Parche/preparación y pruebas adicionales: ver resultados finales del checkpoint; no usar casillas de implementación como aceptación visual.
 
 Verificación final de este checkpoint: parche reproducible de 159 archivos y preparación SDK37.2 PASS; aplicación/transición de parche 24 PASS; proyección 17 PASS; drag 3 PASS; cobertura del orquestador 2 PASS. No se ejecutó la suite host completa ni el compilador Chromium nativo de este candidato.
+
+## Continuación Desktop/Mobile — candidato incremental (21-oct-2026)
+
+- [x] B: foco estructural de 2dp en controles, prioridad de foco sobre hover y encabezados accesibles en colecciones. Se conservan geometría, anchos, parejas y candidato previo de primer clic. No equivale a aceptación visual D5–D9.
+- [x] C, código local: cuatro acciones inferiores con + destacado, contador, haptic e insets/teclado; omnibox nativa superior con alineación según foco sin sustituir listeners. Menú inferior con acciones Chromium, Back/exterior/deslizamiento de cabecera. Switcher nativo con sus snapshots; selector de Spaces reutiliza store y acciones existentes.
+- [x] D, código local: inicio Archium dentro de la NTP nativa, branding oficial, búsqueda real, favoritos del Space, historial de esta pestaña y configuración. No inyección en webs externas. Contraste de botones según luminancia; se restauran las vistas nativas al salir.
+- [x] Regresión Mobile: cambiar UI no cambia UA/recarga; adjuntar Spaces no sustituye la pestaña actual; una selección explícita de Space pendiente espera al restore. Barra inferior conserva otros cambios de margen.
+- [ ] Pendientes: geometría grande/estados completos de omnibox; cabecera con favicon/seguridad y agrupación visual del menú; zoom +/- dedicado; selector visible y filtrado por Space dentro del Hub; rediseño específico de tarjetas, colores por Space y personalización. No existen datos de color por Space en el modelo actual. Resumir sin backend se omite; no se inventan métricas de bloqueador.
+- [ ] Dispositivo: todos los puntos 50→25→50, drag de sidebar, dropdown estrecho, mouse/touch/stylus, insets/IME/orientación, restauración, contraseñas/passkeys, rendimiento/memoria siguen NOT RUN.
+
+Pruebas locales: Mobile 18 PASS; colecciones 22 PASS; geometría 18 PASS; transición 12 PASS; adapter nativo 12 escenarios PASS con frontera sintética; gates 2 PASS. Parche de 162 archivos regenerado. La compilación Chromium nativa y una APK de este candidato requieren el único intento integrado autorizado. Se actualizan exclusivamente los guards del runner a esta rama; se conserva SHA exacto y checkpoint obligatorio, sin fallback limpio.

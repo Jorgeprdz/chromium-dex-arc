@@ -55,6 +55,18 @@ public class ArcCollectionsFocusTest {
         checkFocus(true);
     }
 
+    @Test
+    public void pointerHoverDoesNotHideKeyboardFocus() {
+        Fixture f=new Fixture();f.view.setAppearance(0xffeeeeee,0xff111111,0xff777777);
+        View space=f.view.findViewWithTag("arc-current-space");
+        var ripple=(android.graphics.drawable.RippleDrawable)space.getBackground();
+        var states=(android.graphics.drawable.StateListDrawable)ripple.getDrawable(0);
+        states.setState(new int[]{android.R.attr.state_enabled,android.R.attr.state_focused});
+        var focus=states.getCurrent();
+        states.setState(new int[]{android.R.attr.state_enabled,android.R.attr.state_focused,android.R.attr.state_hovered});
+        assertSame(focus,states.getCurrent());
+    }
+
     private final class Fixture {
         final Activity activity = createActivity();
         final ArcTabActions.NativeTabs tabs = mock(ArcTabActions.NativeTabs.class);

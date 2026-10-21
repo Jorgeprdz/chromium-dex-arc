@@ -22,13 +22,15 @@ diff --git a/chrome/android/chrome_java_resources.gni b/chrome/android/chrome_ja
 diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java_sources.gni
 --- a/chrome/android/chrome_java_sources.gni
 +++ b/chrome/android/chrome_java_sources.gni
-@@ -5,6 +5,35 @@
+@@ -5,6 +5,37 @@
  import("//content/public/common/features.gni")
 
  chrome_java_sources = [
 +  "java/src/org/chromium/chrome/browser/arc/ArcAboutDialog.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcCollectionsController.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java",
++  "java/src/org/chromium/chrome/browser/arc/ArcMobileControls.java",
++  "java/src/org/chromium/chrome/browser/arc/ArcMobileHomeView.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcNativeTabSession.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcTabActions.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcSidebarProfiles.java",
@@ -1719,7 +1721,15 @@ diff --git a/chrome/android/java/res_chromium_base/values/channel_constants.xml 
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
 --- a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
-@@ -4438,6 +4438,8 @@
+@@ -1701,6 +1701,7 @@
+             if (switcher != null) {
+                 switcher.initWithNative();
+             }
++            initializeArcMobileControls();
+             TabSwitcher incognitoSwitcher = mIncognitoTabSwitcherSupplier.get();
+             if (incognitoSwitcher != null) {
+                 incognitoSwitcher.initWithNative();
+@@ -4438,6 +4439,8 @@
          final Tab currentTab = getActivityTab();
          boolean currentTabIsNtp = isTabNtp(currentTab);
          if (id == R.id.new_tab_menu_id) {
@@ -1728,7 +1738,174 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedAct
              if (!mTabModelSelector.isTabStateInitialized()) {
                  RecordUserAction.record("MobileMenuNewTab.BeforeTabRestore");
              }
-@@ -5618,6 +5620,8 @@
+@@ -5456,9 +5459,166 @@
+         }
+     }
+
++    private org.chromium.chrome.browser.arc.@Nullable ArcMobileControls mArcMobileControls;
++    private org.chromium.chrome.browser.arc.@Nullable ArcNativeTabSession mArcMobileSession;
++    private org.chromium.chrome.browser.tabmodel.@Nullable TabModel mArcMobileModel;
++
++    private void initializeArcMobileControls() {
++        // Keep the controller across window-size changes; visibility follows the actual UI mode.
++        if (mArcMobileControls != null) return;
++        android.view.View content = findViewById(android.R.id.content);
++        if (!(content instanceof android.widget.FrameLayout root) || root.getChildCount() == 0) return;
++        android.view.View browser = root.getChildAt(0);
++        mArcMobileControls = new org.chromium.chrome.browser.arc.ArcMobileControls(this, root, browser,
++                new org.chromium.chrome.browser.arc.ArcMobileControls.Host() {
++            public boolean visible() {
++                return !isFinishing() && !getFullscreenManager().getPersistentFullscreenMode()
++                        && !org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.isDesktopWindow(ChromeTabbedActivity.this);
++            }
++            public int tabCount() { return getCurrentTabModel().getCount(); }
++            public int surface() {
++                if(getCurrentTabModel().isIncognito())return 0xff202124;
++                android.util.TypedValue value=new android.util.TypedValue();
++                if(!getTheme().resolveAttribute(android.R.attr.colorBackground,value,true))return android.graphics.Color.WHITE;
++                return value.resourceId!=0?getColor(value.resourceId):value.data;
++            }
++            public int foreground() { return org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy.foreground(surface()); }
++            public int accent() { return org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.surface(ChromeTabbedActivity.this,getCurrentTabModel().isIncognito()); }
++            public String pageLabel() {
++                Tab tab=getActivityTab();
++                if(tab==null)return getString(R.string.app_name);
++                String host=android.net.Uri.parse(tab.getUrl().getSpec()).getHost();
++                return host==null?getString(R.string.app_name):host;
++            }
++            public android.view.View nativeHomeView() {
++                Tab tab=getActivityTab();
++                return !getCurrentTabModel().isIncognito() && !isInOverviewMode() && tab!=null
++                        && UrlUtilities.isNtpUrl(tab.getUrl())?tab.getView():null;
++            }
++            public android.view.View buildHome() { return buildArcMobileHome(surface(),foreground(),accent()); }
++            public void home() {
++                Tab tab=getActivityTab();
++                if(tab==null)newTab();else tab.loadUrl(new org.chromium.content_public.browser.LoadUrlParams("chrome://newtab/"));
++            }
++            public void newTab() { getMenuOrKeyboardActionController().onMenuOrKeyboardAction(
++                    getCurrentTabModel().isIncognito()?R.id.new_incognito_tab_menu_id:R.id.new_tab_menu_id,false); }
++            public void tabs() { showOverview(); }
++            public void spaces() { if(!getCurrentTabModel().isIncognito())showArcMobileSpaces(); }
++            public java.util.List<org.chromium.chrome.browser.arc.ArcMobileControls.Action> actions() {
++                var actions=new java.util.ArrayList<org.chromium.chrome.browser.arc.ArcMobileControls.Action>();
++                Tab contextual=getActivityTab();
++                if(contextual!=null && contextual.getWebContents()!=null
++                        && (contextual.getUrl().getSpec().startsWith("https://") || contextual.getUrl().getSpec().startsWith("http://"))) {
++                addArcMobileAction(actions,R.id.info_menu_id,R.string.arc_mobile_site_info);
++                addArcMobileAction(actions,R.id.find_in_page_id,R.string.arc_mobile_find);
++                addArcMobileAction(actions,R.id.share_menu_id,R.string.arc_mobile_share);
++                addArcMobileAction(actions,R.id.translate_id,R.string.arc_mobile_translate);
++                addArcMobileAction(actions,R.id.request_desktop_site_id,R.string.arc_mobile_desktop_site);
++                int zoom=getResources().getIdentifier("page_zoom_id","id",getPackageName());
++                if(zoom!=0)addArcMobileAction(actions,zoom,R.string.arc_mobile_zoom);
++                }
++                if (!getCurrentTabModel().isIncognito()) {
++                    actions.add(new org.chromium.chrome.browser.arc.ArcMobileControls.Action(getString(R.string.arc_spaces),()->showArcMobileSpaces()));
++                    Tab tab=getActivityTab();
++                    if(tab!=null)actions.add(new org.chromium.chrome.browser.arc.ArcMobileControls.Action(getString(R.string.arc_pin_current),()-> {
++                        var session=arcMobileSession();
++                        if(session!=null && tab==getActivityTab() && !tab.isDestroyed()) {
++                            try {
++                                new org.chromium.chrome.browser.arc.ArcCollectionsController(session.store(),session.actions(),session)
++                                        .rememberTab(tab.getId(),tab.getUrl().getSpec(),tab.getTitle(),false);
++                            } catch(RuntimeException unavailable) {
++                                android.widget.Toast.makeText(ChromeTabbedActivity.this,R.string.arc_collection_error,android.widget.Toast.LENGTH_SHORT).show();
++                            }
++                        }
++                    }));
++                }
++                actions.add(new org.chromium.chrome.browser.arc.ArcMobileControls.Action(getString(R.string.arc_mobile_more),()->getMenuOrKeyboardActionController().onMenuOrKeyboardAction(R.id.show_menu,false)));
++                return actions;
++            }
++        },getString(R.string.arc_mobile_home),getString(R.string.arc_new_tab),
++                getString(R.string.arc_mobile_tabs)+" / "+getString(R.string.arc_spaces),getString(R.string.arc_mobile_menu));
++        android.view.View address=findViewById(R.id.url_bar);
++        if(address instanceof android.widget.TextView text)mArcMobileControls.bindAddressBar(text);
++    }
++
++    private android.view.@Nullable View buildArcMobileHome(int surface,int foreground,int accent) {
++        var session=arcMobileSession();if(session==null)return null;
++        org.chromium.chrome.browser.arc.ArcSidebarState state;
++        try {state=session.store().load();}catch(RuntimeException unavailable){return null;}
++        String spaceName=getString(R.string.arc_spaces);
++        for(var space:state.spaces())if(space.id.equals(state.selectedSpace()))spaceName=space.name;
++        var favorites=new java.util.ArrayList<org.chromium.chrome.browser.arc.ArcMobileControls.Action>();
++        for(var entry:state.favorites())favorites.add(new org.chromium.chrome.browser.arc.ArcMobileControls.Action(entry.title,()-> {
++            if(arcMobileSession()==session)session.actions().selectOrOpen(entry.id);
++        }));
++        var recent=new java.util.ArrayList<org.chromium.chrome.browser.arc.ArcMobileControls.Action>();
++        Tab current=getActivityTab();
++        if(current!=null && current.getWebContents()!=null) {
++            var history=current.getWebContents().getNavigationController().getNavigationHistory();
++            if(history!=null)for(int i=history.getEntryCount()-1;i>=0 && recent.size()<5;i--) {
++                var entry=history.getEntryAtIndex(i);String url=entry.getUrl().getSpec();
++                if(!url.startsWith("https://") && !url.startsWith("http://"))continue;
++                String title=entry.getTitle();
++                recent.add(new org.chromium.chrome.browser.arc.ArcMobileControls.Action(
++                        title.isEmpty()?url:title,()-> {
++                            if(getActivityTab()==current && !current.isDestroyed())current.loadUrl(new org.chromium.content_public.browser.LoadUrlParams(url));
++                        }));
++            }
++        }
++        return new org.chromium.chrome.browser.arc.ArcMobileHomeView(this,getString(R.string.app_name),spaceName,
++                getString(R.string.arc_command_placeholder),getString(R.string.arc_favorites),getString(R.string.arc_mobile_recent),
++                getString(R.string.arc_mobile_settings),surface,foreground,accent,favorites,recent,
++                ()->getMenuOrKeyboardActionController().onMenuOrKeyboardAction(R.id.focus_and_clear_url_bar,false),
++                this::showArcMobileSpaces,
++                ()->getMenuOrKeyboardActionController().onMenuOrKeyboardAction(R.id.preferences_id,false));
++    }
++
++    private void addArcMobileAction(java.util.List<org.chromium.chrome.browser.arc.ArcMobileControls.Action> actions,
++            int id, int label) {
++        if(id!=0)actions.add(new org.chromium.chrome.browser.arc.ArcMobileControls.Action(getString(label),
++                ()->getMenuOrKeyboardActionController().onMenuOrKeyboardAction(id,false)));
++    }
++    private android.app.@Nullable AlertDialog mArcMobileSpacesDialog;
++
++    private boolean mArcMobileBinding;
++    private org.chromium.chrome.browser.arc.@Nullable ArcNativeTabSession arcMobileSession() {
++        if(mArcMobileBinding)return null;
++        var model=getCurrentTabModel();
++        if(model.isIncognito() || model.getProfile()==null || model.getProfile().shutdownStarted())return null;
++        if(mArcMobileSession!=null && mArcMobileModel==model)return mArcMobileSession;
++        if(mArcMobileSession!=null)mArcMobileSession.destroy();
++        mArcMobileSession=null;mArcMobileModel=model;mArcMobileBinding=true;
++        try {
++            mArcMobileSession=new org.chromium.chrome.browser.arc.ArcNativeTabSession(model,getTabCreator(false),
++                    ()->getCurrentTabModel()==model,()->{if(mArcMobileControls!=null){mArcMobileControls.refresh();mArcMobileControls.invalidateHome();}},false);
++            return mArcMobileSession;
++        } finally {mArcMobileBinding=false;}
++    }
++    private void showArcMobileSpaces() {
++        var session=arcMobileSession();if(session==null)return;
++        org.chromium.chrome.browser.arc.ArcSidebarState state;
++        try { state=session.store().load(); }
++        catch(RuntimeException unavailable) {
++            android.widget.Toast.makeText(this,R.string.arc_collection_error,android.widget.Toast.LENGTH_SHORT).show();return;
++        }
++        var spaces=state.spaces();
++        String[] names=new String[spaces.size()];int selected=0;
++        for(int i=0;i<spaces.size();i++){names[i]=spaces.get(i).name;if(spaces.get(i).id.equals(state.selectedSpace()))selected=i;}
++        if(mArcMobileSpacesDialog!=null)mArcMobileSpacesDialog.dismiss();
++        mArcMobileSpacesDialog=new android.app.AlertDialog.Builder(this).setTitle(R.string.arc_spaces)
++                .setSingleChoiceItems(names,selected,(dialog,index)-> {
++                    if(arcMobileSession()==session) new org.chromium.chrome.browser.arc.ArcCollectionsController(
++                            session.store(),session.actions(),session).selectSpace(spaces.get(index).id);
++                    dialog.dismiss();
++                }).setNegativeButton(android.R.string.cancel,null).show();
++    }
++
+     @Override
+     @SuppressWarnings("NullAway")
+     public void onDestroyInternal() {
++        if(mArcMobileSpacesDialog!=null){mArcMobileSpacesDialog.dismiss();mArcMobileSpacesDialog=null;}
++        if (mArcMobileControls != null) { mArcMobileControls.destroy(); mArcMobileControls=null; }
++        if (mArcMobileSession != null) { mArcMobileSession.destroy(); mArcMobileSession=null; }
+
+         if (mPrefChangeRegistrar != null) {
+             mPrefChangeRegistrar.destroy();
+@@ -5618,6 +5778,8 @@
 
      @Override
      public boolean dispatchKeyEvent(KeyEvent event) {
@@ -2649,26 +2826,13 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
          if (mVerticalTabsPreferenceListener != null) {
              ContextUtils.getAppSharedPreferences()
                      .unregisterOnSharedPreferenceChangeListener(mVerticalTabsPreferenceListener);
-@@ -1977,6 +2007,57 @@
+@@ -1977,6 +2007,44 @@
          return mGlicPromoCoordinator != null;
      }
 
 +    private void prepareArcMobileNavigation() {
-+        if (org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.isDesktopWindow(mActivity)) return;
-+        var selector = mTabModelSelectorSupplier.get();
-+        if (selector == null) return;
-+        for (boolean incognito : new boolean[] {false, true}) {
-+            var model = selector.getModel(incognito);
-+            for (int i = 0; i < model.getCount(); i++) {
-+                Tab tab = model.getTabAt(i);
-+                if (tab == null || tab.isDestroyed()) continue;
-+                tab.setUserAgent(org.chromium.chrome.browser.tab.TabUserAgent.MOBILE);
-+                if (tab.getWebContents() != null
-+                        && org.chromium.chrome.browser.tab.TabUtils.isUsingDesktopUserAgent(tab.getWebContents())) {
-+                    org.chromium.chrome.browser.tab.TabUtils.switchUserAgent(tab, false);
-+                }
-+            }
-+        }
++        // Recreating the native UI must preserve each tab's explicit site/UA preference.
++        // Mobile/Desktop chrome is selected from window policy, never page site mode.
 +    }
 +
 +    private void setArcToolbarSuppressed(boolean suppressed) {
@@ -2707,7 +2871,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
      private void updateTopControlsHeight() {
          updateTopControlsHeight(/* allowAnimations= */ true);
      }
-@@ -2473,35 +2554,101 @@
+@@ -2473,35 +2541,101 @@
          }
 
          if (VerticalTabUtils.isVerticalTabsEligible(mActivity)) {
@@ -2832,7 +2996,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
                  mToolbarManager.setVerticalTabsAutoHiddenSupplier(
                          mVerticalTabsSideUiCoordinator.getIsAutoHiddenSupplier());
              }
-@@ -2600,7 +2747,14 @@
+@@ -2600,7 +2734,14 @@
                              var transitionCoord =
                                      assumeNonNull(mToolbarManager)
                                              .getTabStripTransitionCoordinator();
@@ -2848,7 +3012,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
                          } else {
                              assumeNonNull(mVerticalTabsSideUiCoordinator)
                                      .setVisible(/* show= */ false, /* suppressAnimations= */ false);
-@@ -2679,9 +2833,11 @@
+@@ -2679,9 +2820,11 @@
      private void onVerticalTabsActiveChanged(boolean active) {
          var transitionCoordinator =
                  assumeNonNull(mToolbarManager).getTabStripTransitionCoordinator();
@@ -2861,7 +3025,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
          if (active) {
              transitionCoordinator.suppressTabStrip(true);
          } else {
-@@ -3177,6 +3333,14 @@
+@@ -3177,6 +3320,14 @@
          createBookmarkBarIfNecessary();
      }
 
@@ -2876,7 +3040,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
      // MenuOrKeyboardActionHandler implementation
      @Override
      public boolean handleMenuOrKeyboardAction(int id, boolean fromMenu) {
-@@ -3429,8 +3593,12 @@
+@@ -3429,8 +3580,12 @@
       * activated.
       */
      public BooleanSupplier canActivateTabLayoutToggleMenu() {
@@ -2915,7 +3079,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 diff --git a/chrome/android/junit/BUILD.gn b/chrome/android/junit/BUILD.gn
 --- a/chrome/android/junit/BUILD.gn
 +++ b/chrome/android/junit/BUILD.gn
-@@ -431,6 +431,22 @@
+@@ -431,6 +431,23 @@
    # down.
    robolectric_library("chrome_junit_tests_org.chromium.chrome.browser") {
      sources = [
@@ -2932,13 +3096,14 @@ diff --git a/chrome/android/junit/BUILD.gn b/chrome/android/junit/BUILD.gn
 +      "src/org/chromium/chrome/browser/arc/ArcSplitViewCoordinatorTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcOmniboxPlacementTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcCollectionsFocusTest.java",
++      "src/org/chromium/chrome/browser/arc/ArcMobileControlsTest.java",
 +      "src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearanceTest.java",
 +      "src/org/chromium/chrome/browser/toolbar/top/ArcToolbarReparentingTest.java",
 +      "src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/ArcTabSelectionTest.java",
        "//chrome/android/java/src/org/chromium/chrome/browser/bottombar/BottomBarAppMenuUpdateBadgeControllerUnitTest.java",
        "//chrome/android/java/src/org/chromium/chrome/browser/bottombar/BottomBarContainerCoordinatorUnitTest.java",
        "src/org/chromium/chrome/browser/BrowserExitReasonTrackerUnitTest.java",
-@@ -463,6 +479,7 @@
+@@ -463,6 +480,7 @@
      ]
 
      deps = [
@@ -6440,7 +6605,7 @@ diff --git a/chrome/android/java/res/values/arc_strings.xml b/chrome/android/jav
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/res/values/arc_strings.xml
-@@ -0,0 +1,85 @@
+@@ -0,0 +1,97 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<resources>
 +    <string name="arc_about">Acerca de Archium</string>
@@ -6525,6 +6690,18 @@ new file mode 100644
 +    <string name="arc_split_controls">Arrastra para redimensionar; pulsa para ver opciones</string>
 +    <string name="arc_split_swap">Intercambiar paneles</string>
 +    <string name="arc_split_dialog_open">Cierra el diálogo actual antes de cambiar la vista.</string>
++    <string name="arc_mobile_home">Inicio</string>
++    <string name="arc_mobile_tabs">Pestañas</string>
++    <string name="arc_mobile_menu">Menú</string>
++    <string name="arc_mobile_site_info">Información del sitio</string>
++    <string name="arc_mobile_find">Buscar en la página</string>
++    <string name="arc_mobile_share">Compartir</string>
++    <string name="arc_mobile_translate">Traducir</string>
++    <string name="arc_mobile_desktop_site">Sitio de escritorio</string>
++    <string name="arc_mobile_zoom">Zoom</string>
++    <string name="arc_mobile_more">Más herramientas</string>
++    <string name="arc_mobile_recent">Recientes en esta pestaña</string>
++    <string name="arc_mobile_settings">Configuración</string>
 +</resources>
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAboutDialog.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAboutDialog.java
 new file mode 100644
@@ -6785,7 +6962,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollecti
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java
-@@ -0,0 +1,517 @@
+@@ -0,0 +1,522 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -6880,6 +7057,7 @@ new file mode 100644
 +        mFavorites = new GridLayout(activity);
 +        mFavorites.setColumnCount(2);
 +        mFavorites.setContentDescription(activity.getString(R.string.arc_favorites));
++        mFavorites.setAccessibilityHeading(true);
 +        mFavoritesScroll = new BoundedScrollView(activity);
 +        mFavoritesScroll.setBudget(dp(216));
 +        mFavoritesScroll.setTag("arc-favorites-mosaic");
@@ -6894,11 +7072,13 @@ new file mode 100644
 +        addView(mFavoritesMenu, new LayoutParams(-1, dp(44)));
 +        mSpace = button("", this::showSpaces);
 +        mSpace.setTag("arc-current-space");
++        mSpace.setAccessibilityHeading(true);
 +        mSpace.setContentDescription(activity.getString(R.string.arc_spaces));
 +        addView(mSpace, new LayoutParams(-1, dp(44)));
 +        mEntries = new LinearLayout(activity);
 +        mEntries.setOrientation(VERTICAL);
 +        mEntries.setContentDescription(activity.getString(R.string.arc_pinned_tabs));
++        mEntries.setAccessibilityHeading(true);
 +        mScroll = new BoundedScrollView(activity);
 +        mScroll.setTag("arc-collection-scroll");
 +        mScroll.addView(mEntries);
@@ -7046,8 +7226,10 @@ new file mode 100644
 +                Button button = (Button) child;
 +                button.setTextColor(mForeground);
 +                StateListDrawable states = new StateListDrawable();
-+                states.addState(new int[] {android.R.attr.state_hovered}, background(mInteraction, 10));
-+                states.addState(new int[] {android.R.attr.state_focused}, background(mInteraction, 10));
++                GradientDrawable focus = background(mInteraction, 10);
++                focus.setStroke(dp(2), mForeground);
++                states.addState(new int[] {android.R.attr.state_enabled,android.R.attr.state_focused}, focus);
++                states.addState(new int[] {android.R.attr.state_enabled,android.R.attr.state_hovered}, background(mInteraction, 10));
 +                states.addState(new int[] {}, background(Color.TRANSPARENT, 10));
 +                button.setBackground(new RippleDrawable(ColorStateList.valueOf(mInteraction), states, null));
 +            } else if (child instanceof android.view.ViewGroup) {
@@ -8195,7 +8377,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopC
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
-@@ -0,0 +1,1488 @@
+@@ -0,0 +1,1490 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -9621,6 +9803,8 @@ new file mode 100644
 +            GradientDrawable active = new GradientDrawable();
 +            active.setColor(selection);
 +            active.setCornerRadius(dp(8));
++            // Keyboard focus has a structural cue, independent of the fill/hover color.
++            if (state == android.R.attr.state_focused) active.setStroke(dp(2), foreground);
 +            states.addState(new int[] {android.R.attr.state_enabled, state}, active);
 +        }
 +        GradientDrawable idle = new GradientDrawable();
@@ -9831,11 +10015,350 @@ new file mode 100644
 +        cancel();
 +    }
 +}
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcMobileControls.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcMobileControls.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcMobileControls.java
+@@ -0,0 +1,274 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++import android.app.Activity;
++import android.app.Dialog;
++import android.graphics.Color;
++import android.graphics.drawable.GradientDrawable;
++import android.graphics.drawable.RippleDrawable;
++import android.content.res.ColorStateList;
++import android.view.Gravity;
++import android.view.HapticFeedbackConstants;
++import android.view.MotionEvent;
++import android.view.View;
++import android.view.ViewGroup;
++import android.view.Window;
++import android.view.WindowInsets;
++import android.view.WindowManager;
++import android.widget.Button;
++import android.widget.FrameLayout;
++import android.widget.LinearLayout;
++import android.widget.ScrollView;
++import android.widget.TextView;
++import java.util.List;
++
++/** Native mobile chrome only. The host owns Chromium actions, tabs, snapshots and profile state. */
++public final class ArcMobileControls {
++    public interface Host {
++        boolean visible();
++        int tabCount();
++        int surface();
++        int foreground();
++        int accent();
++        String pageLabel();
++        void home();
++        void newTab();
++        void tabs();
++        void spaces();
++        List<Action> actions();
++        default View nativeHomeView() { return null; }
++        default View buildHome() { return null; }
++    }
++    public static final class Action {
++        public final String label;
++        public final Runnable run;
++        public Action(String label, Runnable run) { this.label = label; this.run = run; }
++    }
++    private final Activity mActivity;
++    private final Host mHost;
++    private final FrameLayout mRoot;
++    private final View mBrowser;
++    private int mReservedBottom;
++    private final LinearLayout mBar;
++    private final Button mTabs;
++    private final String mTabsLabel;
++    private final android.view.ViewTreeObserver.OnGlobalLayoutListener mLayout = this::refresh;
++    private Dialog mSheet;
++    private View mNativeHome, mHome;
++    private FrameLayout mHomeParent;
++    private final java.util.Map<View,int[]> mHomeChildren=new java.util.IdentityHashMap<>();
++    private boolean mUpdatingHome;
++    private TextView mAddress;
++    private int mAddressGravity, mAddressAlignment;
++    private final android.view.ViewTreeObserver.OnGlobalFocusChangeListener mFocus = (oldFocus,newFocus) -> refreshAddress();
++    private boolean mDestroyed;
++    private int mInset;
++    private int mSurface, mForeground, mAccent;
++    private boolean mPaletteSet;
++
++    public ArcMobileControls(Activity activity, FrameLayout root, View browser, Host host,
++            String home, String add, String tabs, String menu) {
++        mActivity = activity; mRoot = root; mBrowser = browser; mHost = host; mTabsLabel=tabs;
++        mBar = new LinearLayout(activity);
++        mBar.setGravity(Gravity.CENTER); mBar.setElevation(dp(3));
++        mBar.setTag("archium-mobile-navigation");
++        addButton("⌂", home, host::home, false);
++        addButton("+", add, host::newTab, true);
++        mTabs = addButton("0", tabs, host::tabs, false);
++        mTabs.setOnLongClickListener(view -> { if(mDestroyed)return false;host.spaces();return true; });
++        addButton("⋮", menu, this::showMenu, false);
++        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(-1, dp(64), Gravity.BOTTOM);
++        root.addView(mBar, params);
++        mBar.setOnApplyWindowInsetsListener((view, insets) -> {
++            int bottom = android.os.Build.VERSION.SDK_INT >= 30
++                    ? insets.getInsets(WindowInsets.Type.systemBars() | WindowInsets.Type.displayCutout()).bottom
++                    : insets.getSystemWindowInsetBottom();
++            if (bottom != mInset) {
++                mInset = bottom;
++                mBar.setPadding(0,0,0,bottom);
++                ViewGroup.LayoutParams size = mBar.getLayoutParams(); size.height = dp(64)+bottom;
++                mBar.setLayoutParams(size);
++            }
++            refresh(); return insets;
++        });
++        root.getViewTreeObserver().addOnGlobalLayoutListener(mLayout);
++        mBar.requestApplyInsets(); refresh();
++    }
++    private int dp(int value) { return Math.round(value*mActivity.getResources().getDisplayMetrics().density); }
++    private Button addButton(String text, String label, Runnable action, boolean primary) {
++        Button button = new Button(mActivity);
++        button.setText(text); button.setTextSize(primary ? 30 : 22);
++        button.setContentDescription(label); button.setTooltipText(label);button.setSingleLine(true);
++        button.setMinWidth(0); button.setMinimumWidth(0); button.setPadding(0,0,0,0);
++        button.setTag(primary ? "archium-mobile-new-tab" : label);
++        button.setOnClickListener(view -> {
++            if (mDestroyed) return;
++            view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);
++            action.run(); refresh();
++        });
++        LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(0,dp(48),1);
++        params.setMargins(dp(4),dp(8),dp(4),dp(8));
++        mBar.addView(button, params);
++        return button;
++    }
++    public void bindAddressBar(TextView address) {
++        if (mAddress != null) return;
++        mAddress=address;mAddressGravity=address.getGravity();mAddressAlignment=address.getTextAlignment();
++        mRoot.getViewTreeObserver().addOnGlobalFocusChangeListener(mFocus);
++        refreshAddress();
++    }
++    private void refreshAddress() {
++        if(mDestroyed || mAddress==null)return;
++        if(!mHost.visible()) {
++            mAddress.setGravity(mAddressGravity);mAddress.setTextAlignment(mAddressAlignment);return;
++        }
++        // Observe focus without replacing Chromium's touch/focus listeners or moving its editor.
++        mAddress.setTextAlignment(View.TEXT_ALIGNMENT_GRAVITY);
++        mAddress.setGravity((mAddress.hasFocus()?Gravity.START:Gravity.CENTER_HORIZONTAL)|Gravity.CENTER_VERTICAL);
++    }
++    public void refresh() {
++        if (mDestroyed) return;
++        refreshAddress();refreshHome();
++        WindowInsets insets = mRoot.getRootWindowInsets();
++        boolean ime = insets != null && android.os.Build.VERSION.SDK_INT >= 30
++                && insets.isVisible(WindowInsets.Type.ime());
++        boolean visible = mHost.visible() && !ime;
++        mBar.setVisibility(visible ? View.VISIBLE : View.GONE);
++        if (!visible && mSheet != null) mSheet.dismiss();
++        if (mBrowser.getLayoutParams() instanceof ViewGroup.MarginLayoutParams params) {
++            int reservation=visible?dp(64)+mInset:0;
++            int margin = params.bottomMargin-mReservedBottom+reservation;
++            mReservedBottom=reservation;
++            if (params.bottomMargin != margin) { params.bottomMargin=margin; mBrowser.setLayoutParams(params); }
++        }
++        String count = Integer.toString(mHost.tabCount());
++        if (!count.contentEquals(mTabs.getText())) {
++            mTabs.setText(count);mTabs.setContentDescription(mTabsLabel+", "+count);
++        }
++        int surface = mHost.surface(), foreground = mHost.foreground(), accent = mHost.accent();
++        if (mPaletteSet && mSurface == surface && mForeground == foreground && mAccent == accent) return;
++        mPaletteSet=true;mSurface=surface;mForeground=foreground;mAccent=accent;
++        mBar.setBackgroundColor(surface);
++        for (int i=0;i<mBar.getChildCount();i++) {
++            Button button=(Button)mBar.getChildAt(i);
++            boolean primary=i==1;
++            GradientDrawable shape=new GradientDrawable(); shape.setCornerRadius(dp(primary?24:12));
++            shape.setColor(primary?accent:Color.TRANSPARENT);
++            shape.setStroke(dp(1),foreground);
++            button.setTextColor(primary?contrast(accent):foreground);
++            button.setBackground(new RippleDrawable(ColorStateList.valueOf((foreground&0xffffff)|0x24000000),shape,null));
++        }
++    }
++    public void invalidateHome() { clearHome();refreshHome(); }
++    private void refreshHome() {
++        if(mUpdatingHome)return;mUpdatingHome=true;
++        try {
++            View owner=mHost.visible()?mHost.nativeHomeView():null;
++            if(owner!=mNativeHome || (mHome!=null && mHome.getParent()!=mHomeParent)) {
++                clearHome();
++                // Insert into the actual native NTP, below dialogs and inside native thumbnails.
++                // Unsupported native-page containers retain their original Chromium surface.
++                if(!(owner instanceof FrameLayout parent))return;
++                View home=mHost.buildHome();
++                if(home==null || mHost.nativeHomeView()!=owner)return;
++                mNativeHome=owner;mHome=home;mHomeParent=parent;
++                parent.addView(home,new FrameLayout.LayoutParams(-1,-1));
++            }
++            if(mHomeParent==null)return;
++            for(int i=0;i<mHomeParent.getChildCount();i++) {
++                View child=mHomeParent.getChildAt(i);
++                if(child==mHome || mHomeChildren.containsKey(child))continue;
++                mHomeChildren.put(child,new int[]{child.getVisibility(),child.getImportantForAccessibility()});
++                child.setVisibility(View.INVISIBLE);
++                child.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS);
++            }
++        } finally {mUpdatingHome=false;}
++    }
++    private void clearHome() {
++        if(mHome!=null && mHomeParent!=null)mHomeParent.removeView(mHome);
++        for(var item:mHomeChildren.entrySet()) {
++            View child=item.getKey();int[] state=item.getValue();
++            // Preserve any later visibility/accessibility decision made by Chromium itself.
++            if(child.getVisibility()==View.INVISIBLE)child.setVisibility(state[0]);
++            if(child.getImportantForAccessibility()==View.IMPORTANT_FOR_ACCESSIBILITY_NO_HIDE_DESCENDANTS)
++                child.setImportantForAccessibility(state[1]);
++        }
++        mHomeChildren.clear();mHome=null;mNativeHome=null;mHomeParent=null;
++    }
++    static int contrast(int color) {
++        // Used for the solid + surface; the host supplies its established page/theme palette.
++        double luminance=0;
++        for (int i=0;i<3;i++) {
++            double c=((color>>(16-8*i))&255)/255.0;
++            c=c<=.04045?c/12.92:Math.pow((c+.055)/1.055,2.4);
++            luminance+=c*(i==0?.2126:i==1?.7152:.0722);
++        }
++        return luminance>.179?Color.BLACK:Color.WHITE;
++    }
++    public void showMenu() {
++        if (mDestroyed || !mHost.visible()) return;
++        if (mSheet != null) mSheet.dismiss();
++        Dialog dialog=new Dialog(mActivity); mSheet=dialog;
++        dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
++        LinearLayout content=new LinearLayout(mActivity);content.setOrientation(LinearLayout.VERTICAL);
++        content.setPadding(dp(20),dp(12),dp(20),dp(20));
++        GradientDrawable background=new GradientDrawable();background.setColor(mHost.surface());
++        background.setCornerRadii(new float[]{dp(24),dp(24),dp(24),dp(24),0,0,0,0});
++        content.setBackground(background);
++        TextView heading=new TextView(mActivity);heading.setText(mHost.pageLabel());
++        heading.setTextColor(mHost.foreground());heading.setTextSize(18);heading.setAccessibilityHeading(true);
++        heading.setPadding(0,dp(12),0,dp(16));content.addView(heading);
++        final float[] down={0};
++        heading.setOnTouchListener((view,event)-> {
++            if(event.getActionMasked()==MotionEvent.ACTION_DOWN){down[0]=event.getRawY();return true;}
++            if(event.getActionMasked()==MotionEvent.ACTION_UP){
++                if(event.getRawY()-down[0]>dp(48))dialog.dismiss();else view.performClick();
++                return true;
++            }
++            return event.getActionMasked()==MotionEvent.ACTION_MOVE;
++        });
++        for(Action action:mHost.actions()) {
++            Button button=new Button(mActivity);button.setText(action.label);button.setAllCaps(false);
++            button.setTextColor(mHost.foreground());button.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);
++            button.setOnClickListener(view->{dialog.dismiss();if(!mDestroyed)action.run.run();});
++            content.addView(button,new LinearLayout.LayoutParams(-1,dp(52)));
++        }
++        ScrollView scroll=new ScrollView(mActivity) {
++            @Override protected void onMeasure(int widthSpec,int heightSpec) {
++                int cap=Math.min(dp(600),Math.max(dp(200),mRoot.getHeight()*3/4));
++                if(MeasureSpec.getMode(heightSpec)!=MeasureSpec.UNSPECIFIED)cap=Math.min(cap,MeasureSpec.getSize(heightSpec));
++                super.onMeasure(widthSpec,MeasureSpec.makeMeasureSpec(cap,MeasureSpec.AT_MOST));
++            }
++        };
++        scroll.setFillViewport(false);scroll.addView(content);
++        scroll.setOnApplyWindowInsetsListener((view,insets)-> {
++            if(android.os.Build.VERSION.SDK_INT >= 30) {
++                var safe=insets.getInsets(WindowInsets.Type.systemBars()|WindowInsets.Type.displayCutout());
++                view.setPadding(safe.left,0,safe.right,safe.bottom);
++            } else view.setPadding(0,0,0,insets.getSystemWindowInsetBottom());
++            return insets;
++        });
++        dialog.setContentView(scroll);dialog.setCanceledOnTouchOutside(true);
++        Window window=dialog.getWindow();
++        if(window!=null) {
++            window.setBackgroundDrawableResource(android.R.color.transparent);
++            window.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
++            window.setDimAmount(.22f);window.setGravity(Gravity.BOTTOM);
++            window.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE);
++        }
++        dialog.show();
++        if(window!=null)window.setLayout(-1,ViewGroup.LayoutParams.WRAP_CONTENT);
++    }
++    public void destroy() {
++        if(mDestroyed)return; mDestroyed=true;clearHome();
++        if(mSheet!=null)mSheet.dismiss();mRoot.getViewTreeObserver().removeOnGlobalLayoutListener(mLayout);
++        mBar.setOnApplyWindowInsetsListener(null);mRoot.removeView(mBar);
++        mRoot.getViewTreeObserver().removeOnGlobalFocusChangeListener(mFocus);
++        if(mAddress!=null){mAddress.setGravity(mAddressGravity);mAddress.setTextAlignment(mAddressAlignment);mAddress=null;}
++        if(mBrowser.getLayoutParams() instanceof ViewGroup.MarginLayoutParams params) {
++            params.bottomMargin-=mReservedBottom;mReservedBottom=0;mBrowser.setLayoutParams(params);
++        }
++    }
++}
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcMobileHomeView.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcMobileHomeView.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcMobileHomeView.java
+@@ -0,0 +1,55 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++import android.app.Activity;
++import android.graphics.drawable.GradientDrawable;
++import android.view.Gravity;
++import android.view.View;
++import android.widget.Button;
++import android.widget.ImageView;
++import android.widget.LinearLayout;
++import android.widget.ScrollView;
++import android.widget.TextView;
++import java.util.List;
++
++/** A native Archium home surface; the host attaches it only to its native NTP container. */
++public final class ArcMobileHomeView extends ScrollView {
++    public ArcMobileHomeView(Activity activity,String brand,String space,String search,
++            String favoritesLabel,String recentLabel,String settings,int surface,int foreground,int accent,
++            List<ArcMobileControls.Action> favorites,List<ArcMobileControls.Action> recent,
++            Runnable focusSearch,Runnable spaces,Runnable customize) {
++        super(activity);
++        setTag("archium-mobile-home");setFillViewport(true);setBackgroundColor(surface);
++        LinearLayout content=new LinearLayout(activity);content.setOrientation(LinearLayout.VERTICAL);
++        content.setPadding(dp(24),dp(32),dp(24),dp(24));addView(content);
++        ImageView logo=new ImageView(activity);
++        logo.setImageDrawable(activity.getApplicationInfo().loadIcon(activity.getPackageManager()));
++        logo.setScaleType(ImageView.ScaleType.FIT_CENTER);logo.setContentDescription(brand);
++        LinearLayout.LayoutParams icon=new LinearLayout.LayoutParams(dp(56),dp(56));icon.bottomMargin=dp(16);content.addView(logo,icon);
++        TextView title=new TextView(activity);title.setText(brand);title.setTextSize(28);title.setTextColor(foreground);
++        title.setAccessibilityHeading(true);content.addView(title);
++        addAction(content,new ArcMobileControls.Action(space,spaces),foreground,accent);
++        addAction(content,new ArcMobileControls.Action(search,focusSearch),foreground,accent);
++        addSection(content,favoritesLabel,favorites,foreground,accent);
++        addSection(content,recentLabel,recent,foreground,accent);
++        addAction(content,new ArcMobileControls.Action(settings,customize),foreground,surface);
++    }
++    private int dp(int value){return Math.round(value*getResources().getDisplayMetrics().density);}
++    private void addSection(LinearLayout content,String label,List<ArcMobileControls.Action> actions,int foreground,int accent) {
++        if(actions.isEmpty())return;
++        TextView heading=new TextView(getContext());heading.setText(label);heading.setTextColor(foreground);
++        heading.setTextSize(16);heading.setAccessibilityHeading(true);heading.setPadding(0,dp(24),0,dp(8));content.addView(heading);
++        for(ArcMobileControls.Action action:actions)addAction(content,action,foreground,accent);
++    }
++    private void addAction(LinearLayout content,ArcMobileControls.Action action,int foreground,int surface) {
++        int textColor=ArcMobileControls.contrast(surface);
++        Button button=new Button(getContext());button.setAllCaps(false);button.setText(action.label);
++        button.setGravity(Gravity.START|Gravity.CENTER_VERTICAL);button.setTextColor(textColor);
++        button.setPadding(dp(16),0,dp(16),0);button.setMaxLines(2);
++        GradientDrawable background=new GradientDrawable();background.setCornerRadius(dp(16));background.setColor(surface);
++        button.setBackground(new android.graphics.drawable.RippleDrawable(android.content.res.ColorStateList.valueOf((textColor&0xffffff)|0x24000000),background,null));
++        button.setOnClickListener(view->action.run.run());
++        LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(-1,dp(56));params.topMargin=dp(8);content.addView(button,params);
++    }
++}
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcNativeTabSession.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcNativeTabSession.java
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcNativeTabSession.java
-@@ -0,0 +1,342 @@
+@@ -0,0 +1,353 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -9880,11 +10403,20 @@ new file mode 100644
 +    private final TabWindowManager mWindowManager;
 +    private final TabWindowManager.Observer mWindowObserver;
 +    private RestoreState mRestoreState;
++    private final boolean mRestoreSpaceSelection;
++    private boolean mPendingSpaceSelection;
 +    private boolean mDestroyed;
 +
 +    public ArcNativeTabSession(TabModel model, TabCreator creator,
 +            BooleanSupplier isCurrentModel, Runnable onStateChanged) {
++        this(model, creator, isCurrentModel, onStateChanged, true);
++    }
++
++    /** Mobile uses the same metadata without replacing the native tab selected during restore. */
++    public ArcNativeTabSession(TabModel model, TabCreator creator,
++            BooleanSupplier isCurrentModel, Runnable onStateChanged, boolean restoreSpaceSelection) {
 +        ThreadUtils.assertOnUiThread();
++        mRestoreSpaceSelection = restoreSpaceSelection;
 +        Profile profile = model.getProfile();
 +        if (profile == null || profile.shutdownStarted()) {
 +            throw new IllegalStateException("Arc tab profile is not initialized");
@@ -10078,9 +10610,10 @@ new file mode 100644
 +    }
 +
 +    private void selectForActiveSpaceAfterRestore() {
-+        if (!active() || !restoreComplete()) return;
++        if ((!mRestoreSpaceSelection && !mPendingSpaceSelection) || !active() || !restoreComplete()) return;
 +        try {
 +            selectForActiveSpace(mStore.load());
++            mPendingSpaceSelection = false;
 +        } catch (RuntimeException ignored) {
 +            // Metadata failure must not close, move, or otherwise mutate native tabs.
 +        }
@@ -10159,6 +10692,7 @@ new file mode 100644
 +        // Do not create/select based on an incomplete restore. The persisted Space selection is
 +        // already committed; once restoreCompleted() arrives we choose a valid real tab.
 +        if (restoreComplete()) selectForActiveSpace(state);
++        else mPendingSpaceSelection = true;
 +        mOnStateChanged.run();
 +    }
 +
@@ -12524,7 +13058,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCollect
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCollectionsFocusTest.java
-@@ -0,0 +1,266 @@
+@@ -0,0 +1,278 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -12580,6 +13114,18 @@ new file mode 100644
 +    @Test
 +    public void focusedFavoriteSurvivesRefreshByIdentity() {
 +        checkFocus(true);
++    }
++
++    @Test
++    public void pointerHoverDoesNotHideKeyboardFocus() {
++        Fixture f=new Fixture();f.view.setAppearance(0xffeeeeee,0xff111111,0xff777777);
++        View space=f.view.findViewWithTag("arc-current-space");
++        var ripple=(android.graphics.drawable.RippleDrawable)space.getBackground();
++        var states=(android.graphics.drawable.StateListDrawable)ripple.getDrawable(0);
++        states.setState(new int[]{android.R.attr.state_enabled,android.R.attr.state_focused});
++        var focus=states.getCurrent();
++        states.setState(new int[]{android.R.attr.state_enabled,android.R.attr.state_focused,android.R.attr.state_hovered});
++        assertSame(focus,states.getCurrent());
 +    }
 +
 +    private final class Fixture {
@@ -13498,6 +14044,150 @@ new file mode 100644
 +        dispatch.schedule(host, runs::incrementAndGet);
 +        shadowOf(Looper.getMainLooper()).idle();
 +        assertEquals(0, runs.get());
++    }
++}
+diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcMobileControlsTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcMobileControlsTest.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcMobileControlsTest.java
+@@ -0,0 +1,139 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++import static org.junit.Assert.*;
++import android.app.Activity;
++import android.view.View;
++import android.view.ViewGroup;
++import android.widget.FrameLayout;
++import android.widget.LinearLayout;
++import android.widget.Button;
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.robolectric.Robolectric;
++import org.robolectric.RobolectricTestRunner;
++import org.robolectric.annotation.Config;
++import org.robolectric.annotation.GraphicsMode;
++import org.robolectric.annotation.SQLiteMode;
++import java.util.List;
++@RunWith(RobolectricTestRunner.class)
++@Config(manifest=Config.NONE,sdk={30,36})
++@GraphicsMode(GraphicsMode.Mode.LEGACY)
++@SQLiteMode(SQLiteMode.Mode.LEGACY)
++public class ArcMobileControlsTest {
++    static class Host implements ArcMobileControls.Host {
++        boolean visible=true;int home,add,tabs,find,spaces;int count=3;FrameLayout nativeHome;
++        public View nativeHomeView(){return nativeHome;}
++        public View buildHome(){return nativeHome==null?null:new View(nativeHome.getContext());}
++        public boolean visible(){return visible;}public int tabCount(){return count;}
++        public int surface(){return 0xffeeeeee;}public int foreground(){return 0xff111111;}public int accent(){return 0xff345678;}
++        public String pageLabel(){return "example.test";}
++        public void home(){home++;}public void newTab(){add++;}public void tabs(){tabs++;}public void spaces(){spaces++;}
++        public List<ArcMobileControls.Action> actions(){return List.of(new ArcMobileControls.Action("Find",()->find++));}
++    }
++    @Test public void fourActionsRouteToHostAndRestoreContentMargin() {
++        var controller=Robolectric.buildActivity(Activity.class).setup();Activity a=controller.get();
++        FrameLayout root=new FrameLayout(a);View browser=new View(a);
++        FrameLayout.LayoutParams params=new FrameLayout.LayoutParams(-1,-1);params.bottomMargin=7;
++        root.addView(browser,params);a.setContentView(root);
++        Host host=new Host();ArcMobileControls controls=new ArcMobileControls(a,root,browser,host,"Home","New","Tabs","Menu");
++        LinearLayout bar=root.findViewWithTag("archium-mobile-navigation");
++        assertEquals(4,bar.getChildCount());
++        for(int i=0;i<3;i++)assertTrue(bar.getChildAt(i).performClick());
++        assertEquals(1,host.home);assertEquals(1,host.add);assertEquals(1,host.tabs);
++        assertTrue(bar.getChildAt(2).performLongClick());assertEquals(1,host.spaces);
++        host.count=8;controls.refresh();assertEquals("8",((Button)bar.getChildAt(2)).getText().toString());
++        assertTrue(((ViewGroup.MarginLayoutParams)browser.getLayoutParams()).bottomMargin>7);
++        host.visible=false;controls.refresh();assertEquals(View.GONE,bar.getVisibility());
++        assertEquals(7,((ViewGroup.MarginLayoutParams)browser.getLayoutParams()).bottomMargin);
++        controls.destroy();assertEquals(1,root.getChildCount());
++        controller.pause().stop().destroy();
++    }
++    @Test public void menuContainsOnlyRealHostActionsAndDismissesOnExecution() {
++        var controller=Robolectric.buildActivity(Activity.class).setup();Activity a=controller.get();
++        FrameLayout root=new FrameLayout(a);View browser=new View(a);root.addView(browser,new FrameLayout.LayoutParams(-1,-1));a.setContentView(root);
++        root.layout(0,0,400,900);Host host=new Host();
++        ArcMobileControls controls=new ArcMobileControls(a,root,browser,host,"Home","New","Tabs","Menu");
++        controls.showMenu();android.app.Dialog dialog=org.robolectric.shadows.ShadowDialog.getLatestDialog();
++        assertTrue(dialog.isShowing());
++        android.widget.ScrollView scroll=(android.widget.ScrollView)((ViewGroup)dialog.findViewById(android.R.id.content)).getChildAt(0);
++        LinearLayout content=(LinearLayout)scroll.getChildAt(0);assertEquals(2,content.getChildCount());
++        assertTrue(content.getChildAt(1).performClick());assertEquals(1,host.find);assertFalse(dialog.isShowing());
++        controls.destroy();controller.pause().stop().destroy();
++    }
++    @Test public void releasingNavigationKeepsOtherBrowserMarginChanges() {
++        var controller=Robolectric.buildActivity(Activity.class).setup();Activity a=controller.get();
++        FrameLayout root=new FrameLayout(a);View browser=new View(a);
++        root.addView(browser,new FrameLayout.LayoutParams(-1,-1));a.setContentView(root);
++        Host host=new Host();ArcMobileControls controls=new ArcMobileControls(a,root,browser,host,"Home","New","Tabs","Menu");
++        var params=(ViewGroup.MarginLayoutParams)browser.getLayoutParams();params.bottomMargin+=13;
++        browser.setLayoutParams(params);controls.refresh();
++        host.visible=false;controls.refresh();
++        assertEquals(13,((ViewGroup.MarginLayoutParams)browser.getLayoutParams()).bottomMargin);
++        host.visible=true;controls.refresh();controls.destroy();
++        assertEquals(13,((ViewGroup.MarginLayoutParams)browser.getLayoutParams()).bottomMargin);
++        controller.pause().stop().destroy();
++    }
++    @Test public void addressFocusKeepsNativeListenerAndRestoresAlignment() {
++        var controller=Robolectric.buildActivity(Activity.class).setup();Activity a=controller.get();
++        FrameLayout root=new FrameLayout(a);View browser=new View(a);root.addView(browser,new FrameLayout.LayoutParams(-1,-1));
++        android.widget.EditText address=new android.widget.EditText(a);root.addView(address);a.setContentView(root);
++        address.setGravity(android.view.Gravity.END);int originalGravity=address.getGravity();int[] focus={0};
++        address.setOnFocusChangeListener((view,focused)->focus[0]++);
++        Host host=new Host();ArcMobileControls controls=new ArcMobileControls(a,root,browser,host,"Home","New","Tabs","Menu");
++        controls.bindAddressBar(address);address.requestFocus();controls.refresh();
++        assertEquals(android.view.Gravity.START|android.view.Gravity.CENTER_VERTICAL,address.getGravity());
++        assertNotNull(address.getOnFocusChangeListener());
++        controls.destroy();assertEquals(originalGravity,address.getGravity());
++        controller.pause().stop().destroy();
++    }
++    @Test public void sheetHeaderSwipeClosesWithoutInvokingAnAction() {
++        var controller=Robolectric.buildActivity(Activity.class).setup();Activity a=controller.get();
++        FrameLayout root=new FrameLayout(a);View browser=new View(a);root.addView(browser,new FrameLayout.LayoutParams(-1,-1));a.setContentView(root);
++        root.layout(0,0,400,900);Host host=new Host();ArcMobileControls controls=new ArcMobileControls(a,root,browser,host,"Home","New","Tabs","Menu");
++        controls.showMenu();android.app.Dialog dialog=org.robolectric.shadows.ShadowDialog.getLatestDialog();
++        android.widget.ScrollView scroll=(android.widget.ScrollView)((ViewGroup)dialog.findViewById(android.R.id.content)).getChildAt(0);
++        View header=((LinearLayout)scroll.getChildAt(0)).getChildAt(0);
++        float distance=100*a.getResources().getDisplayMetrics().density;
++        android.view.MotionEvent down=android.view.MotionEvent.obtain(0,0,0,0,0,0);
++        android.view.MotionEvent up=android.view.MotionEvent.obtain(0,10,1,0,distance,0);
++        header.dispatchTouchEvent(down);header.dispatchTouchEvent(up);down.recycle();up.recycle();
++        assertFalse(dialog.isShowing());assertEquals(0,host.find);
++        controls.destroy();controller.pause().stop().destroy();
++    }
++    @Test public void homeUsesNativePageContainerAndRestoresOriginalChildren() {
++        var controller=Robolectric.buildActivity(Activity.class).setup();Activity a=controller.get();
++        FrameLayout root=new FrameLayout(a),browser=new FrameLayout(a),nativePage=new FrameLayout(a);
++        root.addView(browser,new FrameLayout.LayoutParams(-1,-1));browser.addView(nativePage,new FrameLayout.LayoutParams(-1,-1));
++        View original=new View(a);nativePage.addView(original);a.setContentView(root);
++        Host host=new Host();host.nativeHome=nativePage;
++        ArcMobileControls controls=new ArcMobileControls(a,root,browser,host,"Home","New","Tabs","Menu");
++        assertEquals(2,nativePage.getChildCount());assertEquals(View.INVISIBLE,original.getVisibility());
++        // A transition to a real page/Hub releases the native NTP; nothing overlays the window.
++        host.nativeHome=null;controls.refresh();assertEquals(1,nativePage.getChildCount());assertEquals(View.VISIBLE,original.getVisibility());
++        controls.destroy();controller.pause().stop().destroy();
++    }
++    @Test public void homeSearchFavoritesAndSettingsUseActualViewCallbacks() {
++        var controller=Robolectric.buildActivity(Activity.class).setup();Activity a=controller.get();int[] count={0};
++        ArcMobileHomeView home=new ArcMobileHomeView(a,"Archium","Personal","Search","Favorites","Recent","Settings",
++                0xffeeeeee,0xff111111,0xffdddddd,List.of(new ArcMobileControls.Action("Favorite",()->count[0]++)),
++                List.of(new ArcMobileControls.Action("Recent page",()->count[0]++)),()->count[0]++,()->count[0]++,()->count[0]++);
++        a.setContentView(home);LinearLayout content=(LinearLayout)home.getChildAt(0);
++        for(int i=0;i<content.getChildCount();i++)if(content.getChildAt(i) instanceof Button button)assertTrue(button.performClick());
++        assertEquals(5,count[0]);controller.pause().stop().destroy();
++    }
++    @Test public void plusContrastFollowsLuminance() {
++        assertEquals(android.graphics.Color.WHITE,ArcMobileControls.contrast(0xff000000));
++        assertEquals(android.graphics.Color.BLACK,ArcMobileControls.contrast(0xffffffff));
++    }
++    @Test public void homeActionsRemainReadableOnDarkAccentInLightTheme() {
++        var controller=Robolectric.buildActivity(Activity.class).setup();Activity a=controller.get();
++        ArcMobileHomeView home=new ArcMobileHomeView(a,"Archium","Personal","Search","Favorites","Recent","Settings",
++                0xffffffff,0xff111111,0xff000000,List.of(),List.of(),()->{},()->{},()->{});
++        LinearLayout content=(LinearLayout)home.getChildAt(0);
++        Button space=(Button)content.getChildAt(2);
++        assertEquals(android.graphics.Color.WHITE,space.getCurrentTextColor());
++        controller.pause().stop().destroy();
 +    }
 +}
 diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcNavigationControlsTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcNavigationControlsTest.java

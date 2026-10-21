@@ -83,7 +83,7 @@ class R5BuildRoutingTests(unittest.TestCase):
   for name in ('git','python3','sudo','gn','df','ninja','zipinfo'):(self.bin/name).symlink_to(driver)
   self.env={**os.environ,'PATH':str(self.bin)+':'+os.environ['PATH'],'TRACE':str(self.trace),'PIN':PIN,'DEPOT':DEPOT,
    'GITHUB_RUN_ID':'123456','GITHUB_ACTIONS':'true','GITHUB_REPOSITORY':'Jorgeprdz/chromium-dex-arc','GITHUB_SHA':'b'*40,
-   'GITHUB_REF_NAME':'assistant/archium-r5-arc-experience','ARCHIUM_EXPECTED_SHA':'b'*40,
+   'GITHUB_REF_NAME':'assistant/archium-r5-final-mobile','ARCHIUM_EXPECTED_SHA':'b'*40,
    'RUNNER_TEMP':str(self.root/'runner'),'GITHUB_WORKSPACE':str(self.repo),'GITHUB_OUTPUT':str(self.output),
    'ARCHIUM_SOURCE_TAG':'archium-checkpoint-123-1','ARCHIUM_SOURCE_COMMIT':'a'*40,
    'ARCHIUM_CHECKPOINT_TAG':'archium-checkpoint-456-1','ARCHIUM_CHECKPOINT_DIR':str(self.root/'checkpoint'),

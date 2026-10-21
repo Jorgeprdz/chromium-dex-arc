@@ -147,9 +147,12 @@ public final class ArcNativeTabSessionSyntheticBoundaryTest {
             TabWindowManagerSingleton.setTabWindowManagerForTesting(manager);
         }
         ArcNativeTabSession attach(SyntheticModel model, boolean active) {
+            return attach(model, active, true);
+        }
+        ArcNativeTabSession attach(SyntheticModel model, boolean active, boolean restoreSelection) {
             return new ArcNativeTabSession(model, (params, type, parent) -> {
                 model.opened++; int id = 10000 + model.opened; model.emitAdd(id); return model.getTabById(id);
-            }, () -> active, () -> refreshes++);
+            }, () -> active, () -> refreshes++, restoreSelection);
         }
         ArcNativeTabSession attach() { return attach(local, true); }
         String pin(int id) {
@@ -157,6 +160,30 @@ public final class ArcNativeTabSessionSyntheticBoundaryTest {
             String entry = state.pin(state.selectedSpace(), null, "https://pin.test/" + id, "Pin " + id, id);
             store.save(state); return entry;
         }
+    }
+
+    private static void mobileKeepsCurrentTab() {
+        for(boolean alreadyRestored:List.of(false,true)) {
+            Fixture f=new Fixture();f.local.add(20);f.local.restored=alreadyRestored;
+            ArcSidebarState state=f.store.load();String original=state.selectedSpace(),other=state.addSpace("Other");
+            state.associateTab(10,other);state.associateTab(20,original);f.store.save(state);
+            ArcNativeTabSession session=f.attach(f.local,true,false);
+            if(!alreadyRestored)f.local.completeRestore();
+            check(f.local.current==10 && f.local.opened==0 && f.local.selected==0,
+                    "Mobile attachment/restore must preserve the current native tab");
+            state=f.store.load();state.selectSpace(original);f.store.save(state);session.onSpaceChanged(state);
+            check(f.local.current==20,"Explicit Space selection still selects its real native tab");
+            session.destroy();
+        }
+        Fixture f=new Fixture();f.local.add(20);f.local.restored=false;
+        ArcSidebarState state=f.store.load();String original=state.selectedSpace(),other=state.addSpace("Other");
+        state.associateTab(10,other);state.associateTab(20,original);f.store.save(state);
+        ArcNativeTabSession session=f.attach(f.local,true,false);
+        session.onSpaceChanged(state);
+        check(f.local.current==10,"Explicit Space selection waits for authoritative restore");
+        f.local.completeRestore();
+        check(f.local.current==20,"Explicit mobile Space request survives a pending restore");
+        session.destroy();
     }
 
     private static void twoWindows() {
@@ -343,6 +370,7 @@ public final class ArcNativeTabSessionSyntheticBoundaryTest {
         cases.put("local-unregistered", ArcNativeTabSessionSyntheticBoundaryTest::localUnregistered);
         cases.put("authority-unavailable", ArcNativeTabSessionSyntheticBoundaryTest::authorityUnavailable);
         cases.put("destroyed-callbacks", ArcNativeTabSessionSyntheticBoundaryTest::destroyedCallbacks);
+        cases.put("mobile-current-tab", ArcNativeTabSessionSyntheticBoundaryTest::mobileKeepsCurrentTab);
         int failures = 0;
         for (String name : args.length == 0 ? cases.keySet() : List.of(args)) {
             try { cases.get(name).run(); System.out.println("PASS " + name); }
