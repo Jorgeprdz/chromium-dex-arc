@@ -522,3 +522,13 @@ Pruebas locales: Mobile 18 PASS; colecciones 22 PASS; geometría 18 PASS; transi
 - Intentos consumidos: **1/1**. Sin relanzamientos automáticos; QEMU desactivado.
 - Origen incremental: `archium-checkpoint-39551668868-1`; integridad de bytes pendiente del gate de restauración CI.
 - Estado al registrar: in_progress. APK nueva: pendiente; no instalada. Refinamientos y aceptación física pendientes según TODO.
+
+## Fallo de preflight 39628600358 y corrección localizada
+
+El run terminó failure antes de restaurar el checkpoint o compilar Chromium: `test_r53_test_discovery.SplitDiscoveryTest.test_every_split_gate_has_explicit_robolectric_runner` exigía anotaciones cortas con imports en `ArcSplitViewportPolicyTest.java`; el test entregado usaba nombres totalmente cualificados. CI ejecutó 384 pruebas host y reportó un fallo. No hubo APK nueva ni instalación; el checkpoint remoto original permanece disponible.
+
+Corrección: imports explícitos de RunWith/Robolectric/Config/GraphicsMode/SQLiteMode y anotaciones cortas. Se conserva el runner, SDK30/36 y la lógica de la prueba. El gate existente no se modifica. Parche/manifest regenerados (162 archivos).
+
+Verificación local de esta corrección: gate de discovery RED antes y GREEN después; viewport Robolectric 4 PASS; aplicación/transición de parche 24 PASS; preparación SDK37.2 PASS. Evidencia: `/workspace/archium-evidence/r5-final-mobile/continuation/`, archivos `run-39628600358-preflight.log`, `discovery-{red,green}.log`, `viewport-annotation-green.log`, `patch-fix.log`, `preparation-fix.log`. No se repite la suite completa local ni se atribuye aceptación gráfica a estos resultados.
+
+Intentos remotos consumidos: **1/1**. Otro intento incremental requiere autorización nueva del usuario; no se despacha ni relanza automáticamente. Si se autoriza, utilizar el mismo checkpoint `archium-checkpoint-39551668868-1`/SHA35747e28fec81d80c6b97f82f366fc97809aa339/run39551668868 con el nuevo SHA corregido, y actualizar la sesión de monitor/instalador al nuevo run sin borrar evidencia anterior. QEMU desactivado; APK sólo tras gates y validación de firma/versión/dispositivo.
