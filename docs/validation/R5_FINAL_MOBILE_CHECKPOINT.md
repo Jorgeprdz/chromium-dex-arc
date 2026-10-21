@@ -55,3 +55,11 @@ Directorio: /workspace/archium-evidence/r5-final-mobile/continuation/.
 El runner queda restringido a assistant/archium-r5-final-mobile y SHA exacto; no se modifica el monitor histórico de la APK instalada. Registrar ID/SHA/URL del único dispatch tras lanzarlo. No repetir automáticamente si falla: primer error causal, fix localizado y nueva autorización para otro run.
 
 Pendientes físicos: viewport/zoom 50→25→50; favoritos durante drag, target de sidebar y menú estrecho; primer clic omnibox, navegación, diálogos, teclado/IME/gestos y adaptación; seguridad Chromium, memoria y rendimiento. Todos NOT RUN en este candidato. No instalar/publicar APK sin sus verificaciones. Tras el build, completar los pendientes visuales del TODO y actualizar esta evidencia sin declarar aceptación por inspección.
+
+## Dispatch integrado autorizado
+
+- Run: [39628600358](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/39628600358).
+- Código enviado: `1e15e84a6738a8cdd1719305d870635c6541c85b`. Rama: `assistant/archium-r5-final-mobile`.
+- Intentos consumidos: **1/1**. Sin relanzamientos automáticos; QEMU desactivado.
+- Origen incremental: `archium-checkpoint-39551668868-1`; integridad de bytes pendiente del gate de restauración CI.
+- Estado al registrar: in_progress. APK nueva: pendiente; no instalada. Refinamientos y aceptación física pendientes según TODO.

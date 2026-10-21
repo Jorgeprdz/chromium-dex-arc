@@ -514,3 +514,11 @@ Verificación final de este checkpoint: parche reproducible de 159 archivos y pr
 - [ ] Dispositivo: todos los puntos 50→25→50, drag de sidebar, dropdown estrecho, mouse/touch/stylus, insets/IME/orientación, restauración, contraseñas/passkeys, rendimiento/memoria siguen NOT RUN.
 
 Pruebas locales: Mobile 18 PASS; colecciones 22 PASS; geometría 18 PASS; transición 12 PASS; adapter nativo 12 escenarios PASS con frontera sintética; gates 2 PASS. Parche de 162 archivos regenerado. La compilación Chromium nativa y una APK de este candidato requieren el único intento integrado autorizado. Se actualizan exclusivamente los guards del runner a esta rama; se conserva SHA exacto y checkpoint obligatorio, sin fallback limpio.
+
+## Dispatch integrado autorizado
+
+- Run: [39628600358](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/39628600358).
+- Código enviado: `1e15e84a6738a8cdd1719305d870635c6541c85b`. Rama: `assistant/archium-r5-final-mobile`.
+- Intentos consumidos: **1/1**. Sin relanzamientos automáticos; QEMU desactivado.
+- Origen incremental: `archium-checkpoint-39551668868-1`; integridad de bytes pendiente del gate de restauración CI.
+- Estado al registrar: in_progress. APK nueva: pendiente; no instalada. Refinamientos y aceptación física pendientes según TODO.
