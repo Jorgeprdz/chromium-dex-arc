@@ -379,6 +379,40 @@ Informe de implementación y límites: [R5.3](docs/validation/R5_3_SPLIT_VIEW.md
 - [x] ~~Verificar metadata del checkpoint más reciente~~ — checkpoint39486593880-1, cuatro grupos y 25 partes; manifiesto/SHA de origen comprobados. Bytes completos y capacidad del runner deben verificarse antes de restaurar en CI.
 - [x] ~~Completar controles host y de preparación~~ — 373 ejecutados:372 PASS, guard de descubrimiento ajustado y reejecutado1/1 PASS; SDK37, actionlint y patch reproducible PASS.
 - [ ] Confirmar GREEN con el runner Chromium nativo completo y publicar APK verificable en la recompilación incremental.
-- [ ] Validar marco, cápsula, gestos y enlaces divididos con la APK instalada; Amazon sigue UNRESOLVED_GRAPHICS_BLOCKER.
+- [x] ~~Validar marco, cápsula, gestos y enlaces divididos con la APK instalada~~ — PASS reportado por el usuario el 21-oct-2026; alcance detallado abajo. Amazon sigue UNRESOLVED_GRAPHICS_BLOCKER.
 
 [Diagnóstico y corrección del gate JVM](docs/validation/R5_4_CI_JVM_REPAIR.md).
+
+
+## Aceptación del usuario — R5.4, 21-oct-2026
+
+Evidencia: confirmaciones en la conversación sobre el build del run [39503348021](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/39503348021), SHA `cb9822aa0a4a0e4a5d5609bd80da470b0d4db325`. Son resultados de uso real reportados por el usuario, no una nueva ejecución automatizada ni una auditoría de instalación por ADB.
+
+- [x] ~~Pantalla dividida, marco y botones/cápsula~~ — confirmación explícita del usuario.
+- [x] ~~Ctrl+Alt+clic y abrir enlaces en pantalla dividida~~ — confirmación explícita del usuario.
+- [x] ~~Arrastre del separador y adaptación a vista móvil~~ — confirmación explícita del usuario.
+- [x] ~~Omnibox y diálogos nativos~~ — confirmación explícita del usuario.
+- [x] ~~Encaje central y doble clic para volver a 50/50~~ — incluidos en la lista restante confirmada con «todo ok».
+- [x] ~~Intercambiar, ampliar/restaurar conservando scroll y formularios~~ — incluidos en esa confirmación global de la lista revisada.
+- [x] ~~Salir del split conservando ambas pestañas~~ — incluido en esa confirmación.
+- [x] ~~Reordenar pestañas y volver desde otra aplicación sin perder contenido~~ — incluidos en esa confirmación.
+
+### Pendientes fuera del alcance de esa aceptación
+
+- [ ] Amazon: `UNRESOLVED_GRAPHICS_BLOCKER`; no se incluyó una corrección en este build.
+- [ ] Verificaciones específicas no confirmadas: target=_blank/opener, descargas, marcadores y persistencia completa de sesiones.
+- [ ] Validación detallada de teclado/Escape, IME/insets, recreación de superficie y estabilidad prolongada; la confirmación funcional no demuestra cobertura de todos esos casos.
+- [ ] Pruebas específicas de GPU Samsung/DeX: `PENDING_DEVICE_VALIDATION`; QEMU sigue deshabilitado por decisión del usuario.
+
+
+## Regresión reportada — pareja split al cambiar de pestaña (21-oct-2026)
+
+La aceptación anterior queda acotada: el usuario detectó que seleccionar una pestaña externa y volver a una de las divididas deshace la pareja. No está corregido.
+
+- [ ] Conservar la asociación, orden, proporción y panel activo al navegar a otra pestaña; suspender sólo la presentación y recuperarla al volver.
+- [ ] Mostrar una entrada conjunta en la sidebar: títulos «Página 1 | Página 2» expandida y ambos favicons separables visualmente en compacto, conservando las identidades nativas.
+- [ ] Regresión A/B → C → A/B repetida, incluyendo proporción modificada y foco; cierre y salida explícita deben conservar sus semánticas.
+- [x] ~~Definir el alcance de parejas~~ — el usuario solicita varias parejas independientes por ventana.
+- [ ] Revisar e implementar el [diseño de parejas persistentes](docs/superpowers/specs/2026-10-21-persistent-split-pairs-design.md), con regresiones y aceptación en APK nueva.
+
+Causa localizada por inspección: ArcSplitViewCoordinator.mModelObserver.didSelectTab llama exit() cuando activate() rechaza el ID ajeno; refresh() repite esa política y persist() elimina la asociación. Falta RED ejecutado y GREEN; no se declara reparación ni se despacha build.
