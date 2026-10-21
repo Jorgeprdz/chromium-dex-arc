@@ -339,6 +339,10 @@ public final class ArcDesktopCoordinator {
                             activity.getString(R.string.arc_split_controls),
                             activity.getString(R.string.arc_split_focus),
                             activity.getString(R.string.arc_split_restore)));
+            mSplitView.setPairCompatibility(this::isSplitPairCompatible);
+            mSplitView.setPairsChangedCallback(this::refreshSplitPairRows);
+            mNativeTabListCoordinator.setArcSplitSeparateRequest(
+                    tab -> { if (mSplitView != null) mSplitView.separatePair(tab.getId()); });
             mNativeTabListCoordinator.setArcSplitRequest(
                     tab -> { if (mSplitView != null) mSplitView.requestSplit(tab); },
                     () -> !mDestroyed && ArcDesktopAppearance.isDesktopWindow(mActivity));
@@ -763,6 +767,24 @@ public final class ArcDesktopCoordinator {
         return button;
     }
 
+    private boolean isSplitPairCompatible(Tab left, Tab right) {
+        if (!mNativeTabListCoordinator.isArcSplitPairCompatible(left, right)) return false;
+        // Incognito and a not-yet-bound collection have no persisted regular Space metadata.
+        TabModel model = mCurrentModel.get();
+        if (model == null || model != mSessionModel || mCollections == null) return true;
+        try {
+            return mCollections.state().sameTabSpace(left.getId(), right.getId());
+        } catch (RuntimeException unavailable) {
+            return false;
+        }
+    }
+
+    private void refreshSplitPairRows() {
+        if (!mDestroyed && mSplitView != null) {
+            mNativeTabListCoordinator.setArcSplitPairs(mSplitView.getPairSnapshot());
+        }
+    }
+
     private boolean canChangeSplitLayout() {
         View modal = mActivity.findViewById(R.id.tab_modal_dialog_container);
         return !mDestroyed && (modal == null || modal.getVisibility() != View.VISIBLE
@@ -832,6 +854,7 @@ public final class ArcDesktopCoordinator {
     private void clearCollections() {
         // Remove the old profile/Space predicate before changing models. This restores the native
         // global presentation and prevents one profile's Arc metadata from filtering another.
+        mNativeTabListCoordinator.setArcSplitPairs(java.util.List.of());
         mNativeTabListCoordinator.setTabVisibilityPredicate(null);
         if (mCollectionsView != null) {
             mCollectionsView.destroy();
@@ -856,6 +879,7 @@ public final class ArcDesktopCoordinator {
         ArcNativeTabSession session = new ArcNativeTabSession(model, creator,
                 () -> mCurrentModel.get() == model, () -> {
                     if (!mDestroyed && mSessionModel == model) {
+                        refreshSplitPairRows();
                         mNativeTabListCoordinator.refreshTabPresentation();
                         if (mCollectionsView != null) mCollectionsView.refresh();
                         applyAppearance();
@@ -880,6 +904,7 @@ public final class ArcDesktopCoordinator {
         });
         // Navigation/address stay at the top; collections follow the Arc header actions.
         mHeader.addView(mCollectionsView);
+        refreshSplitPairRows();
         mPaletteInitialized = false;
     }
 
@@ -1036,6 +1061,7 @@ public final class ArcDesktopCoordinator {
             mFooter.setVisibility(View.GONE);
             if (mCollectionsView != null) mCollectionsView.setVisibility(View.GONE);
             mColumn.setBackgroundColor(Color.TRANSPARENT);
+            mColumn.setForeground(null);
             clearFrameGeometry();
             return;
         }
@@ -1105,6 +1131,22 @@ public final class ArcDesktopCoordinator {
         if (mCommandBar != null) mCommandBar.setAppearance(surface, foreground, ArcDesktopPolicy.selection(surface));
         mNewTabIcon.setTint(foreground);
         mColumn.setBackgroundColor(surface);
+        mColumn.setForeground(new android.graphics.drawable.Drawable() {
+            private final android.graphics.Paint mPaint = new android.graphics.Paint();
+            @Override public void draw(android.graphics.Canvas canvas) {
+                mPaint.setColor((foreground & 0xffffff) | 0x22000000);
+                android.graphics.Rect bounds = getBounds();
+                // One physical pixel inside the rail; decoration consumes no layout space.
+                canvas.drawRect(bounds.right - 1, bounds.top, bounds.right, bounds.bottom, mPaint);
+                canvas.drawRect(bounds.left, mHeader.getBottom() - 1,
+                        bounds.right, mHeader.getBottom(), mPaint);
+                canvas.drawRect(bounds.left, mFooter.getTop(),
+                        bounds.right, mFooter.getTop() + 1, mPaint);
+            }
+            @Override public void setAlpha(int alpha) { mPaint.setAlpha(alpha); }
+            @Override public void setColorFilter(android.graphics.ColorFilter filter) {}
+            @Override public int getOpacity() { return android.graphics.PixelFormat.TRANSLUCENT; }
+        });
         styleInteraction(mNewTabRow, foreground, ArcDesktopPolicy.selection(surface));
         for (int i = 0; i < mNavigationControls.getChildCount(); i++) {
             View button = mNavigationControls.getChildAt(i);
@@ -1406,6 +1448,8 @@ public final class ArcDesktopCoordinator {
         if (mDestroyed) return;
         mDestroyed = true;
         mNativeTabListCoordinator.setArcSplitRequest(null, () -> false);
+        mNativeTabListCoordinator.setArcSplitSeparateRequest(null);
+        mNativeTabListCoordinator.setArcSplitPairs(java.util.List.of());
         if (mSplitView != null) { mSplitView.destroy(); mSplitView = null; }
         mAppearanceDispatch.destroy();
         mColumn.getViewTreeObserver().removeOnGlobalLayoutListener(mFontLayoutListener);

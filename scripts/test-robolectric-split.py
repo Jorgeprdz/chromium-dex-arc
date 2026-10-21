@@ -21,11 +21,11 @@ if a.host or a.controller:
  for name,text in adapters.items():
   path=a.work/name;path.write_text(text);sources.append(path)
 if a.controller:
- sources += [arc/'ArcSplitLinkRouter.java',arc/'ArcSplitState.java',test/'ArcSplitStateTest.java',arc/'ArcSplitViewCoordinator.java',test/'ArcSplitViewCoordinatorTest.java']
+ sources += [arc/'ArcSplitLinkRouter.java',arc/'ArcSplitState.java',arc/'ArcSplitPairStore.java',test/'ArcSplitStateTest.java',arc/'ArcSplitViewCoordinator.java',test/'ArcSplitViewCoordinatorTest.java']
  tests += ['org.chromium.chrome.browser.arc.ArcSplitStateTest','org.chromium.chrome.browser.arc.ArcSplitViewCoordinatorTest']
  extra={
  'R.java':'package org.chromium.chrome; public class R {public static class id {public static final int tab_modal_dialog_container=2001,tab_modal_dialog_container_stub=2002;}}',
- 'Profile.java':'package org.chromium.chrome.browser.profiles; public class Profile {}',
+ 'Profile.java':'package org.chromium.chrome.browser.profiles; public class Profile {public boolean isOffTheRecord(){return false;}}',
  'GURL.java':'package org.chromium.url; public class GURL {private String value="https://example.test/";public GURL(){}public static boolean nativeTestContext;public GURL(String s){if(!nativeTestContext)throw new AssertionError("Chromium native test context not initialized; use BaseRobolectricTestRunner");value=s;}public String getSpec(){return value;}public boolean isValid(){return value.contains(":");}public String getScheme(){return value.split(":",2)[0];}}',
  'WindowAndroid.java':'package org.chromium.ui.base; public class WindowAndroid {public java.lang.ref.WeakReference<android.app.Activity> getActivity(){return null;}}',
  'Tab.java':'package org.chromium.chrome.browser.tab; public interface Tab {int INVALID_TAB_ID=-1; int getId(); boolean isDestroyed(); org.chromium.content_public.browser.WebContents getWebContents(); boolean isClosing(); boolean isNativePage(); boolean isHidden(); boolean isIncognito(); org.chromium.chrome.browser.profiles.Profile getProfile(); org.chromium.ui.base.WindowAndroid getWindowAndroid(); org.chromium.components.embedder_support.view.ContentView getContentView(); android.view.View getView(); String getTitle(); org.chromium.url.GURL getUrl(); void show(int type); void hide(int type); void reload(); int loadUrl(org.chromium.content_public.browser.LoadUrlParams p); void addObserver(TabObserver o); void removeObserver(TabObserver o);}',

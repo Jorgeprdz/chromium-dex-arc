@@ -174,6 +174,19 @@ public final class ArcSidebarStateTest {
         check(lifecycle.hasTabSpace(200) && lifecycle.visibleTabForPresentation(200, true),
                 "Removing an open Favorite preserves the tab and adopts it into active Space");
 
+        ArcSidebarState splitSpaces = new ArcSidebarState();
+        String firstSpace = splitSpaces.selectedSpace();
+        String otherSpace = splitSpaces.addSpace("Other");
+        splitSpaces.associateTab(501, firstSpace);
+        splitSpaces.associateTab(502, firstSpace);
+        splitSpaces.associateTab(503, otherSpace);
+        check(splitSpaces.sameTabSpace(501, 502), "Same Space permits a pair");
+        splitSpaces.selectSpace(otherSpace);
+        check(splitSpaces.sameTabSpace(501, 502), "Inactive Space pair stays compatible");
+        check(!splitSpaces.sameTabSpace(501, 503), "Cross Space pair rejected");
+        check(!splitSpaces.sameTabSpace(700, 701), "Two unknown tabs are not same Space");
+        check(ArcSidebarState.deserialize(splitSpaces.serialize()).sameTabSpace(501,502),
+                "Pair Space compatibility survives native metadata roundtrip");
         System.out.println("ArcSidebarState: identity, Spaces, restore authority, closed pins, folders, roundtrip and invalid operations passed");
     }
 }

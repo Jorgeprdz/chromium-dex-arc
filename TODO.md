@@ -407,7 +407,7 @@ Evidencia: confirmaciones en la conversación sobre el build del run [3950334802
 
 ## Regresión reportada — pareja split al cambiar de pestaña (21-oct-2026)
 
-La aceptación anterior queda acotada: el usuario detectó que seleccionar una pestaña externa y volver a una de las divididas deshace la pareja. No está corregido.
+La aceptación anterior queda acotada: el usuario detectó que seleccionar una pestaña externa y volver a una de las divididas deshace la pareja. Candidato de corrección implementado en la rama de parejas; GREEN host y validación de APK se registran por separado.
 
 - [ ] Conservar la asociación, orden, proporción y panel activo al navegar a otra pestaña; suspender sólo la presentación y recuperarla al volver.
 - [ ] Mostrar una entrada conjunta en la sidebar: títulos «Página 1 | Página 2» expandida y ambos favicons separables visualmente en compacto, conservando las identidades nativas.
@@ -415,4 +415,73 @@ La aceptación anterior queda acotada: el usuario detectó que seleccionar una p
 - [x] ~~Definir el alcance de parejas~~ — el usuario solicita varias parejas independientes por ventana.
 - [ ] Revisar e implementar el [diseño de parejas persistentes](docs/superpowers/specs/2026-10-21-persistent-split-pairs-design.md), con regresiones y aceptación en APK nueva.
 
-Causa localizada por inspección: ArcSplitViewCoordinator.mModelObserver.didSelectTab llama exit() cuando activate() rechaza el ID ajeno; refresh() repite esa política y persist() elimina la asociación. Falta RED ejecutado y GREEN; no se declara reparación ni se despacha build.
+Causa reproducida: didSelectTab/refresh disolvían la asociación al seleccionar un ID ajeno. El registro de parejas ahora conserva asociaciones al suspender su presentación. RED/GREEN ejecutado en el controlador: 76 pruebas; la aceptación en APK nueva sigue pendiente. No se despacha build.
+
+
+## Regresión reportada — primer clic de omnibox (21-oct-2026)
+
+- [ ] **OMNI-CLICK-01:** con mouse, a veces el popup no abre hasta varios clics. La aceptación anterior de omnibox no cubría esta intermitencia.
+- [x] ~~Reproducir un stream de entrada incompleto que consume el clic siguiente~~ — RED6/24 contra cb9822a; coincidencia causal con los eventos del Galaxy pendiente.
+- [x] ~~Preparar corrección mínima del estado de gesto~~ — GREEN24/24 del probe Android,50/50 helpers,6/6 semántica y preparación SDK37 PASS; candidato aislado, no integrado en APK.
+- [ ] Completar gates del conjunto y ejecutar las regresiones nuevas en el runner Chromium real antes del build incremental.
+- [ ] Verificar primer clic con mouse, foco de ventana, copiar/editar, Ctrl+L/Ctrl+T y retorno desde otras apps con APK que contenga el cambio.
+
+[Diagnóstico, RED/GREEN y límites](docs/validation/R5_5_OMNIBOX_POINTER_STREAM.md). No se declara resuelto por pruebas host.
+
+
+## Próxima tanda única — parejas, entrada y jerarquía de sidebar
+
+Estado: implementación autorizada el 21-oct-2026 y recuperada tras interrupción de Termux. El candidato vive en `assistant/archium-r5-persistent-split-pairs`; [recuperación y gates](docs/validation/R5_6_TERMUX_RECOVERY.md). La integración/compilación incremental y la aceptación de APK se mantienen como gates separados.
+
+### Conjunto a integrar
+
+Código recuperado y completado: registro de múltiples parejas; proyección por IDs nativos, fila conjunta y callbacks de iconos protegidos; candidato de omnibox; apariencia y microanimación cancelable. Los checks siguientes siguen abiertos porque incluyen integración final o aceptación en APK.
+
+- [ ] Parejas divididas independientes: conservar A/B y D/E al visitar C; una fila por pareja, con ambos títulos o favicons según el rail. [Diseño para revisión](docs/superpowers/specs/2026-10-21-persistent-split-pairs-design.md).
+- [ ] OMNI-CLICK-01: verificar e integrar el candidato aislado del primer clic con mouse; no marcar resuelto hasta GREEN en APK. [Diagnóstico y límites](docs/validation/R5_5_OMNIBOX_POINTER_STREAM.md).
+- [ ] R4/SIDEBAR-HIERARCHY: aplicar únicamente el refinamiento visual y funcional detallado abajo, después de acordar el conjunto. No implica implementar otro navegador, sistema de pestañas ni gestor de Espacios.
+
+### R4/SIDEBAR-HIERARCHY — viabilidad y alcance localizado
+
+**Viable sobre la arquitectura existente.** TabVerticalViewBinder ya recibe IS_SELECTED, IS_MULTI_SELECTED, IS_PINNED, títulos y proveedor de favicons del modelo nativo. VerticalTabListCoordinator ya separa las listas fijadas/ordinarias y calcula un separador según las pestañas visibles del Espacio. VerticalTabItemHoverController ofrece hover cards y notificaciones de foco. ArcDesktopCoordinator ya dispone de cabecera, área de pestañas/Espacios y footer. Esos mecanismos deben reutilizarse; la inspección no demuestra que todas las carencias descritas sean defectos reproducidos.
+
+- [ ] **Activa:** mantener un único tab activo según TabModel y su PropertyModel; conservar su resaltado al perder foco, recargar o navegar. Distinguir multiselección de actividad. Cuando se integren parejas, su fila conjunta representa el tab activo nativo sin marcar dos tabs activos independientes.
+- [ ] **Estados:** separar normal, hover, activo, foco de teclado y deshabilitado; permitir activo+foco y activo+hover sin perder el resaltado principal. Usar los colores existentes y conservar radios, hit targets e iconos. Revisar el tratamiento actual de foco/hover antes de añadir listeners o indicadores.
+- [ ] **Fijadas/temporales:** aprovechar las dos listas nativas y evaluar su separación en expandido/compacto cuando ambas estén presentes. Conservar orden/pinning nativos y el filtro por Espacio; no mover tabs por seleccionar ni crear etiquetas, filas de altura nueva o colores nuevos.
+- [ ] **Tres regiones:** reforzar acciones, pestañas/Espacios y utilidades con los contenedores y separadores actuales. Mantener ancho, geometría general, disposición y dimensiones; no reconstruir el layout.
+- [ ] **Identificación:** conservar favicon nativo y comprobar su fallback; título/tooltip o hover card y descripción accesible correctos al reciclar filas. Verificar también la pestaña activa, porque la hover card nativa puede omitirla. No cambiar ni teñir favicons del sitio.
+- [ ] **Actualización:** actuar sobre propiedades/filas afectadas usando los IDs nativos actuales; no introducir una selección visual independiente ni refrescos completos en cada cambio de pestaña. Conservar ciclo de vida, cierre, movimiento, fijación y aislamiento por perfil/Espacio.
+
+Componentes candidatos, sujetos a evidencia antes de modificar: TabVerticalViewBinder, VerticalTabItemHoverController, VerticalTabListCoordinator y el estilo de controles/regiones de ArcDesktopCoordinator. TabListMediator y ArcNativeTabSession conservan la autoridad del modelo y la proyección de Espacios. No añadir un store de selección ni reimplementar persistencia.
+
+**Exclusiones del refinamiento R4:** omnibox (su bug se trata en el apartado independiente de esta tanda), desplazamiento horizontal, zoom/escala, viewport de Seguros Monterrey, renderizado/compositor, colores/branding y rediseño. No dependencias nuevas, animaciones costosas ni APIs exclusivas de Samsung. No declarar esos comportamientos web como fallos de Archium por la captura mencionada.
+
+### R4 — refinamientos con GO incorporados al alcance (21-oct-2026)
+
+Implementados en el candidato de la tanda conjunta y sujetos a validación de APK; los checks siguientes indican código y pruebas host, no aceptación de dispositivo. [Auditoría técnica y condiciones](docs/validation/R4_VISUAL_LINK_HOVER_FEASIBILITY.md). Conservar paleta, geometría, ancho compacto, iconografía y dimensiones actuales; reutilizar el alcance de jerarquía anterior sin duplicar sistemas.
+
+- [x] **Selección activa refinada:** prioridad visual persistente desde el modelo nativo; distinguir hover, foco y multiselección, incluidas las futuras filas de parejas.
+- [x] **Separadores sutiles:** aprovechar las regiones y listas existentes con espaciado disponible o trazos sin alterar dimensiones, orden ni hit targets.
+- [x] **Tooltips/hover cards de pestañas:** reutilizar componentes nativos, comprobar títulos, accesibilidad, reciclado y cobertura de la pestaña seleccionada. No crear un overlay nuevo. Esto es identificación de pestañas, no Link Hover Preview.
+- [x] **Normalización óptica de favicons:** centrado, ajuste y fallback consistentes dentro del tamaño actual; conservar el icono real sin teñirlo, recortarlo ni redibujarlo.
+- [x] **Profundidad de sidebar:** borde interior de 1 píxel físico con la paleta actual, sin consumir espacio de layout. No incluir blur continuo ni sombras adicionales sin evaluación.
+- [x] **Indicadores de Spaces:** proyectar el Espacio actual desde el modelo y selector persistentes existentes; no añadir otro store ni confundir Espacios con grupos.
+- [x] **Microanimaciones acotadas:** transiciones de propiedades de UI cancelables, compatibles con animaciones desactivadas y reciclado. No animar dimensiones de WebContents/superficies; comprobar fluidez antes de ampliar efectos.
+
+### Gates y aceptación del conjunto
+
+- [ ] RED/GREEN relevante para los cambios realmente necesarios: selección, cierre de activa, pin/unpin, filas recicladas, hover/foco/deshabilitado y conservación del indicador sin foco de ventana.
+- [ ] Verificar juntas las parejas persistentes, la entrada de omnibox y la jerarquía de filas; preservar reordenamiento y todos los PASS ya reportados por el usuario.
+- [ ] Evidencia real de escritorio y DeX en ventana dividida, sin afirmar ejecución que no se haya realizado. Reinicio: verificar orden/pinning sólo con la persistencia nativa disponible. Confirmar ausencia de regresiones de scroll sin modificar su motor.
+- [ ] Entregar lista de archivos realmente modificados, matriz visual, resultados y límites; distinguir PASS host, PASS de dispositivo y pendientes. QEMU sigue deshabilitado.
+- [ ] Tras completar la implementación y gates autorizados, preparar una única integración y build progresivo desde el último checkpoint íntegro/compatible. No clean build, purge ni borrado de outputs/checkpoints; no alterar el monitor por definir este alcance.
+
+
+## Future features — Link Hover Preview (pospuesto)
+
+Se conserva la propuesta; **fuera de la próxima tanda y sin implementación por ahora**, por decisión del usuario. [Viabilidad y alternativas](docs/validation/R4_VISUAL_LINK_HOVER_FEASIBILITY.md).
+
+- [ ] **Preview real de enlaces tras 3000 ms de hover con mouse/trackpad:** retomar mediante un SPIKE aislado cuando se autorice; una sola preview, compositor propio, sin cambiar foco ni pestaña principal. Antes de implementar, demostrar privacidad, política de cookies/storage/historial, cancelación, lifecycle y presupuesto de CPU/RAM/GPU/red con medidas reales.
+- [ ] Evaluar conjuntamente tarjeta enriquecida y snapshot como alternativas explícitas, sin sustituir automáticamente la preview real. Las miniaturas existentes tienen GO técnico limitado, pero también quedan pospuestas junto con toda la funcionalidad Hover Preview. Un destino nuevo no debe cargarse silenciosamente por un cache miss.
+
+No se descarta la preview real ni se altera su retardo acordado. Requiere autorización futura; no añade dependencias, builds ni cambios gráficos a la tanda actual.

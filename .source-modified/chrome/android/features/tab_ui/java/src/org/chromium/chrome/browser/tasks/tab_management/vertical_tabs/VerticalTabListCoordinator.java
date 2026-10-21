@@ -63,6 +63,8 @@ import org.chromium.chrome.browser.multiwindow.MultiInstanceOrchestratorFactory;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.share.ShareDelegate;
 import org.chromium.chrome.browser.tab.Tab;
+import org.chromium.chrome.browser.tab.EmptyTabObserver;
+import org.chromium.chrome.browser.ui.vertical_tabs.ArcSplitPairProjection;
 import org.chromium.chrome.browser.tab.TabCreationState;
 import org.chromium.chrome.browser.tab.TabFavicon;
 import org.chromium.chrome.browser.tab.TabLaunchType;
@@ -209,6 +211,35 @@ public class VerticalTabListCoordinator {
     // Optional presentation-only filter. The underlying TabModel always remains global.
     private @Nullable IntPredicate mTabVisibilityPredicate;
     private @Nullable TabModel mPresentationGroupModel;
+    private final ArcSplitPairProjection mArcSplitPairs = new ArcSplitPairProjection();
+    private List<int[]> mArcPairSnapshots = new ArrayList<>();
+    private @Nullable TabModel mArcPairSnapshotModel;
+    private final List<Tab> mArcObservedPairTabs = new ArrayList<>();
+    private @Nullable Consumer<Tab> mArcSplitSeparateRequest;
+    private boolean mArcDestroyed;
+    private final EmptyTabObserver mArcPairTabObserver = new EmptyTabObserver() {
+        @Override
+        public void onFaviconUpdated(Tab tab, @Nullable android.graphics.Bitmap icon,
+                @Nullable org.chromium.url.GURL iconUrl) {
+            // The native layout observer indexes actual row IDs. A secondary pair member has
+            // no row of its own, so explicitly refresh its shared row's current fetchers.
+            if (!mArcDestroyed) mMediator.refreshArcSplitPairRows();
+        }
+
+        @Override
+        public void onUrlUpdated(Tab tab) {
+            onTitleUpdated(tab); // Empty titles display the current URL, including the second tab.
+        }
+
+        @Override
+        public void onTitleUpdated(Tab tab) {
+            // Native layout delegates may write TITLE in this same dispatch. Refresh last and
+            // resolve the current model/snapshot, never capture an old row or profile here.
+            mRecyclerView.post(() -> {
+                if (!mArcDestroyed) mMediator.refreshArcSplitPairRows();
+            });
+        }
+    };
     private final TabGroupObserver mPresentationGroupObserver = new TabGroupObserver() {
         @Override
         public void didChangeTabGroupCollapsed(Token id, boolean collapsed, boolean animate) {
@@ -791,6 +822,7 @@ public class VerticalTabListCoordinator {
                         if (mIsActive && type != TabSelectionType.FROM_DRAG) {
                             scrollActiveTabIntoView();
                         }
+                        mMediator.refreshArcSplitPairRows();
                         mTabItemHoverController.resetHoverState();
                     }
 
@@ -920,6 +952,8 @@ public class VerticalTabListCoordinator {
     }
 
     public void destroy() {
+        mArcDestroyed = true;
+        clearArcPairTabObservers();
         mContainerView.setKeyEventListener(null);
         mPinnedTabsModelList.removeObserver(mPinnedTabsListObserver);
         mPinnedTabsMediator.destroy();
@@ -1135,7 +1169,7 @@ public class VerticalTabListCoordinator {
      * @return The UI index in mModelList, or {@link TabModel#INVALID_TAB_INDEX} if not found.
      */
     private int getIndexForTabScroll(int tabId) {
-        int uiIndex = mModelList.indexFromTabId(tabId);
+        int uiIndex = mModelList.indexFromTabId(mArcSplitPairs.representative(tabId));
 
         // If the tab is hidden inside a collapsed group, find the group header's index instead.
         if (uiIndex == TabModel.INVALID_TAB_INDEX) {
@@ -1203,17 +1237,86 @@ public class VerticalTabListCoordinator {
         refreshTabPresentation();
     }
 
+    /** Window/model-scoped snapshots: stable representative, left, right, last active. */
+    public void setArcSplitPairs(List<int[]> snapshots) {
+        TabModel model = mTabModelSelector.getCurrentModel();
+        boolean sameModel = model != null && model == mArcPairSnapshotModel;
+        List<Integer> ids = new ArrayList<>();
+        if (model != null) for (Tab tab : model) ids.add(tab.getId());
+        List<Integer> previousRows = mArcSplitPairs.project(ids);
+        mArcPairSnapshotModel = model;
+        mArcPairSnapshots = new ArrayList<>();
+        for (int[] pair : snapshots) {
+            if (pair != null) mArcPairSnapshots.add(pair.clone());
+        }
+        if (model != null && sameModel && mTabModelSelector.isTabStateInitialized()) {
+            updateArcPairProjection(model);
+            if (previousRows.equals(mArcSplitPairs.project(ids))) {
+                // Active-panel changes and swaps only rebind metadata. Preserve existing group,
+                // pinned and ordinary row models/drag holders when the projection is unchanged.
+                mMediator.refreshArcSplitPairRows();
+                return;
+            }
+        }
+        refreshTabPresentation();
+    }
+
+    public void setArcSplitSeparateRequest(@Nullable Consumer<Tab> request) {
+        mArcSplitSeparateRequest = request;
+    }
+
+    /** Native section compatibility. The owner additionally checks its persistent Space IDs. */
+    public boolean isArcSplitPairCompatible(Tab left, Tab right) {
+        TabModel model = mTabModelSelector.getCurrentModel();
+        return model != null && left != right && !left.isClosing() && !right.isClosing()
+                && !left.isDestroyed() && !right.isDestroyed()
+                && model.getTabById(left.getId()) == left
+                && model.getTabById(right.getId()) == right
+                && left.isIncognito() == right.isIncognito()
+                && left.getIsPinned() == right.getIsPinned()
+                && java.util.Objects.equals(left.getTabGroupId(), right.getTabGroupId());
+    }
+
+    private void clearArcPairTabObservers() {
+        for (Tab tab : mArcObservedPairTabs) tab.removeObserver(mArcPairTabObserver);
+        mArcObservedPairTabs.clear();
+    }
+
+    private void updateArcPairProjection(TabModel model) {
+        clearArcPairTabObservers();
+        List<int[]> compatible = new ArrayList<>();
+        for (int[] pair : mArcPairSnapshots) {
+            if (model != mArcPairSnapshotModel || pair.length != 4) continue;
+            Tab left = model.getTabById(pair[1]), right = model.getTabById(pair[2]);
+            if (left != null && right != null && isArcSplitPairCompatible(left, right)) {
+                compatible.add(pair);
+            }
+        }
+        mArcSplitPairs.set(compatible, id -> model.getTabById(id) != null
+                && (mTabVisibilityPredicate == null || mTabVisibilityPredicate.test(id)));
+        mMediator.setArcSplitPairs(mArcSplitPairs);
+        for (Tab tab : model) {
+            if (mArcSplitPairs.peer(tab.getId()) < 0) continue;
+            tab.addObserver(mArcPairTabObserver);
+            mArcObservedPairTabs.add(tab);
+        }
+    }
+
     /** Rebuilds the presentation list from the current global TabModel. */
     public void refreshTabPresentation() {
         if (!mTabModelSelector.isTabStateInitialized()) return;
         TabModel model = mTabModelSelector.getCurrentModel();
-        if (model != null && reconcileStandaloneTabOrder(model)) return;
+        if (model != null) updateArcPairProjection(model);
+        if (model != null && reconcileStandaloneTabOrder(model)) {
+            mMediator.refreshArcSplitPairRows();
+            return;
+        }
         resetWithListOfTabs(model);
     }
 
     /** Preserve row models/drag holders for a pure reorder of the same standalone tabs. */
     private boolean reconcileStandaloneTabOrder(TabModel tabModel) {
-        if (mTabVisibilityPredicate == null) return false;
+        if (mTabVisibilityPredicate == null && mArcPairSnapshots.isEmpty()) return false;
         List<Tab> tabs = getTabsForPresentation(tabModel);
         if (tabs.size() != mModelList.size()) return false;
         // Structural/group/pinned changes retain the full projection path. Validate the entire
@@ -1236,7 +1339,7 @@ public class VerticalTabListCoordinator {
     }
 
     private void refreshTabPresentationIfFiltered() {
-        if (mTabVisibilityPredicate != null) refreshTabPresentation();
+        if (mTabVisibilityPredicate != null || !mArcPairSnapshots.isEmpty()) refreshTabPresentation();
     }
 
     private @Nullable Tab getVisibleRepresentative(TabModel tabModel, Tab tab) {
@@ -1254,12 +1357,17 @@ public class VerticalTabListCoordinator {
     }
 
     private List<Tab> getTabsForPresentation(TabModel tabModel) {
-        List<Tab> tabs = tabModel.getRepresentativeTabList();
-        if (mTabVisibilityPredicate == null) return tabs;
         List<Tab> visible = new ArrayList<>();
-        for (Tab tab : tabs) {
+        java.util.Set<Integer> emitted = new java.util.HashSet<>();
+        for (Tab tab : tabModel.getRepresentativeTabList()) {
             Tab representative = getVisibleRepresentative(tabModel, tab);
-            if (representative != null) visible.add(representative);
+            if (representative == null) continue;
+            // Group headers retain native identity; paired children are pruned after expansion.
+            int id = representative.getTabGroupId() != null ? representative.getId()
+                    : mArcSplitPairs.representative(representative.getId());
+            if (!emitted.add(id)) continue;
+            Tab row = tabModel.getTabById(id);
+            if (row != null) visible.add(row);
         }
         return visible;
     }
@@ -1274,7 +1382,6 @@ public class VerticalTabListCoordinator {
 
     /** Removes hidden group children from the presentation model after the mediator expands them. */
     private void pruneFilteredRows(TabModel tabModel) {
-        if (mTabVisibilityPredicate == null) return;
         for (int i = mModelList.size() - 1; i >= 0; i--) {
             PropertyModel model = mModelList.get(i).model;
             if (!TabProperties.isTabOrTabGroup(model)) continue;
@@ -1285,7 +1392,9 @@ public class VerticalTabListCoordinator {
                 }
             } else {
                 int tabId = model.get(TabProperties.TAB_ID);
-                if (tabId != Tab.INVALID_TAB_ID && mTabVisibilityPredicate.test(tabId)) continue;
+                if (tabId != Tab.INVALID_TAB_ID
+                        && (mTabVisibilityPredicate == null || mTabVisibilityPredicate.test(tabId))
+                        && mArcSplitPairs.representative(tabId) == tabId) continue;
             }
             mModelList.removeAt(i);
         }
@@ -1297,12 +1406,14 @@ public class VerticalTabListCoordinator {
      */
     private void resetWithListOfTabs(@Nullable TabModel tabModel) {
         if (tabModel == null) return;
+        updateArcPairProjection(tabModel);
 
         mMediator.resetWithListOfTabs(
                 getTabsForPresentation(tabModel),
                 /* tabGroupSyncIds */ null,
                 /* quickMode */ false);
         pruneFilteredRows(tabModel);
+        mMediator.refreshArcSplitPairRows();
         mPinnedTabsMediator.updateTabModel(tabModel);
         boolean isIncognito =
                 !IncognitoUtils.shouldOpenIncognitoAsWindow() && tabModel.isIncognitoBranded();
@@ -1370,6 +1481,7 @@ public class VerticalTabListCoordinator {
         if (mMainTouchHelperCallback == null) {
             mMainTouchHelperCallback = touchHelperCallback;
         }
+        touchHelperCallback.setArcSplitPairs(mArcSplitPairs);
         mTouchHelperCallbacks.add(touchHelperCallback);
 
         // Handles long-presses for tab item/group context menus. Long-presses for empty space
@@ -2288,8 +2400,10 @@ public class VerticalTabListCoordinator {
         TabModel tabModel = mTabModelSelector.getCurrentModel();
         if (tabModel == null) return false;
 
-        Tab tab = tabModel.getTabById(tabId);
+        final int actionTabId = mArcSplitPairs.actionId(tabId);
+        Tab tab = tabModel.getTabById(actionTabId);
         if (tab == null || tab.isClosing()) return false;
+        tabId = actionTabId;
 
         List<Integer> allTabIds;
         if (TabMultiSelectHelper.hasMultipleTabsSelected(tabModel)
@@ -2300,10 +2414,18 @@ public class VerticalTabListCoordinator {
         }
 
         var anchorInfo = new AnchorInfo(tabId, allTabIds);
-        if (allTabIds.size() == 1 && mArcSplitRequest != null && mArcSplitEnabled.getAsBoolean()) {
+        if (mArcSplitPairs.peer(actionTabId) >= 0 && mArcSplitSeparateRequest != null) {
+            anchorInfo.setArcSplitSeparateAction(() -> {
+                TabModel current = mTabModelSelector.getCurrentModel();
+                Consumer<Tab> separate = mArcSplitSeparateRequest;
+                if (separate != null && current == tabModel
+                        && current.getTabById(actionTabId) == tab
+                        && mArcSplitPairs.peer(actionTabId) >= 0) separate.accept(tab);
+            });
+        } else if (allTabIds.size() == 1 && mArcSplitRequest != null && mArcSplitEnabled.getAsBoolean()) {
             anchorInfo.setArcSplitAction(() -> {
                 Consumer<Tab> request = mArcSplitRequest;
-                Tab live = mTabModelSelector.getCurrentModel().getTabById(tabId);
+                Tab live = mTabModelSelector.getCurrentModel().getTabById(actionTabId);
                 if (request != null && mArcSplitEnabled.getAsBoolean() && live != null && live == tab
                         && !live.isDestroyed() && !live.isClosing()) request.accept(live);
             });
@@ -2328,13 +2450,7 @@ public class VerticalTabListCoordinator {
                             mWindowAndroid,
                             activity,
                             /* tabBookmarkerSupplier= */ null,
-                            /* reorderFunction= */ (info, toPrevious) ->
-                                    NestedTabReorderUtils.reorderTabById(
-                                            mTabModelSelector.getCurrentModel(),
-                                            mPinnedTabsModelList,
-                                            mModelList,
-                                            info.getAnchorTabId(),
-                                            toPrevious),
+                            /* reorderFunction= */ this::reorderArcTabFromContext,
                             mSnackbarManager,
                             mActivityResultTracker,
                             /* modalDialogManager= */ mWindowAndroid.getModalDialogManager(),
@@ -2347,6 +2463,33 @@ public class VerticalTabListCoordinator {
         mTabItemHoverController.hideHoverCard();
         mTabContextMenuCoordinator.showMenu(rectProvider, anchorInfo);
         return true;
+    }
+
+    private void reorderArcTabFromContext(AnchorInfo info, boolean toPrevious) {
+        int id = info.getAnchorTabId();
+        TabModel model = mTabModelSelector.getCurrentModel();
+        TabListModel rows = mModelList;
+        Tab tab = model.getTabById(id);
+        if (tab != null && tab.getIsPinned()) rows = mPinnedTabsModelList;
+        int index = rows.indexFromTabId(mArcSplitPairs.representative(id));
+        int targetIndex = index + (toPrevious ? -1 : 1);
+        if (index != TabModel.INVALID_TAB_INDEX && targetIndex >= 0
+                && targetIndex < rows.size()) {
+            PropertyModel target = rows.get(targetIndex).model;
+            if (!TabProperties.isTabGroupHeader(target)
+                    && TabProperties.isTabOrTabGroup(target)) {
+                int targetId = target.get(TabProperties.TAB_ID);
+                if (mArcSplitPairs.peer(id) >= 0 || mArcSplitPairs.peer(targetId) >= 0) {
+                    if (mMainTouchHelperCallback != null) {
+                        mMainTouchHelperCallback.moveArcUnit(id, targetId, !toPrevious);
+                    }
+                    return;
+                }
+            }
+        }
+        if (mArcSplitPairs.peer(id) >= 0) return; // Do not split/migrate a unit across a section.
+        NestedTabReorderUtils.reorderTabById(model, mPinnedTabsModelList, mModelList,
+                id, toPrevious);
     }
 
     private void showEmptySpaceContextMenu(RectProvider rectProvider, Activity activity) {

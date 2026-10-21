@@ -15,6 +15,10 @@ public class MenuProbe {
   assert !info.hasArcSplitAction();info.setArcSplitAction(()->calls[0]++);
   assert info.hasArcSplitAction();info.runArcSplitAction();assert calls[0]==1;
   info.setArcSplitAction(null);info.runArcSplitAction();assert calls[0]==1;
+  assert !info.hasArcSplitSeparateAction();
+  info.setArcSplitSeparateAction(()->calls[0]+=10);
+  assert info.hasArcSplitSeparateAction(); info.runArcSplitSeparateAction(); assert calls[0]==11;
+  info.setArcSplitSeparateAction(null); info.runArcSplitSeparateAction(); assert calls[0]==11;
   assert info.getAnchorTabId()==17 && info.getAllTabIds().equals(List.of(17));
  }
 }'''.replace('BODY',body)

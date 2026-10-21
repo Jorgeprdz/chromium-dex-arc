@@ -19,6 +19,7 @@ chrome_java_sources = [
   "java/src/org/chromium/chrome/browser/arc/ArcCompactOmnibox.java",
   "java/src/org/chromium/chrome/browser/arc/ArcCommandBar.java",
   "java/src/org/chromium/chrome/browser/arc/ArcSplitState.java",
+  "java/src/org/chromium/chrome/browser/arc/ArcSplitPairStore.java",
   "java/src/org/chromium/chrome/browser/arc/ArcSplitViewportPolicy.java",
   "java/src/org/chromium/chrome/browser/arc/ArcSplitContentHost.java",
   "java/src/org/chromium/chrome/browser/arc/ArcSplitDividerView.java",

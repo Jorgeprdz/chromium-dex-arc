@@ -34,7 +34,7 @@ public class ArcSplitViewCoordinatorTest {
         Profile profile=mock(Profile.class);
         TabModel model=mock(TabModel.class);
         TabCreator creator=mock(TabCreator.class);
-        Tab one=mock(Tab.class),two=mock(Tab.class),other=mock(Tab.class);
+        Tab one=mock(Tab.class),two=mock(Tab.class),other=mock(Tab.class),four=mock(Tab.class),five=mock(Tab.class);
         AtomicReference<TabModel> suppliedModel=new AtomicReference<>(model);
         AtomicReference<Tab> current=new AtomicReference<>(one);
         java.util.concurrent.atomic.AtomicBoolean allowed=new java.util.concurrent.atomic.AtomicBoolean(true);
@@ -43,9 +43,9 @@ public class ArcSplitViewCoordinatorTest {
         Fixture() {this(null,false);}
         Fixture(String saved,boolean incognito) {
             a.setContentView(root);root.layout(0,0,1280,800);
-            Tab[] tabs={one,two,other};WindowAndroid window=mock(WindowAndroid.class);
+            Tab[] tabs={one,two,other,four,five};WindowAndroid window=mock(WindowAndroid.class);
             when(window.getActivity()).thenReturn(new java.lang.ref.WeakReference<>(a));
-            when(model.getProfile()).thenReturn(profile);when(model.isTabModelRestored()).thenReturn(true);when(model.getCount()).thenReturn(3);
+            when(profile.isOffTheRecord()).thenReturn(incognito);when(model.getProfile()).thenReturn(profile);when(model.isTabModelRestored()).thenReturn(true);when(model.getCount()).thenReturn(5);
             for(int i=0;i<tabs.length;i++) {Tab t=tabs[i];int id=17+i;
                 when(t.getId()).thenReturn(id);when(t.isIncognito()).thenReturn(incognito);when(t.getProfile()).thenReturn(profile);when(t.getWindowAndroid()).thenReturn(window);
                 when(t.getTitle()).thenReturn("Public fixture "+id);when(model.getTabById(id)).thenReturn(t);when(model.getTabAt(i)).thenReturn(t);
@@ -60,6 +60,152 @@ public class ArcSplitViewCoordinatorTest {
             coordinator.refresh(true);
         }
         void close(){coordinator.destroy();a.finish();}
+    }
+    @Test public void externalSelectionSuspendsAndRestoresPairWithoutLosingGeometry() {
+        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));
+        f.coordinator.stateForTesting().setRatio(.65f);f.coordinator.activate(18);
+        f.current.set(f.other);f.coordinator.refresh(true);
+        assertSame(f.other,f.current.get());assertFalse(f.coordinator.stateForTesting().isSplit());
+        f.current.set(f.two);f.coordinator.refresh(true);
+        assertTrue("Returning to a member restores its pair",f.coordinator.stateForTesting().isSplit());
+        assertEquals(17,f.coordinator.stateForTesting().leftId());assertEquals(.65f,f.coordinator.stateForTesting().ratio(),.001f);
+        assertEquals(18,f.coordinator.stateForTesting().activeId());verifyNoInteractions(f.creator);f.close();
+    }
+    @Test public void fiveTabsKeepTwoIndependentPairsAndInactiveClosureDoesNotSelectSurvivor() {
+        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));
+        f.coordinator.stateForTesting().setRatio(.65f);f.coordinator.activate(18);
+        f.current.set(f.four);f.coordinator.refresh(true);assertTrue(f.coordinator.enter(f.four,f.five));
+        f.coordinator.stateForTesting().setRatio(.35f);f.coordinator.activate(21);
+        f.current.set(f.other);f.coordinator.refresh(true);
+        f.current.set(f.two);f.coordinator.refresh(true);
+        assertTrue(f.coordinator.stateForTesting().isSplit());assertEquals(.65f,f.coordinator.stateForTesting().ratio(),.001f);
+        f.current.set(f.five);f.coordinator.refresh(true);
+        assertEquals(20,f.coordinator.stateForTesting().leftId());assertEquals(.35f,f.coordinator.stateForTesting().ratio(),.001f);
+        f.current.set(f.other);f.coordinator.refresh(true);
+        ArgumentCaptor<TabModelObserver> observer=ArgumentCaptor.forClass(TabModelObserver.class);verify(f.model).addObserver(observer.capture());
+        observer.getValue().willCloseTab(f.one,true);assertSame(f.other,f.current.get());
+        f.current.set(f.five);f.coordinator.refresh(true);assertTrue(f.coordinator.stateForTesting().isSplit());
+        verify(f.one,never()).reload();verify(f.two,never()).reload();verify(f.four,never()).reload();verify(f.five,never()).reload();f.close();
+    }
+    @Test public void snapshotsAreStableAndPairSelectionRestoresStoredActive() {
+        Fixture f=new Fixture();java.util.concurrent.atomic.AtomicInteger changes=new java.util.concurrent.atomic.AtomicInteger();
+        f.coordinator.setPairsChangedCallback(changes::incrementAndGet);
+        assertTrue(f.coordinator.enter(f.one,f.two));int representative=f.coordinator.getPairSnapshot().get(0)[0];
+        f.coordinator.activate(18);assertTrue("Pane activation updates sidebar",changes.get()>=2);
+        f.coordinator.swap();f.coordinator.settleForTesting();assertEquals(representative,f.coordinator.getPairSnapshot().get(0)[0]);
+        int[] detached=f.coordinator.getPairSnapshot().get(0);detached[1]=999;
+        assertEquals(18,f.coordinator.getPairSnapshot().get(0)[1]);
+        f.current.set(f.other);f.coordinator.refresh(true);assertTrue(f.coordinator.selectPair(17));assertSame(f.two,f.current.get());
+        assertTrue(f.coordinator.isPairMember(17));assertFalse(f.coordinator.enter(f.one,f.four));
+        f.coordinator.separatePair(17);assertFalse(f.coordinator.isPairMember(18));assertSame(f.two,f.current.get());f.close();
+    }
+    @Test public void inactiveMemberAttachmentAndDestructionAreObserved() {
+        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));
+        f.current.set(f.four);f.coordinator.refresh(true);assertTrue(f.coordinator.enter(f.four,f.five));
+        f.current.set(f.other);f.coordinator.refresh(true);
+        ArgumentCaptor<TabObserver> observer=ArgumentCaptor.forClass(TabObserver.class);verify(f.one).addObserver(observer.capture());
+        WindowAndroid moved=mock(WindowAndroid.class);Activity elsewhere=Robolectric.buildActivity(Activity.class).setup().get();
+        when(moved.getActivity()).thenReturn(new java.lang.ref.WeakReference<>(elsewhere));
+        observer.getValue().onActivityAttachmentChanged(f.one,moved);
+        assertFalse(f.coordinator.isPairMember(17));assertTrue(f.coordinator.isPairMember(20));assertSame(f.other,f.current.get());
+        ArgumentCaptor<TabObserver> otherObserver=ArgumentCaptor.forClass(TabObserver.class);verify(f.five).addObserver(otherObserver.capture());
+        otherObserver.getValue().onDestroyed(f.five);assertFalse(f.coordinator.isPairMember(20));assertSame(f.other,f.current.get());
+        elsewhere.finish();f.close();
+    }
+    @Test public void versionedRestoreRejectsEntriesIndependentlyAndDoesNotStealNativeSelection() {
+        Fixture f=new Fixture("v2;17,17,18,18,0.65;20,20,21,21,0.35;19,19,20,19,0.5;99,99,100,99,NaN",false);
+        assertSame(f.one,f.current.get());assertEquals(2,f.coordinator.getPairSnapshot().size());
+        f.current.set(f.other);f.coordinator.refresh(true);assertTrue(f.coordinator.selectPair(20));assertSame(f.five,f.current.get());
+        assertEquals(.35f,f.coordinator.stateForTesting().ratio(),.001f);
+        assertTrue(f.prefs.getString("arc_split_task_"+f.a.getTaskId(),"").startsWith("v2;"));f.close();
+    }
+    @Test public void incompatibleSectionSuspendsWithoutLosingPairsRatiosOrNativeSelection() {
+        Fixture f=new Fixture();f.coordinator.setPairCompatibility((a,b)->a!=f.one && b!=f.one);
+        assertFalse(f.coordinator.enter(f.one,f.two));assertTrue(f.coordinator.enter(f.four,f.five));
+        f.coordinator.stateForTesting().setRatio(.35f);f.coordinator.activate(21);
+        f.coordinator.setPairCompatibility((a,b)->true);assertTrue(f.coordinator.enter(f.one,f.two));
+        f.coordinator.stateForTesting().setRatio(.65f);f.coordinator.activate(18);
+        f.current.set(f.other);f.coordinator.refresh(true);clearInvocations(f.model,f.holder);
+        f.coordinator.setPairCompatibility((a,b)->a!=f.one && b!=f.one);
+        assertTrue("A section move must retain the association",f.coordinator.isPairMember(17));
+        assertTrue(f.coordinator.isPairMember(20));assertEquals(2,f.coordinator.getPairSnapshot().size());
+        assertSame(f.other,f.current.get());verify(f.model,never()).setIndex(anyInt(),anyInt());
+        assertFalse("A suspended row cannot select an incompatible pair",f.coordinator.selectPair(17));
+        assertSame(f.other,f.current.get());
+        f.current.set(f.two);f.coordinator.refresh(true);clearInvocations(f.holder);
+        f.coordinator.refresh(true);verify(f.holder,never()).setArcSplitTabs(any(),any(),anyFloat(),anyInt());
+        assertEquals(.65f,f.coordinator.stateForTesting().ratio(),.001f);
+        assertFalse(f.coordinator.enter(f.one,f.other));assertEquals(2,f.coordinator.getPairSnapshot().size());
+        f.coordinator.setPairCompatibility((a,b)->true);
+        verify(f.holder).setArcSplitTabs(f.one,f.two,.65f,18);assertSame(f.two,f.current.get());
+        f.current.set(f.other);f.coordinator.refresh(true);assertTrue(f.coordinator.selectPair(20));
+        assertSame(f.five,f.current.get());assertEquals(.35f,f.coordinator.stateForTesting().ratio(),.001f);
+        assertTrue(f.coordinator.selectPair(17));assertSame(f.two,f.current.get());
+        assertEquals(.65f,f.coordinator.stateForTesting().ratio(),.001f);f.close();
+    }
+    @Test public void incompatibleRestoredPairRemainsStoredAndCanBeExplicitlySeparated() {
+        Fixture f=new Fixture("17,18,18,0.65",false);f.coordinator.destroy();
+        f.current.set(f.other);
+        f.coordinator=new ArcSplitViewCoordinator(f.a,f.root,f.holder,f.suppliedModel::get,()->f.creator,f.current::get,()->{},()->true,f.prefs,
+            new ArcSplitViewCoordinator.Labels("Split","Existing","New","Exit","Unsupported","No tabs","Swap","Blocked"));
+        f.coordinator.setPairCompatibility((a,b)->false);f.coordinator.refresh(true);
+        assertTrue(f.coordinator.isPairMember(17));assertSame(f.other,f.current.get());
+        assertTrue(f.prefs.getString("arc_split_task_"+f.a.getTaskId(),"").contains("0.65"));
+        f.coordinator.separatePair(17);assertFalse(f.coordinator.isPairMember(18));assertSame(f.other,f.current.get());f.close();
+    }
+    @Test public void differentProfileWithReusedNativeIdsCannotLoadNormalAssociations() {
+        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));
+        String saved=f.prefs.getString("arc_split_task_"+f.a.getTaskId(),null);
+        Profile profile=mock(Profile.class);TabModel model=mock(TabModel.class);
+        Tab a=mock(Tab.class),b=mock(Tab.class);WindowAndroid window=mock(WindowAndroid.class);
+        when(window.getActivity()).thenReturn(new java.lang.ref.WeakReference<>(f.a));
+        when(model.getProfile()).thenReturn(profile);when(model.getCount()).thenReturn(2);when(model.isTabModelRestored()).thenReturn(true);
+        for(int i=0;i<2;i++) {Tab tab=i==0?a:b;int id=17+i;when(tab.getId()).thenReturn(id);when(tab.getProfile()).thenReturn(profile);
+            when(tab.getWindowAndroid()).thenReturn(window);when(model.getTabById(id)).thenReturn(tab);when(model.getTabAt(i)).thenReturn(tab);}
+        f.suppliedModel.set(model);f.current.set(a);f.coordinator.refresh(true);
+        assertTrue("Persisted associations belong to their original profile",f.coordinator.getPairSnapshot().isEmpty());
+        assertTrue(f.coordinator.enter(a,b));f.coordinator.exit();
+        assertEquals(saved,f.prefs.getString("arc_split_task_"+f.a.getTaskId(),null));
+        f.suppliedModel.set(f.model);f.current.set(f.one);f.coordinator.refresh(true);assertTrue(f.coordinator.isPairMember(18));f.close();
+    }
+    @Test public void inactiveActivityHiddenDoesNotHideVisiblePair() {
+        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));
+        f.current.set(f.four);f.coordinator.refresh(true);assertTrue(f.coordinator.enter(f.four,f.five));
+        ArgumentCaptor<TabObserver> observer=ArgumentCaptor.forClass(TabObserver.class);verify(f.one).addObserver(observer.capture());
+        clearInvocations(f.four,f.five,f.holder);
+        observer.getValue().onHidden(f.one,org.chromium.chrome.browser.tab.TabHidingType.ACTIVITY_HIDDEN);
+        verify(f.four,never()).hide(anyInt());verify(f.five,never()).hide(anyInt());
+        f.coordinator.refresh(true);verify(f.holder,never()).clearArcSplitTabs();
+        assertSame(f.four,f.current.get());f.close();
+    }
+    @Test public void inactiveSeparationLeavesOtherPairAndSelectionAlone() {
+        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));
+        f.current.set(f.four);f.coordinator.refresh(true);assertTrue(f.coordinator.enter(f.four,f.five));
+        f.coordinator.activate(21);clearInvocations(f.model,f.holder);
+        f.coordinator.separatePair(17);
+        assertFalse(f.coordinator.isPairMember(18));assertTrue(f.coordinator.isPairMember(21));
+        assertSame(f.five,f.current.get());verify(f.model,never()).setIndex(anyInt(),anyInt());
+        verify(f.holder,never()).clearArcSplitTabs();f.close();
+    }
+    @Test public void storeMigrationRejectsMalformedRowsWithoutDroppingOtherPairs() {
+        ArcSplitPairStore legacy=ArcSplitPairStore.decode("17,18,18,0.65");
+        assertEquals("v2;17,17,18,18,0.65",legacy.encode());
+        ArcSplitPairStore store=ArcSplitPairStore.decode("v2;17,17,18,18,0.65;bad;"
+                +"20,20,21,20,NaN;20,20,21,20,Infinity;20,20,21,20,0.9;"
+                +"20,20,21,999,0.5;20,20,21,20,0.35;19,19,20,19,0.5");
+        assertEquals(2,store.pairs().size());assertNull(store.member(19));
+        assertSame(store.member(20),store.member(21));
+        assertEquals(store.encode(),ArcSplitPairStore.decode(store.encode()).encode());
+    }
+    @Test public void startupWaitsForNativeModelRestorationWithoutChangingPreferences() {
+        Fixture f=new Fixture();f.coordinator.destroy();String key="arc_split_task_"+f.a.getTaskId();
+        f.prefs.edit().putString(key,"17,18,18,0.65").apply();when(f.model.isTabModelRestored()).thenReturn(false);
+        f.coordinator=new ArcSplitViewCoordinator(f.a,f.root,f.holder,f.suppliedModel::get,()->f.creator,f.current::get,()->{},()->true,f.prefs,
+            new ArcSplitViewCoordinator.Labels("Split","Existing","New","Exit","Unsupported","No tabs","Swap","Blocked"));
+        f.coordinator.refresh(true);assertTrue(f.coordinator.getPairSnapshot().isEmpty());
+        assertFalse(f.coordinator.enter(f.four,f.five));assertEquals("17,18,18,0.65",f.prefs.getString(key,null));
+        when(f.model.isTabModelRestored()).thenReturn(true);f.coordinator.refresh(true);
+        assertTrue(f.coordinator.isPairMember(18));assertSame(f.one,f.current.get());f.close();
     }
     @Test public void enterAndActivationUseNativeIdentitiesAndExitKeepsTabsAlive() {
         Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));
@@ -209,10 +355,12 @@ public class ArcSplitViewCoordinatorTest {
     }
     @Test public void failedPresentationKeepsPreviousPairAndSelection() {
         Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));f.coordinator.activate(18);
-        when(f.holder.setArcSplitTabs(eq(f.one),eq(f.other),anyFloat(),anyInt())).thenReturn(false);
-        assertFalse(f.coordinator.enter(f.one,f.other));assertEquals(17,f.coordinator.stateForTesting().leftId());
+        clearInvocations(f.holder);
+        when(f.holder.setArcSplitTabs(eq(f.four),eq(f.five),anyFloat(),anyInt())).thenReturn(false);
+        assertFalse(f.coordinator.enter(f.four,f.five));assertEquals(17,f.coordinator.stateForTesting().leftId());
         assertEquals(18,f.coordinator.stateForTesting().rightId());assertSame(f.two,f.current.get());
-        verify(f.other).hide(org.chromium.chrome.browser.tab.TabHidingType.CHANGED_TABS);f.close();
+        verify(f.five).hide(org.chromium.chrome.browser.tab.TabHidingType.CHANGED_TABS);
+        verify(f.holder).setArcSplitTabs(f.one,f.two,.5f,18);f.close();
     }
     @Test public void existingPickerAndCancellationNeverCreateTab() {
         Fixture f=new Fixture();f.coordinator.requestSplit(f.one);
@@ -237,7 +385,7 @@ public class ArcSplitViewCoordinatorTest {
     }
     @Test public void nativeRestoredIdsReopenOnlyExistingPairAndKeepRatio() {
         Fixture f=new Fixture("17,18,18,0.65",false);
-        assertTrue(f.coordinator.stateForTesting().isSplit());assertSame(f.two,f.current.get());
+        assertTrue(f.coordinator.stateForTesting().isSplit());assertSame(f.one,f.current.get());
         assertEquals(.65f,f.coordinator.stateForTesting().ratio(),.001f);verifyNoInteractions(f.creator);f.close();
     }
     @Test public void missingRestoredIdDoesNotResurrectTabs() {
@@ -263,9 +411,9 @@ public class ArcSplitViewCoordinatorTest {
         f.coordinator=new ArcSplitViewCoordinator(f.a,f.root,f.holder,()->f.model,()->f.creator,f.current::get,()->{},()->true,f.prefs,
             new ArcSplitViewCoordinator.Labels("Split","Existing","New","Exit","Unsupported","No tabs","Swap","Blocked"));
         f.current.set(null);f.coordinator.refresh(false);assertEquals("17,18,18,0.65",f.prefs.getString(key,null));
-        f.current.set(f.one);f.coordinator.refresh(true);assertEquals("17,18,18,0.65",f.prefs.getString(key,null));
+        f.current.set(f.one);f.coordinator.refresh(true);assertTrue(f.coordinator.isPairMember(17));assertSame(f.one,f.current.get());
         when(f.holder.canPresentArcSplit()).thenReturn(true);f.coordinator.refresh(true);
-        assertTrue(f.coordinator.stateForTesting().isSplit());assertSame(f.two,f.current.get());verifyNoInteractions(f.creator);f.close();
+        assertTrue(f.coordinator.stateForTesting().isSplit());assertSame(f.one,f.current.get());verifyNoInteractions(f.creator);f.close();
     }
     @Test public void asymmetricRatioKeepsTwoUsablePanesWithoutLosingIntendedRatio() {
         Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));f.coordinator.stateForTesting().setRatio(.2f);
@@ -279,7 +427,7 @@ public class ArcSplitViewCoordinatorTest {
         when(f.holder.canPresentArcSplit()).thenReturn(false);clearInvocations(f.holder);
         f.coordinator=new ArcSplitViewCoordinator(f.a,f.root,f.holder,()->f.model,()->f.creator,f.current::get,()->{},()->true,f.prefs,
             new ArcSplitViewCoordinator.Labels("Split","Existing","New","Exit","Unsupported","No tabs","Swap","Blocked"));
-        f.coordinator.refresh(true);assertFalse(f.coordinator.stateForTesting().isSplit());
+        f.coordinator.refresh(true);assertTrue(f.coordinator.isPairMember(17));verify(f.holder,never()).setArcSplitTabs(any(),any(),anyFloat(),anyInt());
         ArgumentCaptor<CompositorViewHolder.FrameRequestObserver> frame=ArgumentCaptor.forClass(CompositorViewHolder.FrameRequestObserver.class);
         verify(f.holder).addFrameRequestObserver(frame.capture());when(f.holder.canPresentArcSplit()).thenReturn(true);
         frame.getValue().onFrameRequested();ArgumentCaptor<Runnable> posted=ArgumentCaptor.forClass(Runnable.class);verify(f.holder).post(posted.capture());

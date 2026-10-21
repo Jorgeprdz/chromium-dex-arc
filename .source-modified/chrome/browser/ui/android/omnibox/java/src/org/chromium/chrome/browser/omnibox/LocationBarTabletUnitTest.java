@@ -1359,6 +1359,69 @@ public class LocationBarTabletUnitTest {
     }
 
 
+    @Test
+    @Config(sdk = {30, 36})
+    public void arcFreshAddressDownAfterLostReleaseCanReopen() {
+        setupArcAddressTouch();
+        for (int buttons : new int[] {0, MotionEvent.BUTTON_PRIMARY}) {
+            int[] opens = {0};
+            mLocationBarTablet.setArcAddressPopupOpener(() -> { opens[0]++; return true; });
+            dispatchArcAddressTouch(MotionEvent.ACTION_DOWN, buttons);
+            // The old parent can lose the release after the same editor is reparented.
+            dispatchArcAddressTouch(MotionEvent.ACTION_DOWN, buttons);
+            dispatchArcAddressTouch(MotionEvent.ACTION_UP, 0);
+            assertEquals(2, opens[0]);
+        }
+    }
+
+    @Test
+    @Config(sdk = {30, 36})
+    public void arcPopupEditorAcceptsFirstFreshGestureAfterLostRelease() {
+        UrlBar editor = setupArcAddressTouch();
+        int[] nativeEvents = {0};
+        mLocationBarTablet.setArcAddressPopupOpener(() -> true);
+        dispatchArcAddressTouch(MotionEvent.ACTION_DOWN, 0);
+        mLocationBarTablet.setArcAddressPopupOpener(() -> false);
+        editor.setOnTouchListener((view, event) -> { nativeEvents[0]++; return true; });
+        dispatchArcAddressTouch(MotionEvent.ACTION_DOWN, 0);
+        dispatchArcAddressTouch(MotionEvent.ACTION_UP, 0);
+        assertEquals(2, nativeEvents[0]);
+    }
+
+    private UrlBar setupArcAddressTouch() {
+        setupArcSidebarHierarchy();
+        UrlBar editor = mLocationBarTablet.findViewById(R.id.url_bar);
+        // Exclude action segments from this address-only hit test, preserving the real editor.
+        for (int i = 0; i < mLocationBarTablet.getChildCount(); i++) {
+            View child = mLocationBarTablet.getChildAt(i);
+            if (child != editor) child.setVisibility(View.GONE);
+        }
+        mLocationBarTablet.layout(0, 0, 400, 100);
+        editor.setVisibility(View.VISIBLE);
+        editor.layout(0, 0, 400, 100);
+        return editor;
+    }
+
+    private boolean mArcTouchUsesMouse;
+
+    private void dispatchArcAddressTouch(int action, int buttons) {
+        if (action == MotionEvent.ACTION_DOWN) mArcTouchUsesMouse = buttons != 0;
+        MotionEvent.PointerProperties pointer = new MotionEvent.PointerProperties();
+        pointer.id = 0;
+        pointer.toolType = mArcTouchUsesMouse ? MotionEvent.TOOL_TYPE_MOUSE : MotionEvent.TOOL_TYPE_FINGER;
+        MotionEvent.PointerCoords at = new MotionEvent.PointerCoords();
+        at.x = 100; at.y = 50; at.pressure = 1; at.size = 1;
+        MotionEvent event = MotionEvent.obtain(0, 1, action, 1,
+                new MotionEvent.PointerProperties[] {pointer}, new MotionEvent.PointerCoords[] {at},
+                0, buttons, 1, 1, 0, 0,
+                mArcTouchUsesMouse ? InputDevice.SOURCE_MOUSE : InputDevice.SOURCE_TOUCHSCREEN, 0);
+        try {
+            mLocationBarTablet.dispatchTouchEvent(event);
+        } finally {
+            event.recycle();
+        }
+    }
+
     private void setupContainerAndMeasure(int containerWidth, int prefocusWidth, int leftPosition) {
         LinearLayout container = new LinearLayout(mActivity);
         ((ViewGroup) mHolderView.getParent()).removeView(mHolderView);

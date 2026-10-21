@@ -65,6 +65,9 @@
     <string name="arc_ui_font_medium">Sans serif media</string>
     <string name="arc_ui_font_serif">Serif</string>
     <string name="arc_ui_font_mono">Monoespaciada</string>
+    <item type="id" name="arc_split_separate" />
+    <string name="arc_current_space">Espacio actual: %1$s</string>
+    <string name="arc_split_separate">Separar pestañas</string>
     <item type="id" name="arc_split_view" />
     <string name="arc_split_view">Pantalla dividida</string>
     <string name="arc_split_existing">Elegir pestaña abierta</string>

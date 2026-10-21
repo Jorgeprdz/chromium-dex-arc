@@ -1,7 +1,7 @@
 # Varias parejas de vista dividida y sidebar conjunta
 
 Fecha: 21-oct-2026. Base: `cb9822aa0a4a0e4a5d5609bd80da470b0d4db325`.
-Estado: diseño para revisión; implementación y nueva compilación no iniciadas.
+Estado: implementación candidata recuperada el 21-oct-2026; pruebas host registradas en R5_6_TERMUX_RECOVERY.md. Nueva compilación y aceptación APK pendientes.
 
 ## Resultado acordado
 

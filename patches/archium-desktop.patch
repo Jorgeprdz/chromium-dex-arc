@@ -22,7 +22,7 @@ diff --git a/chrome/android/chrome_java_resources.gni b/chrome/android/chrome_ja
 diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java_sources.gni
 --- a/chrome/android/chrome_java_sources.gni
 +++ b/chrome/android/chrome_java_sources.gni
-@@ -5,6 +5,34 @@
+@@ -5,6 +5,35 @@
  import("//content/public/common/features.gni")
 
  chrome_java_sources = [
@@ -40,6 +40,7 @@ diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java
 +  "java/src/org/chromium/chrome/browser/arc/ArcCompactOmnibox.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcCommandBar.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcSplitState.java",
++  "java/src/org/chromium/chrome/browser/arc/ArcSplitPairStore.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcSplitViewportPolicy.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcSplitContentHost.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcSplitDividerView.java",
@@ -186,15 +187,109 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
  import java.util.function.Supplier;
 
  /**
-@@ -375,6 +376,7 @@
+@@ -375,6 +376,47 @@
      private final @Nullable DataSharingTabManager mDataSharingTabManager;
      private final TabModelObserver mTabModelObserver;
      private final TabListLayoutDelegate mTabListLayoutDelegate;
 +    private @Nullable IntPredicate mTabVisibilityPredicate;
++    private org.chromium.chrome.browser.ui.vertical_tabs.ArcSplitPairProjection mArcSplitPairs =
++            new org.chromium.chrome.browser.ui.vertical_tabs.ArcSplitPairProjection();
++
++    public void setArcSplitPairs(org.chromium.chrome.browser.ui.vertical_tabs.ArcSplitPairProjection pairs) {
++        mArcSplitPairs = pairs;
++    }
++
++    /** Update only pair properties; preserve stable row identity and native listeners. */
++    public void refreshArcSplitPairRows() {
++        if (mComponentId != TabComponentId.VERTICAL_TABS) return;
++        TabModel tabs=mCurrentTabModelSupplier.get();
++        if (tabs == null) return;
++        for(int i=0;i<mModelList.size();i++) {
++            PropertyModel row=mModelList.get(i).model;
++            if (!TabProperties.isTabOrTabGroup(row) || TabProperties.isTabGroupHeader(row)
++                    || !row.containsKey(TabProperties.ARC_SPLIT_PAIR)) continue;
++            int id=row.get(TAB_ID);int[] pair=mArcSplitPairs.pair(id);
++            TabProperties.ArcSplitPair data=null;
++            if(pair!=null) {
++                Tab left=tabs.getTabById(pair[1]),right=tabs.getTabById(pair[2]);
++                if(left!=null && right!=null && !left.isDestroyed() && !right.isDestroyed()) {
++                    data=new TabProperties.ArcSplitPair(pair[1],pair[2],pair[3],
++                            getTabTitleOrUrl(left),getTabTitleOrUrl(right),
++                            mTabListFaviconProvider.getFaviconForTabFetcher(left),
++                            mTabListFaviconProvider.getFaviconForTabFetcher(right),
++                            mTabListFaviconProvider.getDefaultFavicon(left.isIncognitoBranded())
++                                    .getDefaultDrawable());
++                }
++            }
++            row.set(TabProperties.ARC_SPLIT_PAIR,data);
++            row.set(TabProperties.IS_SELECTED,
++                    mArcSplitPairs.representative(TabModelUtils.getCurrentTabId(tabs))==id);
++            if(data!=null) {
++                row.set(TabProperties.TITLE,data.title());
++                Tab active = tabs.getTabById(pair[3]);
++                if (active != null) updateActionButtonDescriptionString(active, row);
++            }
++        }
++    }
++
      private final TabListObserverManager mObserverManager;
      private final TabActionListener mTabClosedListener;
      private final TabGridItemTouchHelperCallback mTabGridItemTouchHelperCallback;
-@@ -1939,6 +1941,15 @@
+@@ -643,6 +685,7 @@
+                         if (tabId == lastId) return;
+
+                         mTabListLayoutDelegate.didSelectTab(tab, type, lastId);
++                        refreshArcSplitPairRows();
+                     }
+
+                     @Override
+@@ -739,6 +782,7 @@
+                         // TODO(crbug.com/40638921): Consider disabling all touch events during
+                         // animation.
+
++                        tabId = mArcSplitPairs.actionId(tabId);
+                         int closingTabIndex = getIndexFromTabId(tabId);
+                         if (closingTabIndex == TabModel.INVALID_TAB_INDEX) return;
+
+@@ -1253,6 +1297,11 @@
+
+     void updateTab(
+             PropertyModel model, int index, Tab tab, boolean isUpdatingId, boolean quickMode) {
++        if (!TabProperties.isTabGroupHeader(model)
++                && mArcSplitPairs.representative(tab.getId()) != tab.getId()) {
++            refreshArcSplitPairRows();
++            return;
++        }
+         if (isUpdatingId) {
+             model.set(TabProperties.TAB_ID, tab.getId());
+         } else {
+@@ -1303,6 +1352,7 @@
+                         || tabGroupId != null)) {
+             updateThumbnailFetcher(model, tab.getId());
+         }
++        if (mArcSplitPairs.peer(tab.getId()) >= 0) refreshArcSplitPairRows();
+     }
+
+     void updateActorUiState(PropertyModel model, Tab tab) {
+@@ -1696,6 +1746,7 @@
+     }
+
+     private void handleTabSelection(int tabId) {
++        tabId = mArcSplitPairs.actionId(tabId);
+         if (mTabListItemOnClickListenerProvider != null) {
+             mTabListItemOnClickListenerProvider.onTabSelecting(tabId);
+         } else {
+@@ -1733,7 +1784,8 @@
+                     return currentTab != null && tabGroupId.equals(currentTab.getTabGroupId());
+                 }
+             }
+-            return TabModelUtils.getCurrentTabId(tabModel) == tab.getId();
++            return mArcSplitPairs.representative(TabModelUtils.getCurrentTabId(tabModel))
++                    == mArcSplitPairs.representative(tab.getId());
+         }
+     }
+
+@@ -1939,6 +1991,16 @@
          updateThumbnailFetcherForSavedTabGroup(tabGroupInfo, savedTabGroup);
      }
 
@@ -204,13 +299,14 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 +    }
 +
 +    boolean isTabHiddenForPresentation(Tab tab) {
-+        return mTabVisibilityPredicate != null && !mTabVisibilityPredicate.test(tab.getId());
++        return (mTabVisibilityPredicate != null && !mTabVisibilityPredicate.test(tab.getId()))
++                || mArcSplitPairs.representative(tab.getId()) != tab.getId();
 +    }
 +
      /**
       * Inserts the child tabs of a group into the list model.
       *
-@@ -1949,12 +1960,13 @@
+@@ -1949,12 +2011,13 @@
      int insertChildTabs(Token tabGroupId, int headerIndex) {
          TabModel tabModel = getCurrentTabModelChecked();
          List<Tab> children = tabModel.getTabsInGroup(tabGroupId);
@@ -230,19 +326,171 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
      }
 
      /**
+@@ -2233,6 +2296,10 @@
+
+     void updateFaviconForTab(
+             PropertyModel model, Tab tab, @Nullable Bitmap icon, @Nullable GURL iconUrl) {
++        if (!TabProperties.isTabGroupHeader(model) && mArcSplitPairs.peer(tab.getId()) >= 0) {
++            refreshArcSplitPairRows();
++            return;
++        }
+         if (TabProperties.isTabGroupHeader(model)) {
+             model.set(TabProperties.FAVICON_FETCHER, null);
+             return;
+@@ -2470,7 +2537,7 @@
+      * @return The UI index in the model list, or {@link TabModel#INVALID_TAB_INDEX} if not found.
+      */
+     int getIndexFromTabId(int tabId) {
+-        return mTabListLayoutDelegate.getIndexFromTabId(tabId);
++        return mTabListLayoutDelegate.getIndexFromTabId(mArcSplitPairs.representative(tabId));
+     }
+
+     /**
+@@ -2566,6 +2633,9 @@
+                 }
+             } else {
+                 addObserversForTab(tab);
++                int peerId=mArcSplitPairs.peer(tab.getId());
++                Tab peer=peerId<0?null:tabModel.getTabById(peerId);
++                if(peer!=null)addObserversForTab(peer);
+             }
+         }
+
+diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/TabProperties.java b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/TabProperties.java
+--- a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/TabProperties.java
++++ b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/TabProperties.java
+@@ -46,6 +46,25 @@
+ /** List of properties to designate information about a single tab. */
+ @NullMarked
+ public class TabProperties {
++    /** Presentation metadata only; native TAB_ID remains the stable representative. */
++    public static final class ArcSplitPair {
++        public final int leftId, rightId, activeId;
++        public final String leftTitle, rightTitle;
++        public final android.graphics.drawable.Drawable defaultIcon;
++        public final org.chromium.chrome.browser.tab_ui.TabListFaviconProvider.TabFaviconFetcher leftIcon, rightIcon;
++        public ArcSplitPair(int left, int right, int active, String leftTitle, String rightTitle,
++                org.chromium.chrome.browser.tab_ui.TabListFaviconProvider.TabFaviconFetcher leftIcon,
++                org.chromium.chrome.browser.tab_ui.TabListFaviconProvider.TabFaviconFetcher rightIcon,
++                android.graphics.drawable.Drawable defaultIcon) {
++            this.defaultIcon = defaultIcon;
++            leftId=left;rightId=right;activeId=active;this.leftTitle=leftTitle;this.rightTitle=rightTitle;
++            this.leftIcon=leftIcon;this.rightIcon=rightIcon;
++        }
++        public String title() { return leftTitle + " | " + rightTitle; }
++    }
++    public static final WritableObjectPropertyKey<@Nullable ArcSplitPair> ARC_SPLIT_PAIR =
++            new WritableObjectPropertyKey<>();
++
+     /** IDs for possible types of UI in the tab list. */
+     @Target(ElementType.TYPE_USE)
+     @IntDef({
+@@ -294,6 +313,7 @@
+                     new PropertyKey[] {
+                         TAB_ACTION_STATE,
+                         TAB_ID,
++                        ARC_SPLIT_PAIR,
+                         SHOPPING_PERSISTED_TAB_DATA_FETCHER,
+                         SHOULD_SHOW_PRICE_DROP_TOOLTIP,
+                         HAS_NOTIFICATION_BUBBLE,
+@@ -346,6 +366,7 @@
+                 ACCESSIBILITY_DELEGATE,
+                 ACTION_BUTTON_DESCRIPTION_TEXT_RESOLVER,
+                 ALERT_STATE,
++                ARC_SPLIT_PAIR,
+                 CARD_TYPE,
+                 CONTENT_DESCRIPTION_TEXT_RESOLVER,
+                 DRAGGING_Y,
 diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinder.java b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinder.java
 --- a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinder.java
 +++ b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinder.java
-@@ -38,6 +38,8 @@
+@@ -38,6 +38,9 @@
  import org.chromium.chrome.browser.tasks.tab_management.TabUiThemeUtil;
  import org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabItemHoverController.TabHoverListener;
  import org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabListProperties.RailCollapseState;
 +import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance;
++import org.chromium.chrome.browser.ui.vertical_tabs.ArcSplitPairVisuals;
 +import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy;
  import org.chromium.chrome.browser.ui.vertical_tabs.VerticalTabUtils;
  import org.chromium.chrome.tab_ui.R;
  import org.chromium.components.browser_ui.styles.ChromeColors;
-@@ -325,7 +327,8 @@
+@@ -223,6 +226,9 @@
+             if (button == null) button = view.findViewById(R.id.menu_button);
+             if (button != null) {
+                 TabListViewBinderUtils.updateActionButtonContentDescription(model, button);
++                button.setTooltipText(model.containsKey(TabProperties.ARC_SPLIT_PAIR)
++                        && model.get(TabProperties.ARC_SPLIT_PAIR) != null
++                        ? button.getContentDescription() : null);
+             }
+         }
+     }
+@@ -239,7 +245,19 @@
+             PropertyModel model, VerticalTabItemLayout view, @Nullable PropertyKey propertyKey) {
+         bindCommonProperties(model, view, propertyKey);
+
+-        if (TabProperties.TITLE == propertyKey) {
++        if (TabProperties.TAB_ID == propertyKey) {
++            // A recycled holder must not finish the previous native tab's selection transition.
++            ArcDesktopAppearance.clearSidebarRowState(view);
++            if (ArcDesktopAppearance.isDesktopWindow(view.getContext())) {
++                ArcDesktopAppearance.applySidebarRowState(view, model.get(TabProperties.IS_SELECTED),
++                        model.get(TabProperties.IS_MULTI_SELECTED), isIncognito(model),
++                        view.isHovered() || view.hasFocus());
++            }
++        }
++        if (TabProperties.ARC_SPLIT_PAIR == propertyKey) {
++            updateTitle(R.id.tab_title, model, view);
++            updateFaviconImage(model, view);
++        } else if (TabProperties.TITLE == propertyKey) {
+             updateTitle(R.id.tab_title, model, view);
+             updateParentPadding(model, view);
+         } else if (TabProperties.FAVICON_FETCHER == propertyKey) {
+@@ -297,8 +315,43 @@
+         @Nullable ImageView faviconView = view.findViewById(R.id.tab_favicon);
+         if (faviconView == null) return;
+
+-        TabListViewBinderUtils.updateFaviconImage(model, faviconView);
++        if (ArcDesktopAppearance.isDesktopWindow(view.getContext())) {
++            ArcDesktopAppearance.normalizeSidebarFavicon(faviconView);
++        }
++        TabProperties.ArcSplitPair pair = model.get(TabProperties.ARC_SPLIT_PAIR);
++        if (pair != null) {
++            bindArcSplitPairIcons(model, faviconView, pair);
++        } else {
++            TabListViewBinderUtils.updateFaviconImage(model, faviconView);
++        }
+         updateIcons(model, view);
++    }
++
++    private static void bindArcSplitPairIcons(PropertyModel model, ImageView faviconView,
++            TabProperties.ArcSplitPair pair) {
++        Object generation = new Object();
++        faviconView.setTag(generation); // Invalidate the native single-icon callback as well.
++        int rowId = model.get(TabProperties.TAB_ID);
++        Drawable[] icons = {pair.defaultIcon, pair.defaultIcon};
++        int divider = ArcDesktopAppearance.foreground(faviconView.getContext(), isIncognito(model));
++        faviconView.setImageTintList(null);
++        faviconView.setImageDrawable(ArcSplitPairVisuals.icons(icons[0], icons[1], divider));
++        pair.leftIcon.fetch(favicon -> {
++            if (faviconView.getTag() != generation
++                    || model.get(TabProperties.ARC_SPLIT_PAIR) != pair
++                    || model.get(TabProperties.TAB_ID) != rowId) return;
++            icons[0] = favicon == null || favicon.getDefaultDrawable() == null
++                    ? pair.defaultIcon : favicon.getDefaultDrawable();
++            faviconView.setImageDrawable(ArcSplitPairVisuals.icons(icons[0], icons[1], divider));
++        });
++        pair.rightIcon.fetch(favicon -> {
++            if (faviconView.getTag() != generation
++                    || model.get(TabProperties.ARC_SPLIT_PAIR) != pair
++                    || model.get(TabProperties.TAB_ID) != rowId) return;
++            icons[1] = favicon == null || favicon.getDefaultDrawable() == null
++                    ? pair.defaultIcon : favicon.getDefaultDrawable();
++            faviconView.setImageDrawable(ArcSplitPairVisuals.icons(icons[0], icons[1], divider));
++        });
+     }
+
+     private static void updateIcons(PropertyModel model, VerticalTabItemLayout view) {
+@@ -325,7 +378,8 @@
                          && actionButton != null
                          && actionData != null
                          && (showIconOnly
@@ -252,7 +500,113 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
                                  : (!DeviceInfo.isDesktop() || isSelected || isHovered));
          @TabAlert
          int alertState =
-@@ -825,6 +828,14 @@
+@@ -350,6 +404,14 @@
+                 loadingWanted = false;
+                 faviconWanted = false;
+             }
++        }
++
++        // A compact pair is identified by both logos; closing its active panel stays in the menu.
++        if (model.get(TabProperties.ARC_SPLIT_PAIR) != null && showIconOnly) {
++            actionWanted = false;
++            alertWanted = false;
++            loadingWanted = false;
++            faviconWanted = faviconView != null;
+         }
+
+         // 3. Apply to views, handle animations/bindings and view constraints
+@@ -486,6 +548,12 @@
+             bg.mutate();
+             ViewCompat.setBackgroundTintList(view, tintList);
+         }
++        if (ArcDesktopAppearance.isDesktopWindow(context)) {
++            ArcDesktopAppearance.applySidebarRowState(view, isSelected, isMultiSelected,
++                    isIncognito, view.isHovered() || view.hasFocus());
++        } else {
++            ArcDesktopAppearance.clearSidebarRowState(view);
++        }
+         updateFaviconImage(model, view);
+         updateTabAlertIndicatorTint(model, view);
+         setupTabHoverListener(model, view, /* defaultBackgroundColor= */ tintList);
+@@ -640,13 +708,59 @@
+         TextView titleView = view.findViewById(titleViewId);
+         if (titleView == null) return;
+
+-        if (shouldShowIconOnly(model, view)) {
+-            titleView.setVisibility(View.GONE);
++        TabProperties.ArcSplitPair pair = model.get(TabProperties.ARC_SPLIT_PAIR);
++        if (pair != null) {
++            updatePairTitle(model, view, titleView, pair);
++            return;
++        }
++        // Replacing a pair with a normal row removes its deferred title formatter.
++        if (titleView.getTag(R.id.tab_title) instanceof View.OnLayoutChangeListener listener) {
++            titleView.removeOnLayoutChangeListener(listener);
++            titleView.setTag(R.id.tab_title, null);
++        }
++        View close = view.findViewById(R.id.action_button);
++        if (close != null) {
++            close.setTooltipText(null);
++            TabListViewBinderUtils.updateActionButtonContentDescription(model, close);
++        }
++        // Always replace recycled text, including while collapsed or pinned.
++        String title = model.get(TabProperties.TITLE);
++        titleView.setText(title);
++        if (ArcDesktopAppearance.isDesktopWindow(view.getContext())) {
++            view.setTooltipText(TextUtils.isEmpty(title) ? null : title);
+         } else {
+-            titleView.setVisibility(View.VISIBLE);
+-            titleView.setText(model.get(TabProperties.TITLE));
+-        }
++            view.setTooltipText(null);
++        }
++        titleView.setVisibility(shouldShowIconOnly(model, view) ? View.GONE : View.VISIBLE);
+         updateContentDescription(model, view);
++    }
++
++    private static void updatePairTitle(PropertyModel model, ViewGroup view,
++            TextView titleView, TabProperties.ArcSplitPair pair) {
++        if (titleView.getTag(R.id.tab_title) instanceof View.OnLayoutChangeListener old) {
++            titleView.removeOnLayoutChangeListener(old);
++        }
++        Runnable format = () -> {
++            if (model.get(TabProperties.ARC_SPLIT_PAIR) != pair) return;
++            int width = titleView.getWidth() - titleView.getCompoundPaddingLeft()
++                    - titleView.getCompoundPaddingRight();
++            titleView.setText(width > 0 ? ArcSplitPairVisuals.title(pair.leftTitle, pair.rightTitle,
++                    titleView.getPaint(), width) : pair.title());
++        };
++        View.OnLayoutChangeListener listener = (v, l, t, r, b, ol, ot, or, ob) -> {
++            if (r - l != or - ol) format.run();
++        };
++        titleView.setTag(R.id.tab_title, listener);
++        titleView.addOnLayoutChangeListener(listener);
++        format.run();
++        titleView.setVisibility(shouldShowIconOnly(model, view) ? View.GONE : View.VISIBLE);
++        view.setTooltipText(pair.title());
++        view.setContentDescription(pair.title());
++        View close = view.findViewById(R.id.action_button);
++        if (close != null) {
++            TabListViewBinderUtils.updateActionButtonContentDescription(model, close);
++            close.setTooltipText(close.getContentDescription());
++        }
+     }
+
+     /**
+@@ -655,6 +769,12 @@
+      * {@code "<Title> [ - Gemini is working...], [Pinned] [Media] Tab"}.
+      */
+     private static void updateContentDescription(PropertyModel model, View view) {
++        TabProperties.ArcSplitPair pair = model.containsKey(TabProperties.ARC_SPLIT_PAIR)
++                ? model.get(TabProperties.ARC_SPLIT_PAIR) : null;
++        if (pair != null) {
++            view.setContentDescription(pair.title());
++            return;
++        }
+         Context context = view.getContext();
+         @Nullable TextResolver contentDescriptionTextResolver =
+                 model.get(TabProperties.CONTENT_DESCRIPTION_TEXT_RESOLVER);
+@@ -825,6 +945,14 @@
       */
      private static ColorStateList getBackgroundTintList(
              Context context, boolean isSelected, boolean isMultiSelected, boolean isIncognito) {
@@ -267,7 +621,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          if (!isSelected && !isMultiSelected) {
              return ColorStateList.valueOf(Color.TRANSPARENT);
          }
-@@ -850,6 +861,11 @@
+@@ -850,6 +978,11 @@
       */
      private static @ColorInt int getTextColor(
              Context context, boolean isSelected, boolean isIncognito) {
@@ -279,7 +633,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          if (isSelected) {
              return isIncognito
                      ? context.getColor(R.color.default_text_color_light)
-@@ -871,6 +887,9 @@
+@@ -871,6 +1004,9 @@
       */
      private static ColorStateList getActionButtonTintList(
              Context context, boolean isSelected, boolean isIncognito) {
@@ -289,6 +643,18 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          if (isIncognito) {
              return isSelected
                      ? ChromeColors.getPrimaryIconTint(context, /* isIncognito= */ true)
+@@ -891,6 +1027,11 @@
+             @Nullable ColorStateList defaultBackgroundColor) {
+         boolean isSelected = model.get(TabProperties.IS_SELECTED);
+         boolean isMultiSelected = model.get(TabProperties.IS_MULTI_SELECTED);
++        if (ArcDesktopAppearance.isDesktopWindow(view.getContext())) {
++            ArcDesktopAppearance.applySidebarRowState(view, isSelected, isMultiSelected,
++                    isIncognito(model), isHovered);
++            return;
++        }
+
+         @Nullable Drawable bg = view.getBackground();
+         if (bg != null) {
 diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinderUnitTest.java b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinderUnitTest.java
 --- a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinderUnitTest.java
 +++ b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/TabVerticalViewBinderUnitTest.java
@@ -330,7 +696,16 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinator.java b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinator.java
 --- a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinator.java
 +++ b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinator.java
-@@ -77,6 +77,7 @@
+@@ -63,6 +63,8 @@
+ import org.chromium.chrome.browser.profiles.Profile;
+ import org.chromium.chrome.browser.share.ShareDelegate;
+ import org.chromium.chrome.browser.tab.Tab;
++import org.chromium.chrome.browser.tab.EmptyTabObserver;
++import org.chromium.chrome.browser.ui.vertical_tabs.ArcSplitPairProjection;
+ import org.chromium.chrome.browser.tab.TabCreationState;
+ import org.chromium.chrome.browser.tab.TabFavicon;
+ import org.chromium.chrome.browser.tab.TabLaunchType;
+@@ -77,6 +79,7 @@
  import org.chromium.chrome.browser.tabmodel.TabGroupMergeNotificationType;
  import org.chromium.chrome.browser.tabmodel.TabGroupMetadata;
  import org.chromium.chrome.browser.tabmodel.TabGroupUtils.TabGroupCreationCallback;
@@ -338,7 +713,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
  import org.chromium.chrome.browser.tabmodel.TabList;
  import org.chromium.chrome.browser.tabmodel.TabModel;
  import org.chromium.chrome.browser.tabmodel.TabModelSelector;
-@@ -136,6 +137,8 @@
+@@ -136,6 +139,8 @@
  import java.util.Collections;
  import java.util.List;
  import java.util.function.BooleanSupplier;
@@ -347,7 +722,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
  import java.util.function.Supplier;
 
  /** Coordinator to manage and display the Vertical Tab List. */
-@@ -167,7 +170,7 @@
+@@ -167,7 +172,7 @@
      private final VerticalTabGroupSpineDecoration mSpineDecoration;
      private final VerticalTabDropIndicatorDecoration mDropIndicatorDecoration;
      private final VerticalTabPinnedDropIndicatorDecoration mPinnedDropIndicatorDecoration;
@@ -356,13 +731,42 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
      private final NonNullObservableSupplier<Boolean> mVerticalTabsActiveSupplier;
      private final VerticalTabRailCollapseController mCollapseController;
      private final VerticalTabRailHoverController mRailHoverController;
-@@ -203,6 +206,36 @@
+@@ -203,6 +208,65 @@
      private @Nullable View mDragEndRelayView;
 
      private boolean mIsActive;
 +    // Optional presentation-only filter. The underlying TabModel always remains global.
 +    private @Nullable IntPredicate mTabVisibilityPredicate;
 +    private @Nullable TabModel mPresentationGroupModel;
++    private final ArcSplitPairProjection mArcSplitPairs = new ArcSplitPairProjection();
++    private List<int[]> mArcPairSnapshots = new ArrayList<>();
++    private @Nullable TabModel mArcPairSnapshotModel;
++    private final List<Tab> mArcObservedPairTabs = new ArrayList<>();
++    private @Nullable Consumer<Tab> mArcSplitSeparateRequest;
++    private boolean mArcDestroyed;
++    private final EmptyTabObserver mArcPairTabObserver = new EmptyTabObserver() {
++        @Override
++        public void onFaviconUpdated(Tab tab, @Nullable android.graphics.Bitmap icon,
++                @Nullable org.chromium.url.GURL iconUrl) {
++            // The native layout observer indexes actual row IDs. A secondary pair member has
++            // no row of its own, so explicitly refresh its shared row's current fetchers.
++            if (!mArcDestroyed) mMediator.refreshArcSplitPairRows();
++        }
++
++        @Override
++        public void onUrlUpdated(Tab tab) {
++            onTitleUpdated(tab); // Empty titles display the current URL, including the second tab.
++        }
++
++        @Override
++        public void onTitleUpdated(Tab tab) {
++            // Native layout delegates may write TITLE in this same dispatch. Refresh last and
++            // resolve the current model/snapshot, never capture an old row or profile here.
++            mRecyclerView.post(() -> {
++                if (!mArcDestroyed) mMediator.refreshArcSplitPairRows();
++            });
++        }
++    };
 +    private final TabGroupObserver mPresentationGroupObserver = new TabGroupObserver() {
 +        @Override
 +        public void didChangeTabGroupCollapsed(Token id, boolean collapsed, boolean animate) {
@@ -393,7 +797,13 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 
      private class VerticalTabListClickHandler implements TabListItemOnClickListenerProvider {
          private final TabActionListener mTabGroupClickedListener =
-@@ -763,6 +796,7 @@
+@@ -758,11 +822,13 @@
+                         if (mIsActive && type != TabSelectionType.FROM_DRAG) {
+                             scrollActiveTabIntoView();
+                         }
++                        mMediator.refreshArcSplitPairRows();
+                         mTabItemHoverController.resetHoverState();
+                     }
 
                      @Override
                      public void didChangePinState(Tab tab) {
@@ -401,7 +811,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
                          // Scroll the newly unpinned active tab into view.
                          if (!tab.getIsPinned()
                                  && tab.getId() == mTabModelSelector.getCurrentTabId()) {
-@@ -777,18 +811,21 @@
+@@ -777,18 +843,21 @@
                              @TabLaunchType int type,
                              @TabCreationState int creationState,
                              boolean markedForSelection) {
@@ -423,7 +833,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
                          updateIncognitoButtonVisibility();
                          updatePinnedTabsSeparatorVisibility();
                      }
-@@ -806,7 +843,18 @@
+@@ -806,7 +875,18 @@
 
                      @Override
                      public void tabClosureCommitted(Tab tab) {
@@ -442,7 +852,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
                      }
 
                      @Override
-@@ -814,6 +862,7 @@
+@@ -814,6 +894,7 @@
                          mTabItemHoverController.resetHoverState();
                      }
                  };
@@ -450,7 +860,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 
          mVerticalTabsActiveSupplier.addSyncObserverAndCallIfNonNull(mActiveObserver);
 
-@@ -863,8 +912,8 @@
+@@ -863,14 +944,16 @@
              return;
          }
 
@@ -461,7 +871,15 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
              return;
          }
          KeyboardFocusUtil.setFocusOnFirstFocusableDescendant(mContainerView);
-@@ -881,6 +930,10 @@
+     }
+
+     public void destroy() {
++        mArcDestroyed = true;
++        clearArcPairTabObservers();
+         mContainerView.setKeyEventListener(null);
+         mPinnedTabsModelList.removeObserver(mPinnedTabsListObserver);
+         mPinnedTabsMediator.destroy();
+@@ -881,6 +964,10 @@
          mModelList.clear();
          mTabModelSelector.removeObserver(mTabModelSelectorObserver);
          mTabModelSelector.getCurrentTabModelSupplier().removeObserver(mCurrentTabModelObserver);
@@ -472,7 +890,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          mTabListFaviconProvider.destroy();
 
          if (mTabStripContextMenuCoordinator != null) {
-@@ -903,7 +956,9 @@
+@@ -903,7 +990,9 @@
          }
 
          mSpineDecoration.destroy();
@@ -483,7 +901,16 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          mVerticalTabsActiveSupplier.removeObserver(mActiveObserver);
          if (mBackPressManager.has(BackPressHandler.Type.CANCEL_TAB_SWITCHER_DRAG)) {
              mBackPressManager.removeHandler(BackPressHandler.Type.CANCEL_TAB_SWITCHER_DRAG);
-@@ -1116,6 +1171,124 @@
+@@ -1080,7 +1169,7 @@
+      * @return The UI index in mModelList, or {@link TabModel#INVALID_TAB_INDEX} if not found.
+      */
+     private int getIndexForTabScroll(int tabId) {
+-        int uiIndex = mModelList.indexFromTabId(tabId);
++        int uiIndex = mModelList.indexFromTabId(mArcSplitPairs.representative(tabId));
+
+         // If the tab is hidden inside a collapsed group, find the group header's index instead.
+         if (uiIndex == TabModel.INVALID_TAB_INDEX) {
+@@ -1116,6 +1205,199 @@
          if (mTabModelSelector.isTabStateInitialized()) {
              resetWithListOfTabs(tabModel);
          }
@@ -519,17 +946,86 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 +        refreshTabPresentation();
 +    }
 +
++    /** Window/model-scoped snapshots: stable representative, left, right, last active. */
++    public void setArcSplitPairs(List<int[]> snapshots) {
++        TabModel model = mTabModelSelector.getCurrentModel();
++        boolean sameModel = model != null && model == mArcPairSnapshotModel;
++        List<Integer> ids = new ArrayList<>();
++        if (model != null) for (Tab tab : model) ids.add(tab.getId());
++        List<Integer> previousRows = mArcSplitPairs.project(ids);
++        mArcPairSnapshotModel = model;
++        mArcPairSnapshots = new ArrayList<>();
++        for (int[] pair : snapshots) {
++            if (pair != null) mArcPairSnapshots.add(pair.clone());
++        }
++        if (model != null && sameModel && mTabModelSelector.isTabStateInitialized()) {
++            updateArcPairProjection(model);
++            if (previousRows.equals(mArcSplitPairs.project(ids))) {
++                // Active-panel changes and swaps only rebind metadata. Preserve existing group,
++                // pinned and ordinary row models/drag holders when the projection is unchanged.
++                mMediator.refreshArcSplitPairRows();
++                return;
++            }
++        }
++        refreshTabPresentation();
++    }
++
++    public void setArcSplitSeparateRequest(@Nullable Consumer<Tab> request) {
++        mArcSplitSeparateRequest = request;
++    }
++
++    /** Native section compatibility. The owner additionally checks its persistent Space IDs. */
++    public boolean isArcSplitPairCompatible(Tab left, Tab right) {
++        TabModel model = mTabModelSelector.getCurrentModel();
++        return model != null && left != right && !left.isClosing() && !right.isClosing()
++                && !left.isDestroyed() && !right.isDestroyed()
++                && model.getTabById(left.getId()) == left
++                && model.getTabById(right.getId()) == right
++                && left.isIncognito() == right.isIncognito()
++                && left.getIsPinned() == right.getIsPinned()
++                && java.util.Objects.equals(left.getTabGroupId(), right.getTabGroupId());
++    }
++
++    private void clearArcPairTabObservers() {
++        for (Tab tab : mArcObservedPairTabs) tab.removeObserver(mArcPairTabObserver);
++        mArcObservedPairTabs.clear();
++    }
++
++    private void updateArcPairProjection(TabModel model) {
++        clearArcPairTabObservers();
++        List<int[]> compatible = new ArrayList<>();
++        for (int[] pair : mArcPairSnapshots) {
++            if (model != mArcPairSnapshotModel || pair.length != 4) continue;
++            Tab left = model.getTabById(pair[1]), right = model.getTabById(pair[2]);
++            if (left != null && right != null && isArcSplitPairCompatible(left, right)) {
++                compatible.add(pair);
++            }
++        }
++        mArcSplitPairs.set(compatible, id -> model.getTabById(id) != null
++                && (mTabVisibilityPredicate == null || mTabVisibilityPredicate.test(id)));
++        mMediator.setArcSplitPairs(mArcSplitPairs);
++        for (Tab tab : model) {
++            if (mArcSplitPairs.peer(tab.getId()) < 0) continue;
++            tab.addObserver(mArcPairTabObserver);
++            mArcObservedPairTabs.add(tab);
++        }
++    }
++
 +    /** Rebuilds the presentation list from the current global TabModel. */
 +    public void refreshTabPresentation() {
 +        if (!mTabModelSelector.isTabStateInitialized()) return;
 +        TabModel model = mTabModelSelector.getCurrentModel();
-+        if (model != null && reconcileStandaloneTabOrder(model)) return;
++        if (model != null) updateArcPairProjection(model);
++        if (model != null && reconcileStandaloneTabOrder(model)) {
++            mMediator.refreshArcSplitPairRows();
++            return;
++        }
 +        resetWithListOfTabs(model);
 +    }
 +
 +    /** Preserve row models/drag holders for a pure reorder of the same standalone tabs. */
 +    private boolean reconcileStandaloneTabOrder(TabModel tabModel) {
-+        if (mTabVisibilityPredicate == null) return false;
++        if (mTabVisibilityPredicate == null && mArcPairSnapshots.isEmpty()) return false;
 +        List<Tab> tabs = getTabsForPresentation(tabModel);
 +        if (tabs.size() != mModelList.size()) return false;
 +        // Structural/group/pinned changes retain the full projection path. Validate the entire
@@ -552,7 +1048,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 +    }
 +
 +    private void refreshTabPresentationIfFiltered() {
-+        if (mTabVisibilityPredicate != null) refreshTabPresentation();
++        if (mTabVisibilityPredicate != null || !mArcPairSnapshots.isEmpty()) refreshTabPresentation();
 +    }
 +
 +    private @Nullable Tab getVisibleRepresentative(TabModel tabModel, Tab tab) {
@@ -570,12 +1066,17 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 +    }
 +
 +    private List<Tab> getTabsForPresentation(TabModel tabModel) {
-+        List<Tab> tabs = tabModel.getRepresentativeTabList();
-+        if (mTabVisibilityPredicate == null) return tabs;
 +        List<Tab> visible = new ArrayList<>();
-+        for (Tab tab : tabs) {
++        java.util.Set<Integer> emitted = new java.util.HashSet<>();
++        for (Tab tab : tabModel.getRepresentativeTabList()) {
 +            Tab representative = getVisibleRepresentative(tabModel, tab);
-+            if (representative != null) visible.add(representative);
++            if (representative == null) continue;
++            // Group headers retain native identity; paired children are pruned after expansion.
++            int id = representative.getTabGroupId() != null ? representative.getId()
++                    : mArcSplitPairs.representative(representative.getId());
++            if (!emitted.add(id)) continue;
++            Tab row = tabModel.getTabById(id);
++            if (row != null) visible.add(row);
 +        }
 +        return visible;
 +    }
@@ -590,7 +1091,6 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 +
 +    /** Removes hidden group children from the presentation model after the mediator expands them. */
 +    private void pruneFilteredRows(TabModel tabModel) {
-+        if (mTabVisibilityPredicate == null) return;
 +        for (int i = mModelList.size() - 1; i >= 0; i--) {
 +            PropertyModel model = mModelList.get(i).model;
 +            if (!TabProperties.isTabOrTabGroup(model)) continue;
@@ -601,15 +1101,20 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 +                }
 +            } else {
 +                int tabId = model.get(TabProperties.TAB_ID);
-+                if (tabId != Tab.INVALID_TAB_ID && mTabVisibilityPredicate.test(tabId)) continue;
++                if (tabId != Tab.INVALID_TAB_ID
++                        && (mTabVisibilityPredicate == null || mTabVisibilityPredicate.test(tabId))
++                        && mArcSplitPairs.representative(tabId) == tabId) continue;
 +            }
 +            mModelList.removeAt(i);
 +        }
      }
 
      /**
-@@ -1126,9 +1299,10 @@
+@@ -1124,11 +1406,14 @@
+      */
+     private void resetWithListOfTabs(@Nullable TabModel tabModel) {
          if (tabModel == null) return;
++        updateArcPairProjection(tabModel);
 
          mMediator.resetWithListOfTabs(
 -                tabModel.getRepresentativeTabList(),
@@ -617,10 +1122,19 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
                  /* tabGroupSyncIds */ null,
                  /* quickMode */ false);
 +        pruneFilteredRows(tabModel);
++        mMediator.refreshArcSplitPairRows();
          mPinnedTabsMediator.updateTabModel(tabModel);
          boolean isIncognito =
                  !IncognitoUtils.shouldOpenIncognitoAsWindow() && tabModel.isIncognitoBranded();
-@@ -1960,6 +2134,16 @@
+@@ -1196,6 +1481,7 @@
+         if (mMainTouchHelperCallback == null) {
+             mMainTouchHelperCallback = touchHelperCallback;
+         }
++        touchHelperCallback.setArcSplitPairs(mArcSplitPairs);
+         mTouchHelperCallbacks.add(touchHelperCallback);
+
+         // Handles long-presses for tab item/group context menus. Long-presses for empty space
+@@ -1960,6 +2246,16 @@
          return menuShown;
      }
 
@@ -637,14 +1151,34 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
      private boolean showMenuForItemView(RectProvider rectProvider, View itemView) {
          if (!(itemView.getParent() instanceof RecyclerView recyclerView)) return false;
          int position = recyclerView.getChildAdapterPosition(itemView);
-@@ -2116,6 +2300,15 @@
+@@ -2104,8 +2400,10 @@
+         TabModel tabModel = mTabModelSelector.getCurrentModel();
+         if (tabModel == null) return false;
+
+-        Tab tab = tabModel.getTabById(tabId);
++        final int actionTabId = mArcSplitPairs.actionId(tabId);
++        Tab tab = tabModel.getTabById(actionTabId);
+         if (tab == null || tab.isClosing()) return false;
++        tabId = actionTabId;
+
+         List<Integer> allTabIds;
+         if (TabMultiSelectHelper.hasMultipleTabsSelected(tabModel)
+@@ -2116,6 +2414,23 @@
          }
 
          var anchorInfo = new AnchorInfo(tabId, allTabIds);
-+        if (allTabIds.size() == 1 && mArcSplitRequest != null && mArcSplitEnabled.getAsBoolean()) {
++        if (mArcSplitPairs.peer(actionTabId) >= 0 && mArcSplitSeparateRequest != null) {
++            anchorInfo.setArcSplitSeparateAction(() -> {
++                TabModel current = mTabModelSelector.getCurrentModel();
++                Consumer<Tab> separate = mArcSplitSeparateRequest;
++                if (separate != null && current == tabModel
++                        && current.getTabById(actionTabId) == tab
++                        && mArcSplitPairs.peer(actionTabId) >= 0) separate.accept(tab);
++            });
++        } else if (allTabIds.size() == 1 && mArcSplitRequest != null && mArcSplitEnabled.getAsBoolean()) {
 +            anchorInfo.setArcSplitAction(() -> {
 +                Consumer<Tab> request = mArcSplitRequest;
-+                Tab live = mTabModelSelector.getCurrentModel().getTabById(tabId);
++                Tab live = mTabModelSelector.getCurrentModel().getTabById(actionTabId);
 +                if (request != null && mArcSplitEnabled.getAsBoolean() && live != null && live == tab
 +                        && !live.isDestroyed() && !live.isClosing()) request.accept(live);
 +            });
@@ -653,7 +1187,56 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 
          if (mTabContextMenuCoordinator == null) {
              TabGroupCreationCallback tabGroupCreationCallback =
-@@ -2373,9 +2566,21 @@
+@@ -2135,13 +2450,7 @@
+                             mWindowAndroid,
+                             activity,
+                             /* tabBookmarkerSupplier= */ null,
+-                            /* reorderFunction= */ (info, toPrevious) ->
+-                                    NestedTabReorderUtils.reorderTabById(
+-                                            mTabModelSelector.getCurrentModel(),
+-                                            mPinnedTabsModelList,
+-                                            mModelList,
+-                                            info.getAnchorTabId(),
+-                                            toPrevious),
++                            /* reorderFunction= */ this::reorderArcTabFromContext,
+                             mSnackbarManager,
+                             mActivityResultTracker,
+                             /* modalDialogManager= */ mWindowAndroid.getModalDialogManager(),
+@@ -2154,6 +2463,33 @@
+         mTabItemHoverController.hideHoverCard();
+         mTabContextMenuCoordinator.showMenu(rectProvider, anchorInfo);
+         return true;
++    }
++
++    private void reorderArcTabFromContext(AnchorInfo info, boolean toPrevious) {
++        int id = info.getAnchorTabId();
++        TabModel model = mTabModelSelector.getCurrentModel();
++        TabListModel rows = mModelList;
++        Tab tab = model.getTabById(id);
++        if (tab != null && tab.getIsPinned()) rows = mPinnedTabsModelList;
++        int index = rows.indexFromTabId(mArcSplitPairs.representative(id));
++        int targetIndex = index + (toPrevious ? -1 : 1);
++        if (index != TabModel.INVALID_TAB_INDEX && targetIndex >= 0
++                && targetIndex < rows.size()) {
++            PropertyModel target = rows.get(targetIndex).model;
++            if (!TabProperties.isTabGroupHeader(target)
++                    && TabProperties.isTabOrTabGroup(target)) {
++                int targetId = target.get(TabProperties.TAB_ID);
++                if (mArcSplitPairs.peer(id) >= 0 || mArcSplitPairs.peer(targetId) >= 0) {
++                    if (mMainTouchHelperCallback != null) {
++                        mMainTouchHelperCallback.moveArcUnit(id, targetId, !toPrevious);
++                    }
++                    return;
++                }
++            }
++        }
++        if (mArcSplitPairs.peer(id) >= 0) return; // Do not split/migrate a unit across a section.
++        NestedTabReorderUtils.reorderTabById(model, mPinnedTabsModelList, mModelList,
++                id, toPrevious);
+     }
+
+     private void showEmptySpaceContextMenu(RectProvider rectProvider, Activity activity) {
+@@ -2373,9 +2709,21 @@
                                  mContainerModel.get(VerticalTabListProperties.COLLAPSE_STATE));
 
          TabModel model = mTabModelSelector.getCurrentModel();
@@ -826,6 +1409,131 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
      // =============================================================================================
      // Helper Methods
      // =============================================================================================
+diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListItemTouchHelperCallback.java b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListItemTouchHelperCallback.java
+--- a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListItemTouchHelperCallback.java
++++ b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListItemTouchHelperCallback.java
+@@ -106,6 +106,25 @@
+     private boolean mHasFiredDragMovementCallback;
+     private int mUndoBarThrottleToken = TokenHolder.INVALID_TOKEN;
+     private float mDragStartX;
++    private org.chromium.chrome.browser.ui.vertical_tabs.ArcSplitPairProjection mArcSplitPairs =
++            new org.chromium.chrome.browser.ui.vertical_tabs.ArcSplitPairProjection();
++
++    public void setArcSplitPairs(
++            org.chromium.chrome.browser.ui.vertical_tabs.ArcSplitPairProjection pairs) {
++        mArcSplitPairs = pairs;
++    }
++
++    private boolean isArcPair(RecyclerView.ViewHolder holder) {
++        return hasTabPropertiesModel(holder) && mArcSplitPairs.peer(getTabId(holder)) >= 0;
++    }
++
++    private boolean arcSameSection(TabModel model, int leftId, int rightId) {
++        Tab left = model.getTabById(leftId), right = model.getTabById(rightId);
++        return left != null && right != null && !left.isClosing() && !right.isClosing()
++                && left.getIsPinned() == right.getIsPinned()
++                && Objects.equals(left.getTabGroupId(), right.getTabGroupId());
++    }
++
+
+     public void setDragStartX(float x) {
+         mDragStartX = x;
+@@ -269,6 +288,13 @@
+             RecyclerView.ViewHolder target) {
+         if (!hasTabPropertiesModel(target)) {
+             return false;
++        }
++
++        if (isArcPair(current) || isArcPair(target)) {
++            TabModel model = mCurrentTabModelSupplier.get();
++            if (model == null || current.getItemViewType() == TabProperties.UiType.TAB_GROUP
++                    || target.getItemViewType() == TabProperties.UiType.TAB_GROUP
++                    || !arcSameSection(model, getTabId(current), getTabId(target))) return false;
+         }
+
+         // A pinned tab cannot be dropped in the unpinned section and vice versa.
+@@ -436,6 +462,26 @@
+         TabModel tabModel = mCurrentTabModelSupplier.get();
+         if (tabModel == null) return false;
+
++        if (isArcPair(fromViewHolder) || isArcPair(toViewHolder)) {
++            if (fromViewHolder.getItemViewType() == TabProperties.UiType.TAB_GROUP
++                    || toViewHolder.getItemViewType() == TabProperties.UiType.TAB_GROUP
++                    || !arcSameSection(tabModel, currentTabId, destinationTabId)) return false;
++            // A stable representative can follow its peer in the native model. Determine the
++            // direction from current projected units, never from the representative's native index
++            // or an adapter position retained by a drag holder.
++            List<Integer> nativeIds = new ArrayList<>();
++            for (Tab tab : tabModel) nativeIds.add(tab.getId());
++            List<Integer> rows = mArcSplitPairs.project(nativeIds);
++            int currentRow = rows.indexOf(mArcSplitPairs.representative(currentTabId));
++            int destinationRow = rows.indexOf(mArcSplitPairs.representative(destinationTabId));
++            if (currentRow < 0 || destinationRow < 0 || currentRow == destinationRow) return false;
++            boolean moved = moveArcUnit(currentTabId, destinationTabId,
++                    currentRow < destinationRow);
++            if (!moved) return false;
++            mSelectedTabIndex = toViewHolder.getBindingAdapterPosition();
++            return true;
++        }
++
+         boolean isGroupHeader = fromViewHolder.getItemViewType() == TabProperties.UiType.TAB_GROUP;
+         Token currentGroupId = getTabGroupId(fromViewHolder);
+         boolean isStandaloneTab = !isGroupHeader && currentGroupId == null;
+@@ -495,6 +541,37 @@
+
+         // Perform basic list reordering by updating the TabModel immediately.
+         NestedTabReorderUtils.moveTabOrGroup(tabModel, currentTabId, destinationIndex, isGroup);
++        return true;
++    }
++
++    /** Reorders a projected unit by current IDs, also used by the native context menu. */
++    public boolean moveArcUnit(int currentTabId, int destinationTabId, boolean after) {
++        TabModel tabModel = mCurrentTabModelSupplier.get();
++        if (tabModel == null || !arcSameSection(tabModel, currentTabId, destinationTabId)) {
++            return false;
++        }
++        List<Integer> ids = new ArrayList<>();
++        for (Tab tab : tabModel) ids.add(tab.getId());
++        List<Integer> desired = mArcSplitPairs.moveUnit(
++                ids, currentTabId, destinationTabId, after);
++        if (desired.equals(ids)) return false;
++        List<Integer> unit = new ArrayList<>();
++        int rowId = mArcSplitPairs.representative(currentTabId);
++        for (int id : ids) {
++            if (mArcSplitPairs.representative(id) == rowId) unit.add(id);
++        }
++        int end = desired.indexOf(unit.get(unit.size() - 1)) + 1;
++        int anchorId = end < desired.size() ? desired.get(end) : Tab.INVALID_TAB_ID;
++        // Only move the dragged unit. Resolve anchor indices after each native mutation;
++        // never move intervening tabs/groups or reuse adapter positions as native indices.
++        for (int i = unit.size() - 1; i >= 0; i--) {
++            Tab live = tabModel.getTabById(unit.get(i));
++            Tab anchor = tabModel.getTabById(anchorId);
++            if (live == null || live.isClosing()) return false;
++            int destination = anchor == null ? tabModel.getCount() : tabModel.indexOf(anchor);
++            tabModel.moveTab(live.getId(), destination);
++            anchorId = live.getId();
++        }
+         return true;
+     }
+
+@@ -1460,6 +1537,7 @@
+             float dx,
+             float dy) {
+         if (isDraggedItemCollapsed()) return false;
++        if (isArcPair(viewHolder)) return false;
+         if (!hasTabPropertiesModel(viewHolder)) return false;
+         if (viewHolder.getItemViewType() == TabProperties.UiType.TAB_GROUP) return false;
+
+@@ -1593,7 +1671,7 @@
+         TabModel tabModel = mCurrentTabModelSupplier.get();
+         if (tabModel == null) return;
+
+-        int tabId = getTabId(viewHolder);
++        int tabId = mArcSplitPairs.actionId(getTabId(viewHolder));
+         Tab tab = tabModel.getTabById(tabId);
+         selectTabInternal(tabModel, tab, type);
+     }
 diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListViewBinder.java b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListViewBinder.java
 --- a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListViewBinder.java
 +++ b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListViewBinder.java
@@ -1332,11 +2040,21 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/layo
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/overlays/strip/TabContextMenuCoordinator.java b/chrome/android/java/src/org/chromium/chrome/browser/compositor/overlays/strip/TabContextMenuCoordinator.java
 --- a/chrome/android/java/src/org/chromium/chrome/browser/compositor/overlays/strip/TabContextMenuCoordinator.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/compositor/overlays/strip/TabContextMenuCoordinator.java
-@@ -117,6 +117,14 @@
+@@ -117,6 +117,24 @@
      public static class AnchorInfo {
          private final int mAnchorTabId;
          private final List<Integer> mAllTabIds;
 +        private @Nullable Runnable mArcSplitAction;
++        private @Nullable Runnable mArcSplitSeparateAction;
++
++        public void setArcSplitSeparateAction(@Nullable Runnable action) {
++            mArcSplitSeparateAction = action;
++        }
++        public boolean hasArcSplitSeparateAction() { return mArcSplitSeparateAction != null; }
++        public void runArcSplitSeparateAction() {
++            Runnable action = mArcSplitSeparateAction;
++            if (action != null) action.run();
++        }
 +
 +        public void setArcSplitAction(@Nullable Runnable action) { mArcSplitAction = action; }
 +        public boolean hasArcSplitAction() { return mArcSplitAction != null; }
@@ -1347,10 +2065,16 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/over
 
          public AnchorInfo(int anchorTabId, List<Integer> allTabIds) {
              mAnchorTabId = anchorTabId;
-@@ -336,6 +344,12 @@
+@@ -336,6 +354,18 @@
              // Anchored tab(s) may have been moved to another window or closed between menu open
              // and item click. Drop the action if any tabs are no longer in this TabModel.
              if (tabs.size() < tabIds.size()) return;
++            if (menuId == R.id.arc_split_separate) {
++                if (tabs.size() == 1 && tabs.get(0).getId() == anchorInfo.getAnchorTabId()) {
++                    anchorInfo.runArcSplitSeparateAction();
++                }
++                return;
++            }
 +            if (menuId == R.id.arc_split_view) {
 +                if (tabs.size() == 1 && tabs.get(0).getId() == anchorInfo.getAnchorTabId()) {
 +                    anchorInfo.runArcSplitAction();
@@ -1360,11 +2084,17 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/over
              recordMenuAction(
                      menuId, tabs.size() > 1, tabModel.isIncognitoBranded(), tabStripLayout);
 
-@@ -712,6 +726,13 @@
+@@ -712,6 +742,19 @@
 
      private void buildMenuActionItemsForSingleTab(
              ModelList itemList, AnchorInfo anchorInfo, List<Tab> tabs, boolean isIncognito) {
-+        if (anchorInfo.hasArcSplitAction()) {
++        if (anchorInfo.hasArcSplitSeparateAction()) {
++            itemList.add(new ListItemBuilder()
++                    .withTitle(mActivity.getString(R.string.arc_split_separate))
++                    .withMenuId(R.id.arc_split_separate)
++                    .withIsIncognito(isIncognito)
++                    .build());
++        } else if (anchorInfo.hasArcSplitAction()) {
 +            itemList.add(new ListItemBuilder()
 +                    .withTitle(mActivity.getString(R.string.arc_split_view))
 +                    .withMenuId(R.id.arc_split_view)
@@ -3035,7 +3765,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
  /** This class represents the location bar where the user types in URLs and search terms. */
  @NullMarked
  public class LocationBarLayout extends ConstraintLayout {
-@@ -229,6 +233,93 @@
+@@ -229,6 +233,96 @@
 
      /* package */ void setDeleteButtonBackground(@DrawableRes int resourceId) {
          mDeleteButton.setBackgroundResource(resourceId);
@@ -3059,6 +3789,9 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
 +    @Override
 +    public boolean dispatchTouchEvent(MotionEvent event) {
 +        int action = event.getActionMasked();
++        // DOWN begins a new stream. Reparenting this editor into the popup can leave the old
++        // stream without a local UP/CANCEL; never let its latch consume a fresh click.
++        if (action == MotionEvent.ACTION_DOWN) mArcConsumesAddressGesture = false;
 +        if (mArcConsumesAddressGesture) {
 +            if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
 +                mArcConsumesAddressGesture = false;
@@ -3674,7 +4407,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
          container.layout(0, 0, mLocationBarTablet.mMinWidthForExpandedActivationChip + 1, 100);
          mLocationBarTablet.setHolderAndContainer(mHolderView, container);
 
-@@ -1078,8 +1126,244 @@
+@@ -1078,8 +1126,307 @@
          assertEquals(0f, urlBar.getTranslationX(), MathUtils.EPSILON);
      }
 
@@ -3910,6 +4643,69 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
 +        }
 +    }
 +
++
++    @Test
++    @Config(sdk = {30, 36})
++    public void arcFreshAddressDownAfterLostReleaseCanReopen() {
++        setupArcAddressTouch();
++        for (int buttons : new int[] {0, MotionEvent.BUTTON_PRIMARY}) {
++            int[] opens = {0};
++            mLocationBarTablet.setArcAddressPopupOpener(() -> { opens[0]++; return true; });
++            dispatchArcAddressTouch(MotionEvent.ACTION_DOWN, buttons);
++            // The old parent can lose the release after the same editor is reparented.
++            dispatchArcAddressTouch(MotionEvent.ACTION_DOWN, buttons);
++            dispatchArcAddressTouch(MotionEvent.ACTION_UP, 0);
++            assertEquals(2, opens[0]);
++        }
++    }
++
++    @Test
++    @Config(sdk = {30, 36})
++    public void arcPopupEditorAcceptsFirstFreshGestureAfterLostRelease() {
++        UrlBar editor = setupArcAddressTouch();
++        int[] nativeEvents = {0};
++        mLocationBarTablet.setArcAddressPopupOpener(() -> true);
++        dispatchArcAddressTouch(MotionEvent.ACTION_DOWN, 0);
++        mLocationBarTablet.setArcAddressPopupOpener(() -> false);
++        editor.setOnTouchListener((view, event) -> { nativeEvents[0]++; return true; });
++        dispatchArcAddressTouch(MotionEvent.ACTION_DOWN, 0);
++        dispatchArcAddressTouch(MotionEvent.ACTION_UP, 0);
++        assertEquals(2, nativeEvents[0]);
++    }
++
++    private UrlBar setupArcAddressTouch() {
++        setupArcSidebarHierarchy();
++        UrlBar editor = mLocationBarTablet.findViewById(R.id.url_bar);
++        // Exclude action segments from this address-only hit test, preserving the real editor.
++        for (int i = 0; i < mLocationBarTablet.getChildCount(); i++) {
++            View child = mLocationBarTablet.getChildAt(i);
++            if (child != editor) child.setVisibility(View.GONE);
++        }
++        mLocationBarTablet.layout(0, 0, 400, 100);
++        editor.setVisibility(View.VISIBLE);
++        editor.layout(0, 0, 400, 100);
++        return editor;
++    }
++
++    private boolean mArcTouchUsesMouse;
++
++    private void dispatchArcAddressTouch(int action, int buttons) {
++        if (action == MotionEvent.ACTION_DOWN) mArcTouchUsesMouse = buttons != 0;
++        MotionEvent.PointerProperties pointer = new MotionEvent.PointerProperties();
++        pointer.id = 0;
++        pointer.toolType = mArcTouchUsesMouse ? MotionEvent.TOOL_TYPE_MOUSE : MotionEvent.TOOL_TYPE_FINGER;
++        MotionEvent.PointerCoords at = new MotionEvent.PointerCoords();
++        at.x = 100; at.y = 50; at.pressure = 1; at.size = 1;
++        MotionEvent event = MotionEvent.obtain(0, 1, action, 1,
++                new MotionEvent.PointerProperties[] {pointer}, new MotionEvent.PointerCoords[] {at},
++                0, buttons, 1, 1, 0, 0,
++                mArcTouchUsesMouse ? InputDevice.SOURCE_MOUSE : InputDevice.SOURCE_TOUCHSCREEN, 0);
++        try {
++            mLocationBarTablet.dispatchTouchEvent(event);
++        } finally {
++            event.recycle();
++        }
++    }
 +
      private void setupContainerAndMeasure(int containerWidth, int prefocusWidth, int leftPosition) {
 -        mContainerView = new View(mActivity);
@@ -4230,12 +5026,14 @@ diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/brow
 diff --git a/chrome/browser/ui/vertical_tabs/BUILD.gn b/chrome/browser/ui/vertical_tabs/BUILD.gn
 --- a/chrome/browser/ui/vertical_tabs/BUILD.gn
 +++ b/chrome/browser/ui/vertical_tabs/BUILD.gn
-@@ -5,11 +5,16 @@
+@@ -5,11 +5,18 @@
  import("//build/config/android/rules.gni")
 
  android_library("java") {
 -  sources = [ "android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/VerticalTabUtils.java" ]
 +  sources = [
++    "android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcSplitPairProjection.java",
++    "android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcSplitPairVisuals.java",
 +    "android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java",
 +    "android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java",
 +    "android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/VerticalTabUtils.java",
@@ -5581,7 +6379,7 @@ diff --git a/chrome/android/java/res/values/arc_strings.xml b/chrome/android/jav
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/res/values/arc_strings.xml
-@@ -0,0 +1,82 @@
+@@ -0,0 +1,85 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<resources>
 +    <string name="arc_about">Acerca de Archium</string>
@@ -5649,6 +6447,9 @@ new file mode 100644
 +    <string name="arc_ui_font_medium">Sans serif media</string>
 +    <string name="arc_ui_font_serif">Serif</string>
 +    <string name="arc_ui_font_mono">Monoespaciada</string>
++    <item type="id" name="arc_split_separate" />
++    <string name="arc_current_space">Espacio actual: %1$s</string>
++    <string name="arc_split_separate">Separar pestañas</string>
 +    <item type="id" name="arc_split_view" />
 +    <string name="arc_split_view">Pantalla dividida</string>
 +    <string name="arc_split_existing">Elegir pestaña abierta</string>
@@ -5923,7 +6724,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollecti
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java
-@@ -0,0 +1,423 @@
+@@ -0,0 +1,433 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -6166,7 +6967,13 @@ new file mode 100644
 +            mLoadIcon.accept(entry, favorite);
 +        }
 +        for (ArcSidebarState.Space space : state.spaces()) {
-+            if (space.id.equals(state.selectedSpace())) mSpace.setText(space.name + "  ▾");
++            if (space.id.equals(state.selectedSpace())) {
++                mSpace.setText(space.name + "  ▾");
++                mSpace.setSelected(true);
++                String description = mActivity.getString(R.string.arc_current_space, space.name);
++                mSpace.setContentDescription(description);
++                mSpace.setTooltipText(description);
++            }
 +        }
 +        mEntries.removeAllViews();
 +        List<ArcSidebarState.Folder> folders = state.folders(state.selectedSpace());
@@ -6240,7 +7047,11 @@ new file mode 100644
 +        List<ArcSidebarState.Space> spaces = state.spaces();
 +        PopupMenu menu = new PopupMenu(mActivity, mSpace);
 +        mMenu = menu;
-+        for (int i = 0; i < spaces.size(); i++) menu.getMenu().add(0, i, i, spaces.get(i).name);
++        for (int i = 0; i < spaces.size(); i++) {
++            menu.getMenu().add(0, i, i, spaces.get(i).name)
++                    .setCheckable(true)
++                    .setChecked(spaces.get(i).id.equals(state.selectedSpace()));
++        }
 +        menu.getMenu().add(0, spaces.size(), spaces.size(), R.string.arc_new_space);
 +        menu.getMenu().add(0, spaces.size() + 1, spaces.size() + 1, R.string.arc_delete_space)
 +                .setEnabled(spaces.size() > 1);
@@ -7239,7 +8050,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopC
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
-@@ -0,0 +1,1443 @@
+@@ -0,0 +1,1487 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -7581,6 +8392,10 @@ new file mode 100644
 +                            activity.getString(R.string.arc_split_controls),
 +                            activity.getString(R.string.arc_split_focus),
 +                            activity.getString(R.string.arc_split_restore)));
++            mSplitView.setPairCompatibility(this::isSplitPairCompatible);
++            mSplitView.setPairsChangedCallback(this::refreshSplitPairRows);
++            mNativeTabListCoordinator.setArcSplitSeparateRequest(
++                    tab -> { if (mSplitView != null) mSplitView.separatePair(tab.getId()); });
 +            mNativeTabListCoordinator.setArcSplitRequest(
 +                    tab -> { if (mSplitView != null) mSplitView.requestSplit(tab); },
 +                    () -> !mDestroyed && ArcDesktopAppearance.isDesktopWindow(mActivity));
@@ -8005,6 +8820,24 @@ new file mode 100644
 +        return button;
 +    }
 +
++    private boolean isSplitPairCompatible(Tab left, Tab right) {
++        if (!mNativeTabListCoordinator.isArcSplitPairCompatible(left, right)) return false;
++        // Incognito and a not-yet-bound collection have no persisted regular Space metadata.
++        TabModel model = mCurrentModel.get();
++        if (model == null || model != mSessionModel || mCollections == null) return true;
++        try {
++            return mCollections.state().sameTabSpace(left.getId(), right.getId());
++        } catch (RuntimeException unavailable) {
++            return false;
++        }
++    }
++
++    private void refreshSplitPairRows() {
++        if (!mDestroyed && mSplitView != null) {
++            mNativeTabListCoordinator.setArcSplitPairs(mSplitView.getPairSnapshot());
++        }
++    }
++
 +    private boolean canChangeSplitLayout() {
 +        View modal = mActivity.findViewById(R.id.tab_modal_dialog_container);
 +        return !mDestroyed && (modal == null || modal.getVisibility() != View.VISIBLE
@@ -8074,6 +8907,7 @@ new file mode 100644
 +    private void clearCollections() {
 +        // Remove the old profile/Space predicate before changing models. This restores the native
 +        // global presentation and prevents one profile's Arc metadata from filtering another.
++        mNativeTabListCoordinator.setArcSplitPairs(java.util.List.of());
 +        mNativeTabListCoordinator.setTabVisibilityPredicate(null);
 +        if (mCollectionsView != null) {
 +            mCollectionsView.destroy();
@@ -8098,6 +8932,7 @@ new file mode 100644
 +        ArcNativeTabSession session = new ArcNativeTabSession(model, creator,
 +                () -> mCurrentModel.get() == model, () -> {
 +                    if (!mDestroyed && mSessionModel == model) {
++                        refreshSplitPairRows();
 +                        mNativeTabListCoordinator.refreshTabPresentation();
 +                        if (mCollectionsView != null) mCollectionsView.refresh();
 +                        applyAppearance();
@@ -8122,6 +8957,7 @@ new file mode 100644
 +        });
 +        // Navigation/address stay at the top; collections follow the Arc header actions.
 +        mHeader.addView(mCollectionsView);
++        refreshSplitPairRows();
 +        mPaletteInitialized = false;
 +    }
 +
@@ -8278,6 +9114,7 @@ new file mode 100644
 +            mFooter.setVisibility(View.GONE);
 +            if (mCollectionsView != null) mCollectionsView.setVisibility(View.GONE);
 +            mColumn.setBackgroundColor(Color.TRANSPARENT);
++            mColumn.setForeground(null);
 +            clearFrameGeometry();
 +            return;
 +        }
@@ -8347,6 +9184,22 @@ new file mode 100644
 +        if (mCommandBar != null) mCommandBar.setAppearance(surface, foreground, ArcDesktopPolicy.selection(surface));
 +        mNewTabIcon.setTint(foreground);
 +        mColumn.setBackgroundColor(surface);
++        mColumn.setForeground(new android.graphics.drawable.Drawable() {
++            private final android.graphics.Paint mPaint = new android.graphics.Paint();
++            @Override public void draw(android.graphics.Canvas canvas) {
++                mPaint.setColor((foreground & 0xffffff) | 0x22000000);
++                android.graphics.Rect bounds = getBounds();
++                // One physical pixel inside the rail; decoration consumes no layout space.
++                canvas.drawRect(bounds.right - 1, bounds.top, bounds.right, bounds.bottom, mPaint);
++                canvas.drawRect(bounds.left, mHeader.getBottom() - 1,
++                        bounds.right, mHeader.getBottom(), mPaint);
++                canvas.drawRect(bounds.left, mFooter.getTop(),
++                        bounds.right, mFooter.getTop() + 1, mPaint);
++            }
++            @Override public void setAlpha(int alpha) { mPaint.setAlpha(alpha); }
++            @Override public void setColorFilter(android.graphics.ColorFilter filter) {}
++            @Override public int getOpacity() { return android.graphics.PixelFormat.TRANSLUCENT; }
++        });
 +        styleInteraction(mNewTabRow, foreground, ArcDesktopPolicy.selection(surface));
 +        for (int i = 0; i < mNavigationControls.getChildCount(); i++) {
 +            View button = mNavigationControls.getChildAt(i);
@@ -8648,6 +9501,8 @@ new file mode 100644
 +        if (mDestroyed) return;
 +        mDestroyed = true;
 +        mNativeTabListCoordinator.setArcSplitRequest(null, () -> false);
++        mNativeTabListCoordinator.setArcSplitSeparateRequest(null);
++        mNativeTabListCoordinator.setArcSplitPairs(java.util.List.of());
 +        if (mSplitView != null) { mSplitView.destroy(); mSplitView = null; }
 +        mAppearanceDispatch.destroy();
 +        mColumn.getViewTreeObserver().removeOnGlobalLayoutListener(mFontLayoutListener);
@@ -9418,7 +10273,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarS
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarState.java
-@@ -0,0 +1,409 @@
+@@ -0,0 +1,414 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -9637,6 +10492,11 @@ new file mode 100644
 +        requireSpace(spaceId);
 +        if (!mTabSpaces.containsKey(tabId)) capacity(mTabSpaces.size());
 +        mTabSpaces.put(tabId, spaceId);
++    }
++    /** Structural compatibility; independent of which Space is being presented. */
++    public boolean sameTabSpace(int left, int right) {
++        String owner = mTabSpaces.get(left);
++        return owner != null && owner.equals(mTabSpaces.get(right));
 +    }
 +    public boolean hasTabSpace(int tabId) { return mTabSpaces.containsKey(tabId); }
 +    public boolean isFavoriteTab(int tabId) {
@@ -10510,6 +11370,93 @@ new file mode 100644
 +        return controller.adoptLink(source,contents,create);
 +    }
 +}
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitPairStore.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitPairStore.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitPairStore.java
+@@ -0,0 +1,82 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++import java.util.ArrayList;
++import java.util.LinkedHashMap;
++import java.util.List;
++import java.util.Map;
++
++/** Associations for one native TabModel. Owns IDs and geometry, never Tabs or WebContents. */
++final class ArcSplitPairStore {
++    static final class Pair {
++        final int representativeId;
++        final ArcSplitState state;
++        Pair(int representativeId, ArcSplitState state) {
++            this.representativeId = representativeId;
++            this.state = state;
++        }
++    }
++    private final Map<Integer, Pair> mPairs = new LinkedHashMap<>();
++    private final Map<Integer, Pair> mMembers = new LinkedHashMap<>();
++    Pair member(int id) { return mMembers.get(id); }
++    List<Pair> pairs() { return new ArrayList<>(mPairs.values()); }
++    boolean add(int representative, ArcSplitState state) {
++        if (!state.isSplit() || (representative != state.leftId() && representative != state.rightId())
++                || mPairs.containsKey(representative) || member(state.leftId()) != null
++                || member(state.rightId()) != null) return false;
++        Pair pair = new Pair(representative, state);
++        mPairs.put(representative, pair);
++        mMembers.put(state.leftId(), pair);
++        mMembers.put(state.rightId(), pair);
++        return true;
++    }
++    void remove(Pair pair) {
++        if (pair == null) return;
++        mPairs.remove(pair.representativeId);
++        mMembers.remove(pair.state.leftId());
++        mMembers.remove(pair.state.rightId());
++    }
++    List<int[]> snapshot() {
++        List<int[]> result = new ArrayList<>();
++        for (Pair pair : mPairs.values()) result.add(new int[] {pair.representativeId,
++                pair.state.leftId(), pair.state.rightId(), pair.state.activeId()});
++        return result;
++    }
++    String encode() {
++        if (mPairs.isEmpty()) return null;
++        StringBuilder result = new StringBuilder("v2");
++        for (Pair pair : mPairs.values()) {
++            ArcSplitState state = pair.state;
++            result.append(';').append(pair.representativeId).append(',').append(state.leftId())
++                    .append(',').append(state.rightId()).append(',').append(state.activeId())
++                    .append(',').append(state.ratio());
++        }
++        return result.toString();
++    }
++    /** Invalid entries are independent; duplicate members never overwrite an earlier valid pair. */
++    static ArcSplitPairStore decode(String saved) {
++        ArcSplitPairStore result = new ArcSplitPairStore();
++        if (saved == null) return result;
++        boolean versioned = saved.startsWith("v2;");
++        for (String row : (versioned ? saved.substring(3) : saved).split(";")) {
++            try {
++                String[] cells = row.split(",");
++                if (cells.length != (versioned ? 5 : 4)) continue;
++                int offset = versioned ? 1 : 0;
++                int left = Integer.parseInt(cells[offset]), right = Integer.parseInt(cells[offset + 1]);
++                int active = Integer.parseInt(cells[offset + 2]);
++                float ratio = Float.parseFloat(cells[offset + 3]);
++                if (!Float.isFinite(ratio) || ratio < .2f || ratio > .8f) continue;
++                ArcSplitState state = new ArcSplitState();
++                if (!state.start(left, right) || !state.activate(active)) continue;
++                state.setRatio(ratio);
++                result.add(versioned ? Integer.parseInt(cells[0]) : left, state);
++            } catch (IllegalArgumentException ignored) {
++                // Discard only this malformed association.
++            }
++        }
++        return result;
++    }
++}
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitResizePolicy.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitResizePolicy.java
 new file mode 100644
 --- /dev/null
@@ -10661,7 +11608,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitVie
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitViewCoordinator.java
-@@ -0,0 +1,508 @@
+@@ -0,0 +1,594 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -10676,11 +11623,17 @@ new file mode 100644
 +import android.widget.Toast;
 +import java.util.ArrayList;
 +import java.util.List;
++import java.util.IdentityHashMap;
++import java.util.Map;
++import java.util.Set;
++import java.util.Collections;
++import java.util.function.BiPredicate;
 +import java.util.Objects;
 +import java.util.function.BooleanSupplier;
 +import java.util.function.Supplier;
 +import org.chromium.chrome.R;
 +import org.chromium.chrome.browser.compositor.CompositorViewHolder;
++import org.chromium.chrome.browser.profiles.Profile;
 +import org.chromium.chrome.browser.tab.Tab;
 +import org.chromium.chrome.browser.tab.TabHidingType;
 +import org.chromium.chrome.browser.tab.TabLaunchType;
@@ -10727,7 +11680,15 @@ new file mode 100644
 +    private final SharedPreferences mPrefs;
 +    private final Labels mLabels;
 +    private final ArcSplitViewportPolicy mViewportPolicy = new ArcSplitViewportPolicy();
-+    private final ArcSplitState mState = new ArcSplitState();
++    private ArcSplitState mState = new ArcSplitState();
++    private final Map<TabModel, ArcSplitPairStore> mStores = new IdentityHashMap<>();
++    private ArcSplitPairStore mPairs = new ArcSplitPairStore();
++    private final Set<TabModel> mRestoredModels = Collections.newSetFromMap(new IdentityHashMap<>());
++    // The task preference belongs to the first normal profile; other profiles stay in memory.
++    private Profile mPersistentProfile;
++    private final List<Tab> mWatched = new ArrayList<>();
++    private Runnable mPairsChanged = () -> {};
++    private BiPredicate<Tab, Tab> mPairCompatibility = (a, b) -> true;
 +    private final ArcSplitSwapAnimator mAnimation = new ArcSplitSwapAnimator();
 +    private final ArcSplitSwapAnimator mResizeAnimation = new ArcSplitSwapAnimator();
 +    private boolean mFocusedPane;
@@ -10752,7 +11713,8 @@ new file mode 100644
 +            if (!mUpdating && tab == mCurrent.get()) {mBackground=false;refresh(mDesktop);}
 +        }
 +        @Override public void onHidden(Tab tab, int type) {
-+            if (mUpdating || !mState.isSplit() || type != TabHidingType.ACTIVITY_HIDDEN) return;
++            if (mUpdating || !mState.isSplit() || type != TabHidingType.ACTIVITY_HIDDEN
++                    || (tab != mObservedLeft && tab != mObservedRight)) return;
 +            mDivider.dismissActions();mLastViewport=null;
 +            mBackground=true; mUpdating=true;
 +            try {mResizeAnimation.settle();mAnimation.settle();Tab peer=tab==mObservedLeft?mObservedRight:mObservedLeft;
@@ -10772,8 +11734,7 @@ new file mode 100644
 +    private final TabModelObserver mModelObserver = new TabModelObserver() {
 +        @Override public void didSelectTab(Tab tab,int type,int lastId) {
 +            if (mUpdating) return;
-+            if (!mState.isSplit()) {if(!mRestored)refresh(mDesktop);return;}
-+            if (!mState.activate(tab.getId())) exit(); else refresh(mDesktop);
++            refresh(mDesktop);persist();
 +        }
 +        @Override public void willCloseTabs(List<Tab> tabs,boolean all,boolean undo) {beforeClose(tabs);}
 +        @Override public void willCloseTab(Tab tab,boolean alone) {beforeClose(List.of(tab));}
@@ -10817,18 +11778,26 @@ new file mode 100644
 +        holder.addFrameRequestObserver(mFrameObserver);
 +    }
 +
-+    private boolean compatible(Tab first,Tab second) {
++    /** Association lifetime follows native ownership, never a sidebar section or current content. */
++    private boolean associationValid(Tab first,Tab second) {
 +        TabModel model=mModelSupplier.get();
 +        if(model==null || first==null || second==null || first==second
 +                || first.isDestroyed() || second.isDestroyed() || first.isClosing() || second.isClosing()
-+                || first.getId()==second.getId() || first.isNativePage() || second.isNativePage()
-+                || first.isIncognito()!=second.isIncognito() || first.getProfile()==null
-+                || !Objects.equals(first.getProfile(),second.getProfile())
++                || first.getId()==second.getId() || first.isIncognito()!=second.isIncognito()
++                || first.getProfile()==null || !Objects.equals(first.getProfile(),second.getProfile())
 +                || !Objects.equals(first.getProfile(),model.getProfile())
 +                || model.getTabById(first.getId())!=first || model.getTabById(second.getId())!=second) return false;
 +        WindowAndroid one=first.getWindowAndroid(),two=second.getWindowAndroid();
-+        if(one==null || two==null || one.getActivity().get()!=mActivity || two.getActivity().get()!=mActivity) return false;
-+        return (first.getView()==null || first.getView()==first.getContentView())
++        // A transient detach suspends presentation. A known different window ends ownership.
++        return (one==null || one.getActivity().get()==mActivity)
++                && (two==null || two.getActivity().get()==mActivity);
++    }
++
++    private boolean compatible(Tab first,Tab second) {
++        return associationValid(first,second) && !first.isNativePage() && !second.isNativePage()
++                && first.getWindowAndroid()!=null && second.getWindowAndroid()!=null
++                && mPairCompatibility.test(first,second)
++                && (first.getView()==null || first.getView()==first.getContentView())
 +                && (second.getView()==null || second.getView()==second.getContentView());
 +    }
 +
@@ -10836,12 +11805,12 @@ new file mode 100644
 +        if(mDestroyed || !mDesktop || !mCanChangeLayout.getAsBoolean()) {message(mLabels.blocked);return;}
 +        dismissPicker();
 +        List<String> choices=new ArrayList<>(List.of(mLabels.existing,mLabels.newTab));
-+        if(mState.isSplit())choices.add(mLabels.exit);
++        if(first!=null && isPairMember(first.getId()))choices.add(mLabels.exit);
 +        mPicker=new AlertDialog.Builder(mActivity).setTitle(mLabels.title)
 +                .setItems(choices.toArray(new String[0]),(dialog,which)->{
 +                    if(which==0)chooseExisting(first);
 +                    else if(which==1)createAndSplit(first);
-+                    else exit();
++                    else separatePair(first.getId());
 +                }).create();
 +        mPicker.show();
 +    }
@@ -10850,7 +11819,7 @@ new file mode 100644
 +        List<Tab> candidates=new ArrayList<>();List<String> titles=new ArrayList<>();
 +        for(int i=0;i<model.getCount();i++) {
 +            Tab tab=model.getTabAt(i);
-+            if(compatible(first,tab)) {candidates.add(tab);String title=tab.getTitle();
++            if(compatible(first,tab) && !isPairMember(first.getId()) && !isPairMember(tab.getId())) {candidates.add(tab);String title=tab.getTitle();
 +                titles.add(title==null || title.isEmpty()?tab.getUrl().getSpec():title);}
 +        }
 +        if(candidates.isEmpty()){message(mLabels.noTabs);return;}
@@ -10862,39 +11831,65 @@ new file mode 100644
 +    }
 +    private void createAndSplit(Tab first) {
 +        TabModel model=mModelSupplier.get();TabCreator creator=mCreator.get();
-+        if(mDestroyed || creator==null || model==null || model.getTabById(first.getId())!=first
++        if(mDestroyed || first==null || creator==null || model==null || isPairMember(first.getId())
++                || model.getTabById(first.getId())!=first
 +                || first.isDestroyed() || first.isClosing()) return;
 +        Tab second=creator.createNewTab(new LoadUrlParams("about:blank"),TabLaunchType.FROM_CHROME_UI,first);
 +        if(second!=null && enter(first,second)) {activate(second.getId());mFocusNew.run();}
 +        else message(mLabels.unsupported);
 +    }
 +
-+    public boolean enter(Tab first,Tab second) {
-+        if(mDestroyed || !mDesktop || !mCanChangeLayout.getAsBoolean() || !compatible(first,second)
++    /** New pair requests never dissolve an existing association. */
++    public boolean enter(Tab first,Tab second) { return enter(first,second,null); }
++
++    private boolean enter(Tab first,Tab second,ArcSplitPairStore.Pair replacement) {
++        if(mDestroyed || mUpdating || !mRestored || mModelSupplier.get()!=mModel
++                || !mDesktop || !mCanChangeLayout.getAsBoolean() || !compatible(first,second)
 +                || !mHolder.canPresentArcSplit()) return false;
-+        Tab previousSelection=mCurrent.get();
-+        int oldLeft=mState.leftId(),oldRight=mState.rightId(),oldActive=mState.activeId();float oldRatio=mState.ratio();
-+        mAnimation.settle();mUpdating=true;
++        ArcSplitPairStore.Pair one=mPairs.member(first.getId()),two=mPairs.member(second.getId());
++        if((one!=null && one!=replacement) || (two!=null && two!=replacement))return false;
++        Tab previousSelection=mCurrent.get();ArcSplitState previous=mState;
++        mResizeAnimation.settle();mAnimation.settle();mUpdating=true;
 +        try {
-+            unwatch(); mIncognito=first.isIncognito(); mState.start(first.getId(),second.getId());
-+            select(first);
-+            if(!mHolder.setArcSplitTabs(first,second,mState.ratio(),mState.activeId())) {
-+                mState.exit();mHolder.clearArcSplitTabs();
-+                Tab oldA=mModel.getTabById(oldLeft),oldB=mModel.getTabById(oldRight);
-+                if(compatible(oldA,oldB)) {
-+                    mState.start(oldLeft,oldRight);mState.setRatio(oldRatio);mState.activate(oldActive);
-+                    select(oldActive==oldLeft?oldA:oldB);mIncognito=oldA.isIncognito();
-+                    mHolder.setArcSplitTabs(oldA,oldB,presentationRatio(mHolder.getArcSplitViewport()),oldActive);watch(oldA,oldB);
-+                } else {
-+                    select(previousSelection);
-+                }
-+                if(second!=mCurrent.get() && second!=oldA && second!=oldB && !second.isDestroyed()
++            leavePresentation();mFocusedPane=false;
++            ArcSplitState next=new ArcSplitState();next.start(first.getId(),second.getId());
++            mState=next;select(first);
++            if(!mHolder.setArcSplitTabs(first,second,next.ratio(),next.activeId())) {
++                mState=previous;select(previousSelection);mHolder.clearArcSplitTabs();
++                if(second!=mCurrent.get() && (mPairs.member(second.getId())==null) && !second.isDestroyed()
 +                        && !second.isHidden())second.hide(TabHidingType.CHANGED_TABS);
 +                return false;
 +            }
++            mPairs.remove(replacement);mPairs.add(first.getId(),next);
 +            watch(first,second);mLastViewport=null;persist();
-+        } finally {mUpdating=false;}
-+        refresh(mDesktop);return true;
++        } finally {
++            mUpdating=false;
++            if(mState==previous)refresh(mDesktop);
++        }
++        refresh(mDesktop);mPairsChanged.run();return true;
++    }
++
++    /** Detached snapshots: representative identity survives swap and pane activation. */
++    public List<int[]> getPairSnapshot() { return mPairs.snapshot(); }
++    public boolean isPairMember(int id) { return mPairs.member(id)!=null; }
++    public void setPairsChangedCallback(Runnable callback) { mPairsChanged=callback==null?()->{}:callback; }
++    public void setPairCompatibility(BiPredicate<Tab,Tab> compatibility) {
++        mPairCompatibility=compatibility==null?(a,b)->true:compatibility;refresh(mDesktop);
++    }
++    public boolean selectPair(int memberId) {
++        if(mDestroyed || mUpdating)return false;
++        refresh(mDesktop);ArcSplitPairStore.Pair pair=mPairs.member(memberId);
++        if(pair==null || mModel==null || !compatible(mModel.getTabById(pair.state.leftId()),
++                mModel.getTabById(pair.state.rightId())))return false;
++        Tab active=mModel.getTabById(pair.state.activeId());
++        if(active==null || active.isDestroyed() || active.isClosing())return false;
++        mUpdating=true;try {select(active);} finally {mUpdating=false;}
++        refresh(mDesktop);persist();return true;
++    }
++    public void separatePair(int memberId) {
++        ArcSplitPairStore.Pair pair=mPairs.member(memberId);if(pair==null)return;
++        if(pair.state==mState) {exit();return;}
++        mPairs.remove(pair);syncObservers();persist();mPairsChanged.run();
 +    }
 +
 +    public boolean canOpenLink(Tab source) {
@@ -10933,7 +11928,6 @@ new file mode 100644
 +        if(!canOpenLink(source))return create.getAsBoolean();
 +        boolean wasSplit=mState.isSplit();float ratio=mState.ratio();
 +        boolean sourceOnRight=wasSplit && source.getId()==mState.rightId();
-+        Tab priorPeer=wasSplit?mModel.getTabById(sourceOnRight?mState.leftId():mState.rightId()):null;
 +        boolean created;
 +        mUpdating=true;
 +        try { created=create.getAsBoolean(); } finally { mUpdating=false; }
@@ -10943,12 +11937,13 @@ new file mode 100644
 +            Tab candidate=mModel.getTabAt(i);
 +            if(candidate!=null && !candidate.isDestroyed() && candidate.getWebContents()==contents){target=candidate;break;}
 +        }
-+        if(target!=null && enter(sourceOnRight?target:source,sourceOnRight?source:target)) {
++        // Renderer-created contents explicitly replace the source's peer, preserving the
++        // established link-adoption contract. An unrelated existing pair is never dissolved.
++        ArcSplitPairStore.Pair replacement=mPairs.member(source.getId());
++        if(target!=null && enter(sourceOnRight?target:source,sourceOnRight?source:target,replacement)) {
 +            if(wasSplit)mState.setRatio(ratio);
 +            mFocusedPane=false;activate(target.getId());
-+            if(priorPeer!=null && priorPeer!=source && priorPeer!=target && !priorPeer.isDestroyed() && !priorPeer.isHidden())
-+                priorPeer.hide(TabHidingType.CHANGED_TABS);
-+        } else { exit(); }
++        } else { refresh(mDesktop); }
 +        return true;
 +    }
 +
@@ -10959,12 +11954,14 @@ new file mode 100644
 +        }
 +    }
 +    public void activate(int id) {
-+        if(mDestroyed || mUpdating || !mState.isSplit() || !mState.activate(id))return;
++        if(mDestroyed || mUpdating || !mState.isSplit())return;
++        boolean changed=mState.activeId()!=id;
++        if(!mState.activate(id))return;
 +        mAnimation.settle();mUpdating=true;
 +        try {Tab tab=mModel.getTabById(id);if(tab==null || tab.isDestroyed()){exit();return;}
 +            select(tab);mHolder.onContentChanged();
 +        } finally {mUpdating=false;}
-+        refresh(mDesktop);persist();
++        refresh(mDesktop);persist();if(changed)mPairsChanged.run();
 +    }
 +
 +    private void reconcile() {refresh(mDesktop);}
@@ -10980,17 +11977,50 @@ new file mode 100644
 +            if(mModel!=null)persist();
 +            leavePresentation();unwatch();dismissPicker();
 +            if(mModel!=null)mModel.removeObserver(mModelObserver);
-+            mState.exit();mFocusedPane=false;mModel=model;mRestored=false;mBackground=false;
++            mState=new ArcSplitState();mFocusedPane=false;mModel=model;mBackground=false;
++            mPairs=model==null?new ArcSplitPairStore():mStores.get(model);
++            mRestored=model!=null && mRestoredModels.contains(model);
++            if(mPairs==null) {mPairs=new ArcSplitPairStore();if(model!=null)mStores.put(model,mPairs);}
++            mIncognito=model!=null && model.getProfile()!=null && model.getProfile().isOffTheRecord();
++            if(!mIncognito && mPersistentProfile==null && model!=null)mPersistentProfile=model.getProfile();
++            mPairsChanged.run();
 +            if(model!=null)model.addObserver(mModelObserver);
 +        }
 +        if(model==null)return;
 +        if(!mRestored && model.isTabModelRestored()) {
 +            mRestored=restore();
 +            if(!mRestored)return;
++            mRestoredModels.add(model);
 +        }
++        if(!mRestored)return;
++        boolean removed=false;
++        for(ArcSplitPairStore.Pair pair:mPairs.pairs()) {
++            if(!associationValid(model.getTabById(pair.state.leftId()),model.getTabById(pair.state.rightId()))) {
++                mPairs.remove(pair);removed=true;
++            }
++        }
++        Tab active=mCurrent.get();
++        ArcSplitPairStore.Pair selected=active==null || model.getTabById(active.getId())!=active
++                ?null:mPairs.member(active.getId());
++        if(selected==null || selected.state!=mState) {
++            mUpdating=true;
++            try {mResizeAnimation.settle();mAnimation.settle();leavePresentation();}
++            finally {mUpdating=false;}
++            mState=selected==null?new ArcSplitState():selected.state;
++            mFocusedPane=false;mObservedLeft=null;mObservedRight=null;
++        }
++        syncObservers();
++        if(removed) {persist();mPairsChanged.run();}
 +        if(!mState.isSplit())return;
-+        Tab left=model.getTabById(mState.leftId()),right=model.getTabById(mState.rightId()),active=mCurrent.get();
-+        if(!compatible(left,right) || active==null || !mState.activate(active.getId())) {exit();return;}
++        boolean activeChanged=mState.activeId()!=active.getId();mState.activate(active.getId());
++        if(activeChanged) {persist();mPairsChanged.run();}
++        Tab left=model.getTabById(mState.leftId()),right=model.getTabById(mState.rightId());
++        if(!compatible(left,right)) {
++            mUpdating=true;
++            try {mResizeAnimation.settle();mAnimation.settle();leavePresentation();}
++            finally {mUpdating=false;}
++            return;
++        }
 +        Rect viewport=mHolder.getArcSplitViewport();
 +        if(mFocusedPane && desktop && !mBackground && !active.isHidden()
 +                && mHolder.getWindowVisibility()==View.VISIBLE && mHolder.canPresentArcSplit()) {
@@ -11074,7 +12104,7 @@ new file mode 100644
 +    }
 +    public void swap() {
 +        if(mDestroyed || !mState.isSplit() || mLastViewport==null || !mCanChangeLayout.getAsBoolean())return;
-+        mResizeAnimation.settle();mAnimation.settle();mState.swap();refresh(mDesktop);persist();
++        mResizeAnimation.settle();mAnimation.settle();mState.swap();refresh(mDesktop);persist();mPairsChanged.run();
 +        mDivider.setBusy(true);mHolder.setArcSplitInputBlocked(true);
 +        mAnimation.start(p -> {if(!mDestroyed)mHolder.setArcSplitSwapProgress(p);},()->{
 +            mHolder.setArcSplitInputBlocked(false);mDivider.setBusy(false);
@@ -11082,7 +12112,9 @@ new file mode 100644
 +    }
 +    public void exit() {
 +        if(mDestroyed)return;
-+        mResizeAnimation.settle();mAnimation.settle();mFocusedPane=false;leavePresentation();unwatch();mState.exit();persist();dismissPicker();
++        mResizeAnimation.settle();mAnimation.settle();mFocusedPane=false;leavePresentation();
++        mPairs.remove(mPairs.member(mState.leftId()));mState=new ArcSplitState();
++        mObservedLeft=null;mObservedRight=null;syncObservers();persist();dismissPicker();mPairsChanged.run();
 +    }
 +    private void leavePresentation() {
 +        mViewportPolicy.clear();
@@ -11092,65 +12124,66 @@ new file mode 100644
 +            if(tab!=null && tab!=active && !tab.isDestroyed() && !tab.isHidden())tab.hide(TabHidingType.CHANGED_TABS);
 +    }
 +    private void beforeClose(List<Tab> closing) {
-+        if(mUpdating || !mState.isSplit() || mModel==null)return;
-+        boolean left=closing.stream().anyMatch(t->t.getId()==mState.leftId());
-+        boolean right=closing.stream().anyMatch(t->t.getId()==mState.rightId());
-+        if(!left && !right)return;
-+        Tab survivor=left&&!right?mModel.getTabById(mState.rightId()):right&&!left?mModel.getTabById(mState.leftId()):null;
-+        mUpdating=true;
-+        try {if(survivor!=null && !survivor.isDestroyed() && !survivor.isClosing())select(survivor);exit();}
-+        finally {mUpdating=false;}
++        if(mUpdating || mModel==null)return;
++        boolean changed=false;mUpdating=true;
++        try {
++            for(ArcSplitPairStore.Pair pair:mPairs.pairs()) {
++                boolean left=closing.stream().anyMatch(t->t.getId()==pair.state.leftId());
++                boolean right=closing.stream().anyMatch(t->t.getId()==pair.state.rightId());
++                if(!left && !right)continue;
++                if(pair.state==mState) {
++                    Tab active=mCurrent.get();
++                    Tab survivor=left&&!right?mModel.getTabById(pair.state.rightId()):right&&!left?mModel.getTabById(pair.state.leftId()):null;
++                    if(active!=null && closing.contains(active) && survivor!=null && !survivor.isDestroyed() && !survivor.isClosing())select(survivor);
++                    mResizeAnimation.settle();mAnimation.settle();leavePresentation();mState=new ArcSplitState();
++                    mObservedLeft=null;mObservedRight=null;mFocusedPane=false;
++                }
++                mPairs.remove(pair);changed=true;
++            }
++        } finally {mUpdating=false;}
++        if(changed) {syncObservers();persist();mPairsChanged.run();}
 +    }
-+    private void removed(Tab tab) {
-+        if(mDestroyed || mUpdating || !mState.isSplit()
-+                || (tab.getId()!=mState.leftId() && tab.getId()!=mState.rightId()))return;
-+        beforeClose(List.of(tab));
-+    }
++    private void removed(Tab tab) { if(!mDestroyed)beforeClose(List.of(tab)); }
 +    private void watch(Tab left,Tab right) {
-+        if(mObservedLeft==left && mObservedRight==right)return;
-+        unwatch();mObservedLeft=left;mObservedRight=right;left.addObserver(mTabs);right.addObserver(mTabs);
++        mObservedLeft=left;mObservedRight=right;syncObservers();
++    }
++    private void syncObservers() {
++        List<Tab> wanted=new ArrayList<>();
++        if(mModel!=null)for(ArcSplitPairStore.Pair pair:mPairs.pairs()) {
++            for(int id:new int[]{pair.state.leftId(),pair.state.rightId()}) {
++                Tab tab=mModel.getTabById(id);if(tab!=null)wanted.add(tab);
++            }
++        }
++        for(Tab tab:new ArrayList<>(mWatched))if(!wanted.contains(tab)) {tab.removeObserver(mTabs);mWatched.remove(tab);}
++        for(Tab tab:wanted)if(!mWatched.contains(tab)) {tab.addObserver(mTabs);mWatched.add(tab);}
 +    }
 +    private void unwatch() {
-+        if(mObservedLeft!=null)mObservedLeft.removeObserver(mTabs);
-+        if(mObservedRight!=null)mObservedRight.removeObserver(mTabs);
-+        mObservedLeft=null;mObservedRight=null;
++        for(Tab tab:mWatched)tab.removeObserver(mTabs);
++        mWatched.clear();mObservedLeft=null;mObservedRight=null;
 +    }
 +    private void persist() {
-+        if(mIncognito || mPrefs==null)return;
-+        String value=mState.isSplit()?mState.leftId()+","+mState.rightId()+","+mState.activeId()+","+mState.ratio():null;
++        if(mIncognito || mPrefs==null || !mRestored || mModel==null
++                || !Objects.equals(mPersistentProfile,mModel.getProfile()))return;
++        String value=mPairs.encode();
 +        if(!Objects.equals(value,mPrefs.getString(mStateKey,null))) {
 +            SharedPreferences.Editor edit=mPrefs.edit();if(value==null)edit.remove(mStateKey);else edit.putString(mStateKey,value);edit.apply();
 +        }
 +    }
-+    /** false means a transient prerequisite is missing; do not consume saved state. */
++    /** Reconcile native IDs only after restoration. Never override native selectedtab. */
 +    private boolean restore() {
 +        Tab current=mCurrent.get();
-+        if(current==null)return false;
-+        if(current.isIncognito())return true;
-+        String saved=mPrefs.getString(mStateKey,null);
++        if(current==null || mModel.getProfile()==null || mModel.getTabById(current.getId())!=current)return false;
++        if(mIncognito || !Objects.equals(mPersistentProfile,mModel.getProfile()))return true;
++        String saved=mPrefs==null?null:mPrefs.getString(mStateKey,null);
 +        if(saved==null)return true;
-+        try {
-+            String[] parts=saved.split(",");
-+            if(parts.length!=4)throw new IllegalArgumentException();
-+            int left=Integer.parseInt(parts[0]),right=Integer.parseInt(parts[1]);
-+            int active=Integer.parseInt(parts[2]);float ratio=Float.parseFloat(parts[3]);
-+            if(!Float.isFinite(ratio) || (active!=left && active!=right))throw new IllegalArgumentException();
-+            Tab a=mModel.getTabById(left),b=mModel.getTabById(right);
-+            if(a==null || b==null || a==b || a.isDestroyed() || b.isDestroyed()
-+                    || a.isClosing() || b.isClosing() || a.isIncognito() || b.isIncognito()
-+                    || !Objects.equals(a.getProfile(),b.getProfile())
-+                    || !Objects.equals(a.getProfile(),mModel.getProfile()))throw new IllegalArgumentException();
-+            if(a.getWindowAndroid()==null || b.getWindowAndroid()==null)return false;
-+            if(!compatible(a,b))throw new IllegalArgumentException();
-+            if(!mDesktop || !mHolder.canPresentArcSplit() || !mCanChangeLayout.getAsBoolean()
-+                    || mHolder.getArcSplitViewport().width()<2*dp(MIN_PANE_DP))return false;
-+            // enter/activate can synchronously call refresh; suppress recursive restoration.
-+            mRestored=true;
-+            if(!enter(a,b)) {mRestored=false;return false;}
-+            mState.setRatio(ratio);activate(active);persist();return true;
-+        } catch(IllegalArgumentException error) {
-+            mPrefs.edit().remove(mStateKey).apply();return true;
++        ArcSplitPairStore restored=ArcSplitPairStore.decode(saved);
++        for(ArcSplitPairStore.Pair pair:restored.pairs()) {
++            Tab left=mModel.getTabById(pair.state.leftId()),right=mModel.getTabById(pair.state.rightId());
++            if(left!=null && right!=null && (left.getWindowAndroid()==null || right.getWindowAndroid()==null))return false;
++            if(!associationValid(left,right) || left.isIncognito() || right.isIncognito())restored.remove(pair);
 +        }
++        mPairs=restored;mStores.put(mModel,restored);mRestored=true;
++        syncObservers();persist();mPairsChanged.run();return true;
 +    }
 +    private void dismissPicker(){if(mPicker!=null){mPicker.dismiss();mPicker=null;}}
 +    private void message(String text){if(!mDestroyed && !mActivity.isFinishing())Toast.makeText(mActivity,text,Toast.LENGTH_SHORT).show();}
@@ -12862,7 +13895,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitVi
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitViewCoordinatorTest.java
-@@ -0,0 +1,306 @@
+@@ -0,0 +1,454 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -12899,7 +13932,7 @@ new file mode 100644
 +        Profile profile=mock(Profile.class);
 +        TabModel model=mock(TabModel.class);
 +        TabCreator creator=mock(TabCreator.class);
-+        Tab one=mock(Tab.class),two=mock(Tab.class),other=mock(Tab.class);
++        Tab one=mock(Tab.class),two=mock(Tab.class),other=mock(Tab.class),four=mock(Tab.class),five=mock(Tab.class);
 +        AtomicReference<TabModel> suppliedModel=new AtomicReference<>(model);
 +        AtomicReference<Tab> current=new AtomicReference<>(one);
 +        java.util.concurrent.atomic.AtomicBoolean allowed=new java.util.concurrent.atomic.AtomicBoolean(true);
@@ -12908,9 +13941,9 @@ new file mode 100644
 +        Fixture() {this(null,false);}
 +        Fixture(String saved,boolean incognito) {
 +            a.setContentView(root);root.layout(0,0,1280,800);
-+            Tab[] tabs={one,two,other};WindowAndroid window=mock(WindowAndroid.class);
++            Tab[] tabs={one,two,other,four,five};WindowAndroid window=mock(WindowAndroid.class);
 +            when(window.getActivity()).thenReturn(new java.lang.ref.WeakReference<>(a));
-+            when(model.getProfile()).thenReturn(profile);when(model.isTabModelRestored()).thenReturn(true);when(model.getCount()).thenReturn(3);
++            when(profile.isOffTheRecord()).thenReturn(incognito);when(model.getProfile()).thenReturn(profile);when(model.isTabModelRestored()).thenReturn(true);when(model.getCount()).thenReturn(5);
 +            for(int i=0;i<tabs.length;i++) {Tab t=tabs[i];int id=17+i;
 +                when(t.getId()).thenReturn(id);when(t.isIncognito()).thenReturn(incognito);when(t.getProfile()).thenReturn(profile);when(t.getWindowAndroid()).thenReturn(window);
 +                when(t.getTitle()).thenReturn("Public fixture "+id);when(model.getTabById(id)).thenReturn(t);when(model.getTabAt(i)).thenReturn(t);
@@ -12925,6 +13958,152 @@ new file mode 100644
 +            coordinator.refresh(true);
 +        }
 +        void close(){coordinator.destroy();a.finish();}
++    }
++    @Test public void externalSelectionSuspendsAndRestoresPairWithoutLosingGeometry() {
++        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));
++        f.coordinator.stateForTesting().setRatio(.65f);f.coordinator.activate(18);
++        f.current.set(f.other);f.coordinator.refresh(true);
++        assertSame(f.other,f.current.get());assertFalse(f.coordinator.stateForTesting().isSplit());
++        f.current.set(f.two);f.coordinator.refresh(true);
++        assertTrue("Returning to a member restores its pair",f.coordinator.stateForTesting().isSplit());
++        assertEquals(17,f.coordinator.stateForTesting().leftId());assertEquals(.65f,f.coordinator.stateForTesting().ratio(),.001f);
++        assertEquals(18,f.coordinator.stateForTesting().activeId());verifyNoInteractions(f.creator);f.close();
++    }
++    @Test public void fiveTabsKeepTwoIndependentPairsAndInactiveClosureDoesNotSelectSurvivor() {
++        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));
++        f.coordinator.stateForTesting().setRatio(.65f);f.coordinator.activate(18);
++        f.current.set(f.four);f.coordinator.refresh(true);assertTrue(f.coordinator.enter(f.four,f.five));
++        f.coordinator.stateForTesting().setRatio(.35f);f.coordinator.activate(21);
++        f.current.set(f.other);f.coordinator.refresh(true);
++        f.current.set(f.two);f.coordinator.refresh(true);
++        assertTrue(f.coordinator.stateForTesting().isSplit());assertEquals(.65f,f.coordinator.stateForTesting().ratio(),.001f);
++        f.current.set(f.five);f.coordinator.refresh(true);
++        assertEquals(20,f.coordinator.stateForTesting().leftId());assertEquals(.35f,f.coordinator.stateForTesting().ratio(),.001f);
++        f.current.set(f.other);f.coordinator.refresh(true);
++        ArgumentCaptor<TabModelObserver> observer=ArgumentCaptor.forClass(TabModelObserver.class);verify(f.model).addObserver(observer.capture());
++        observer.getValue().willCloseTab(f.one,true);assertSame(f.other,f.current.get());
++        f.current.set(f.five);f.coordinator.refresh(true);assertTrue(f.coordinator.stateForTesting().isSplit());
++        verify(f.one,never()).reload();verify(f.two,never()).reload();verify(f.four,never()).reload();verify(f.five,never()).reload();f.close();
++    }
++    @Test public void snapshotsAreStableAndPairSelectionRestoresStoredActive() {
++        Fixture f=new Fixture();java.util.concurrent.atomic.AtomicInteger changes=new java.util.concurrent.atomic.AtomicInteger();
++        f.coordinator.setPairsChangedCallback(changes::incrementAndGet);
++        assertTrue(f.coordinator.enter(f.one,f.two));int representative=f.coordinator.getPairSnapshot().get(0)[0];
++        f.coordinator.activate(18);assertTrue("Pane activation updates sidebar",changes.get()>=2);
++        f.coordinator.swap();f.coordinator.settleForTesting();assertEquals(representative,f.coordinator.getPairSnapshot().get(0)[0]);
++        int[] detached=f.coordinator.getPairSnapshot().get(0);detached[1]=999;
++        assertEquals(18,f.coordinator.getPairSnapshot().get(0)[1]);
++        f.current.set(f.other);f.coordinator.refresh(true);assertTrue(f.coordinator.selectPair(17));assertSame(f.two,f.current.get());
++        assertTrue(f.coordinator.isPairMember(17));assertFalse(f.coordinator.enter(f.one,f.four));
++        f.coordinator.separatePair(17);assertFalse(f.coordinator.isPairMember(18));assertSame(f.two,f.current.get());f.close();
++    }
++    @Test public void inactiveMemberAttachmentAndDestructionAreObserved() {
++        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));
++        f.current.set(f.four);f.coordinator.refresh(true);assertTrue(f.coordinator.enter(f.four,f.five));
++        f.current.set(f.other);f.coordinator.refresh(true);
++        ArgumentCaptor<TabObserver> observer=ArgumentCaptor.forClass(TabObserver.class);verify(f.one).addObserver(observer.capture());
++        WindowAndroid moved=mock(WindowAndroid.class);Activity elsewhere=Robolectric.buildActivity(Activity.class).setup().get();
++        when(moved.getActivity()).thenReturn(new java.lang.ref.WeakReference<>(elsewhere));
++        observer.getValue().onActivityAttachmentChanged(f.one,moved);
++        assertFalse(f.coordinator.isPairMember(17));assertTrue(f.coordinator.isPairMember(20));assertSame(f.other,f.current.get());
++        ArgumentCaptor<TabObserver> otherObserver=ArgumentCaptor.forClass(TabObserver.class);verify(f.five).addObserver(otherObserver.capture());
++        otherObserver.getValue().onDestroyed(f.five);assertFalse(f.coordinator.isPairMember(20));assertSame(f.other,f.current.get());
++        elsewhere.finish();f.close();
++    }
++    @Test public void versionedRestoreRejectsEntriesIndependentlyAndDoesNotStealNativeSelection() {
++        Fixture f=new Fixture("v2;17,17,18,18,0.65;20,20,21,21,0.35;19,19,20,19,0.5;99,99,100,99,NaN",false);
++        assertSame(f.one,f.current.get());assertEquals(2,f.coordinator.getPairSnapshot().size());
++        f.current.set(f.other);f.coordinator.refresh(true);assertTrue(f.coordinator.selectPair(20));assertSame(f.five,f.current.get());
++        assertEquals(.35f,f.coordinator.stateForTesting().ratio(),.001f);
++        assertTrue(f.prefs.getString("arc_split_task_"+f.a.getTaskId(),"").startsWith("v2;"));f.close();
++    }
++    @Test public void incompatibleSectionSuspendsWithoutLosingPairsRatiosOrNativeSelection() {
++        Fixture f=new Fixture();f.coordinator.setPairCompatibility((a,b)->a!=f.one && b!=f.one);
++        assertFalse(f.coordinator.enter(f.one,f.two));assertTrue(f.coordinator.enter(f.four,f.five));
++        f.coordinator.stateForTesting().setRatio(.35f);f.coordinator.activate(21);
++        f.coordinator.setPairCompatibility((a,b)->true);assertTrue(f.coordinator.enter(f.one,f.two));
++        f.coordinator.stateForTesting().setRatio(.65f);f.coordinator.activate(18);
++        f.current.set(f.other);f.coordinator.refresh(true);clearInvocations(f.model,f.holder);
++        f.coordinator.setPairCompatibility((a,b)->a!=f.one && b!=f.one);
++        assertTrue("A section move must retain the association",f.coordinator.isPairMember(17));
++        assertTrue(f.coordinator.isPairMember(20));assertEquals(2,f.coordinator.getPairSnapshot().size());
++        assertSame(f.other,f.current.get());verify(f.model,never()).setIndex(anyInt(),anyInt());
++        assertFalse("A suspended row cannot select an incompatible pair",f.coordinator.selectPair(17));
++        assertSame(f.other,f.current.get());
++        f.current.set(f.two);f.coordinator.refresh(true);clearInvocations(f.holder);
++        f.coordinator.refresh(true);verify(f.holder,never()).setArcSplitTabs(any(),any(),anyFloat(),anyInt());
++        assertEquals(.65f,f.coordinator.stateForTesting().ratio(),.001f);
++        assertFalse(f.coordinator.enter(f.one,f.other));assertEquals(2,f.coordinator.getPairSnapshot().size());
++        f.coordinator.setPairCompatibility((a,b)->true);
++        verify(f.holder).setArcSplitTabs(f.one,f.two,.65f,18);assertSame(f.two,f.current.get());
++        f.current.set(f.other);f.coordinator.refresh(true);assertTrue(f.coordinator.selectPair(20));
++        assertSame(f.five,f.current.get());assertEquals(.35f,f.coordinator.stateForTesting().ratio(),.001f);
++        assertTrue(f.coordinator.selectPair(17));assertSame(f.two,f.current.get());
++        assertEquals(.65f,f.coordinator.stateForTesting().ratio(),.001f);f.close();
++    }
++    @Test public void incompatibleRestoredPairRemainsStoredAndCanBeExplicitlySeparated() {
++        Fixture f=new Fixture("17,18,18,0.65",false);f.coordinator.destroy();
++        f.current.set(f.other);
++        f.coordinator=new ArcSplitViewCoordinator(f.a,f.root,f.holder,f.suppliedModel::get,()->f.creator,f.current::get,()->{},()->true,f.prefs,
++            new ArcSplitViewCoordinator.Labels("Split","Existing","New","Exit","Unsupported","No tabs","Swap","Blocked"));
++        f.coordinator.setPairCompatibility((a,b)->false);f.coordinator.refresh(true);
++        assertTrue(f.coordinator.isPairMember(17));assertSame(f.other,f.current.get());
++        assertTrue(f.prefs.getString("arc_split_task_"+f.a.getTaskId(),"").contains("0.65"));
++        f.coordinator.separatePair(17);assertFalse(f.coordinator.isPairMember(18));assertSame(f.other,f.current.get());f.close();
++    }
++    @Test public void differentProfileWithReusedNativeIdsCannotLoadNormalAssociations() {
++        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));
++        String saved=f.prefs.getString("arc_split_task_"+f.a.getTaskId(),null);
++        Profile profile=mock(Profile.class);TabModel model=mock(TabModel.class);
++        Tab a=mock(Tab.class),b=mock(Tab.class);WindowAndroid window=mock(WindowAndroid.class);
++        when(window.getActivity()).thenReturn(new java.lang.ref.WeakReference<>(f.a));
++        when(model.getProfile()).thenReturn(profile);when(model.getCount()).thenReturn(2);when(model.isTabModelRestored()).thenReturn(true);
++        for(int i=0;i<2;i++) {Tab tab=i==0?a:b;int id=17+i;when(tab.getId()).thenReturn(id);when(tab.getProfile()).thenReturn(profile);
++            when(tab.getWindowAndroid()).thenReturn(window);when(model.getTabById(id)).thenReturn(tab);when(model.getTabAt(i)).thenReturn(tab);}
++        f.suppliedModel.set(model);f.current.set(a);f.coordinator.refresh(true);
++        assertTrue("Persisted associations belong to their original profile",f.coordinator.getPairSnapshot().isEmpty());
++        assertTrue(f.coordinator.enter(a,b));f.coordinator.exit();
++        assertEquals(saved,f.prefs.getString("arc_split_task_"+f.a.getTaskId(),null));
++        f.suppliedModel.set(f.model);f.current.set(f.one);f.coordinator.refresh(true);assertTrue(f.coordinator.isPairMember(18));f.close();
++    }
++    @Test public void inactiveActivityHiddenDoesNotHideVisiblePair() {
++        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));
++        f.current.set(f.four);f.coordinator.refresh(true);assertTrue(f.coordinator.enter(f.four,f.five));
++        ArgumentCaptor<TabObserver> observer=ArgumentCaptor.forClass(TabObserver.class);verify(f.one).addObserver(observer.capture());
++        clearInvocations(f.four,f.five,f.holder);
++        observer.getValue().onHidden(f.one,org.chromium.chrome.browser.tab.TabHidingType.ACTIVITY_HIDDEN);
++        verify(f.four,never()).hide(anyInt());verify(f.five,never()).hide(anyInt());
++        f.coordinator.refresh(true);verify(f.holder,never()).clearArcSplitTabs();
++        assertSame(f.four,f.current.get());f.close();
++    }
++    @Test public void inactiveSeparationLeavesOtherPairAndSelectionAlone() {
++        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));
++        f.current.set(f.four);f.coordinator.refresh(true);assertTrue(f.coordinator.enter(f.four,f.five));
++        f.coordinator.activate(21);clearInvocations(f.model,f.holder);
++        f.coordinator.separatePair(17);
++        assertFalse(f.coordinator.isPairMember(18));assertTrue(f.coordinator.isPairMember(21));
++        assertSame(f.five,f.current.get());verify(f.model,never()).setIndex(anyInt(),anyInt());
++        verify(f.holder,never()).clearArcSplitTabs();f.close();
++    }
++    @Test public void storeMigrationRejectsMalformedRowsWithoutDroppingOtherPairs() {
++        ArcSplitPairStore legacy=ArcSplitPairStore.decode("17,18,18,0.65");
++        assertEquals("v2;17,17,18,18,0.65",legacy.encode());
++        ArcSplitPairStore store=ArcSplitPairStore.decode("v2;17,17,18,18,0.65;bad;"
++                +"20,20,21,20,NaN;20,20,21,20,Infinity;20,20,21,20,0.9;"
++                +"20,20,21,999,0.5;20,20,21,20,0.35;19,19,20,19,0.5");
++        assertEquals(2,store.pairs().size());assertNull(store.member(19));
++        assertSame(store.member(20),store.member(21));
++        assertEquals(store.encode(),ArcSplitPairStore.decode(store.encode()).encode());
++    }
++    @Test public void startupWaitsForNativeModelRestorationWithoutChangingPreferences() {
++        Fixture f=new Fixture();f.coordinator.destroy();String key="arc_split_task_"+f.a.getTaskId();
++        f.prefs.edit().putString(key,"17,18,18,0.65").apply();when(f.model.isTabModelRestored()).thenReturn(false);
++        f.coordinator=new ArcSplitViewCoordinator(f.a,f.root,f.holder,f.suppliedModel::get,()->f.creator,f.current::get,()->{},()->true,f.prefs,
++            new ArcSplitViewCoordinator.Labels("Split","Existing","New","Exit","Unsupported","No tabs","Swap","Blocked"));
++        f.coordinator.refresh(true);assertTrue(f.coordinator.getPairSnapshot().isEmpty());
++        assertFalse(f.coordinator.enter(f.four,f.five));assertEquals("17,18,18,0.65",f.prefs.getString(key,null));
++        when(f.model.isTabModelRestored()).thenReturn(true);f.coordinator.refresh(true);
++        assertTrue(f.coordinator.isPairMember(18));assertSame(f.one,f.current.get());f.close();
 +    }
 +    @Test public void enterAndActivationUseNativeIdentitiesAndExitKeepsTabsAlive() {
 +        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));
@@ -13074,10 +14253,12 @@ new file mode 100644
 +    }
 +    @Test public void failedPresentationKeepsPreviousPairAndSelection() {
 +        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));f.coordinator.activate(18);
-+        when(f.holder.setArcSplitTabs(eq(f.one),eq(f.other),anyFloat(),anyInt())).thenReturn(false);
-+        assertFalse(f.coordinator.enter(f.one,f.other));assertEquals(17,f.coordinator.stateForTesting().leftId());
++        clearInvocations(f.holder);
++        when(f.holder.setArcSplitTabs(eq(f.four),eq(f.five),anyFloat(),anyInt())).thenReturn(false);
++        assertFalse(f.coordinator.enter(f.four,f.five));assertEquals(17,f.coordinator.stateForTesting().leftId());
 +        assertEquals(18,f.coordinator.stateForTesting().rightId());assertSame(f.two,f.current.get());
-+        verify(f.other).hide(org.chromium.chrome.browser.tab.TabHidingType.CHANGED_TABS);f.close();
++        verify(f.five).hide(org.chromium.chrome.browser.tab.TabHidingType.CHANGED_TABS);
++        verify(f.holder).setArcSplitTabs(f.one,f.two,.5f,18);f.close();
 +    }
 +    @Test public void existingPickerAndCancellationNeverCreateTab() {
 +        Fixture f=new Fixture();f.coordinator.requestSplit(f.one);
@@ -13102,7 +14283,7 @@ new file mode 100644
 +    }
 +    @Test public void nativeRestoredIdsReopenOnlyExistingPairAndKeepRatio() {
 +        Fixture f=new Fixture("17,18,18,0.65",false);
-+        assertTrue(f.coordinator.stateForTesting().isSplit());assertSame(f.two,f.current.get());
++        assertTrue(f.coordinator.stateForTesting().isSplit());assertSame(f.one,f.current.get());
 +        assertEquals(.65f,f.coordinator.stateForTesting().ratio(),.001f);verifyNoInteractions(f.creator);f.close();
 +    }
 +    @Test public void missingRestoredIdDoesNotResurrectTabs() {
@@ -13128,9 +14309,9 @@ new file mode 100644
 +        f.coordinator=new ArcSplitViewCoordinator(f.a,f.root,f.holder,()->f.model,()->f.creator,f.current::get,()->{},()->true,f.prefs,
 +            new ArcSplitViewCoordinator.Labels("Split","Existing","New","Exit","Unsupported","No tabs","Swap","Blocked"));
 +        f.current.set(null);f.coordinator.refresh(false);assertEquals("17,18,18,0.65",f.prefs.getString(key,null));
-+        f.current.set(f.one);f.coordinator.refresh(true);assertEquals("17,18,18,0.65",f.prefs.getString(key,null));
++        f.current.set(f.one);f.coordinator.refresh(true);assertTrue(f.coordinator.isPairMember(17));assertSame(f.one,f.current.get());
 +        when(f.holder.canPresentArcSplit()).thenReturn(true);f.coordinator.refresh(true);
-+        assertTrue(f.coordinator.stateForTesting().isSplit());assertSame(f.two,f.current.get());verifyNoInteractions(f.creator);f.close();
++        assertTrue(f.coordinator.stateForTesting().isSplit());assertSame(f.one,f.current.get());verifyNoInteractions(f.creator);f.close();
 +    }
 +    @Test public void asymmetricRatioKeepsTwoUsablePanesWithoutLosingIntendedRatio() {
 +        Fixture f=new Fixture();assertTrue(f.coordinator.enter(f.one,f.two));f.coordinator.stateForTesting().setRatio(.2f);
@@ -13144,7 +14325,7 @@ new file mode 100644
 +        when(f.holder.canPresentArcSplit()).thenReturn(false);clearInvocations(f.holder);
 +        f.coordinator=new ArcSplitViewCoordinator(f.a,f.root,f.holder,()->f.model,()->f.creator,f.current::get,()->{},()->true,f.prefs,
 +            new ArcSplitViewCoordinator.Labels("Split","Existing","New","Exit","Unsupported","No tabs","Swap","Blocked"));
-+        f.coordinator.refresh(true);assertFalse(f.coordinator.stateForTesting().isSplit());
++        f.coordinator.refresh(true);assertTrue(f.coordinator.isPairMember(17));verify(f.holder,never()).setArcSplitTabs(any(),any(),anyFloat(),anyInt());
 +        ArgumentCaptor<CompositorViewHolder.FrameRequestObserver> frame=ArgumentCaptor.forClass(CompositorViewHolder.FrameRequestObserver.class);
 +        verify(f.holder).addFrameRequestObserver(frame.capture());when(f.holder.canPresentArcSplit()).thenReturn(true);
 +        frame.getValue().onFrameRequested();ArgumentCaptor<Runnable> posted=ArgumentCaptor.forClass(Runnable.class);verify(f.holder).post(posted.capture());
@@ -17716,7 +18897,7 @@ diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrom
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java
-@@ -0,0 +1,167 @@
+@@ -0,0 +1,296 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -17883,6 +19064,135 @@ new file mode 100644
 +    public static int selection(Context context, boolean incognito) {
 +        return ArcDesktopPolicy.selection(surface(context, incognito));
 +    }
++
++    /** Retains native favicon/fallback artwork and its existing box, including asynchronous results. */
++    public static void normalizeSidebarFavicon(android.widget.ImageView favicon) {
++        favicon.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
++        favicon.setImageTintList(null);
++    }
++
++    /** UI-only feedback; selection comes from the native row model, never another selection store. */
++    public static void applySidebarRowState(android.view.View row, boolean active,
++            boolean multiSelected, boolean incognito, boolean hoveredOrFocused) {
++        int fill = active ? activeTabSurface(row.getContext(), incognito)
++                : multiSelected || hoveredOrFocused ? selection(row.getContext(), incognito)
++                : android.graphics.Color.TRANSPARENT;
++        int disabledFill = (fill & 0x00ffffff)
++                | (Math.round(android.graphics.Color.alpha(fill) * .4f) << 24);
++        row.setBackgroundTintList(new android.content.res.ColorStateList(
++                new int[][] {{-android.R.attr.state_enabled}, {}},
++                new int[] {disabledFill, fill}));
++        SidebarRowOutline outline;
++        if (row.getForeground() instanceof SidebarRowOutline existing) {
++            outline = existing;
++        } else {
++            outline = new SidebarRowOutline(row);
++            row.setForeground(outline);
++        }
++        outline.update(active, foreground(row.getContext(), incognito));
++    }
++
++    /** Removes only our decoration when a window switches back to the native mobile layout. */
++    public static void clearSidebarRowState(android.view.View row) {
++        if (row.getForeground() instanceof SidebarRowOutline outline) {
++            outline.dispose();
++            row.setForeground(null);
++        }
++    }
++
++    /** One physical pixel, drawn inside the native capsule; no padding, size or radius changes. */
++    private static final class SidebarRowOutline extends android.graphics.drawable.Drawable
++            implements android.view.View.OnAttachStateChangeListener {
++        final android.view.View row;
++        final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
++        final android.graphics.RectF bounds = new android.graphics.RectF();
++        boolean active;
++        boolean initialized;
++        int color;
++        int alpha;
++        android.animation.ValueAnimator animator;
++
++        SidebarRowOutline(android.view.View row) {
++            this.row = row;
++            paint.setStyle(android.graphics.Paint.Style.STROKE);
++            paint.setStrokeWidth(1f);
++            row.addOnAttachStateChangeListener(this);
++        }
++
++        void update(boolean active, int color) {
++            this.color = color;
++            int target = active ? 64 : 0;
++            boolean changed = this.active != active;
++            this.active = active;
++            if (!initialized || !row.isAttachedToWindow()
++                    || !android.animation.ValueAnimator.areAnimatorsEnabled()) {
++                cancelAnimation();
++                alpha = target;
++                initialized = true;
++            } else if (changed) {
++                cancelAnimation();
++                if (alpha != target) {
++                    animator = android.animation.ValueAnimator.ofInt(alpha, target);
++                    animator.setDuration(100);
++                    animator.addUpdateListener(value -> {
++                        alpha = (int) value.getAnimatedValue();
++                        invalidateSelf();
++                    });
++                    animator.start();
++                }
++            }
++            invalidateSelf();
++        }
++
++        void cancelAnimation() {
++            if (animator == null) return;
++            animator.cancel();
++            animator.removeAllUpdateListeners();
++            animator = null;
++        }
++
++        void dispose() {
++            cancelAnimation();
++            row.removeOnAttachStateChangeListener(this);
++        }
++
++        @Override public void onViewAttachedToWindow(android.view.View view) {}
++        @Override public void onViewDetachedFromWindow(android.view.View view) {
++            cancelAnimation();
++            alpha = active ? 64 : 0;
++            invalidateSelf();
++        }
++
++        @Override public boolean isStateful() { return true; }
++        @Override protected boolean onStateChange(int[] state) { invalidateSelf(); return true; }
++        @Override public void draw(android.graphics.Canvas canvas) {
++            boolean focused = row.hasFocus();
++            for (int state : getState()) focused |= state == android.R.attr.state_focused;
++            int opacity = row.isEnabled() ? focused ? 192 : alpha : Math.round(alpha * .4f);
++            if (opacity == 0) return;
++            android.graphics.drawable.Drawable background = row.getBackground();
++            // Follow the innermost native shape, including its existing vertical insets.
++            while (background != null) {
++                android.graphics.drawable.Drawable current = background.getCurrent();
++                if (current != background) { background = current; continue; }
++                if (background instanceof android.graphics.drawable.InsetDrawable inset) {
++                    background = inset.getDrawable();
++                } else break;
++            }
++            android.graphics.Rect nativeBounds = background == null ? getBounds() : background.getBounds();
++            bounds.set(nativeBounds.isEmpty() ? getBounds() : nativeBounds);
++            bounds.inset(.5f, .5f);
++            float radius = background instanceof android.graphics.drawable.GradientDrawable gradient
++                    ? Math.max(0f, gradient.getCornerRadius() - .5f) : 0f;
++            paint.setColor(color);
++            paint.setAlpha(opacity);
++            canvas.drawRoundRect(bounds, radius, radius, paint);
++        }
++        @Override public void setAlpha(int alpha) { /* State supplies the outline opacity. */ }
++        @Override public void setColorFilter(android.graphics.ColorFilter filter) { paint.setColorFilter(filter); }
++        @Override public int getOpacity() { return android.graphics.PixelFormat.TRANSLUCENT; }
++    }
++
 +}
 diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java
 new file mode 100644
@@ -18026,6 +19336,146 @@ new file mode 100644
 +            result |= ((int) Math.round(a * fraction + b * (1 - fraction))) << shift;
 +        }
 +        return result;
++    }
++}
+diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcSplitPairProjection.java b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcSplitPairProjection.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcSplitPairProjection.java
+@@ -0,0 +1,70 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be found in the LICENSE file.
++package org.chromium.chrome.browser.ui.vertical_tabs;
++
++import java.util.ArrayList;
++import java.util.HashMap;
++import java.util.HashSet;
++import java.util.List;
++import java.util.Map;
++import java.util.Set;
++import java.util.function.IntPredicate;
++
++/** Window-owned row identities. Does not own, select, hide or move native tabs. */
++public final class ArcSplitPairProjection {
++    private final Map<Integer, int[]> mMembers = new HashMap<>();
++
++    /** Snapshots contain stable representative, left, right and active native IDs. */
++    public void set(List<int[]> snapshots, IntPredicate eligible) {
++        mMembers.clear();
++        for (int[] row : snapshots) {
++            if (row == null || row.length != 4 || row[1] < 0 || row[2] < 0
++                    || row[1] == row[2] || (row[0] != row[1] && row[0] != row[2])
++                    || (row[3] != row[1] && row[3] != row[2])
++                    || mMembers.containsKey(row[1]) || mMembers.containsKey(row[2])
++                    || !eligible.test(row[1]) || !eligible.test(row[2])) continue;
++            int[] copy = row.clone();
++            mMembers.put(copy[1], copy);
++            mMembers.put(copy[2], copy);
++        }
++    }
++    public int representative(int id) {
++        int[] p=mMembers.get(id); return p==null?id:p[0];
++    }
++    public int actionId(int id) {
++        int[] p=mMembers.get(id); return p==null?id:p[3];
++    }
++    public int peer(int id) {
++        int[] p=mMembers.get(id); return p==null?-1:(id==p[1]?p[2]:p[1]);
++    }
++    public int[] pair(int id) {
++        int[] p=mMembers.get(id); return p==null?null:p.clone();
++    }
++    public List<Integer> project(List<Integer> ids) {
++        List<Integer> out=new ArrayList<>();Set<Integer> seen=new HashSet<>();
++        for(int id:ids) {int row=representative(id);if(seen.add(row))out.add(row);}
++        return out;
++    }
++    /** Move both identities before a current target unit, preserving native within-unit order. */
++    public List<Integer> moveUnit(List<Integer> ids,int dragged,int target) {
++        return moveUnit(ids, dragged, target, false);
++    }
++    public List<Integer> moveUnit(List<Integer> ids,int dragged,int target, boolean after) {
++        List<Integer> out=new ArrayList<>(ids);
++        int representative=representative(dragged),targetRow=representative(target);
++        if(representative==targetRow)return out;
++        List<Integer> unit=new ArrayList<>();
++        for(int id:ids)if(representative(id)==representative)unit.add(id);
++        if(unit.isEmpty() || !ids.contains(target))return out;
++        out.removeAll(unit);
++        int at=0;
++        while(at<out.size() && representative(out.get(at))!=targetRow)at++;
++        if (after) {
++            // A target pair can be non-adjacent in the native model; insert after its last ID.
++            for (int i = at; i < out.size(); i++) {
++                if (representative(out.get(i)) == targetRow) at = i + 1;
++            }
++        }
++        out.addAll(at,unit);return out;
++    }
++}
+diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcSplitPairVisuals.java b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcSplitPairVisuals.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcSplitPairVisuals.java
+@@ -0,0 +1,60 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.ui.vertical_tabs;
++
++import android.graphics.Canvas;
++import android.graphics.ColorFilter;
++import android.graphics.Paint;
++import android.graphics.PixelFormat;
++import android.graphics.Rect;
++import android.graphics.drawable.Drawable;
++import android.text.TextPaint;
++import android.text.TextUtils;
++
++/** Presentation only: retains the native favicon artwork and two independently ellipsized titles. */
++public final class ArcSplitPairVisuals {
++    private ArcSplitPairVisuals() {}
++
++    public static CharSequence title(
++            CharSequence left, CharSequence right, TextPaint paint, float width) {
++        String separator = " | ";
++        float half = Math.max(0, (width - paint.measureText(separator)) / 2);
++        return TextUtils.concat(TextUtils.ellipsize(left, paint, half, TextUtils.TruncateAt.END),
++                separator, TextUtils.ellipsize(right, paint, half, TextUtils.TruncateAt.END));
++    }
++
++    public static Drawable icons(Drawable left, Drawable right, int dividerColor) {
++        return new Drawable() {
++            private final Paint mPaint = new Paint();
++            @Override public void draw(Canvas canvas) {
++                Rect b = getBounds();
++                int middle = b.left + (b.width() - 1) / 2;
++                fit(canvas, left, new Rect(b.left, b.top, middle, b.bottom));
++                fit(canvas, right, new Rect(middle + 1, b.top, b.right, b.bottom));
++                mPaint.setColor(dividerColor);
++                canvas.drawRect(middle, b.top, middle + 1, b.bottom, mPaint);
++            }
++            @Override public void setAlpha(int alpha) { mPaint.setAlpha(alpha); }
++            @Override public void setColorFilter(ColorFilter filter) {}
++            @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
++        };
++    }
++
++    private static void fit(Canvas canvas, Drawable icon, Rect area) {
++        if (area.isEmpty()) return;
++        Rect original = new Rect(icon.getBounds());
++        int iw = Math.max(1, icon.getIntrinsicWidth());
++        int ih = Math.max(1, icon.getIntrinsicHeight());
++        float scale = Math.min((float) area.width() / iw, (float) area.height() / ih);
++        int width = Math.round(iw * scale), height = Math.round(ih * scale);
++        int x = area.left + (area.width() - width) / 2;
++        int y = area.top + (area.height() - height) / 2;
++        try {
++            icon.setBounds(x, y, x + width, y + height);
++            icon.draw(canvas);
++        } finally {
++            icon.setBounds(original);
++        }
 +    }
 +}
 diff --git a/components/password_manager/core/browser/import/archium_password_import_preview.cc b/components/password_manager/core/browser/import/archium_password_import_preview.cc

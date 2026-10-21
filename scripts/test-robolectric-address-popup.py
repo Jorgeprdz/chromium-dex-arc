@@ -9,12 +9,15 @@ from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 p=argparse.ArgumentParser(description=__doc__)
 p.add_argument('--classpath-file',type=Path,required=True);p.add_argument('--java-home',type=Path,required=True);p.add_argument('--work',type=Path,required=True)
-p.add_argument('--baseline',action='store_true',help='Run against immutable pre-change commit 5b8694a')
+revisions=p.add_mutually_exclusive_group()
+revisions.add_argument('--baseline',action='store_true',help='Run against immutable pre-change commit 5b8694a')
+revisions.add_argument('--source-ref',help='Compare current regression cases against an explicit Git revision')
 a=p.parse_args();a.work.mkdir(parents=True,exist_ok=True)
 baseline='5b8694a07f328128e1267262780e6996b0ba4509'
+revision=a.source_ref or (baseline if a.baseline else None)
 def delivered(path):
- if a.baseline:
-  return subprocess.check_output(['git','show',baseline+':'+path],cwd=ROOT,text=True)
+ if revision:
+  return subprocess.check_output(['git','show',revision+':'+path],cwd=ROOT,text=True)
  return (ROOT/path).read_text()
 source=delivered('.source-modified/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarLayout.java')
 if 'setArcAddressPopupOpener(' in source:
@@ -49,7 +52,12 @@ public class AddressPopupProbe {
  Activity activity;
  @Before public void setup(){c=Robolectric.buildActivity(Activity.class).setup();activity=c.get();}
  @After public void close(){c.pause().stop().destroy();}
- static class Location extends FrameLayout {
+ static class NativeDispatchFrame extends FrameLayout {
+  int nativeDispatches;
+  NativeDispatchFrame(Activity a){super(a);}
+  @Override public boolean dispatchTouchEvent(MotionEvent e){nativeDispatches++;return super.dispatchTouchEvent(e);}
+ }
+ static class Location extends NativeDispatchFrame {
   final EditText mUrlBar; final View mLocationBarStatusView,mFocusThief;
   Location(Activity a){super(a);mUrlBar=new EditText(a);mLocationBarStatusView=new View(a);mFocusThief=new View(a);
    addView(mUrlBar);addView(mLocationBarStatusView);addView(mFocusThief);mFocusThief.setVisibility(View.GONE);}
@@ -57,11 +65,12 @@ public class AddressPopupProbe {
  }
  Location location(){Location v=new Location(activity);activity.setContentView(v);Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();v.layout(0,0,216,48);
   v.mUrlBar.layout(48,0,168,48);v.mLocationBarStatusView.layout(0,0,48,48);return v;}
+ boolean mouseStream;
  void touch(Location v,int action,int buttons,float x,float y){
-  android.view.InputDevice d=null;
-  MotionEvent.PointerProperties pp=new MotionEvent.PointerProperties();pp.id=0;pp.toolType=MotionEvent.TOOL_TYPE_FINGER;
+  if(action==MotionEvent.ACTION_DOWN)mouseStream=buttons!=0;
+  MotionEvent.PointerProperties pp=new MotionEvent.PointerProperties();pp.id=0;pp.toolType=mouseStream?MotionEvent.TOOL_TYPE_MOUSE:MotionEvent.TOOL_TYPE_FINGER;
   MotionEvent.PointerCoords pc=new MotionEvent.PointerCoords();pc.x=x;pc.y=y;pc.pressure=1;pc.size=1;
-  MotionEvent e=MotionEvent.obtain(1,2,action,1,new MotionEvent.PointerProperties[]{pp},new MotionEvent.PointerCoords[]{pc},0,buttons,1,1,0,0,android.view.InputDevice.SOURCE_TOUCHSCREEN,0);
+  MotionEvent e=MotionEvent.obtain(1,2,action,1,new MotionEvent.PointerProperties[]{pp},new MotionEvent.PointerCoords[]{pc},0,buttons,1,1,0,0,mouseStream?android.view.InputDevice.SOURCE_MOUSE:android.view.InputDevice.SOURCE_TOUCHSCREEN,0);
   try{v.dispatchTouchEvent(e);Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();}finally{e.recycle();}
  }
  @Test public void primaryClickRoutesToPopupExactlyOnceAndConsumesRelease(){
@@ -90,6 +99,37 @@ public class AddressPopupProbe {
  @Test public void popupAndMobileFallbackKeepNativeEditorInput(){
   Location v=location();AtomicInteger nativeEvents=new AtomicInteger();v.mUrlBar.setOnTouchListener((x,e)->{nativeEvents.incrementAndGet();return true;});
   v.setArcAddressPopupOpener(()->false);touch(v,MotionEvent.ACTION_DOWN,0,100,24);touch(v,MotionEvent.ACTION_UP,0,100,24);assertEquals(2,nativeEvents.get());}
+ @Test public void freshDownAfterLostReleaseCanOpenAddressAgain(){
+  for(int buttons:new int[]{0,MotionEvent.BUTTON_PRIMARY}){
+   Location v=location();AtomicInteger opens=new AtomicInteger();
+   v.setArcAddressPopupOpener(()->{opens.incrementAndGet();return true;});
+   touch(v,MotionEvent.ACTION_DOWN,buttons,100,24);
+   // Reparenting the editor can end its old touch target without another release here.
+   touch(v,MotionEvent.ACTION_DOWN,buttons,100,24);
+   touch(v,MotionEvent.ACTION_UP,0,100,24);
+   assertEquals("A fresh gesture must not be consumed by the old stream",2,opens.get());
+  }
+ }
+ @Test public void popupEditorReceivesFirstNewGestureAfterLostRelease(){
+  Location v=location();AtomicInteger nativeEvents=new AtomicInteger();
+  v.setArcAddressPopupOpener(()->true);touch(v,MotionEvent.ACTION_DOWN,0,100,24);
+  // The same LocationBar is now in the popup, whose opener correctly returns false.
+  v.setArcAddressPopupOpener(()->false);
+  v.mUrlBar.setOnTouchListener((x,e)->{nativeEvents.incrementAndGet();return true;});
+  touch(v,MotionEvent.ACTION_DOWN,0,100,24);touch(v,MotionEvent.ACTION_UP,0,100,24);
+  assertEquals(2,nativeEvents.get());
+ }
+ @Test public void interruptedEntryCannotSwallowNextSecondaryClick(){
+  Location v=location();AtomicInteger nativeEvents=new AtomicInteger(),opens=new AtomicInteger();
+  v.setArcAddressPopupOpener(()->{opens.incrementAndGet();return true;});
+  touch(v,MotionEvent.ACTION_DOWN,MotionEvent.BUTTON_PRIMARY,100,24);
+  v.mUrlBar.setOnTouchListener((x,e)->{nativeEvents.incrementAndGet();return true;});
+  touch(v,MotionEvent.ACTION_DOWN,MotionEvent.BUTTON_SECONDARY,100,24);
+  touch(v,MotionEvent.ACTION_UP,0,100,24);
+  // Android may handle a real secondary mouse click before its editor touch listener.
+  // Assert the native dispatcher receives the stream rather than prescribing child handling.
+  assertEquals(1,opens.get());assertEquals(2,v.nativeDispatches);
+ }
  @Test public void teardownDropsOpenerAndCancelledGestureCanStartAgain(){
   Location v=location();AtomicInteger opens=new AtomicInteger();v.setArcAddressPopupOpener(()->{opens.incrementAndGet();return true;});
   touch(v,MotionEvent.ACTION_DOWN,0,100,24);touch(v,MotionEvent.ACTION_CANCEL,0,100,24);
@@ -125,7 +165,7 @@ f=a.work/'AddressPopupProbe.java';f.write_text(fixture)
 cp=a.classpath_file.read_text().strip();classes=a.work/'classes';classes.mkdir(exist_ok=True)
 arc=ROOT/'chromium/chrome/android/java/src/org/chromium/chrome/browser/arc'
 command_source=arc/'ArcCommandBar.java'
-if a.baseline:
+if revision:
  command_source=a.work/'ArcCommandBar.java'
  command_source.write_text(delivered('chromium/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCommandBar.java'))
 subprocess.run([str(a.java_home/'bin/javac'),'-cp',cp,'-d',str(classes),str(f),str(command_source),str(arc/'ArcOmniboxPlacement.java')],check=True)

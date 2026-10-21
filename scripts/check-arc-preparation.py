@@ -139,12 +139,14 @@ def main():
         pure += list((ROOT / 'chromium').rglob('ArcSidebarStore.java'))
         pure += list((ROOT / 'chromium').rglob('ArcTabActions.java'))
         pure += list((ROOT / 'chromium').rglob('ArcCollectionsController.java'))
+        pure += list((ROOT / 'chromium').rglob('ArcSplitPairProjection.java'))
         run('javac', '-cp', str(window_jar), '-d', str(classes), *map(str, pure), str(ROOT / 'tests/java/ArcDesktopPolicyTest.java'),
             str(ROOT / 'tests/java/ArchiumAutofillPolicyTest.java'), str(ROOT / 'tests/java/ArchiumWindowClassTest.java'),
             str(ROOT / 'tests/java/ArchiumPasswordCsvTest.java'),
-            str(ROOT / 'tests/java/ArcSidebarStateTest.java'), str(ROOT / 'tests/java/ArcSidebarStoreTest.java'), str(ROOT / 'tests/java/ArcTabActionsTest.java'), str(ROOT / 'tests/java/ArcCollectionsControllerTest.java'))
+            str(ROOT / 'tests/java/ArcSplitPairProjectionTest.java'), str(ROOT / 'tests/java/ArcSidebarStateTest.java'), str(ROOT / 'tests/java/ArcSidebarStoreTest.java'), str(ROOT / 'tests/java/ArcTabActionsTest.java'), str(ROOT / 'tests/java/ArcCollectionsControllerTest.java'))
         run('java', '-cp', str(classes), 'ArchiumWindowClassTest')
         run('java', '-cp', str(classes), 'ArcDesktopPolicyTest')
+        run('java', '-cp', str(classes), 'ArcSplitPairProjectionTest')
         run('java', '-cp', str(classes), 'ArcSidebarStateTest')
         run('java', '-cp', str(classes), 'ArcSidebarStoreTest')
         run('java', '-cp', str(classes), 'ArcTabActionsTest')
@@ -306,7 +308,9 @@ def main():
             ' public void setArcSplitSwapProgress(float p){} public void setArcSplitInputBlocked(boolean b){} public void setArcSplitFrameSpacing(int inset,int gutter){}'
             ' public android.graphics.Rect getArcSplitViewport(){return null;} public boolean canPresentArcSplit(){return false;} public void onContentChanged(){}')
         extend('org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabListCoordinator',
-            ' public void setArcSplitRequest(java.util.function.Consumer<org.chromium.chrome.browser.tab.Tab> c,java.util.function.BooleanSupplier enabled){}')
+            ' public void setArcSplitRequest(java.util.function.Consumer<org.chromium.chrome.browser.tab.Tab> c,java.util.function.BooleanSupplier enabled){}'
+            ' public void setArcSplitPairs(java.util.List<int[]> pairs){} public void setArcSplitSeparateRequest(java.util.function.Consumer<org.chromium.chrome.browser.tab.Tab> c){}'
+            ' public boolean isArcSplitPairCompatible(org.chromium.chrome.browser.tab.Tab left, org.chromium.chrome.browser.tab.Tab right){return false;}')
         extend('org.chromium.chrome.browser.tab.Tab',
             ' public boolean isClosing(){return false;} public boolean isNativePage(){return false;} public boolean isHidden(){return false;} public boolean isIncognito(){return false;}'
             ' public android.view.View getView(){return null;} public org.chromium.components.embedder_support.view.ContentView getContentView(){return null;}'

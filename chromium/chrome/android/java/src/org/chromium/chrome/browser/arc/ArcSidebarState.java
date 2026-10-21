@@ -217,6 +217,11 @@ public final class ArcSidebarState {
         if (!mTabSpaces.containsKey(tabId)) capacity(mTabSpaces.size());
         mTabSpaces.put(tabId, spaceId);
     }
+    /** Structural compatibility; independent of which Space is being presented. */
+    public boolean sameTabSpace(int left, int right) {
+        String owner = mTabSpaces.get(left);
+        return owner != null && owner.equals(mTabSpaces.get(right));
+    }
     public boolean hasTabSpace(int tabId) { return mTabSpaces.containsKey(tabId); }
     public boolean isFavoriteTab(int tabId) {
         for (Entry entry : mEntries) {

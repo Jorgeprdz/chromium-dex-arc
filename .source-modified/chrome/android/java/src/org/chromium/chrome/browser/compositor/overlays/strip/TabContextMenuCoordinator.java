@@ -118,6 +118,16 @@ public class TabContextMenuCoordinator extends TabStripReorderingHelper<AnchorIn
         private final int mAnchorTabId;
         private final List<Integer> mAllTabIds;
         private @Nullable Runnable mArcSplitAction;
+        private @Nullable Runnable mArcSplitSeparateAction;
+
+        public void setArcSplitSeparateAction(@Nullable Runnable action) {
+            mArcSplitSeparateAction = action;
+        }
+        public boolean hasArcSplitSeparateAction() { return mArcSplitSeparateAction != null; }
+        public void runArcSplitSeparateAction() {
+            Runnable action = mArcSplitSeparateAction;
+            if (action != null) action.run();
+        }
 
         public void setArcSplitAction(@Nullable Runnable action) { mArcSplitAction = action; }
         public boolean hasArcSplitAction() { return mArcSplitAction != null; }
@@ -344,6 +354,12 @@ public class TabContextMenuCoordinator extends TabStripReorderingHelper<AnchorIn
             // Anchored tab(s) may have been moved to another window or closed between menu open
             // and item click. Drop the action if any tabs are no longer in this TabModel.
             if (tabs.size() < tabIds.size()) return;
+            if (menuId == R.id.arc_split_separate) {
+                if (tabs.size() == 1 && tabs.get(0).getId() == anchorInfo.getAnchorTabId()) {
+                    anchorInfo.runArcSplitSeparateAction();
+                }
+                return;
+            }
             if (menuId == R.id.arc_split_view) {
                 if (tabs.size() == 1 && tabs.get(0).getId() == anchorInfo.getAnchorTabId()) {
                     anchorInfo.runArcSplitAction();
@@ -726,7 +742,13 @@ public class TabContextMenuCoordinator extends TabStripReorderingHelper<AnchorIn
 
     private void buildMenuActionItemsForSingleTab(
             ModelList itemList, AnchorInfo anchorInfo, List<Tab> tabs, boolean isIncognito) {
-        if (anchorInfo.hasArcSplitAction()) {
+        if (anchorInfo.hasArcSplitSeparateAction()) {
+            itemList.add(new ListItemBuilder()
+                    .withTitle(mActivity.getString(R.string.arc_split_separate))
+                    .withMenuId(R.id.arc_split_separate)
+                    .withIsIncognito(isIncognito)
+                    .build());
+        } else if (anchorInfo.hasArcSplitAction()) {
             itemList.add(new ListItemBuilder()
                     .withTitle(mActivity.getString(R.string.arc_split_view))
                     .withMenuId(R.id.arc_split_view)

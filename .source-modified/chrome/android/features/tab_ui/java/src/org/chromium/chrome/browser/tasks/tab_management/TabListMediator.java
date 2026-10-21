@@ -377,6 +377,46 @@ public class TabListMediator implements TabListNotificationHandler {
     private final TabModelObserver mTabModelObserver;
     private final TabListLayoutDelegate mTabListLayoutDelegate;
     private @Nullable IntPredicate mTabVisibilityPredicate;
+    private org.chromium.chrome.browser.ui.vertical_tabs.ArcSplitPairProjection mArcSplitPairs =
+            new org.chromium.chrome.browser.ui.vertical_tabs.ArcSplitPairProjection();
+
+    public void setArcSplitPairs(org.chromium.chrome.browser.ui.vertical_tabs.ArcSplitPairProjection pairs) {
+        mArcSplitPairs = pairs;
+    }
+
+    /** Update only pair properties; preserve stable row identity and native listeners. */
+    public void refreshArcSplitPairRows() {
+        if (mComponentId != TabComponentId.VERTICAL_TABS) return;
+        TabModel tabs=mCurrentTabModelSupplier.get();
+        if (tabs == null) return;
+        for(int i=0;i<mModelList.size();i++) {
+            PropertyModel row=mModelList.get(i).model;
+            if (!TabProperties.isTabOrTabGroup(row) || TabProperties.isTabGroupHeader(row)
+                    || !row.containsKey(TabProperties.ARC_SPLIT_PAIR)) continue;
+            int id=row.get(TAB_ID);int[] pair=mArcSplitPairs.pair(id);
+            TabProperties.ArcSplitPair data=null;
+            if(pair!=null) {
+                Tab left=tabs.getTabById(pair[1]),right=tabs.getTabById(pair[2]);
+                if(left!=null && right!=null && !left.isDestroyed() && !right.isDestroyed()) {
+                    data=new TabProperties.ArcSplitPair(pair[1],pair[2],pair[3],
+                            getTabTitleOrUrl(left),getTabTitleOrUrl(right),
+                            mTabListFaviconProvider.getFaviconForTabFetcher(left),
+                            mTabListFaviconProvider.getFaviconForTabFetcher(right),
+                            mTabListFaviconProvider.getDefaultFavicon(left.isIncognitoBranded())
+                                    .getDefaultDrawable());
+                }
+            }
+            row.set(TabProperties.ARC_SPLIT_PAIR,data);
+            row.set(TabProperties.IS_SELECTED,
+                    mArcSplitPairs.representative(TabModelUtils.getCurrentTabId(tabs))==id);
+            if(data!=null) {
+                row.set(TabProperties.TITLE,data.title());
+                Tab active = tabs.getTabById(pair[3]);
+                if (active != null) updateActionButtonDescriptionString(active, row);
+            }
+        }
+    }
+
     private final TabListObserverManager mObserverManager;
     private final TabActionListener mTabClosedListener;
     private final TabGridItemTouchHelperCallback mTabGridItemTouchHelperCallback;
@@ -645,6 +685,7 @@ public class TabListMediator implements TabListNotificationHandler {
                         if (tabId == lastId) return;
 
                         mTabListLayoutDelegate.didSelectTab(tab, type, lastId);
+                        refreshArcSplitPairRows();
                     }
 
                     @Override
@@ -741,6 +782,7 @@ public class TabListMediator implements TabListNotificationHandler {
                         // TODO(crbug.com/40638921): Consider disabling all touch events during
                         // animation.
 
+                        tabId = mArcSplitPairs.actionId(tabId);
                         int closingTabIndex = getIndexFromTabId(tabId);
                         if (closingTabIndex == TabModel.INVALID_TAB_INDEX) return;
 
@@ -1255,6 +1297,11 @@ public class TabListMediator implements TabListNotificationHandler {
 
     void updateTab(
             PropertyModel model, int index, Tab tab, boolean isUpdatingId, boolean quickMode) {
+        if (!TabProperties.isTabGroupHeader(model)
+                && mArcSplitPairs.representative(tab.getId()) != tab.getId()) {
+            refreshArcSplitPairRows();
+            return;
+        }
         if (isUpdatingId) {
             model.set(TabProperties.TAB_ID, tab.getId());
         } else {
@@ -1305,6 +1352,7 @@ public class TabListMediator implements TabListNotificationHandler {
                         || tabGroupId != null)) {
             updateThumbnailFetcher(model, tab.getId());
         }
+        if (mArcSplitPairs.peer(tab.getId()) >= 0) refreshArcSplitPairRows();
     }
 
     void updateActorUiState(PropertyModel model, Tab tab) {
@@ -1698,6 +1746,7 @@ public class TabListMediator implements TabListNotificationHandler {
     }
 
     private void handleTabSelection(int tabId) {
+        tabId = mArcSplitPairs.actionId(tabId);
         if (mTabListItemOnClickListenerProvider != null) {
             mTabListItemOnClickListenerProvider.onTabSelecting(tabId);
         } else {
@@ -1735,7 +1784,8 @@ public class TabListMediator implements TabListNotificationHandler {
                     return currentTab != null && tabGroupId.equals(currentTab.getTabGroupId());
                 }
             }
-            return TabModelUtils.getCurrentTabId(tabModel) == tab.getId();
+            return mArcSplitPairs.representative(TabModelUtils.getCurrentTabId(tabModel))
+                    == mArcSplitPairs.representative(tab.getId());
         }
     }
 
@@ -1947,7 +1997,8 @@ public class TabListMediator implements TabListNotificationHandler {
     }
 
     boolean isTabHiddenForPresentation(Tab tab) {
-        return mTabVisibilityPredicate != null && !mTabVisibilityPredicate.test(tab.getId());
+        return (mTabVisibilityPredicate != null && !mTabVisibilityPredicate.test(tab.getId()))
+                || mArcSplitPairs.representative(tab.getId()) != tab.getId();
     }
 
     /**
@@ -2245,6 +2296,10 @@ public class TabListMediator implements TabListNotificationHandler {
 
     void updateFaviconForTab(
             PropertyModel model, Tab tab, @Nullable Bitmap icon, @Nullable GURL iconUrl) {
+        if (!TabProperties.isTabGroupHeader(model) && mArcSplitPairs.peer(tab.getId()) >= 0) {
+            refreshArcSplitPairRows();
+            return;
+        }
         if (TabProperties.isTabGroupHeader(model)) {
             model.set(TabProperties.FAVICON_FETCHER, null);
             return;
@@ -2482,7 +2537,7 @@ public class TabListMediator implements TabListNotificationHandler {
      * @return The UI index in the model list, or {@link TabModel#INVALID_TAB_INDEX} if not found.
      */
     int getIndexFromTabId(int tabId) {
-        return mTabListLayoutDelegate.getIndexFromTabId(tabId);
+        return mTabListLayoutDelegate.getIndexFromTabId(mArcSplitPairs.representative(tabId));
     }
 
     /**
@@ -2578,6 +2633,9 @@ public class TabListMediator implements TabListNotificationHandler {
                 }
             } else {
                 addObserversForTab(tab);
+                int peerId=mArcSplitPairs.peer(tab.getId());
+                Tab peer=peerId<0?null:tabModel.getTabById(peerId);
+                if(peer!=null)addObserversForTab(peer);
             }
         }
 

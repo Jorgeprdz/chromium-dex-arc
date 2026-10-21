@@ -253,6 +253,9 @@ public class LocationBarLayout extends ConstraintLayout {
     @Override
     public boolean dispatchTouchEvent(MotionEvent event) {
         int action = event.getActionMasked();
+        // DOWN begins a new stream. Reparenting this editor into the popup can leave the old
+        // stream without a local UP/CANCEL; never let its latch consume a fresh click.
+        if (action == MotionEvent.ACTION_DOWN) mArcConsumesAddressGesture = false;
         if (mArcConsumesAddressGesture) {
             if (action == MotionEvent.ACTION_UP || action == MotionEvent.ACTION_CANCEL) {
                 mArcConsumesAddressGesture = false;
