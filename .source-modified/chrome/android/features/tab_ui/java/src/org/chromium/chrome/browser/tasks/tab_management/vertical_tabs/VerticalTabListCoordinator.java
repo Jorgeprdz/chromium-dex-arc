@@ -9,6 +9,7 @@ import static org.chromium.build.NullUtil.assumeNonNull;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
+import android.graphics.Bitmap;
 import android.graphics.Point;
 import android.graphics.PointF;
 import android.graphics.Rect;
@@ -134,6 +135,7 @@ import org.chromium.ui.modelutil.PropertyModelChangeProcessor;
 import org.chromium.ui.modelutil.SimpleRecyclerViewAdapter;
 import org.chromium.ui.recyclerview.widget.ItemTouchHelper2;
 import org.chromium.ui.widget.RectProvider;
+import org.chromium.url.GURL;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -219,8 +221,8 @@ public class VerticalTabListCoordinator {
     private boolean mArcDestroyed;
     private final TabObserver mArcPairTabObserver = new TabObserver() {
         @Override
-        public void onFaviconUpdated(Tab tab, @Nullable android.graphics.Bitmap icon,
-                @Nullable org.chromium.url.GURL iconUrl) {
+        public void onFaviconUpdated(Tab tab, @Nullable Bitmap icon,
+                @Nullable GURL iconUrl) {
             // The native layout observer indexes actual row IDs. A secondary pair member has
             // no row of its own, so explicitly refresh its shared row's current fetchers.
             if (!mArcDestroyed) mMediator.refreshArcSplitPairRows();

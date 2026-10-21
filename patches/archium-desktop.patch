@@ -704,7 +704,15 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinator.java b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinator.java
 --- a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinator.java
 +++ b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/VerticalTabListCoordinator.java
-@@ -63,6 +63,8 @@
+@@ -9,6 +9,7 @@
+ import android.annotation.SuppressLint;
+ import android.app.Activity;
+ import android.content.Context;
++import android.graphics.Bitmap;
+ import android.graphics.Point;
+ import android.graphics.PointF;
+ import android.graphics.Rect;
+@@ -63,6 +64,8 @@
  import org.chromium.chrome.browser.profiles.Profile;
  import org.chromium.chrome.browser.share.ShareDelegate;
  import org.chromium.chrome.browser.tab.Tab;
@@ -713,7 +721,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
  import org.chromium.chrome.browser.tab.TabCreationState;
  import org.chromium.chrome.browser.tab.TabFavicon;
  import org.chromium.chrome.browser.tab.TabLaunchType;
-@@ -77,6 +79,7 @@
+@@ -77,6 +80,7 @@
  import org.chromium.chrome.browser.tabmodel.TabGroupMergeNotificationType;
  import org.chromium.chrome.browser.tabmodel.TabGroupMetadata;
  import org.chromium.chrome.browser.tabmodel.TabGroupUtils.TabGroupCreationCallback;
@@ -721,7 +729,13 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
  import org.chromium.chrome.browser.tabmodel.TabList;
  import org.chromium.chrome.browser.tabmodel.TabModel;
  import org.chromium.chrome.browser.tabmodel.TabModelSelector;
-@@ -136,6 +139,8 @@
+@@ -131,11 +135,14 @@
+ import org.chromium.ui.modelutil.SimpleRecyclerViewAdapter;
+ import org.chromium.ui.recyclerview.widget.ItemTouchHelper2;
+ import org.chromium.ui.widget.RectProvider;
++import org.chromium.url.GURL;
+
+ import java.util.ArrayList;
  import java.util.Collections;
  import java.util.List;
  import java.util.function.BooleanSupplier;
@@ -730,7 +744,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
  import java.util.function.Supplier;
 
  /** Coordinator to manage and display the Vertical Tab List. */
-@@ -167,7 +172,7 @@
+@@ -167,7 +174,7 @@
      private final VerticalTabGroupSpineDecoration mSpineDecoration;
      private final VerticalTabDropIndicatorDecoration mDropIndicatorDecoration;
      private final VerticalTabPinnedDropIndicatorDecoration mPinnedDropIndicatorDecoration;
@@ -739,7 +753,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
      private final NonNullObservableSupplier<Boolean> mVerticalTabsActiveSupplier;
      private final VerticalTabRailCollapseController mCollapseController;
      private final VerticalTabRailHoverController mRailHoverController;
-@@ -203,6 +208,65 @@
+@@ -203,6 +210,65 @@
      private @Nullable View mDragEndRelayView;
 
      private boolean mIsActive;
@@ -754,8 +768,8 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 +    private boolean mArcDestroyed;
 +    private final TabObserver mArcPairTabObserver = new TabObserver() {
 +        @Override
-+        public void onFaviconUpdated(Tab tab, @Nullable android.graphics.Bitmap icon,
-+                @Nullable org.chromium.url.GURL iconUrl) {
++        public void onFaviconUpdated(Tab tab, @Nullable Bitmap icon,
++                @Nullable GURL iconUrl) {
 +            // The native layout observer indexes actual row IDs. A secondary pair member has
 +            // no row of its own, so explicitly refresh its shared row's current fetchers.
 +            if (!mArcDestroyed) mMediator.refreshArcSplitPairRows();
@@ -805,7 +819,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 
      private class VerticalTabListClickHandler implements TabListItemOnClickListenerProvider {
          private final TabActionListener mTabGroupClickedListener =
-@@ -758,11 +822,13 @@
+@@ -758,11 +824,13 @@
                          if (mIsActive && type != TabSelectionType.FROM_DRAG) {
                              scrollActiveTabIntoView();
                          }
@@ -819,7 +833,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
                          // Scroll the newly unpinned active tab into view.
                          if (!tab.getIsPinned()
                                  && tab.getId() == mTabModelSelector.getCurrentTabId()) {
-@@ -777,18 +843,21 @@
+@@ -777,18 +845,21 @@
                              @TabLaunchType int type,
                              @TabCreationState int creationState,
                              boolean markedForSelection) {
@@ -841,7 +855,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
                          updateIncognitoButtonVisibility();
                          updatePinnedTabsSeparatorVisibility();
                      }
-@@ -806,7 +875,18 @@
+@@ -806,7 +877,18 @@
 
                      @Override
                      public void tabClosureCommitted(Tab tab) {
@@ -860,7 +874,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
                      }
 
                      @Override
-@@ -814,6 +894,7 @@
+@@ -814,6 +896,7 @@
                          mTabItemHoverController.resetHoverState();
                      }
                  };
@@ -868,7 +882,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 
          mVerticalTabsActiveSupplier.addSyncObserverAndCallIfNonNull(mActiveObserver);
 
-@@ -863,14 +944,16 @@
+@@ -863,14 +946,16 @@
              return;
          }
 
@@ -887,7 +901,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          mContainerView.setKeyEventListener(null);
          mPinnedTabsModelList.removeObserver(mPinnedTabsListObserver);
          mPinnedTabsMediator.destroy();
-@@ -881,6 +964,10 @@
+@@ -881,6 +966,10 @@
          mModelList.clear();
          mTabModelSelector.removeObserver(mTabModelSelectorObserver);
          mTabModelSelector.getCurrentTabModelSupplier().removeObserver(mCurrentTabModelObserver);
@@ -898,7 +912,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          mTabListFaviconProvider.destroy();
 
          if (mTabStripContextMenuCoordinator != null) {
-@@ -903,7 +990,9 @@
+@@ -903,7 +992,9 @@
          }
 
          mSpineDecoration.destroy();
@@ -909,7 +923,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          mVerticalTabsActiveSupplier.removeObserver(mActiveObserver);
          if (mBackPressManager.has(BackPressHandler.Type.CANCEL_TAB_SWITCHER_DRAG)) {
              mBackPressManager.removeHandler(BackPressHandler.Type.CANCEL_TAB_SWITCHER_DRAG);
-@@ -1080,7 +1169,7 @@
+@@ -1080,7 +1171,7 @@
       * @return The UI index in mModelList, or {@link TabModel#INVALID_TAB_INDEX} if not found.
       */
      private int getIndexForTabScroll(int tabId) {
@@ -918,7 +932,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 
          // If the tab is hidden inside a collapsed group, find the group header's index instead.
          if (uiIndex == TabModel.INVALID_TAB_INDEX) {
-@@ -1116,6 +1205,199 @@
+@@ -1116,6 +1207,199 @@
          if (mTabModelSelector.isTabStateInitialized()) {
              resetWithListOfTabs(tabModel);
          }
@@ -1118,7 +1132,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
      }
 
      /**
-@@ -1124,11 +1406,14 @@
+@@ -1124,11 +1408,14 @@
       */
      private void resetWithListOfTabs(@Nullable TabModel tabModel) {
          if (tabModel == null) return;
@@ -1134,7 +1148,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          mPinnedTabsMediator.updateTabModel(tabModel);
          boolean isIncognito =
                  !IncognitoUtils.shouldOpenIncognitoAsWindow() && tabModel.isIncognitoBranded();
-@@ -1196,6 +1481,7 @@
+@@ -1196,6 +1483,7 @@
          if (mMainTouchHelperCallback == null) {
              mMainTouchHelperCallback = touchHelperCallback;
          }
@@ -1142,7 +1156,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          mTouchHelperCallbacks.add(touchHelperCallback);
 
          // Handles long-presses for tab item/group context menus. Long-presses for empty space
-@@ -1960,6 +2246,16 @@
+@@ -1960,6 +2248,16 @@
          return menuShown;
      }
 
@@ -1159,7 +1173,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
      private boolean showMenuForItemView(RectProvider rectProvider, View itemView) {
          if (!(itemView.getParent() instanceof RecyclerView recyclerView)) return false;
          int position = recyclerView.getChildAdapterPosition(itemView);
-@@ -2104,8 +2400,10 @@
+@@ -2104,8 +2402,10 @@
          TabModel tabModel = mTabModelSelector.getCurrentModel();
          if (tabModel == null) return false;
 
@@ -1171,7 +1185,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 
          List<Integer> allTabIds;
          if (TabMultiSelectHelper.hasMultipleTabsSelected(tabModel)
-@@ -2116,6 +2414,23 @@
+@@ -2116,6 +2416,23 @@
          }
 
          var anchorInfo = new AnchorInfo(tabId, allTabIds);
@@ -1195,7 +1209,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 
          if (mTabContextMenuCoordinator == null) {
              TabGroupCreationCallback tabGroupCreationCallback =
-@@ -2135,13 +2450,7 @@
+@@ -2135,13 +2452,7 @@
                              mWindowAndroid,
                              activity,
                              /* tabBookmarkerSupplier= */ null,
@@ -1210,7 +1224,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
                              mSnackbarManager,
                              mActivityResultTracker,
                              /* modalDialogManager= */ mWindowAndroid.getModalDialogManager(),
-@@ -2154,6 +2463,33 @@
+@@ -2154,6 +2465,33 @@
          mTabItemHoverController.hideHoverCard();
          mTabContextMenuCoordinator.showMenu(rectProvider, anchorInfo);
          return true;
@@ -1244,7 +1258,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
      }
 
      private void showEmptySpaceContextMenu(RectProvider rectProvider, Activity activity) {
-@@ -2373,9 +2709,21 @@
+@@ -2373,9 +2711,21 @@
                                  mContainerModel.get(VerticalTabListProperties.COLLAPSE_STATE));
 
          TabModel model = mTabModelSelector.getCurrentModel();
