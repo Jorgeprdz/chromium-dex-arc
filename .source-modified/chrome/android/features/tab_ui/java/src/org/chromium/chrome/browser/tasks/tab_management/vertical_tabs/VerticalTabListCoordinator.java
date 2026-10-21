@@ -63,7 +63,7 @@ import org.chromium.chrome.browser.multiwindow.MultiInstanceOrchestratorFactory;
 import org.chromium.chrome.browser.profiles.Profile;
 import org.chromium.chrome.browser.share.ShareDelegate;
 import org.chromium.chrome.browser.tab.Tab;
-import org.chromium.chrome.browser.tab.EmptyTabObserver;
+import org.chromium.chrome.browser.tab.TabObserver;
 import org.chromium.chrome.browser.ui.vertical_tabs.ArcSplitPairProjection;
 import org.chromium.chrome.browser.tab.TabCreationState;
 import org.chromium.chrome.browser.tab.TabFavicon;
@@ -217,7 +217,7 @@ public class VerticalTabListCoordinator {
     private final List<Tab> mArcObservedPairTabs = new ArrayList<>();
     private @Nullable Consumer<Tab> mArcSplitSeparateRequest;
     private boolean mArcDestroyed;
-    private final EmptyTabObserver mArcPairTabObserver = new EmptyTabObserver() {
+    private final TabObserver mArcPairTabObserver = new TabObserver() {
         @Override
         public void onFaviconUpdated(Tab tab, @Nullable android.graphics.Bitmap icon,
                 @Nullable org.chromium.url.GURL iconUrl) {

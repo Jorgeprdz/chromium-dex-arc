@@ -56,3 +56,11 @@ Quedan pendientes el gate de recursos con la herramienta compatible, el runner C
 ### Suite host amplia
 
 La ejecución nativa terminó: 376 pruebas, un fallo estático y dos errores de recursos. El fallo estático anti-Canvas se corrigió con el alcance descrito y su grupo completo pasó 10/10 en una ejecución posterior. Los dos errores AAPT2 se reprodujeron en la base sin los cambios de esta tanda; siguen pendientes, por lo que no se declara PASS global host. Las nuevas regresiones de dirección de drag pasan por separado junto a proyección/grupos: 16/16. No se altera ni se salta el gate que bloqueará el build cuando corresponda.
+
+### Compilación e instalación autorizadas posteriormente
+
+El usuario autorizó «dale hasta que reviente! jaja. compila e instala». Se integró el candidato en la rama de build y se lanzó el run 39538318107 desde el checkpoint 39486593880-1, con instalación ADB verificada y sin emulador Android.
+
+Preflight CI: PASS, 379 pruebas y AAPT2/recursos reales; quedan resueltos los dos errores del entorno local. La restauración pasó. El header nativo de chrome_java detectó dos defectos de imports que los probes extraídos no compilaban: faltaba importar org.chromium.build.annotations.Nullable en TabProperties y EmptyTabObserver no existe en el pin. Se corrige con el import y la interfaz TabObserver real, de callbacks default verificados contra Chromium157. No cambia el comportamiento de las parejas.
+
+Preparación SDK37.2 y 16 regresiones de proyección/drag pasan tras el cambio; revisión acotada aprobada. La compilación nativa debe repetirse; el run fallido publicó el checkpoint 39538318107-1 completo para reutilizarlo. Evidencias y continuidad actuales: /workspace/archium-evidence/r56-build/.

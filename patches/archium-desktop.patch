@@ -359,7 +359,15 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/TabProperties.java b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/TabProperties.java
 --- a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/TabProperties.java
 +++ b/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser/tasks/tab_management/TabProperties.java
-@@ -46,6 +46,25 @@
+@@ -18,6 +18,7 @@
+
+ import org.chromium.base.Token;
+ import org.chromium.build.annotations.NullMarked;
++import org.chromium.build.annotations.Nullable;
+ import org.chromium.chrome.browser.actor.ui.ActorUiTabController.UiTabState;
+ import org.chromium.chrome.browser.tab.Tab;
+ import org.chromium.chrome.browser.tab_ui.TabListFaviconProvider;
+@@ -46,6 +47,25 @@
  /** List of properties to designate information about a single tab. */
  @NullMarked
  public class TabProperties {
@@ -385,7 +393,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
      /** IDs for possible types of UI in the tab list. */
      @Target(ElementType.TYPE_USE)
      @IntDef({
-@@ -294,6 +313,7 @@
+@@ -294,6 +314,7 @@
                      new PropertyKey[] {
                          TAB_ACTION_STATE,
                          TAB_ID,
@@ -393,7 +401,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
                          SHOPPING_PERSISTED_TAB_DATA_FETCHER,
                          SHOULD_SHOW_PRICE_DROP_TOOLTIP,
                          HAS_NOTIFICATION_BUBBLE,
-@@ -346,6 +366,7 @@
+@@ -346,6 +367,7 @@
                  ACCESSIBILITY_DELEGATE,
                  ACTION_BUTTON_DESCRIPTION_TEXT_RESOLVER,
                  ALERT_STATE,
@@ -700,7 +708,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
  import org.chromium.chrome.browser.profiles.Profile;
  import org.chromium.chrome.browser.share.ShareDelegate;
  import org.chromium.chrome.browser.tab.Tab;
-+import org.chromium.chrome.browser.tab.EmptyTabObserver;
++import org.chromium.chrome.browser.tab.TabObserver;
 +import org.chromium.chrome.browser.ui.vertical_tabs.ArcSplitPairProjection;
  import org.chromium.chrome.browser.tab.TabCreationState;
  import org.chromium.chrome.browser.tab.TabFavicon;
@@ -744,7 +752,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 +    private final List<Tab> mArcObservedPairTabs = new ArrayList<>();
 +    private @Nullable Consumer<Tab> mArcSplitSeparateRequest;
 +    private boolean mArcDestroyed;
-+    private final EmptyTabObserver mArcPairTabObserver = new EmptyTabObserver() {
++    private final TabObserver mArcPairTabObserver = new TabObserver() {
 +        @Override
 +        public void onFaviconUpdated(Tab tab, @Nullable android.graphics.Bitmap icon,
 +                @Nullable org.chromium.url.GURL iconUrl) {

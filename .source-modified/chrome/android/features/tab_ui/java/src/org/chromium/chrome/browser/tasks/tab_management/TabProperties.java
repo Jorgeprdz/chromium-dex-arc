@@ -18,6 +18,7 @@ import androidx.annotation.IntDef;
 
 import org.chromium.base.Token;
 import org.chromium.build.annotations.NullMarked;
+import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.browser.actor.ui.ActorUiTabController.UiTabState;
 import org.chromium.chrome.browser.tab.Tab;
 import org.chromium.chrome.browser.tab_ui.TabListFaviconProvider;
