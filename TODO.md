@@ -553,3 +553,14 @@ Nueva rama `assistant/archium-r5-desktop-native-mobile`, base verificada33e79a5.
 Evidencia y resultados exactos: [auditoría Desktop + Mobile nativo](docs/validation/R5_DESKTOP_NATIVE_MOBILE.md). Los PASS locales no cierran las casillas de dispositivo.
 
 Gates finales de esta tanda: host389 PASS; split144 PASS; entrada omnibox26 PASS; Command Bar18 PASS; colecciones28 PASS; transiciones12 PASS; adapter12 escenarios PASS; rollback5 PASS; preparación SDK37.2 y reproducibilidad PASS. Estado del candidato: **READY FOR BUILD**, con aceptación física P4 pendiente y sin Actions lanzadas.
+
+
+## Split View — seguimiento físico22-oct-2026
+
+- [x] Run39705469954 SUCCESS e instalación verificada del SHA78b370b. Autorización1/1 consumida; ningún intento adicional.
+- [ ] P0 **FAIL EN APK**: separador funcional; viewport visible cambia1058→527→1058px, pero layout/media query conserva ancho superior al panel estrecho. La sincronización Java anterior no cierra este problema.
+- [x] Candidato local: política nativa de layout por WebContents de Split View, limitada a páginas donde Chromium ignora meta viewport; limpieza por pertenencia/WeakPtr y recomputación al salir. Sin UA/zoom forzado/GN/GPU.
+- [x] Pruebas interpretadas:5 PASS del validador/contratos fuente y5 PASS de invariantes de Mobile nativo. RED de traza física conservado. No son ejecución C++ ni aceptación de Blink.
+- [ ] Compilar/probar C++ y verificar el candidato físicamente. **NO COMPILAR TODAVÍA**, instrucción vigente del usuario; no solicitar ni disparar Actions en esta tanda.
+
+Punto exacto de continuación, evidencia y limitaciones: [R5_SPLIT_LAYOUT_VIEWPORT_FOLLOWUP.md](docs/validation/R5_SPLIT_LAYOUT_VIEWPORT_FOLLOWUP.md).

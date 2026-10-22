@@ -4,9 +4,12 @@
 
 #include "chrome/browser/android/compositor/scene_layer/static_tab_scene_layer.h"
 
-#include <vector>
 #include <cmath>
+#include <memory>
+#include <set>
+#include <vector>
 
+#include "base/supports_user_data.h"
 #include "cc/input/android/offset_tag_android.h"
 #include "cc/slim/filter.h"
 #include "cc/slim/layer.h"
@@ -15,6 +18,7 @@
 #include "chrome/browser/android/compositor/tab_content_manager.h"
 #include "chrome/browser/android/tab_android.h"
 #include "content/public/browser/web_contents.h"
+#include "third_party/blink/public/common/web_preferences/web_preferences.h"
 #include "ui/android/view_android.h"
 
 // Must come after all headers that specialize FromJniType() / ToJniType().
@@ -24,6 +28,12 @@ using base::android::JavaRef;
 
 namespace android {
 namespace {
+
+const char kArcSplitViewportOwnersKey = 0;
+
+struct ArcSplitViewportOwners : public base::SupportsUserData::Data {
+  std::set<const void*> owners;
+};
 
 static bool LayerDraws(scoped_refptr<cc::slim::Layer> layer) {
   if (!layer.get() || layer->opacity() == 0.0f ||
@@ -45,13 +55,93 @@ static bool LayerDraws(scoped_refptr<cc::slim::Layer> layer) {
 
 }  // namespace
 
+void SetArcSplitViewportOwner(content::WebContents* contents,
+                             const void* owner,
+                             bool enabled) {
+  if (!contents || !owner) {
+    return;
+  }
+  auto* data = static_cast<ArcSplitViewportOwners*>(
+      contents->GetUserData(&kArcSplitViewportOwnersKey));
+  if (!data) {
+    if (!enabled) {
+      return;
+    }
+    auto fresh = std::make_unique<ArcSplitViewportOwners>();
+    data = fresh.get();
+    contents->SetUserData(&kArcSplitViewportOwnersKey, std::move(fresh));
+  }
+  const bool was_split = !data->owners.empty();
+  if (enabled) {
+    data->owners.insert(owner);
+  } else {
+    data->owners.erase(owner);
+  }
+  const bool is_split = !data->owners.empty();
+  if (!is_split) {
+    contents->RemoveUserData(&kArcSplitViewportOwnersKey);
+  }
+  if (was_split != is_split) {
+    // Recompute native preferences, including any current user/site overrides.
+    // Do not restore a stale snapshot or send preference IPC on every frame.
+    contents->OnWebPreferencesChanged();
+  }
+}
+
+void ApplyArcSplitViewportPreferences(
+    content::WebContents* contents,
+    blink::web_pref::WebPreferences* prefs) {
+  if (contents->GetUserData(&kArcSplitViewportOwnersKey) &&
+      !prefs->viewport_meta_enabled) {
+    // Request Desktop Site ignores viewport meta. Leaving the Android viewport
+    // mechanism enabled then supplies a wide fallback layout (980px), even when
+    // the widget/visual viewport is narrower. Desktop layout must follow the
+    // actual widget width, as in desktop Chromium, so CSS breakpoints can run.
+    // Explicit mobile mode retains Chromium's meta-viewport handling.
+    prefs->viewport_enabled = false;
+  }
+}
+
 StaticTabSceneLayer::StaticTabSceneLayer(JNIEnv* env,
                                          const JavaRef<jobject>& jobj)
     : SceneLayer(env, jobj),
       tab_content_manager_(nullptr),
       background_color_(SK_ColorWHITE) {}
 
-StaticTabSceneLayer::~StaticTabSceneLayer() = default;
+StaticTabSceneLayer::~StaticTabSceneLayer() {
+  for (const auto& contents : arc_viewport_contents_) {
+    if (contents) {
+      SetArcSplitViewportOwner(contents.get(), this, false);
+    }
+  }
+}
+
+void StaticTabSceneLayer::UpdateArcSplitViewportPolicy() {
+  auto previous = arc_viewport_contents_;
+  const int32_t ids[] = {arc_left_id_, arc_right_id_};
+  for (size_t i = 0; i < arc_viewport_contents_.size(); ++i) {
+    TabAndroid* tab = tab_content_manager_ && ids[i] >= 0
+                          ? tab_content_manager_->GetTab(ids[i])
+                          : nullptr;
+    arc_viewport_contents_[i] = tab && tab->web_contents()
+                                   ? tab->web_contents()->GetWeakPtr()
+                                   : base::WeakPtr<content::WebContents>();
+  }
+  // Compare membership rather than position so swapping panes doesn't remove
+  // and reapply preferences. Weak references don't keep destroyed tabs alive.
+  for (const auto& contents : previous) {
+    if (contents && contents.get() != arc_viewport_contents_[0].get() &&
+        contents.get() != arc_viewport_contents_[1].get()) {
+      SetArcSplitViewportOwner(contents.get(), this, false);
+    }
+  }
+  for (const auto& contents : arc_viewport_contents_) {
+    if (contents && contents.get() != previous[0].get() &&
+        contents.get() != previous[1].get()) {
+      SetArcSplitViewportOwner(contents.get(), this, true);
+    }
+  }
+}
 
 bool StaticTabSceneLayer::ShouldShowBackground() {
   scoped_refptr<cc::slim::Layer> root = layer_->RootLayer();
@@ -81,6 +171,7 @@ void StaticTabSceneLayer::UpdateTabLayer(JNIEnv* env,
   const bool split = can_use_live_layer && arc_left_id_ != -1 &&
                      arc_right_id_ != -1 && (id == arc_left_id_ || id == arc_right_id_);
   if (split) {
+    UpdateArcSplitViewportPolicy();
     if (!arc_secondary_layer_) {
       arc_secondary_layer_ = android::ContentLayer::Create(tab_content_manager_);
       layer_->AddChild(arc_secondary_layer_->layer());
@@ -150,6 +241,7 @@ void StaticTabSceneLayer::SetArcSplitTabs(
   arc_right_id_ = valid ? right_id : -1;
   arc_left_bounds_ = valid ? gfx::RectF(left_x, left_y, left_width, left_height) : gfx::RectF();
   arc_right_bounds_ = valid ? gfx::RectF(right_x, right_y, right_width, right_height) : gfx::RectF();
+  UpdateArcSplitViewportPolicy();
 }
 
 void StaticTabSceneLayer::SetTabContentManager(

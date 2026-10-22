@@ -1,5 +1,7 @@
 # R5 — Desktop fixes y Mobile nativo
 
+> Actualización22-oct: run39705469954 compiló e instaló78b370b. El recorte responsive continúa **FAIL físico**. Ver [seguimiento de layout viewport](R5_SPLIT_LAYOUT_VIEWPORT_FOLLOWUP.md); el nuevo candidato no está compilado por instrucción del usuario. El resto de este documento registra la tanda anterior.
+
 Base verificada: `33e79a5` (documentación posterior al código `b51d9b0494a379a58b808d3b4fbf5b3566890fb0`, run39634608887 successful). Rama nueva: `assistant/archium-r5-desktop-native-mobile`; worktree `/workspace/Archium-R5-desktop-native-mobile`. No cambios en main/feat ni eliminación de checkpoints/outputs. Sin Actions en esta tarea.
 
 ## P0: defecto localizado y alcance de la corrección

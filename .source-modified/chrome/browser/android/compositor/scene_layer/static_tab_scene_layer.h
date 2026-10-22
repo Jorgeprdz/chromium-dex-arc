@@ -7,17 +7,36 @@
 
 #include <jni.h>
 
+#include <array>
+
 #include "base/android/jni_weak_ref.h"
 #include "base/android/scoped_java_ref.h"
 #include "base/memory/raw_ptr.h"
 #include "base/memory/scoped_refptr.h"
+#include "base/memory/weak_ptr.h"
 #include "chrome/browser/ui/android/layouts/scene_layer.h"
 #include "ui/gfx/geometry/rect_f.h"
+
+namespace blink::web_pref {
+struct WebPreferences;
+}  // namespace blink::web_pref
+
+namespace content {
+class WebContents;
+}  // namespace content
 
 namespace android {
 
 class ContentLayer;
 class TabContentManager;
+
+// Per-WebContents split state, reapplied when Chromium recomputes preferences.
+void SetArcSplitViewportOwner(content::WebContents* contents,
+                             const void* owner,
+                             bool enabled);
+void ApplyArcSplitViewportPreferences(
+    content::WebContents* contents,
+    blink::web_pref::WebPreferences* prefs);
 
 // A SceneLayer to render a static tab.
 class StaticTabSceneLayer : public SceneLayer {
@@ -50,6 +69,9 @@ class StaticTabSceneLayer : public SceneLayer {
       const base::android::JavaRef<jobject>& jtab_content_manager);
 
  private:
+  void UpdateArcSplitViewportPolicy();
+
+  std::array<base::WeakPtr<content::WebContents>, 2> arc_viewport_contents_;
   scoped_refptr<android::ContentLayer> content_layer_;
   scoped_refptr<android::ContentLayer> arc_secondary_layer_;
   int32_t arc_left_id_ = -1;

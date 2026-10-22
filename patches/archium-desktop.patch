@@ -3115,21 +3115,144 @@ diff --git a/chrome/browser/BUILD.gn b/chrome/browser/BUILD.gn
 diff --git a/chrome/browser/android/compositor/scene_layer/static_tab_scene_layer.cc b/chrome/browser/android/compositor/scene_layer/static_tab_scene_layer.cc
 --- a/chrome/browser/android/compositor/scene_layer/static_tab_scene_layer.cc
 +++ b/chrome/browser/android/compositor/scene_layer/static_tab_scene_layer.cc
-@@ -5,6 +5,7 @@
+@@ -4,8 +4,12 @@
+
  #include "chrome/browser/android/compositor/scene_layer/static_tab_scene_layer.h"
 
- #include <vector>
 +#include <cmath>
++#include <memory>
++#include <set>
+ #include <vector>
 
++#include "base/supports_user_data.h"
  #include "cc/input/android/offset_tag_android.h"
  #include "cc/slim/filter.h"
-@@ -77,6 +78,35 @@
+ #include "cc/slim/layer.h"
+@@ -14,6 +18,7 @@
+ #include "chrome/browser/android/compositor/tab_content_manager.h"
+ #include "chrome/browser/android/tab_android.h"
+ #include "content/public/browser/web_contents.h"
++#include "third_party/blink/public/common/web_preferences/web_preferences.h"
+ #include "ui/android/view_android.h"
+
+ // Must come after all headers that specialize FromJniType() / ToJniType().
+@@ -23,6 +28,12 @@
+
+ namespace android {
+ namespace {
++
++const char kArcSplitViewportOwnersKey = 0;
++
++struct ArcSplitViewportOwners : public base::SupportsUserData::Data {
++  std::set<const void*> owners;
++};
+
+ static bool LayerDraws(scoped_refptr<cc::slim::Layer> layer) {
+   if (!layer.get() || layer->opacity() == 0.0f ||
+@@ -43,6 +54,53 @@
+ }
+
+ }  // namespace
++
++void SetArcSplitViewportOwner(content::WebContents* contents,
++                             const void* owner,
++                             bool enabled) {
++  if (!contents || !owner) {
++    return;
++  }
++  auto* data = static_cast<ArcSplitViewportOwners*>(
++      contents->GetUserData(&kArcSplitViewportOwnersKey));
++  if (!data) {
++    if (!enabled) {
++      return;
++    }
++    auto fresh = std::make_unique<ArcSplitViewportOwners>();
++    data = fresh.get();
++    contents->SetUserData(&kArcSplitViewportOwnersKey, std::move(fresh));
++  }
++  const bool was_split = !data->owners.empty();
++  if (enabled) {
++    data->owners.insert(owner);
++  } else {
++    data->owners.erase(owner);
++  }
++  const bool is_split = !data->owners.empty();
++  if (!is_split) {
++    contents->RemoveUserData(&kArcSplitViewportOwnersKey);
++  }
++  if (was_split != is_split) {
++    // Recompute native preferences, including any current user/site overrides.
++    // Do not restore a stale snapshot or send preference IPC on every frame.
++    contents->OnWebPreferencesChanged();
++  }
++}
++
++void ApplyArcSplitViewportPreferences(
++    content::WebContents* contents,
++    blink::web_pref::WebPreferences* prefs) {
++  if (contents->GetUserData(&kArcSplitViewportOwnersKey) &&
++      !prefs->viewport_meta_enabled) {
++    // Request Desktop Site ignores viewport meta. Leaving the Android viewport
++    // mechanism enabled then supplies a wide fallback layout (980px), even when
++    // the widget/visual viewport is narrower. Desktop layout must follow the
++    // actual widget width, as in desktop Chromium, so CSS breakpoints can run.
++    // Explicit mobile mode retains Chromium's meta-viewport handling.
++    prefs->viewport_enabled = false;
++  }
++}
+
+ StaticTabSceneLayer::StaticTabSceneLayer(JNIEnv* env,
+                                          const JavaRef<jobject>& jobj)
+@@ -50,7 +108,40 @@
+       tab_content_manager_(nullptr),
+       background_color_(SK_ColorWHITE) {}
+
+-StaticTabSceneLayer::~StaticTabSceneLayer() = default;
++StaticTabSceneLayer::~StaticTabSceneLayer() {
++  for (const auto& contents : arc_viewport_contents_) {
++    if (contents) {
++      SetArcSplitViewportOwner(contents.get(), this, false);
++    }
++  }
++}
++
++void StaticTabSceneLayer::UpdateArcSplitViewportPolicy() {
++  auto previous = arc_viewport_contents_;
++  const int32_t ids[] = {arc_left_id_, arc_right_id_};
++  for (size_t i = 0; i < arc_viewport_contents_.size(); ++i) {
++    TabAndroid* tab = tab_content_manager_ && ids[i] >= 0
++                          ? tab_content_manager_->GetTab(ids[i])
++                          : nullptr;
++    arc_viewport_contents_[i] = tab && tab->web_contents()
++                                   ? tab->web_contents()->GetWeakPtr()
++                                   : base::WeakPtr<content::WebContents>();
++  }
++  // Compare membership rather than position so swapping panes doesn't remove
++  // and reapply preferences. Weak references don't keep destroyed tabs alive.
++  for (const auto& contents : previous) {
++    if (contents && contents.get() != arc_viewport_contents_[0].get() &&
++        contents.get() != arc_viewport_contents_[1].get()) {
++      SetArcSplitViewportOwner(contents.get(), this, false);
++    }
++  }
++  for (const auto& contents : arc_viewport_contents_) {
++    if (contents && contents.get() != previous[0].get() &&
++        contents.get() != previous[1].get()) {
++      SetArcSplitViewportOwner(contents.get(), this, true);
++    }
++  }
++}
+
+ bool StaticTabSceneLayer::ShouldShowBackground() {
+   scoped_refptr<cc::slim::Layer> root = layer_->RootLayer();
+@@ -77,6 +168,36 @@
      layer_->AddChild(content_layer_->layer());
    }
 
 +  const bool split = can_use_live_layer && arc_left_id_ != -1 &&
 +                     arc_right_id_ != -1 && (id == arc_left_id_ || id == arc_right_id_);
 +  if (split) {
++    UpdateArcSplitViewportPolicy();
 +    if (!arc_secondary_layer_) {
 +      arc_secondary_layer_ = android::ContentLayer::Create(tab_content_manager_);
 +      layer_->AddChild(arc_secondary_layer_->layer());
@@ -3159,7 +3282,7 @@ diff --git a/chrome/browser/android/compositor/scene_layer/static_tab_scene_laye
    if (id != -1 && can_use_live_layer) {
      // StaticLayout may not know that the live layer cannot draw. Ensure it gets
      // a thumbnail if needed.
-@@ -107,6 +137,21 @@
+@@ -107,6 +228,22 @@
    content_layer_->layer()->SetOffsetTag(tag);
  }
 
@@ -3176,6 +3299,7 @@ diff --git a/chrome/browser/android/compositor/scene_layer/static_tab_scene_laye
 +  arc_right_id_ = valid ? right_id : -1;
 +  arc_left_bounds_ = valid ? gfx::RectF(left_x, left_y, left_width, left_height) : gfx::RectF();
 +  arc_right_bounds_ = valid ? gfx::RectF(right_x, right_y, right_width, right_height) : gfx::RectF();
++  UpdateArcSplitViewportPolicy();
 +}
 +
  void StaticTabSceneLayer::SetTabContentManager(
@@ -3184,15 +3308,44 @@ diff --git a/chrome/browser/android/compositor/scene_layer/static_tab_scene_laye
 diff --git a/chrome/browser/android/compositor/scene_layer/static_tab_scene_layer.h b/chrome/browser/android/compositor/scene_layer/static_tab_scene_layer.h
 --- a/chrome/browser/android/compositor/scene_layer/static_tab_scene_layer.h
 +++ b/chrome/browser/android/compositor/scene_layer/static_tab_scene_layer.h
-@@ -12,6 +12,7 @@
+@@ -7,16 +7,36 @@
+
+ #include <jni.h>
+
++#include <array>
++
+ #include "base/android/jni_weak_ref.h"
+ #include "base/android/scoped_java_ref.h"
  #include "base/memory/raw_ptr.h"
  #include "base/memory/scoped_refptr.h"
++#include "base/memory/weak_ptr.h"
  #include "chrome/browser/ui/android/layouts/scene_layer.h"
 +#include "ui/gfx/geometry/rect_f.h"
++
++namespace blink::web_pref {
++struct WebPreferences;
++}  // namespace blink::web_pref
++
++namespace content {
++class WebContents;
++}  // namespace content
 
  namespace android {
 
-@@ -40,12 +41,22 @@
+ class ContentLayer;
+ class TabContentManager;
++
++// Per-WebContents split state, reapplied when Chromium recomputes preferences.
++void SetArcSplitViewportOwner(content::WebContents* contents,
++                             const void* owner,
++                             bool enabled);
++void ApplyArcSplitViewportPreferences(
++    content::WebContents* contents,
++    blink::web_pref::WebPreferences* prefs);
+
+ // A SceneLayer to render a static tab.
+ class StaticTabSceneLayer : public SceneLayer {
+@@ -40,12 +60,25 @@
                        float y,
                        const base::android::JavaRef<jobject>& joffset_tag);
 
@@ -3205,6 +3358,9 @@ diff --git a/chrome/browser/android/compositor/scene_layer/static_tab_scene_laye
        const base::android::JavaRef<jobject>& jtab_content_manager);
 
   private:
++  void UpdateArcSplitViewportPolicy();
++
++  std::array<base::WeakPtr<content::WebContents>, 2> arc_viewport_contents_;
    scoped_refptr<android::ContentLayer> content_layer_;
 +  scoped_refptr<android::ContentLayer> arc_secondary_layer_;
 +  int32_t arc_left_id_ = -1;
@@ -3293,6 +3449,27 @@ diff --git a/chrome/browser/browser_process_impl.cc b/chrome/browser/browser_pro
  #endif  // BUILDFLAG(IS_POSIX) && !BUILDFLAG(IS_MAC) && !BUILDFLAG(IS_LINUX)
 
  #if BUILDFLAG(IS_MAC)
+diff --git a/chrome/browser/chrome_content_browser_client.cc b/chrome/browser/chrome_content_browser_client.cc
+--- a/chrome/browser/chrome_content_browser_client.cc
++++ b/chrome/browser/chrome_content_browser_client.cc
+@@ -548,6 +548,7 @@
+ #include "chrome/browser/android/devtools_manager_delegate_android.h"  // nogncheck crbug.com/40147906
+ #include "chrome/browser/android/ntp/new_tab_page_url_handler.h"  // nogncheck crbug.com/40147906
+ #include "chrome/browser/android/service_tab_launcher.h"  // nogncheck crbug.com/40147906
++#include "chrome/browser/android/compositor/scene_layer/static_tab_scene_layer.h"
+ #include "chrome/browser/android/tab_android.h"  // nogncheck crbug.com/40147906
+ #include "chrome/browser/android/tab_web_contents_delegate_android.h"  // nogncheck crbug.com/40147906
+ #include "chrome/browser/android/web_contents_theme_client.h"  // nogncheck crbug.com/40147906
+@@ -5021,6 +5022,9 @@
+
+   web_prefs->is_xslt_deprecation_banner_suppressed =
+       prefs->GetBoolean(prefs::kXSLTDeprecationBannerSuppressed);
++#if BUILDFLAG(IS_ANDROID)
++  android::ApplyArcSplitViewportPreferences(web_contents, web_prefs);
++#endif
+ }
+
+ bool ChromeContentBrowserClientParts::OverrideWebPreferencesAfterNavigation(
 diff --git a/chrome/browser/password_manager/BUILD.gn b/chrome/browser/password_manager/BUILD.gn
 --- a/chrome/browser/password_manager/BUILD.gn
 +++ b/chrome/browser/password_manager/BUILD.gn
