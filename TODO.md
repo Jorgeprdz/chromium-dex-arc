@@ -575,3 +575,13 @@ Punto exacto de continuación, evidencia y limitaciones: [R5_SPLIT_LAYOUT_VIEWPO
 - [ ] APK y Actions: NO LANZADOS; se mantiene «no compiles todavía». No eliminar checkpoints ni hacer clean.
 
 Checkpoint y continuación: [R5_MOBILE_APPROVED_REDESIGN.md](docs/validation/R5_MOBILE_APPROVED_REDESIGN.md). Esta aprobación reemplaza únicamente la decisión anterior sobre presentación inferior móvil; los overlays Mobile antiguos siguen eliminados.
+
+
+## Fallo39721663072 — corrección de integración Java
+
+- [x] Diagnóstico: preflight/restauración y host398 PASS; falla compilación Java por TYPE_USE Nullable mal ubicado en el tipo anidado ArcPhoneNavigation.Host.
+- [x] Corrección de una línea en ToolbarManager y nueva prueba compilada RED/GREEN de la declaración real; ownership5 PASS.
+- [ ] Compilación nativa/APK del fix: pendiente de autorización para otro único intento. No se relanzó Actions; APK anterior intacta.
+- Checkpoint publicado39721663072-1, SHA82b37ed; pack verificado por CI, futura restauración requiere gates de integridad/compatibilidad. Receipt BUILD_FAILED/recoverable=false, sin continuación automática.
+
+Evidencia y alcance: [checkpoint Mobile](docs/validation/R5_MOBILE_APPROVED_REDESIGN.md#run39721663072--fallo-java-y-corrección-localizada).

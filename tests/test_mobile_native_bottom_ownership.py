@@ -1,5 +1,9 @@
 """Approved Mobile uses Chromium's sole bottom slot; never a second root overlay."""
 from pathlib import Path
+import re
+import shutil
+import subprocess
+import tempfile
 import unittest
 ROOT=Path(__file__).resolve().parents[1]
 class MobileBottomOwnershipTests(unittest.TestCase):
@@ -29,3 +33,19 @@ class MobileBottomOwnershipTests(unittest.TestCase):
         self.assertNotIn('ArcMobileHomeView',s)
         self.assertNotIn('showArcMobileSpaces',s)
         self.assertNotIn('initializeArcMobileControls',s)
+
+    def test_toolbar_host_field_compiles_with_type_use_nullable(self):
+        # Compile the delivered integration field, not a corrected copy or string assertion.
+        javac=shutil.which('javac')
+        self.assertIsNotNone(javac,'JDK required for the native field syntax regression')
+        source=(ROOT/'.source-modified/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java').read_text()
+        declaration=re.search(r'^    private [^;\n]+ mArcPhoneHost;',source,re.MULTILINE)
+        self.assertIsNotNone(declaration,'Mobile Host integration field missing')
+        with tempfile.TemporaryDirectory(prefix='archium-host-nullable-') as tmp:
+            path=Path(tmp)/'ToolbarHostProbe.java'
+            path.write_text('import java.lang.annotation.*;\n'
+                '@Target(ElementType.TYPE_USE) @interface Nullable {}\n'
+                'class ArcPhoneNavigation { interface Host {} }\n'
+                'class ToolbarHostProbe {\n'+declaration.group(0)+'\n}\n')
+            result=subprocess.run([javac,'-d',tmp,str(path)],capture_output=True,text=True)
+            self.assertEqual(0,result.returncode,result.stderr)

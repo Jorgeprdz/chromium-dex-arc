@@ -409,7 +409,7 @@ public class ToolbarManager
     private final CompositorViewHolder mCompositorViewHolder;
     private final BottomControlsStacker mBottomControlsStacker;
     private @Nullable ArcPhoneNavigation mArcPhoneNavigation;
-    private @Nullable ArcPhoneNavigation.Host mArcPhoneHost;
+    private ArcPhoneNavigation.@Nullable Host mArcPhoneHost;
     private @Nullable Callback<Integer> mArcPhoneCountObserver;
     private final TopControlsStacker mTopControlsStacker;
     private final BrowserControlsSizer mBrowserControlsSizer;

@@ -48,3 +48,14 @@ Antes del único build autorizado posteriormente: enviar SHA exacto, preflight c
 ## Consulta de cuota Actions
 
 Repositorio público; workflow baseline/preflight/stage usa `ubuntu-24.04` estándar. Los runners estándar en repositorios públicos no consumen minutos facturables según [GitHub](https://docs.github.com/en/billing/concepts/product-billing/github-actions). El saldo de almacenamiento/artefactos/cache no pudo consultarse: las APIs de billing devolvieron 404 y requisito de scope `user`; no se amplió el token. No se afirma un saldo numérico disponible ni se eliminaron checkpoints.
+
+
+## Run39721663072 — fallo Java y corrección localizada
+
+El único intento autorizado ejecutó SHA82b37ed: authorize y preflight SUCCESS; restauración verificada por CI; suite host de S2: **398 PASS**. Falló el target `chrome_java__compile_java`, antes de APK, por la declaración `private @Nullable ArcPhoneNavigation.Host mArcPhoneHost;` en ToolbarManager: `Nullable` es TYPE_USE y el tipo anidado requiere `ArcPhoneNavigation.@Nullable Host`.
+
+La preparación aislada anterior compilaba el nuevo delegate pero no ToolbarManager; por eso no detectó esta integración. Se añade una prueba host que extrae la declaración entregada y la compila con javac y una anotación exclusivamente TYPE_USE. RED reproduce el error, GREEN acepta la corrección de una línea. Los otros cuatro contratos de ownership siguen PASS. Preparación aislada SDK37.2 PASS y parche/manifest reproducibles en dos generaciones; diff sin errores de whitespace. No se cambia comportamiento, UI, dependencias ni gates para ocultar el fallo.
+
+Logs y receipt: `/workspace/archium-evidence/mobile-approved-implementation/run-39721663072/`. El checkpoint `archium-checkpoint-39721663072-1` fue publicado; receipt declara `checkpoint_verified=true`, `pack_verified=true`, `outcome=BUILD_FAILED`, `recoverable=false`. No es una continuación automática autorizada. La disponibilidad, capacidad, compatibilidad y hashes de bytes se deben volver a validar antes de una futura restauración; no se hizo esa restauración localmente.
+
+No se generó APK ni se instaló actualización. La versión anterior permanece instalada. No se relanzó Actions: otro intento requiere autorización nueva. Candidato corregido pendiente de compilación nativa completa; no se afirma que hayan desaparecido posibles errores posteriores que javac no alcanzó a reportar.

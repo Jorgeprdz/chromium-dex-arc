@@ -192,7 +192,7 @@
     "chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java": "fc27bad7451ca8da011c828efb4239759b26f584f6e0523773fce9c2f8b2e62b",
     "chrome/android/java/src/org/chromium/chrome/browser/tab/TabWebContentsDelegateAndroidImpl.java": "67d47aefea359f133a57e39a8c0a90d921905e09e2157a3bd00460f90a95cbc0",
     "chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java": "a5c47302dfe3c31b1b83849b24321dfe12c14f0a02a9b9f09a212b34cb413744",
-    "chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java": "22a110d98887556b798674868d46642c97a0210f88f6ebf00fad10b29ba4bd1f",
+    "chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java": "5333c01562b650d693110e1bf6718e2d801bf6ef01d046a982eff5bb1c811285",
     "chrome/android/junit/BUILD.gn": "7a0284837fb856aabe57b425ff39880c131af017619f2bebb74653169387bbbc",
     "chrome/android/junit/src/org/chromium/chrome/browser/modaldialog/ChromeTabModalPresenterUnitTest.java": "fc44f988f2756694fb64cb1918ce16c25021280c61915ecd2bee75be495c173a",
     "chrome/android/junit/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinatorUnitTest.java": "d5261f64fe0e5e5612125143d95ca54001a217cee00d0f77920bd9cf114aace6",
@@ -328,5 +328,5 @@
     "components/password_manager/core/browser/password_store/password_store_backend.cc": "45764d4ad0e05acc5a216944a5a6763212f6c17e71bf689e9c973f12fb5c87d8",
     "components/password_manager/core/browser/password_store/password_store_interface.cc": "7e9dd5813ce8ece459ec66abdd3306028b7b3d6bbae048664872a34d8d097268"
   },
-  "patch_sha256": "43c856d2e02049f8f51dfaa08700c92e6fdfd8c63f8abf2cdc4a130830b54a56"
+  "patch_sha256": "6b2f2569c2ec5d5ae274ebaa99e457941a55fbe97c1843af3dfc89e7d9de11e5"
 }
