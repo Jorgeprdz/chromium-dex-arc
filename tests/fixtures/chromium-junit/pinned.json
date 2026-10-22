@@ -1,0 +1,9 @@
+{
+  "revision": "cfd94726b7b5fb48aedcc32662f2f3fbdbadec35",
+  "sha256": {
+    "TestListComputer.java": "11678d5c6da27380624010673a35b010b67145a3023bfcfb2d1339338d1a2c4e",
+    "Allowlist.java": "ee65ce38e5f0989cb85c4abc897bab4ddd50a0eec66cb9e672a01b209eab1a27",
+    "shadows-allowlist.txt": "e81cdd63fe743978f7903ef92a9afa9f920ab21b83e102c4e431d3426662b7cf",
+    "ThemeColorProvider.java": "951abbc1f797f62b62409cadd1e6be686bd403e7b39c0473f75803633604e26d"
+  }
+}

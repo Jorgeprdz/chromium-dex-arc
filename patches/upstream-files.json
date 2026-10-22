@@ -227,7 +227,7 @@
     "chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTabletUnitTest.java": "9675cf194af6e980b3528ac6626127cb308bcdfa383d854b4718e792d629f5f6",
     "chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImpl.java": "e4599e59289d3f9793684ab45fd345e7303a8c890ebe8093320f9ff4e9db6ace",
     "chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/OmniboxSuggestionsDropdownEmbedderImplUnitTest.java": "6f0037715cbb7bccca137c9114d3a2c794d1b7976d89c68a3506a9113e0b8358",
-    "chrome/browser/ui/android/theme/java/src/org/chromium/chrome/browser/theme/ToolbarThemeColorProvider.java": "f300b6e5871046f7ea7f44dd77793bf9a29340c3fef7d27931bae421a744d38a",
+    "chrome/browser/ui/android/theme/java/src/org/chromium/chrome/browser/theme/ToolbarThemeColorProvider.java": "5e89306c7e012ce7693814eee99cfc0c26008d108a1e06a3f331792d346fe5e1",
     "chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarLayout.java": "be715af66bda4ece6b20bd3fc239141453d88912becce9aa7aacd4a5541f9931",
     "chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarPhone.java": "36c2eae700aa7ea31247fa7fd9e0577e85127505c5842c864bca66106005b057",
     "chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java": "22ce2700694286a33c79c621a1b80589de871139f210a92177caa36156632f5b",
@@ -297,7 +297,7 @@
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcFrameDispatchTest.java": "7c5ed7e3c17bad07f79cd203a4dfd01db9a4de6426af309f4e36e9355ab1285d",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcNavigationControlsTest.java": "7a5e682dcf3a867d54df11e8cde32db02e2e3c1a328712b94c3d9874696d6af1",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcOmniboxPlacementTest.java": "8f648fd7a93b27b8d21a9f503717d3697ce4515c7b1095a29ee28d3201b81eff",
-    "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneNavigationTest.java": "35a0dcf4a18e2b218cea8a75e824733fc6b7f641bf29819229c9dc3c73c103e2",
+    "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneNavigationTest.java": "a4555f37a581257121a8fa0392341239c8d05d7d9143f4e61fe061574eb3cdbb",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitContentHostTest.java": "1936e7181ffd28b3483fc41aa1288baa284c9605e29f1e717b77ba57663c673d",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitControlsTest.java": "f88843322e9076240012915ccc1dd0ab467640d8b48e2986e78ac62ae105d216",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitStateTest.java": "d482407a305d2ca8bafd2922c6c95f4784079faf0dbf1fe4815b61ee4f36b84c",
@@ -336,5 +336,5 @@
     "components/password_manager/core/browser/password_store/password_store_backend.cc": "45764d4ad0e05acc5a216944a5a6763212f6c17e71bf689e9c973f12fb5c87d8",
     "components/password_manager/core/browser/password_store/password_store_interface.cc": "7e9dd5813ce8ece459ec66abdd3306028b7b3d6bbae048664872a34d8d097268"
   },
-  "patch_sha256": "ff963c12f36d80271aeda53da1a270e9f41c618485f9c41d2f7d124b7f5a87b6"
+  "patch_sha256": "cffefb59c1d6f50ab2954c7760c7e7fc42f429c5ed7196a1fe892b4557c0a80d"
 }

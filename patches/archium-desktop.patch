@@ -5511,15 +5511,20 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
 diff --git a/chrome/browser/ui/android/theme/java/src/org/chromium/chrome/browser/theme/ToolbarThemeColorProvider.java b/chrome/browser/ui/android/theme/java/src/org/chromium/chrome/browser/theme/ToolbarThemeColorProvider.java
 --- a/chrome/browser/ui/android/theme/java/src/org/chromium/chrome/browser/theme/ToolbarThemeColorProvider.java
 +++ b/chrome/browser/ui/android/theme/java/src/org/chromium/chrome/browser/theme/ToolbarThemeColorProvider.java
-@@ -6,6 +6,7 @@
+@@ -6,8 +6,12 @@
 
  import android.content.Context;
  import android.content.res.ColorStateList;
 +import android.graphics.Color;
 
  import androidx.annotation.ColorInt;
++import androidx.annotation.VisibleForTesting;
++
++import java.util.function.BiFunction;
 
-@@ -18,6 +19,8 @@
+ import org.chromium.build.annotations.NullMarked;
+ import org.chromium.build.annotations.Nullable;
+@@ -18,6 +22,8 @@
  import org.chromium.chrome.browser.theme.ThemeColorProvider.TintObserver;
  import org.chromium.chrome.browser.ui.bottombar.BottomBarConfigUtils;
  import org.chromium.chrome.browser.ui.theme.BrandedColorScheme;
@@ -5528,27 +5533,51 @@ diff --git a/chrome/browser/ui/android/theme/java/src/org/chromium/chrome/browse
 
  /**
   * Theme color provider for the toolbar. It listens to {@link TopUiThemeColorProvider} by default.
-@@ -27,6 +30,8 @@
+@@ -27,6 +33,10 @@
  @NullMarked
  public class ToolbarThemeColorProvider extends ThemeColorProvider
          implements BrowserControlsStateProvider.Observer, ThemeColorObserver, TintObserver {
 +    private final Context mArcContext;
++    private final BiFunction<Context, Boolean, Integer> mArcSurfaceColorResolver;
++    private final BiFunction<Context, Integer, ColorStateList> mArcIconTintResolver;
 +    private boolean mArcPhoneFloatingSurface;
      private final TopUiThemeColorProvider mTopUiThemeColorProvider;
      private final BottomUiThemeColorProvider mBottomUiThemeColorProvider;
      private final BrowserControlsStateProvider mBrowserControlsStateProvider;
-@@ -48,6 +53,7 @@
+@@ -47,15 +57,51 @@
+             TopUiThemeColorProvider topUiThemeColorProvider,
              BottomUiThemeColorProvider bottomUiThemeColorProvider,
              BrowserControlsStateProvider browserControlsStateProvider) {
++        this(context, topUiThemeColorProvider, bottomUiThemeColorProvider,
++                browserControlsStateProvider, BottomBarConfigUtils.isBottomBarEnabled(context),
++                ChromeColors::getDefaultThemeColor, ThemeUtils::getThemedToolbarIconTint);
++    }
++
++    /** Explicit resource boundaries for tests; production keeps the native resolvers above. */
++    @VisibleForTesting
++    public ToolbarThemeColorProvider(
++            Context context,
++            TopUiThemeColorProvider topUiThemeColorProvider,
++            BottomUiThemeColorProvider bottomUiThemeColorProvider,
++            BrowserControlsStateProvider browserControlsStateProvider,
++            boolean bottomBarEnabled,
++            BiFunction<Context, Boolean, Integer> surfaceColorResolver,
++            BiFunction<Context, Integer, ColorStateList> iconTintResolver) {
          super(context);
 +        mArcContext = context;
++        mArcSurfaceColorResolver = surfaceColorResolver;
++        mArcIconTintResolver = iconTintResolver;
          mTopUiThemeColorProvider = topUiThemeColorProvider;
          mBottomUiThemeColorProvider = bottomUiThemeColorProvider;
          mBrowserControlsStateProvider = browserControlsStateProvider;
-@@ -58,6 +64,24 @@
-         updateActiveProvider(/* animate= */ false);
-     }
+-        mIsBottomBarEnabled = BottomBarConfigUtils.isBottomBarEnabled(context);
++        mIsBottomBarEnabled = bottomBarEnabled;
+         mControlsPosition = browserControlsStateProvider.getControlsPosition();
 
+         mBrowserControlsStateProvider.addObserver(this);
+         updateActiveProvider(/* animate= */ false);
++    }
++
 +    /** Phone-only palette opt-in; use the same native color scheme for surface and icons. */
 +    public void setArcPhoneFloatingSurfaceEnabled(boolean enabled) {
 +        if (mArcPhoneFloatingSurface == enabled
@@ -5563,14 +5592,12 @@ diff --git a/chrome/browser/ui/android/theme/java/src/org/chromium/chrome/browse
 +    private @ColorInt int getArcPhoneSurfaceColor() {
 +        boolean incognito = mActiveProvider != null
 +                && mActiveProvider.getBrandedColorScheme() == BrandedColorScheme.INCOGNITO;
-+        int color = ChromeColors.getDefaultThemeColor(mArcContext, incognito);
++        int color = mArcSurfaceColorResolver.apply(mArcContext, incognito);
 +        return ColorUtils.shouldUseLightForegroundOnBackground(color) ? 0xff202124 : Color.WHITE;
-+    }
-+
+     }
+
      /**
-      * @param tab The {@link Tab} on which the theme color is used.
-      * @param fallbackColor The fallback color to use if the default color is used or there is no
-@@ -66,6 +90,7 @@
+@@ -66,6 +112,7 @@
       *     current tab.
       */
      public @ColorInt int getThemeColorOrFallback(@Nullable Tab tab, @ColorInt int fallbackColor) {
@@ -5578,7 +5605,7 @@ diff --git a/chrome/browser/ui/android/theme/java/src/org/chromium/chrome/browse
          if (mActiveProvider == mTopUiThemeColorProvider) {
              return mTopUiThemeColorProvider.getThemeColorOrFallback(tab, fallbackColor);
          }
-@@ -77,6 +102,7 @@
+@@ -77,6 +124,7 @@
       * @return Returns the toolbar background color.
       */
      public @ColorInt int getToolbarBackgroundColor(Tab tab) {
@@ -5586,7 +5613,7 @@ diff --git a/chrome/browser/ui/android/theme/java/src/org/chromium/chrome/browse
          if (mActiveProvider == mTopUiThemeColorProvider) {
              return mTopUiThemeColorProvider.getToolbarBackgroundColor(tab);
          }
-@@ -102,7 +128,7 @@
+@@ -102,7 +150,7 @@
 
      @Override
      public void onThemeColorChanged(int color, boolean shouldAnimate) {
@@ -5595,14 +5622,14 @@ diff --git a/chrome/browser/ui/android/theme/java/src/org/chromium/chrome/browse
      }
 
      @Override
-@@ -110,7 +136,19 @@
+@@ -110,7 +158,19 @@
              @Nullable ColorStateList tint,
              @Nullable ColorStateList activityFocusTint,
              @BrandedColorScheme int brandedColorScheme) {
 +        if (mArcPhoneFloatingSurface) {
 +            brandedColorScheme = brandedColorScheme == BrandedColorScheme.INCOGNITO
 +                    ? BrandedColorScheme.INCOGNITO : BrandedColorScheme.APP_DEFAULT;
-+            ColorStateList nativeTint = ThemeUtils.getThemedToolbarIconTint(mArcContext, brandedColorScheme);
++            ColorStateList nativeTint = mArcIconTintResolver.apply(mArcContext, brandedColorScheme);
 +            activityFocusTint = activityFocusTint == null ? null
 +                    : nativeTint.withAlpha(Color.alpha(activityFocusTint.getDefaultColor()));
 +            tint = nativeTint;
@@ -5615,7 +5642,7 @@ diff --git a/chrome/browser/ui/android/theme/java/src/org/chromium/chrome/browse
      }
 
      private void updateActiveProvider(boolean animate) {
-@@ -130,11 +168,15 @@
+@@ -130,11 +190,15 @@
              mActiveProvider.addThemeColorObserver(this);
              mActiveProvider.addTintObserver(this);
 
@@ -14992,7 +15019,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneNa
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneNavigationTest.java
-@@ -0,0 +1,291 @@
+@@ -0,0 +1,284 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -15024,32 +15051,16 @@ new file mode 100644
 +import org.robolectric.annotation.Config;
 +import org.robolectric.annotation.GraphicsMode;
 +import org.robolectric.annotation.SQLiteMode;
-+import org.robolectric.annotation.Implements;
-+import org.robolectric.annotation.Implementation;
 +import org.chromium.components.browser_ui.bottomsheet.BottomSheetContent;
 +import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
 +
 +/** Real Android views and delivered sheet; Chromium controller/action boundaries are mocks. */
 +@RunWith(RobolectricTestRunner.class)
-+@Config(manifest=Config.NONE,sdk={30,36},qualifiers="mdpi",
-+        instrumentedPackages={"org.chromium.components.browser_ui.styles", "org.chromium.chrome.browser.theme", "org.chromium.chrome.browser.ui.bottombar"},
-+        shadows={ArcPhoneNavigationTest.PhoneColors.class,ArcPhoneNavigationTest.PhoneTints.class,ArcPhoneNavigationTest.PhoneBottomConfig.class})
++@Config(manifest=Config.NONE,sdk={30,36},qualifiers="mdpi")
 +@GraphicsMode(GraphicsMode.Mode.LEGACY)
 +@SQLiteMode(SQLiteMode.Mode.LEGACY)
 +public class ArcPhoneNavigationTest {
-+    @Implements(value=org.chromium.components.browser_ui.styles.ChromeColors.class,isInAndroidSdk=false)
-+    public static class PhoneColors {
-+        static boolean dark;
-+        @Implementation protected static int getDefaultThemeColor(android.content.Context context,boolean incognito){return dark||incognito?0xff202124:Color.WHITE;}
-+    }
-+    @Implements(value=org.chromium.chrome.browser.theme.ThemeUtils.class,isInAndroidSdk=false)
-+    public static class PhoneTints {
-+        @Implementation protected static android.content.res.ColorStateList getThemedToolbarIconTint(android.content.Context context,int scheme){return android.content.res.ColorStateList.valueOf(PhoneColors.dark||scheme==org.chromium.chrome.browser.ui.theme.BrandedColorScheme.INCOGNITO?Color.WHITE:Color.BLACK);}
-+    }
-+    @Implements(value=org.chromium.chrome.browser.ui.bottombar.BottomBarConfigUtils.class,isInAndroidSdk=false)
-+    public static class PhoneBottomConfig {
-+        @Implementation protected static boolean isBottomBarEnabled(android.content.Context context){return false;}
-+    }
++    private boolean mDarkPalette;
 +    private org.robolectric.android.controller.ActivityController<Activity> mActivity;
 +    private FrameLayout mSlot;
 +    private ArcPhoneNavigation mNavigation;
@@ -15071,7 +15082,7 @@ new file mode 100644
 +        public void zoom(int direction){zoom+=direction*10;}
 +    }
 +    @Before public void setUp(){
-+        PhoneColors.dark=false;
++        mDarkPalette=false;
 +        mActivity=Robolectric.buildActivity(Activity.class).setup();
 +        mSlot=new FrameLayout(mActivity.get());mActivity.get().setContentView(mSlot);
 +        mController=mock(BottomSheetController.class);
@@ -15245,7 +15256,7 @@ new file mode 100644
 +    @Test public void phonePaletteKeepsNativeDefaultsUntilExplicitOptIn(){ verifyNativePalette(false); }
 +    @Test public void phonePalettePreservesDarkAndIncognitoContrast(){ verifyNativePalette(true); }
 +    private void verifyNativePalette(boolean dark) {
-+        PhoneColors.dark=dark;
++        mDarkPalette=dark;
 +        {
 +            var top=mock(org.chromium.chrome.browser.theme.TopUiThemeColorProvider.class);
 +            var bottom=mock(org.chromium.chrome.browser.theme.BottomUiThemeColorProvider.class);
@@ -15253,9 +15264,18 @@ new file mode 100644
 +            when(controls.getControlsPosition()).thenReturn(org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider.ControlsPosition.TOP);
 +            int scheme=dark?org.chromium.chrome.browser.ui.theme.BrandedColorScheme.INCOGNITO:org.chromium.chrome.browser.ui.theme.BrandedColorScheme.APP_DEFAULT;
 +            var siteTint=android.content.res.ColorStateList.valueOf(0xffffffff);
++            var paletteContext=mock(android.content.Context.class);
++            var paletteResources=mock(android.content.res.Resources.class);
++            when(paletteContext.getResources()).thenReturn(paletteResources);
++            when(paletteResources.getColorStateList(anyInt(),any())).thenReturn(siteTint);
 +            when(top.getThemeColor()).thenReturn(Color.RED);when(top.getTint()).thenReturn(siteTint);
 +            when(top.getActivityFocusTint()).thenReturn(siteTint);when(top.getBrandedColorScheme()).thenReturn(scheme);
-+            var provider=new org.chromium.chrome.browser.theme.ToolbarThemeColorProvider(mActivity.get(),top,bottom,controls);
++            var provider=new org.chromium.chrome.browser.theme.ToolbarThemeColorProvider(
++                    paletteContext,top,bottom,controls,false,
++                    (context,incognito)->mDarkPalette||incognito?0xff202124:Color.WHITE,
++                    (context,colorScheme)->android.content.res.ColorStateList.valueOf(
++                            mDarkPalette||colorScheme==org.chromium.chrome.browser.ui.theme.BrandedColorScheme.INCOGNITO
++                                    ?Color.WHITE:Color.BLACK));
 +            assertEquals(Color.RED,provider.getThemeColor());assertSame(siteTint,provider.getTint());
 +            provider.setArcPhoneFloatingSurfaceEnabled(true);
 +            assertEquals(dark?0xff202124:Color.WHITE,provider.getThemeColor());
@@ -15274,8 +15294,8 @@ new file mode 100644
 +                assertEquals(0xff202124,provider.getThemeColor());
 +                when(top.getBrandedColorScheme()).thenReturn(scheme);
 +                provider.onTintChanged(siteTint,siteTint,scheme);assertEquals(Color.WHITE,provider.getThemeColor());
-+                PhoneColors.dark=true;provider.setArcPhoneFloatingSurfaceEnabled(true);assertEquals(0xff202124,provider.getThemeColor());
-+                PhoneColors.dark=false;provider.setArcPhoneFloatingSurfaceEnabled(true);assertEquals(Color.WHITE,provider.getThemeColor());
++                mDarkPalette=true;provider.setArcPhoneFloatingSurfaceEnabled(true);assertEquals(0xff202124,provider.getThemeColor());
++                mDarkPalette=false;provider.setArcPhoneFloatingSurfaceEnabled(true);assertEquals(Color.WHITE,provider.getThemeColor());
 +            }
 +            provider.setArcPhoneFloatingSurfaceEnabled(false);
 +            assertEquals(Color.RED,provider.getThemeColor());assertSame(siteTint,provider.getTint());

@@ -618,3 +618,14 @@ Checkpoint recuperable y diferencias respecto al render: [R5_FLOATING_MOBILE_LIG
 - [ ] Validar íntegramente checkpoint39817793524-1 antes de una restauración futura; su publicación no equivale a verificar aquí todos sus bytes.
 
 Preferencia de horas: Ciudad de México (`America/Mexico_City`, UTC−6). Detalle: [auditoría Floating y fallo del run](docs/validation/R5_FLOATING_MOBILE_LIGHT_DARK.md#run39817793524--fallo-y-corrección-localizada).
+
+
+## Run39829306775 — incompatibilidad de tests corregida localmente
+
+- [x] Causa raíz: descubrimiento Robolectric de Chromium rechaza tres shadows de clases propias en ArcPhoneNavigationTest; el runner local previo no aplicaba esa política.
+- [x] Sin ampliar excepciones: retirar shadows, inyectar únicamente fronteras de recursos/flags por constructor de pruebas y conservar28 tests. Constructor normal conserva helpers nativos.
+- [x] Reproducción RED con TestListComputer/Allowlist originales fijados; GREEN en política y56 ejecuciones locales. Guard del preflight2, superficie4, aplicación7 y transición17 PASS. Parche reproducible.
+- [ ] Gate integrado y APK del fix: NOT RUN. No relanzar sin autorización nueva. Desktop, geometría, motor y respaldo conservados.
+- [ ] Verificar todos los bytes del checkpoint39829306775-1 antes de usarlo en un próximo build incremental.
+
+Evidencia y límites: [run39829306775](docs/validation/R5_FLOATING_MOBILE_LIGHT_DARK.md#run39829306775--rechazo-de-shadows-y-corrección-de-la-validación). Horas CDMX.

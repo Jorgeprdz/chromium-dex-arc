@@ -9,6 +9,9 @@ import android.content.res.ColorStateList;
 import android.graphics.Color;
 
 import androidx.annotation.ColorInt;
+import androidx.annotation.VisibleForTesting;
+
+import java.util.function.BiFunction;
 
 import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
@@ -31,6 +34,8 @@ import org.chromium.ui.util.ColorUtils;
 public class ToolbarThemeColorProvider extends ThemeColorProvider
         implements BrowserControlsStateProvider.Observer, ThemeColorObserver, TintObserver {
     private final Context mArcContext;
+    private final BiFunction<Context, Boolean, Integer> mArcSurfaceColorResolver;
+    private final BiFunction<Context, Integer, ColorStateList> mArcIconTintResolver;
     private boolean mArcPhoneFloatingSurface;
     private final TopUiThemeColorProvider mTopUiThemeColorProvider;
     private final BottomUiThemeColorProvider mBottomUiThemeColorProvider;
@@ -52,12 +57,29 @@ public class ToolbarThemeColorProvider extends ThemeColorProvider
             TopUiThemeColorProvider topUiThemeColorProvider,
             BottomUiThemeColorProvider bottomUiThemeColorProvider,
             BrowserControlsStateProvider browserControlsStateProvider) {
+        this(context, topUiThemeColorProvider, bottomUiThemeColorProvider,
+                browserControlsStateProvider, BottomBarConfigUtils.isBottomBarEnabled(context),
+                ChromeColors::getDefaultThemeColor, ThemeUtils::getThemedToolbarIconTint);
+    }
+
+    /** Explicit resource boundaries for tests; production keeps the native resolvers above. */
+    @VisibleForTesting
+    public ToolbarThemeColorProvider(
+            Context context,
+            TopUiThemeColorProvider topUiThemeColorProvider,
+            BottomUiThemeColorProvider bottomUiThemeColorProvider,
+            BrowserControlsStateProvider browserControlsStateProvider,
+            boolean bottomBarEnabled,
+            BiFunction<Context, Boolean, Integer> surfaceColorResolver,
+            BiFunction<Context, Integer, ColorStateList> iconTintResolver) {
         super(context);
         mArcContext = context;
+        mArcSurfaceColorResolver = surfaceColorResolver;
+        mArcIconTintResolver = iconTintResolver;
         mTopUiThemeColorProvider = topUiThemeColorProvider;
         mBottomUiThemeColorProvider = bottomUiThemeColorProvider;
         mBrowserControlsStateProvider = browserControlsStateProvider;
-        mIsBottomBarEnabled = BottomBarConfigUtils.isBottomBarEnabled(context);
+        mIsBottomBarEnabled = bottomBarEnabled;
         mControlsPosition = browserControlsStateProvider.getControlsPosition();
 
         mBrowserControlsStateProvider.addObserver(this);
@@ -78,7 +100,7 @@ public class ToolbarThemeColorProvider extends ThemeColorProvider
     private @ColorInt int getArcPhoneSurfaceColor() {
         boolean incognito = mActiveProvider != null
                 && mActiveProvider.getBrandedColorScheme() == BrandedColorScheme.INCOGNITO;
-        int color = ChromeColors.getDefaultThemeColor(mArcContext, incognito);
+        int color = mArcSurfaceColorResolver.apply(mArcContext, incognito);
         return ColorUtils.shouldUseLightForegroundOnBackground(color) ? 0xff202124 : Color.WHITE;
     }
 
@@ -139,7 +161,7 @@ public class ToolbarThemeColorProvider extends ThemeColorProvider
         if (mArcPhoneFloatingSurface) {
             brandedColorScheme = brandedColorScheme == BrandedColorScheme.INCOGNITO
                     ? BrandedColorScheme.INCOGNITO : BrandedColorScheme.APP_DEFAULT;
-            ColorStateList nativeTint = ThemeUtils.getThemedToolbarIconTint(mArcContext, brandedColorScheme);
+            ColorStateList nativeTint = mArcIconTintResolver.apply(mArcContext, brandedColorScheme);
             activityFocusTint = activityFocusTint == null ? null
                     : nativeTint.withAlpha(Color.alpha(activityFocusTint.getDefaultColor()));
             tint = nativeTint;

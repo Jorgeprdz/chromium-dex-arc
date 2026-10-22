@@ -29,32 +29,16 @@ import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.GraphicsMode;
 import org.robolectric.annotation.SQLiteMode;
-import org.robolectric.annotation.Implements;
-import org.robolectric.annotation.Implementation;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetContent;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
 
 /** Real Android views and delivered sheet; Chromium controller/action boundaries are mocks. */
 @RunWith(RobolectricTestRunner.class)
-@Config(manifest=Config.NONE,sdk={30,36},qualifiers="mdpi",
-        instrumentedPackages={"org.chromium.components.browser_ui.styles", "org.chromium.chrome.browser.theme", "org.chromium.chrome.browser.ui.bottombar"},
-        shadows={ArcPhoneNavigationTest.PhoneColors.class,ArcPhoneNavigationTest.PhoneTints.class,ArcPhoneNavigationTest.PhoneBottomConfig.class})
+@Config(manifest=Config.NONE,sdk={30,36},qualifiers="mdpi")
 @GraphicsMode(GraphicsMode.Mode.LEGACY)
 @SQLiteMode(SQLiteMode.Mode.LEGACY)
 public class ArcPhoneNavigationTest {
-    @Implements(value=org.chromium.components.browser_ui.styles.ChromeColors.class,isInAndroidSdk=false)
-    public static class PhoneColors {
-        static boolean dark;
-        @Implementation protected static int getDefaultThemeColor(android.content.Context context,boolean incognito){return dark||incognito?0xff202124:Color.WHITE;}
-    }
-    @Implements(value=org.chromium.chrome.browser.theme.ThemeUtils.class,isInAndroidSdk=false)
-    public static class PhoneTints {
-        @Implementation protected static android.content.res.ColorStateList getThemedToolbarIconTint(android.content.Context context,int scheme){return android.content.res.ColorStateList.valueOf(PhoneColors.dark||scheme==org.chromium.chrome.browser.ui.theme.BrandedColorScheme.INCOGNITO?Color.WHITE:Color.BLACK);}
-    }
-    @Implements(value=org.chromium.chrome.browser.ui.bottombar.BottomBarConfigUtils.class,isInAndroidSdk=false)
-    public static class PhoneBottomConfig {
-        @Implementation protected static boolean isBottomBarEnabled(android.content.Context context){return false;}
-    }
+    private boolean mDarkPalette;
     private org.robolectric.android.controller.ActivityController<Activity> mActivity;
     private FrameLayout mSlot;
     private ArcPhoneNavigation mNavigation;
@@ -76,7 +60,7 @@ public class ArcPhoneNavigationTest {
         public void zoom(int direction){zoom+=direction*10;}
     }
     @Before public void setUp(){
-        PhoneColors.dark=false;
+        mDarkPalette=false;
         mActivity=Robolectric.buildActivity(Activity.class).setup();
         mSlot=new FrameLayout(mActivity.get());mActivity.get().setContentView(mSlot);
         mController=mock(BottomSheetController.class);
@@ -250,7 +234,7 @@ public class ArcPhoneNavigationTest {
     @Test public void phonePaletteKeepsNativeDefaultsUntilExplicitOptIn(){ verifyNativePalette(false); }
     @Test public void phonePalettePreservesDarkAndIncognitoContrast(){ verifyNativePalette(true); }
     private void verifyNativePalette(boolean dark) {
-        PhoneColors.dark=dark;
+        mDarkPalette=dark;
         {
             var top=mock(org.chromium.chrome.browser.theme.TopUiThemeColorProvider.class);
             var bottom=mock(org.chromium.chrome.browser.theme.BottomUiThemeColorProvider.class);
@@ -258,9 +242,18 @@ public class ArcPhoneNavigationTest {
             when(controls.getControlsPosition()).thenReturn(org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider.ControlsPosition.TOP);
             int scheme=dark?org.chromium.chrome.browser.ui.theme.BrandedColorScheme.INCOGNITO:org.chromium.chrome.browser.ui.theme.BrandedColorScheme.APP_DEFAULT;
             var siteTint=android.content.res.ColorStateList.valueOf(0xffffffff);
+            var paletteContext=mock(android.content.Context.class);
+            var paletteResources=mock(android.content.res.Resources.class);
+            when(paletteContext.getResources()).thenReturn(paletteResources);
+            when(paletteResources.getColorStateList(anyInt(),any())).thenReturn(siteTint);
             when(top.getThemeColor()).thenReturn(Color.RED);when(top.getTint()).thenReturn(siteTint);
             when(top.getActivityFocusTint()).thenReturn(siteTint);when(top.getBrandedColorScheme()).thenReturn(scheme);
-            var provider=new org.chromium.chrome.browser.theme.ToolbarThemeColorProvider(mActivity.get(),top,bottom,controls);
+            var provider=new org.chromium.chrome.browser.theme.ToolbarThemeColorProvider(
+                    paletteContext,top,bottom,controls,false,
+                    (context,incognito)->mDarkPalette||incognito?0xff202124:Color.WHITE,
+                    (context,colorScheme)->android.content.res.ColorStateList.valueOf(
+                            mDarkPalette||colorScheme==org.chromium.chrome.browser.ui.theme.BrandedColorScheme.INCOGNITO
+                                    ?Color.WHITE:Color.BLACK));
             assertEquals(Color.RED,provider.getThemeColor());assertSame(siteTint,provider.getTint());
             provider.setArcPhoneFloatingSurfaceEnabled(true);
             assertEquals(dark?0xff202124:Color.WHITE,provider.getThemeColor());
@@ -279,8 +272,8 @@ public class ArcPhoneNavigationTest {
                 assertEquals(0xff202124,provider.getThemeColor());
                 when(top.getBrandedColorScheme()).thenReturn(scheme);
                 provider.onTintChanged(siteTint,siteTint,scheme);assertEquals(Color.WHITE,provider.getThemeColor());
-                PhoneColors.dark=true;provider.setArcPhoneFloatingSurfaceEnabled(true);assertEquals(0xff202124,provider.getThemeColor());
-                PhoneColors.dark=false;provider.setArcPhoneFloatingSurfaceEnabled(true);assertEquals(Color.WHITE,provider.getThemeColor());
+                mDarkPalette=true;provider.setArcPhoneFloatingSurfaceEnabled(true);assertEquals(0xff202124,provider.getThemeColor());
+                mDarkPalette=false;provider.setArcPhoneFloatingSurfaceEnabled(true);assertEquals(Color.WHITE,provider.getThemeColor());
             }
             provider.setArcPhoneFloatingSurfaceEnabled(false);
             assertEquals(Color.RED,provider.getThemeColor());assertSame(siteTint,provider.getTint());

@@ -1,6 +1,7 @@
 """Pinned cfd94726 native API boundaries for host probes; not implementations of Chromium."""
 def definitions():
     return {
+        'androidx.annotation.VisibleForTesting': 'public @interface VisibleForTesting {}',
         'org.chromium.base.ObserverList': 'public class ObserverList<T> extends java.util.ArrayList<T> {public void addObserver(T v){add(v);}public void removeObserver(T v){remove(v);}}',
         'org.chromium.chrome.browser.theme.ThemeColorProvider': """public class ThemeColorProvider {
         public interface ThemeColorObserver{void onThemeColorChanged(int color,boolean animate);}public interface TintObserver{void onTintChanged(android.content.res.ColorStateList t,android.content.res.ColorStateList f,int s);}
@@ -12,7 +13,7 @@ def definitions():
         }""",
         'org.chromium.chrome.browser.theme.TopUiThemeColorProvider': 'public class TopUiThemeColorProvider extends ThemeColorProvider {public TopUiThemeColorProvider(){super(null);}public int getThemeColorOrFallback(org.chromium.chrome.browser.tab.Tab tab,int fallback){return fallback;}public int getToolbarBackgroundColor(org.chromium.chrome.browser.tab.Tab tab){return getThemeColor();}}',
         'org.chromium.chrome.browser.theme.BottomUiThemeColorProvider': 'public class BottomUiThemeColorProvider extends ThemeColorProvider {public BottomUiThemeColorProvider(){super(null);}}',
-        'org.chromium.chrome.browser.theme.ThemeUtils': 'public class ThemeUtils {public static android.content.res.ColorStateList getThemedToolbarIconTint(android.content.Context c,int scheme){return android.content.res.ColorStateList.valueOf(android.graphics.Color.BLACK);}}',
+        'org.chromium.chrome.browser.theme.ThemeUtils': 'public class ThemeUtils {public static android.content.res.ColorStateList getThemedToolbarIconTint(android.content.Context c,int scheme){return c.getColorStateList(android.R.color.black);}public static android.content.res.ColorStateList getThemedToolbarIconTintForActivityState(android.content.Context c,int scheme,boolean focused){return getThemedToolbarIconTint(c,scheme);}}',
         'org.chromium.chrome.browser.ui.theme.BrandedColorScheme': 'public @interface BrandedColorScheme {int LIGHT_BRANDED_THEME=0,DARK_BRANDED_THEME=1,INCOGNITO=2,APP_DEFAULT=3;}',
         'org.chromium.chrome.browser.ui.bottombar.BottomBarConfigUtils': 'public class BottomBarConfigUtils {public static boolean isBottomBarEnabled(android.content.Context c){return false;}}',
         'org.chromium.components.browser_ui.styles.ChromeColors': 'public class ChromeColors {public static int getDefaultThemeColor(android.content.Context c,boolean incognito){return incognito?0xff202124:android.graphics.Color.WHITE;}}',
