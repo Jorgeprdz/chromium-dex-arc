@@ -976,11 +976,6 @@ public class ToolbarPhone extends ToolbarLayout
                 ? 0xff202124 : Color.WHITE;
     }
 
-    @Override
-    protected boolean shouldDrawHairline() {
-        return !mArcPhoneFloatingSurface && super.shouldDrawHairline();
-    }
-
     private void updateToolbarBackground(@ColorInt int color) {
         if (mArcPhoneFloatingSurface && !urlHasFocus() && !isLocationBarShownInNtp()) {
             color = getArcPhoneSurfaceColor();
@@ -3187,6 +3182,7 @@ public class ToolbarPhone extends ToolbarLayout
      */
     @Override
     protected boolean shouldDrawHairline() {
+        if (mArcPhoneFloatingSurface) return false;
         // TODO(twellington): Move this hairline state information to ToolbarDataProvider and show
         // hairline when incognito NTP is scrolled.
         return super.shouldDrawHairline()

@@ -5710,7 +5710,7 @@ diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/brow
          if (ChromeFeatureList.sToolbarPhoneAnimationRefactor.isEnabled()) {
              mLocationBar.getContainerView().invalidateOutline();
          }
-@@ -926,7 +942,49 @@
+@@ -926,7 +942,44 @@
          return Math.max(mToolbarSidePaddingForNtp, toolbarButtonsContainerWidth);
      }
 
@@ -5748,11 +5748,6 @@ diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/brow
 +                ? 0xff202124 : Color.WHITE;
 +    }
 +
-+    @Override
-+    protected boolean shouldDrawHairline() {
-+        return !mArcPhoneFloatingSurface && super.shouldDrawHairline();
-+    }
-+
      private void updateToolbarBackground(@ColorInt int color) {
 +        if (mArcPhoneFloatingSurface && !urlHasFocus() && !isLocationBarShownInNtp()) {
 +            color = getArcPhoneSurfaceColor();
@@ -5760,6 +5755,14 @@ diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/brow
          if (mToolbarBackground.getColor() == color) return;
          mToolbarBackground.setColor(color);
          setToolbarHairlineColor(color);
+@@ -3129,6 +3182,7 @@
+      */
+     @Override
+     protected boolean shouldDrawHairline() {
++        if (mArcPhoneFloatingSurface) return false;
+         // TODO(twellington): Move this hairline state information to ToolbarDataProvider and show
+         // hairline when incognito NTP is scrolled.
+         return super.shouldDrawHairline()
 diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java
 --- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java
 +++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java

@@ -607,3 +607,14 @@ Detalle y evidencia: [registro del fallo C++](docs/validation/R5_MOBILE_APPROVED
 - [ ] Matriz visual real completa: PENDIENTE en claro/oscuro (status, omnibar, pill, menús, Hub, IME/foco, fullscreen, insets, seguir sistema, reinicio y transiciones Desktop↔Phone). No declarar READY FOR BUILD todavía.
 
 Checkpoint recuperable y diferencias respecto al render: [R5_FLOATING_MOBILE_LIGHT_DARK.md](docs/validation/R5_FLOATING_MOBILE_LIGHT_DARK.md). Base instalada92c24df/run39781720300; ese éxito no valida los cambios nuevos.
+
+
+## Run39817793524 — fallo de compilación corregido localmente
+
+- [x] Identificado primer error causal: override `ToolbarPhone.shouldDrawHairline()` duplicado por Floating. No fue un timeout; fallo11:26 CDMX y checkpoint/publicación hasta~11:50.
+- [x] Unificado en el método nativo existente, sin cambiar dimensiones ni filtros originales. Nueva prueba javac/Java RED/GREEN; superficie4, aplicación7 y transición17 PASS.
+- [x] Patch/manifest regenerados de forma reproducible; único código de producción distinto de a3841bc: ToolbarPhone.
+- [ ] Build integrado del fix y APK: pendientes. Sin relanzar Actions. La APK anterior permanece instalada y respaldada.
+- [ ] Validar íntegramente checkpoint39817793524-1 antes de una restauración futura; su publicación no equivale a verificar aquí todos sus bytes.
+
+Preferencia de horas: Ciudad de México (`America/Mexico_City`, UTC−6). Detalle: [auditoría Floating y fallo del run](docs/validation/R5_FLOATING_MOBILE_LIGHT_DARK.md#run39817793524--fallo-y-corrección-localizada).
