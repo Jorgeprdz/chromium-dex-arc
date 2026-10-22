@@ -59,3 +59,14 @@ La preparación aislada anterior compilaba el nuevo delegate pero no ToolbarMana
 Logs y receipt: `/workspace/archium-evidence/mobile-approved-implementation/run-39721663072/`. El checkpoint `archium-checkpoint-39721663072-1` fue publicado; receipt declara `checkpoint_verified=true`, `pack_verified=true`, `outcome=BUILD_FAILED`, `recoverable=false`. No es una continuación automática autorizada. La disponibilidad, capacidad, compatibilidad y hashes de bytes se deben volver a validar antes de una futura restauración; no se hizo esa restauración localmente.
 
 No se generó APK ni se instaló actualización. La versión anterior permanece instalada. No se relanzó Actions: otro intento requiere autorización nueva. Candidato corregido pendiente de compilación nativa completa; no se afirma que hayan desaparecido posibles errores posteriores que javac no alcanzó a reportar.
+
+
+## Run39729088298 — corrección de buffer nativo
+
+El intento autorizado con SHA7c4ece8 pasó authorize, preflight y restauración. La suite host de S2 registró399 PASS y `chrome_java__compile_java` terminó correctamente: el defecto Nullable anterior quedó superado en compilación nativa integrada. El primer error causal posterior fue Clang en `static_tab_scene_layer.cc`: dos accesos `ids[i]` sobre `const int32_t ids[]`, rechazados por `-Wunsafe-buffer-usage` tratado como error. El build se detuvo sin APK.
+
+Corrección localizada: `std::array<int32_t, 2>` y su include explícito. No se cambia el algoritmo, no se suprimen warnings y no se modifican flags, GN, toolchain o GPU. El compilador integrado es LLVM24; para verificar la corrección se usó el Clang21.1.8 ya instalado en Termux, sin instalar dependencias.
+
+Evidencia `/workspace/archium-evidence/mobile-approved-implementation/run-39729088298/`: `buffer-red.cc` extrae el método exacto anterior y reproduce ambos errores con `-std=c++23 -Wunsafe-buffer-usage -Werror`; `buffer-green.cc` extrae el método corregido, compila con esos mismos flags y ejecuta aserciones de attach/swap/detach, IDs negativos, pestaña ausente, WebContents ausente y reasignación. Las fronteras WebContents/TabManager/WeakPtr de ese ensayo están simuladas: no es aceptación Blink, ni validación de destrucción real de objetos Chromium. Logs `buffer-red.log`, `buffer-green.log`. Contratos existentes Split5 PASS y Mobile ownership5 PASS. Aplicación del parche7 PASS, transición17 PASS y reproducibilidad de patch/manifest PASS.
+
+Checkpoint publicado `archium-checkpoint-39729088298-1`, commit7c4ece8. Receipt BUILD_FAILED/recoverable=false; checkpoint_verified y pack_verified true. No se descargaron/restauraron todos los bytes localmente. Un intento manual posterior debe verificar nuevamente metadatos, capacidad, compatibilidad y hashes antes de restaurar. No hay relanzamiento automático, APK nueva ni instalación. El candidato completo sigue pendiente de build integrado y aceptación física.

@@ -42,3 +42,8 @@ No modifica UA/Client Hints, preferencia de sitio, ratios, metadatos de parejas,
 - Compilación C++, gates completos, pruebas de propiedad/lifetime nativas y GREEN en dispositivo del nuevo código: **NOT RUN**, respetando la pausa de compilación.
 
 Antes de cualquier build: revisar/ejecutar pruebas nativas de entrada/salida, dos propietarios, swap, navegación, reemplazo y destrucción de WebContents; confirmar API/include/linkage reales. Después de autorización separada, una APK candidata debe pasar la fixture responsive y las dos secuencias50→25→50 y25→75→25 en ambos paneles. Contrastar CSS/visual viewport, media queries, formularios, scroll, selección móvil explícita, zoom de usuario y vuelta a vista individual. No lanzar automáticamente otra compilación.
+
+
+## Integración39729088298: protección de buffers
+
+La compilación integrada alcanzó el nuevo C++ y falló por dos accesos indexados al arreglo C `ids`. Se reemplaza sólo ese contenedor por `std::array<int32_t, 2>`, sin cambiar pertenencia de paneles ni política de viewport. Clang local reproduce RED y acepta GREEN con `-Wunsafe-buffer-usage -Werror`; ensayo funcional con fronteras simuladas PASS. Ver [registro Mobile/build](R5_MOBILE_APPROVED_REDESIGN.md#run39729088298--corrección-de-buffer-nativo). El candidato no tiene todavía una APK ni aceptación responsive física; no se despachó otro workflow.

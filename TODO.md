@@ -585,3 +585,13 @@ Checkpoint y continuación: [R5_MOBILE_APPROVED_REDESIGN.md](docs/validation/R5_
 - Checkpoint publicado39721663072-1, SHA82b37ed; pack verificado por CI, futura restauración requiere gates de integridad/compatibilidad. Receipt BUILD_FAILED/recoverable=false, sin continuación automática.
 
 Evidencia y alcance: [checkpoint Mobile](docs/validation/R5_MOBILE_APPROVED_REDESIGN.md#run39721663072--fallo-java-y-corrección-localizada).
+
+
+## Fallo39729088298 — corrección de buffer C++
+
+- [x] Java integrado supera el defecto Nullable anterior; host399 PASS. Primer fallo posterior: Clang rechaza ids[i] sobre arreglo C en StaticTabSceneLayer.
+- [x] Sustituido por std::array, sin cambios de algoritmo ni supresiones. Clang local RED/GREEN con unsafe-buffer-usage/Werror y ensayo de pertenencia/swap/detach PASS (fronteras simuladas). Split5 y Mobile ownership5 PASS.
+- [ ] APK/build integrado del cambio: pendiente de autorización nueva. No se relanzó Actions ni se instaló nada.
+- Checkpoint publicado39729088298-1, fuente7c4ece8; gates de integridad/compatibilidad obligatorios antes de una futura restauración.
+
+Detalle y evidencia: [registro del fallo C++](docs/validation/R5_MOBILE_APPROVED_REDESIGN.md#run39729088298--corrección-de-buffer-nativo).

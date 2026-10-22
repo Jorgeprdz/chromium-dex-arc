@@ -3366,10 +3366,11 @@ diff --git a/chrome/browser/BUILD.gn b/chrome/browser/BUILD.gn
 diff --git a/chrome/browser/android/compositor/scene_layer/static_tab_scene_layer.cc b/chrome/browser/android/compositor/scene_layer/static_tab_scene_layer.cc
 --- a/chrome/browser/android/compositor/scene_layer/static_tab_scene_layer.cc
 +++ b/chrome/browser/android/compositor/scene_layer/static_tab_scene_layer.cc
-@@ -4,8 +4,12 @@
+@@ -4,8 +4,13 @@
 
  #include "chrome/browser/android/compositor/scene_layer/static_tab_scene_layer.h"
 
++#include <array>
 +#include <cmath>
 +#include <memory>
 +#include <set>
@@ -3379,7 +3380,7 @@ diff --git a/chrome/browser/android/compositor/scene_layer/static_tab_scene_laye
  #include "cc/input/android/offset_tag_android.h"
  #include "cc/slim/filter.h"
  #include "cc/slim/layer.h"
-@@ -14,6 +18,7 @@
+@@ -14,6 +19,7 @@
  #include "chrome/browser/android/compositor/tab_content_manager.h"
  #include "chrome/browser/android/tab_android.h"
  #include "content/public/browser/web_contents.h"
@@ -3387,7 +3388,7 @@ diff --git a/chrome/browser/android/compositor/scene_layer/static_tab_scene_laye
  #include "ui/android/view_android.h"
 
  // Must come after all headers that specialize FromJniType() / ToJniType().
-@@ -23,6 +28,12 @@
+@@ -23,6 +29,12 @@
 
  namespace android {
  namespace {
@@ -3400,7 +3401,7 @@ diff --git a/chrome/browser/android/compositor/scene_layer/static_tab_scene_laye
 
  static bool LayerDraws(scoped_refptr<cc::slim::Layer> layer) {
    if (!layer.get() || layer->opacity() == 0.0f ||
-@@ -43,6 +54,53 @@
+@@ -43,6 +55,53 @@
  }
 
  }  // namespace
@@ -3454,7 +3455,7 @@ diff --git a/chrome/browser/android/compositor/scene_layer/static_tab_scene_laye
 
  StaticTabSceneLayer::StaticTabSceneLayer(JNIEnv* env,
                                           const JavaRef<jobject>& jobj)
-@@ -50,7 +108,40 @@
+@@ -50,7 +109,40 @@
        tab_content_manager_(nullptr),
        background_color_(SK_ColorWHITE) {}
 
@@ -3469,7 +3470,7 @@ diff --git a/chrome/browser/android/compositor/scene_layer/static_tab_scene_laye
 +
 +void StaticTabSceneLayer::UpdateArcSplitViewportPolicy() {
 +  auto previous = arc_viewport_contents_;
-+  const int32_t ids[] = {arc_left_id_, arc_right_id_};
++  const std::array<int32_t, 2> ids = {arc_left_id_, arc_right_id_};
 +  for (size_t i = 0; i < arc_viewport_contents_.size(); ++i) {
 +    TabAndroid* tab = tab_content_manager_ && ids[i] >= 0
 +                          ? tab_content_manager_->GetTab(ids[i])
@@ -3496,7 +3497,7 @@ diff --git a/chrome/browser/android/compositor/scene_layer/static_tab_scene_laye
 
  bool StaticTabSceneLayer::ShouldShowBackground() {
    scoped_refptr<cc::slim::Layer> root = layer_->RootLayer();
-@@ -77,6 +168,36 @@
+@@ -77,6 +169,36 @@
      layer_->AddChild(content_layer_->layer());
    }
 
@@ -3533,7 +3534,7 @@ diff --git a/chrome/browser/android/compositor/scene_layer/static_tab_scene_laye
    if (id != -1 && can_use_live_layer) {
      // StaticLayout may not know that the live layer cannot draw. Ensure it gets
      // a thumbnail if needed.
-@@ -107,6 +228,22 @@
+@@ -107,6 +229,22 @@
    content_layer_->layer()->SetOffsetTag(tag);
  }
 

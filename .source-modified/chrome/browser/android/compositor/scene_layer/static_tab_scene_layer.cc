@@ -4,6 +4,7 @@
 
 #include "chrome/browser/android/compositor/scene_layer/static_tab_scene_layer.h"
 
+#include <array>
 #include <cmath>
 #include <memory>
 #include <set>
@@ -118,7 +119,7 @@ StaticTabSceneLayer::~StaticTabSceneLayer() {
 
 void StaticTabSceneLayer::UpdateArcSplitViewportPolicy() {
   auto previous = arc_viewport_contents_;
-  const int32_t ids[] = {arc_left_id_, arc_right_id_};
+  const std::array<int32_t, 2> ids = {arc_left_id_, arc_right_id_};
   for (size_t i = 0; i < arc_viewport_contents_.size(); ++i) {
     TabAndroid* tab = tab_content_manager_ && ids[i] >= 0
                           ? tab_content_manager_->GetTab(ids[i])
