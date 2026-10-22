@@ -72,6 +72,7 @@ class HostGateCoverageTests(unittest.TestCase):
             "org.chromium.chrome.browser.arc.ArcColorPickerTest.*",
             "org.chromium.chrome.browser.arc.ArcFrameDispatchTest.*",
             "org.chromium.chrome.browser.arc.ArcNavigationControlsTest.*",
+            "org.chromium.chrome.browser.arc.ArcPhoneNavigationTest.*",
             "org.chromium.chrome.browser.arc.ArcCommandBarTest.*",
             "org.chromium.chrome.browser.arc.ArcSplitStateTest.*",
             "org.chromium.chrome.browser.arc.ArcSplitViewportPolicyTest.*",

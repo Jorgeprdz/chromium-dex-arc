@@ -564,3 +564,14 @@ Gates finales de esta tanda: host389 PASS; split144 PASS; entrada omnibox26 PASS
 - [ ] Compilar/probar C++ y verificar el candidato físicamente. **NO COMPILAR TODAVÍA**, instrucción vigente del usuario; no solicitar ni disparar Actions en esta tanda.
 
 Punto exacto de continuación, evidencia y limitaciones: [R5_SPLIT_LAYOUT_VIEWPORT_FOLLOWUP.md](docs/validation/R5_SPLIT_LAYOUT_VIEWPORT_FOLLOWUP.md).
+
+
+## Mobile — navegación y menú aprobados, 22-oct-2026
+
+- [x] Implementación local: reemplazar el contenido de la barra inferior nativa por cuatro acciones; conservar omnibar y título superiores. Un solo slot y una sola vista compartida con Hub.
+- [x] Menú nativo bottom sheet sin editor inferior; acciones reales Chromium, zoom, pin, descargas y acceso al menú completo. Superficies suaves sin contornos gruesos.
+- [x] Robolectric30 PASS, ownership4 PASS, gates2 PASS, legacy5 PASS, split5 PASS y preparación aislada SDK37.2 PASS. Alcance y fronteras simuladas documentados.
+- [ ] Compilación completa Java/C++ y aceptación física Mobile/desktop/transiciones: NOT RUN. El candidato Split View anterior permanece pendiente de aceptación Blink/dispositivo.
+- [ ] APK y Actions: NO LANZADOS; se mantiene «no compiles todavía». No eliminar checkpoints ni hacer clean.
+
+Checkpoint y continuación: [R5_MOBILE_APPROVED_REDESIGN.md](docs/validation/R5_MOBILE_APPROVED_REDESIGN.md). Esta aprobación reemplaza únicamente la decisión anterior sobre presentación inferior móvil; los overlays Mobile antiguos siguen eliminados.

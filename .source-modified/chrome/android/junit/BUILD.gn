@@ -436,6 +436,7 @@ if (is_android) {
       "src/org/chromium/chrome/browser/arc/ArcCompactOmniboxTest.java",
       "src/org/chromium/chrome/browser/arc/ArcFrameDispatchTest.java",
       "src/org/chromium/chrome/browser/arc/ArcNavigationControlsTest.java",
+      "src/org/chromium/chrome/browser/arc/ArcPhoneNavigationTest.java",
       "src/org/chromium/chrome/browser/arc/ArcCommandBarTest.java",
       "src/org/chromium/chrome/browser/arc/ArcSplitStateTest.java",
       "src/org/chromium/chrome/browser/arc/ArcSplitViewportPolicyTest.java",

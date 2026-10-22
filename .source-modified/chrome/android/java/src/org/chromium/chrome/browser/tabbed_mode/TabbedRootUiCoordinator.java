@@ -1459,7 +1459,8 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
                     .addTouchEventObserver(mDragDropTouchObserver);
         }
 
-        if (!DeviceFormFactor.isNonMultiDisplayContextOnTablet(mActivity)) {
+        if (!org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.isDesktopWindow(mActivity)
+                || !DeviceFormFactor.isNonMultiDisplayContextOnTablet(mActivity)) {
             // mToolbarManager is initialized in initializeToolbar() which happens during
             // inflation.
             assumeNonNull(mToolbarManager).enableBottomControls();

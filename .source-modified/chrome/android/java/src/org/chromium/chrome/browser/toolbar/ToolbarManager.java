@@ -77,6 +77,7 @@ import org.chromium.chrome.browser.bookmarks.BookmarkModel;
 import org.chromium.chrome.browser.bookmarks.BookmarkModelObserver;
 import org.chromium.chrome.browser.bookmarks.TabBookmarker;
 import org.chromium.chrome.browser.bottombar.BottomBarContainerCoordinator;
+import org.chromium.chrome.browser.arc.ArcPhoneNavigation;
 import org.chromium.chrome.browser.browser_controls.BottomControlsStacker;
 import org.chromium.chrome.browser.browser_controls.BottomControlsStacker.LayerType;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsSizer;
@@ -407,6 +408,9 @@ public class ToolbarManager
     private final AppMenuDelegate mAppMenuDelegate;
     private final CompositorViewHolder mCompositorViewHolder;
     private final BottomControlsStacker mBottomControlsStacker;
+    private @Nullable ArcPhoneNavigation mArcPhoneNavigation;
+    private @Nullable ArcPhoneNavigation.Host mArcPhoneHost;
+    private @Nullable Callback<Integer> mArcPhoneCountObserver;
     private final TopControlsStacker mTopControlsStacker;
     private final BrowserControlsSizer mBrowserControlsSizer;
     private final FullscreenManager mFullscreenManager;
@@ -2524,8 +2528,19 @@ public class ToolbarManager
         return ((LocationBarCoordinator) mLocationBar).getUrlBarViewRectProvider();
     }
 
+    /** Native actions are supplied after the tabbed Activity initializes its models. */
+    public void configureArcPhoneNavigation(ArcPhoneNavigation.Host host) {
+        mArcPhoneHost = host;
+        if (mArcPhoneNavigation != null) mArcPhoneNavigation.bind(host);
+    }
+
     /** Enable the bottom controls. */
     public void enableBottomControls() {
+        if (!org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.isDesktopWindow(mActivity)) {
+            // Replace the native app bar delegate, never stack an additional app/root bar.
+            enableBottomBar();
+            return;
+        }
         enableTabGroupUiControls();
         if (BottomBarConfigUtils.isBottomBarEnabled(mActivity)) {
             enableBottomBar();
@@ -2605,26 +2620,43 @@ public class ToolbarManager
         OneshotSupplier<String> countrySupplier =
                 mCountrySupplier != null ? mCountrySupplier : new OneshotSupplierImpl<>();
 
-        BottomBarContainerCoordinator bottomBarContainerCoordinator =
-                new BottomBarContainerCoordinator(
-                        bottomAppBarContainer.findViewById(R.id.bottom_container_slot),
-                        mBottomControlsStacker::requestLayerUpdate,
-                        assumeNonNull(mActionRegistry),
-                        mCurrentTabSupplier,
-                        mAppThemeColorProvider,
-                        mHomepageEnabledSupplier,
-                        mProfileSupplier,
-                        countrySupplier,
-                        mOmniboxFocusStateSupplier,
-                        mModalDialogManagerSupplier,
-                        mAppMenuCoordinatorSupplier,
-                        mLayoutManager);
-        bottomBarContainerOneshotSupplier.set(bottomBarContainerCoordinator);
+        boolean arcPhone = !org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.isDesktopWindow(mActivity);
+        if (arcPhone) {
+            mArcPhoneNavigation = new ArcPhoneNavigation(
+                    bottomAppBarContainer.findViewById(R.id.bottom_container_slot), mBottomSheetController,
+                    BottomBarUtils.getBottomBarHeight(mActivity));
+            if (mArcPhoneHost != null) mArcPhoneNavigation.bind(mArcPhoneHost);
+            bottomBarContainerOneshotSupplier.set(mArcPhoneNavigation);
+            if (mBottomBarHostManager != null) {
+                mBottomBarHostManager.registerBottomBar(
+                        mArcPhoneNavigation.getBottomBar(), mArcPhoneNavigation::attachBottomBarView);
+            }
+            mArcPhoneCountObserver = ignored -> {
+                if (mArcPhoneNavigation != null) mArcPhoneNavigation.refresh();
+            };
+            mOverridableTabCount.getObservable().addSyncObserver(mArcPhoneCountObserver);
+        } else {
+            BottomBarContainerCoordinator bottomBarContainerCoordinator =
+                    new BottomBarContainerCoordinator(
+                            bottomAppBarContainer.findViewById(R.id.bottom_container_slot),
+                            mBottomControlsStacker::requestLayerUpdate,
+                            assumeNonNull(mActionRegistry),
+                            mCurrentTabSupplier,
+                            mAppThemeColorProvider,
+                            mHomepageEnabledSupplier,
+                            mProfileSupplier,
+                            countrySupplier,
+                            mOmniboxFocusStateSupplier,
+                            mModalDialogManagerSupplier,
+                            mAppMenuCoordinatorSupplier,
+                            mLayoutManager);
+            bottomBarContainerOneshotSupplier.set(bottomBarContainerCoordinator);
 
-        if (mBottomBarHostManager != null) {
-            mBottomBarHostManager.registerBottomBar(
-                    bottomBarContainerCoordinator.getBottomBar(),
-                    bottomBarContainerCoordinator::attachBottomBarView);
+            if (mBottomBarHostManager != null) {
+                mBottomBarHostManager.registerBottomBar(
+                        bottomBarContainerCoordinator.getBottomBar(),
+                        bottomBarContainerCoordinator::attachBottomBarView);
+            }
         }
 
         var bottomAppBarCoordinator =
@@ -3052,9 +3084,15 @@ public class ToolbarManager
             mTabGroupUiBottomControlsCoordinatorSupplier = null;
         }
 
+        if (mArcPhoneCountObserver != null) {
+            mOverridableTabCount.getObservable().removeObserver(mArcPhoneCountObserver);
+            mArcPhoneCountObserver = null;
+        }
+        mArcPhoneHost = null;
         BottomControlsCoordinator bottomAppBarCoordinator = mBottomAppBarCoordinatorSupplier.get();
         if (bottomAppBarCoordinator != null) {
             bottomAppBarCoordinator.destroy();
+            mArcPhoneNavigation = null;
             mBottomAppBarCoordinatorSupplier = null;
         }
 
@@ -3318,6 +3356,10 @@ public class ToolbarManager
      */
     @Override
     public void onThemeColorChanged(int color, boolean shouldAnimate) {
+        if (mArcPhoneNavigation != null) {
+            mArcPhoneNavigation.refresh();
+            mBottomControlsStacker.requestLayerUpdate(false);
+        }
         if (!mShouldUpdateToolbarPrimaryColor) return;
 
         boolean colorChanged = mCurrentThemeColor != color;
@@ -3658,6 +3700,7 @@ public class ToolbarManager
 
         updateButtonStatus();
         mCurrentTabSupplier.set(tab);
+        if (mArcPhoneNavigation != null) mArcPhoneNavigation.refresh();
         mFormFieldFocusedSupplier.onWebContentsChanged(tab == null ? null : tab.getWebContents());
     }
 

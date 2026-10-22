@@ -329,6 +329,13 @@ def main():
         definitions['org.chromium.chrome.browser.tab.TabHidingType'] = 'public class TabHidingType {public static final int CHANGED_TABS=0,ACTIVITY_HIDDEN=1;}'
         definitions['org.chromium.components.embedder_support.view.ContentView'] = 'public class ContentView extends android.widget.FrameLayout {public ContentView(android.content.Context c){super(c);} public int getContentOffsetXPix(){return 0;} public void setContentOffsetXPix(int x){}}'
         definitions['org.chromium.content_public.browser.NavigationController'] = 'public interface NavigationController {boolean getUseDesktopUserAgent(); void setUseDesktopUserAgent(boolean override,boolean reloadOnChange,boolean skipOnInitialNavigation);}'
+        phone_spec = importlib.util.spec_from_file_location(
+            'phone_native_boundaries', ROOT / 'tests/phone_native_boundaries.py')
+        phone_module = importlib.util.module_from_spec(phone_spec)
+        phone_spec.loader.exec_module(phone_module)
+        phone_definitions = phone_module.definitions()
+        phone_definitions.pop('org.chromium.chrome.browser.profiles.Profile')
+        definitions.update(phone_definitions)
         for annotation in ['Nullable', 'NullMarked', 'NullUnmarked']:
             definitions['org.chromium.build.annotations.' + annotation] = '@java.lang.annotation.Target({java.lang.annotation.ElementType.TYPE_USE,java.lang.annotation.ElementType.TYPE,java.lang.annotation.ElementType.METHOD,java.lang.annotation.ElementType.PACKAGE}) public @interface ' + annotation + ' {}'
         # Nullable is strictly TYPE_USE in Chromium; declaration targets can mask javac errors.

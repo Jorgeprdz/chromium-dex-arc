@@ -1526,12 +1526,101 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
                     mUndoBarPopupController,
                     contextMenuPopulatorFactory,
                     new ChromeSelectionDropdownMenuDelegate());
+            configureArcPhoneNavigation(toolbarManager);
 
             // TODO(crbug.com/40828084): Fix this assert which is tripping on unrelated
             // tests.
             // assert !(mOverviewModeController != null
             //         && mOverviewModeController.overviewVisible());
         }
+    }
+
+    private void configureArcPhoneNavigation(org.chromium.chrome.browser.toolbar.ToolbarManager toolbar) {
+        if (org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.isDesktopWindow(this)) return;
+        toolbar.configureArcPhoneNavigation(new org.chromium.chrome.browser.arc.ArcPhoneNavigation.Host() {
+            public @Nullable Object pageToken() { return getActivityTab(); }
+            public String domain() {
+                Tab tab = getActivityTab();
+                String domain = tab == null ? null : android.net.Uri.parse(tab.getUrl().getSpec()).getHost();
+                return domain == null ? getString(R.string.app_name) : domain;
+            }
+            public android.graphics.@Nullable Bitmap favicon() {
+                Tab tab = getActivityTab();
+                return tab == null ? null : org.chromium.chrome.browser.tab.TabFavicon.getBitmap(tab);
+            }
+            public int tabCount() { return getCurrentTabModel().getCount(); }
+            public boolean webPage() {
+                Tab tab = getActivityTab();
+                if (tab == null || tab.isDestroyed()) return false;
+                var contents=tab.getWebContents();
+                if(contents==null || contents.isDestroyed())return false;
+                String scheme = tab.getUrl().getScheme();
+                return "https".equals(scheme) || "http".equals(scheme);
+            }
+            public boolean pinned() { Tab tab=getActivityTab();return tab!=null && tab.getIsPinned(); }
+            public boolean desktopSite() {
+                Tab tab=getActivityTab();
+                if(tab==null || !webPage())return false;
+                var contents=tab.getWebContents();
+                return contents!=null && contents.getNavigationController().getUseDesktopUserAgent();
+            }
+            public int zoomPercent() {
+                if (!webPage()) return 100;
+                Tab tab=getActivityTab();
+                if(tab==null)return 100;
+                var contents=tab.getWebContents();
+                if(contents==null || contents.isDestroyed())return 100;
+                double factor = org.chromium.content_public.browser.HostZoomMap.getZoomLevel(contents);
+                return (int)org.chromium.components.browser_ui.accessibility.PageZoomUtils.getReadableZoomLevel(factor);
+            }
+            public int surface() {
+                if (getCurrentTabModel().isIncognito()) return 0xff202124;
+                android.util.TypedValue value=new android.util.TypedValue();
+                if (!getTheme().resolveAttribute(android.R.attr.colorBackground,value,true)) return android.graphics.Color.WHITE;
+                return value.resourceId!=0 ? getColor(value.resourceId) : value.data;
+            }
+            public void zoom(int direction) {
+                if (!webPage()) return;
+                Tab tab=getActivityTab();
+                if(tab==null)return;
+                var contents=tab.getWebContents();
+                if(contents==null || contents.isDestroyed())return;
+                double current=org.chromium.content_public.browser.HostZoomMap.getZoomLevel(contents),next=current;
+                double[] steps=org.chromium.content_public.browser.HostZoomMap.AVAILABLE_ZOOM_FACTORS;
+                if (direction>0) {
+                    for(double value:steps)if(value>current+.001){next=value;break;}
+                } else {
+                    for(int i=steps.length-1;i>=0;i--)if(steps[i]<current-.001){next=steps[i];break;}
+                }
+                if(next!=current)org.chromium.content_public.browser.HostZoomMap.setZoomLevel(contents,next);
+            }
+            public void action(int action) {
+                int id;
+                switch(action) {
+                    case org.chromium.chrome.browser.arc.ArcPhoneNavigation.HOME: id=R.id.homepage_menu_id;break;
+                    case org.chromium.chrome.browser.arc.ArcPhoneNavigation.NEW_TAB:
+                        id=getCurrentTabModel().isIncognito()?R.id.new_incognito_tab_menu_id:R.id.new_tab_menu_id;break;
+                    case org.chromium.chrome.browser.arc.ArcPhoneNavigation.TABS: showOverview();return;
+                    case org.chromium.chrome.browser.arc.ArcPhoneNavigation.PIN:
+                        if(webPage()) {
+                            Tab tab=getActivityTab();
+                            if(tab==null || tab.isDestroyed() || getCurrentTabModel().getTabById(tab.getId())!=tab)return;
+                            if(tab.getIsPinned())getCurrentTabModel().unpinTab(tab.getId());
+                            else getCurrentTabModel().pinTab(tab.getId(),true);
+                        }
+                        return;
+                    case org.chromium.chrome.browser.arc.ArcPhoneNavigation.FIND: if(!webPage())return;id=R.id.find_in_page_id;break;
+                    case org.chromium.chrome.browser.arc.ArcPhoneNavigation.SHARE: if(!webPage())return;id=R.id.share_menu_id;break;
+                    case org.chromium.chrome.browser.arc.ArcPhoneNavigation.FAVORITE: if(!webPage())return;id=R.id.bookmark_this_page_id;break;
+                    case org.chromium.chrome.browser.arc.ArcPhoneNavigation.DESKTOP_SITE: if(!webPage())return;id=R.id.request_desktop_site_id;break;
+                    case org.chromium.chrome.browser.arc.ArcPhoneNavigation.SITE_INFO: if(!webPage())return;id=R.id.info_menu_id;break;
+                    case org.chromium.chrome.browser.arc.ArcPhoneNavigation.DOWNLOADS: id=R.id.downloads_menu_id;break;
+                    case org.chromium.chrome.browser.arc.ArcPhoneNavigation.MORE: id=R.id.show_menu;break;
+                    default: return;
+                }
+                getMenuOrKeyboardActionController().onMenuOrKeyboardAction(id,false);
+            }
+        });
     }
 
     private void maybeCreateIncognitoTabSnapshotController() {

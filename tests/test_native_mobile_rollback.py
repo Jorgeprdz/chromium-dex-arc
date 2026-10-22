@@ -1,4 +1,4 @@
-"""Phone presentation must remain owned by native Chromium after selective rollback."""
+"""Retired Mobile overlays stay removed; the approved replacement uses native containers."""
 from pathlib import Path
 import unittest
 ROOT=Path(__file__).resolve().parents[1]
