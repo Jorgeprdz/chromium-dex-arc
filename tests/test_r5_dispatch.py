@@ -6,7 +6,7 @@ class R5DispatchTests(unittest.TestCase):
  def invoke(self, **changes):
   with tempfile.TemporaryDirectory() as d:
    env={**os.environ,'GITHUB_ACTIONS':'true','GITHUB_REPOSITORY':'Jorgeprdz/chromium-dex-arc',
-        'GITHUB_REF_NAME':'assistant/archium-r5-final-mobile','GITHUB_SHA':'a'*40,
+        'GITHUB_REF_NAME':'assistant/archium-r5-desktop-native-mobile','GITHUB_SHA':'a'*40,
         'ARCHIUM_EXPECTED_SHA':'a'*40,'RUNNER_TEMP':d,'GITHUB_WORKSPACE':str(ROOT),
         'ARCHIUM_SOURCE_TAG':'archium-checkpoint-38165289963-1',
         'ARCHIUM_SOURCE_COMMIT':'dcbd868ea42ffd0991c01c2872adce01316a9768'}

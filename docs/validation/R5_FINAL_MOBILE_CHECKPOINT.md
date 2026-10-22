@@ -1,5 +1,7 @@
 # R5 Desktop final + Mobile — checkpoint acotado
 
+> Estado vigente (22-oct-2026): en `assistant/archium-r5-desktop-native-mobile` se retira la UI Mobile personalizada y se conservan Desktop y sus datos. Los apartados Mobile siguientes son históricos. Ver [auditoría, pruebas y aceptación pendiente](R5_DESKTOP_NATIVE_MOBILE.md). No retomar el rediseño Mobile.
+
 Base: a2ad646f4dabd96a1ba82dc246b8184a708d32b4, instalada por run 39562759522.
 Rama: assistant/archium-r5-final-mobile, worktree /workspace/Archium-R5-final-mobile.
 Chromium: cfd94726b7b5fb48aedcc32662f2f3fbdbadec35, sin cambios de motor, GN, toolchain, dependencias ni branding.

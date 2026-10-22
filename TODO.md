@@ -538,3 +538,18 @@ Intentos remotos consumidos: **1/1**. Otro intento incremental requiere autoriza
 El usuario autorizó otro único intento con «go». Run [39634608887](https://github.com/Jorgeprdz/chromium-dex-arc/actions/runs/39634608887), código `b51d9b0494a379a58b808d3b4fbf5b3566890fb0`, rama `assistant/archium-r5-final-mobile`. Estado al registrar: in_progress; resultado/APK pendientes. Se reutiliza `archium-checkpoint-39551668868-1`; preflight completo habilitado y QEMU desactivado. Autorización nueva: **1/1 intento consumido**, sin relanzamientos automáticos.
 
 Monitor e instalador: sesión Termux independiente, estado `/workspace/.local/state/archium-r5-final-mobile-39634608887/`. Refresco 600s; instalación únicamente después de gates, identidad del run, checksum, firma, package/ABI, versión y dispositivo, con comprobación posterior de bytes instalados. Evidencia del fallo anterior conservada. No se declara APK ni aceptación física por lanzar este run.
+
+## Desktop fixes + rollback Mobile — 22-oct-2026
+
+Nueva rama `assistant/archium-r5-desktop-native-mobile`, base verificada33e79a5. No Actions en esta tarea; el build requiere autorización nueva.
+
+- [x] P0 candidato local: sincronizar los dos WebContents al terminar el layout; RED/GREEN de callback y secuencias, sin UA/zoom/recargas. Aceptación de Blink aún abierta.
+- [x] P1: mismo ArcCommandBar desde primer clic lateral/superior; preservar editor, navegación y atajos.
+- [x] P2: clic derecho/long press, quitar de Space y cerrar nativo separados, tooltip y guard para filas borradas; prueba de ausencia de pins espontáneos por restore/Space.
+- [x] P3: retirar ArcMobileControls/HomeView, integraciones Activity/Root UI, recursos/gates/tests huérfanos y opciones exclusivas del adapter; fuente propia sólo en Desktop. Native Activity coincide con la versión previa a Mobile.
+- [ ] P4 aceptación física: viewport/escala/media queries/scroll/formulario/reloads; primer clic y atajos; quitar/cerrar/reiniciar; toolbar/NTP/teclado/insets Phone y Desktop↔Phone.
+- [ ] P5: autorizar un único build incremental tras entregar auditoría local. Checkpoint39551668868-1 conserva cuatro grupos compatibles; bytes/capacidad se verifican durante restauración CI.
+
+Evidencia y resultados exactos: [auditoría Desktop + Mobile nativo](docs/validation/R5_DESKTOP_NATIVE_MOBILE.md). Los PASS locales no cierran las casillas de dispositivo.
+
+Gates finales de esta tanda: host389 PASS; split144 PASS; entrada omnibox26 PASS; Command Bar18 PASS; colecciones28 PASS; transiciones12 PASS; adapter12 escenarios PASS; rollback5 PASS; preparación SDK37.2 y reproducibilidad PASS. Estado del candidato: **READY FOR BUILD**, con aceptación física P4 pendiente y sin Actions lanzadas.

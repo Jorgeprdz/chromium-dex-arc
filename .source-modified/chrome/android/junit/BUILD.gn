@@ -444,7 +444,6 @@ if (is_android) {
       "src/org/chromium/chrome/browser/arc/ArcSplitViewCoordinatorTest.java",
       "src/org/chromium/chrome/browser/arc/ArcOmniboxPlacementTest.java",
       "src/org/chromium/chrome/browser/arc/ArcCollectionsFocusTest.java",
-      "src/org/chromium/chrome/browser/arc/ArcMobileControlsTest.java",
       "src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearanceTest.java",
       "src/org/chromium/chrome/browser/toolbar/top/ArcToolbarReparentingTest.java",
       "src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/ArcTabSelectionTest.java",

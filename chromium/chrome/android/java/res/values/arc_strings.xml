@@ -35,6 +35,9 @@
     <string name="arc_name">Nombre</string>
     <string name="arc_collection_error">No se pudo actualizar la colección</string>
     <string name="arc_remove_entry">Quitar de la barra lateral</string>
+    <string name="arc_remove_from_space">Quitar de %1$s</string>
+    <string name="arc_close_tab">Cerrar pestaña</string>
+    <string name="arc_pinned_entry_actions">Clic derecho o pulsación prolongada para quitar la fijación o cerrar la pestaña</string>
     <string name="arc_move_to_folder">Mover a carpeta</string>
     <string name="arc_folder_root">Sin carpeta</string>
     <string name="arc_spaces">Espacios</string>
@@ -82,16 +85,4 @@
     <string name="arc_split_controls">Arrastra para redimensionar; pulsa para ver opciones</string>
     <string name="arc_split_swap">Intercambiar paneles</string>
     <string name="arc_split_dialog_open">Cierra el diálogo actual antes de cambiar la vista.</string>
-    <string name="arc_mobile_home">Inicio</string>
-    <string name="arc_mobile_tabs">Pestañas</string>
-    <string name="arc_mobile_menu">Menú</string>
-    <string name="arc_mobile_site_info">Información del sitio</string>
-    <string name="arc_mobile_find">Buscar en la página</string>
-    <string name="arc_mobile_share">Compartir</string>
-    <string name="arc_mobile_translate">Traducir</string>
-    <string name="arc_mobile_desktop_site">Sitio de escritorio</string>
-    <string name="arc_mobile_zoom">Zoom</string>
-    <string name="arc_mobile_more">Más herramientas</string>
-    <string name="arc_mobile_recent">Recientes en esta pestaña</string>
-    <string name="arc_mobile_settings">Configuración</string>
 </resources>

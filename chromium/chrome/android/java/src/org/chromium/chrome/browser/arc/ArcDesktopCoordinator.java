@@ -647,9 +647,7 @@ public final class ArcDesktopCoordinator {
 
     private boolean openAddressCommandBar() {
         if (mDestroyed || mCommandBar == null || mCommandBar.isShowing()
-                || mFocusAddressBar == null || !ArcDesktopAppearance.isDesktopWindow(mActivity)
-                || ArcDesktopAppearance.getAddressBarPosition(mActivity)
-                        != ArcDesktopAppearance.ADDRESS_SIDEBAR) return false;
+                || mFocusAddressBar == null || !ArcDesktopAppearance.isDesktopWindow(mActivity)) return false;
         // Finish a native popover before moving its existing holder, as in the Ctrl+T path.
         mEndAddressInput.run();
         mCompactOmnibox.restore();

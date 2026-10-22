@@ -100,6 +100,17 @@ public final class ArcCollectionsController {
         mTabs.onArcStateChanged(draft);
     }
 
+    public boolean canClose(String id) {
+        Integer tabId = state().entry(id).tabId;
+        return tabId != null && mTabs.exists(tabId);
+    }
+
+    /** Closing is a native undoable operation, independent of removing the saved entry. */
+    public void close(String id) {
+        Integer tabId = state().entry(id).tabId;
+        if (tabId != null) mActions.closeTab(tabId);
+    }
+
     public void move(String id, String space, String folder, int index) {
         ArcSidebarState draft = state();
         draft.move(id, space, folder, index);

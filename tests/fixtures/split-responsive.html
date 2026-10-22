@@ -1,0 +1,66 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Archium — fixture responsive</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 12px; font: 16px sans-serif; }
+  #probe { --layout: compact; display: grid; grid-template-columns: 1fr; gap: 8px; }
+  #probe > div { background: #dcecff; color: #102840; padding: 12px; min-width: 0; }
+  @media (min-width: 380px) { #probe { --layout: medium; grid-template-columns: repeat(2, 1fr); } }
+  @media (min-width: 700px) { #probe { --layout: wide; grid-template-columns: repeat(3, 1fr); } }
+  input { max-width: 100%; }
+  pre { white-space: pre-wrap; overflow-wrap: anywhere; }
+  #scroll { height: 130vh; background: linear-gradient(#eee, #9bb); }
+</style>
+<h1>Viewport independiente</h1>
+<p>Sin recargar: 50 → 25 → 50 → 25 → 75 → 25. Repetir en el otro panel.</p>
+<div id="probe"><div>Uno</div><div>Dos</div><div>Tres</div></div>
+<form id="form"><label>Valor que debe conservarse <input id="value" autocomplete="off"></label><button>Probar formulario</button></form>
+<button id="mark">Registrar etapa</button><button id="save">Exportar JSON</button>
+<pre id="metrics"></pre><div id="scroll">Zona para comprobar scroll</div>
+<script>
+// Instrumentation confined to this test document; never injected into visited sites.
+const trace = [], documentId = crypto.randomUUID(), initialDpr = devicePixelRatio;
+const value = document.querySelector('#value'), probe = document.querySelector('#probe');
+let stage = 0, submits = 0;
+function record(event) {
+  const row = {event, stage, documentId, time: performance.now(), innerWidth, innerHeight,
+    clientWidth: document.documentElement.clientWidth, scrollWidth: document.documentElement.scrollWidth,
+    scrollX, scrollY, devicePixelRatio, visualWidth: visualViewport?.width,
+    visualHeight: visualViewport?.height, visualScale: visualViewport?.scale,
+    medium: matchMedia('(min-width: 380px)').matches, wide: matchMedia('(min-width: 700px)').matches,
+    layout: getComputedStyle(probe).getPropertyValue('--layout').trim(), value: value.value, submits};
+  row.errors = [];
+  const expected = innerWidth >= 700 ? 'wide' : innerWidth >= 380 ? 'medium' : 'compact';
+  if (row.layout !== expected) row.errors.push('CSS breakpoint does not match innerWidth');
+  if (row.scrollWidth > row.clientWidth + 1) row.errors.push('Horizontal overflow');
+  if (row.visualScale != null && Math.abs(row.visualScale - 1) > .02) row.errors.push('Unexpected visual scale');
+  if (devicePixelRatio !== initialDpr) row.errors.push('DPR changed during fixed-display test');
+  if (event === 'checkpoint' && stage === 5) {
+    const marks = [...trace.filter(r => r.event === 'checkpoint'), row];
+    const right = new URLSearchParams(location.search).get('side') === 'right';
+    const ratios = right ? [.5, .75, .5, .75, .25, .75] : [.5, .25, .5, .25, .75, .25];
+    const available = (marks[4].clientWidth - marks[1].clientWidth) / (ratios[4] - ratios[1]);
+    const inset = available * .5 - marks[0].clientWidth;
+    if (available <= 0 || inset < -2 || inset > 40) row.errors.push('Pane viewport did not track the divider');
+    if (marks.some((r, i) => Math.abs(r.clientWidth - (available * ratios[i] - inset)) > 2))
+      row.errors.push('Viewport sequence is not reversible');
+    if (marks.some(r => r.value !== marks[0].value || r.submits !== marks[0].submits))
+      row.errors.push('Form state changed during resize');
+    if (marks.some(r => r.documentId !== documentId)) row.errors.push('Document replaced during resize');
+  }
+  trace.push(row); document.querySelector('#metrics').textContent = JSON.stringify(row, null, 2);
+}
+addEventListener('resize', () => requestAnimationFrame(() => record('resize')));
+visualViewport?.addEventListener('resize', () => record('visual-resize'));
+addEventListener('scroll', () => record('scroll'), {passive: true});
+document.querySelector('#form').onsubmit = event => {event.preventDefault(); submits++; record('submit');};
+document.querySelector('#mark').onclick = () => {record('checkpoint'); stage++;};
+document.querySelector('#save').onclick = () => {
+  const url = URL.createObjectURL(new Blob([JSON.stringify(trace, null, 2)], {type: 'application/json'}));
+  const a = document.createElement('a'); a.href = url; a.download = 'archium-split-viewport.json'; a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+};
+record('load');
+</script>

@@ -365,6 +365,8 @@ public final class ArcCollectionsView extends LinearLayout {
             Button row = button(entry.title, () -> open(entry.id));
             row.setTag("arc-entry:" + entry.id);
             row.setOnLongClickListener(view -> { showEntryMenu(view, entry); return true; });
+            row.setOnContextClickListener(view -> { showEntryMenu(view, entry); return true; });
+            row.setTooltipText(mActivity.getString(R.string.arc_pinned_entry_actions));
             mEntries.addView(row, new LayoutParams(-1, dp(44)));
         }
         Button newFolder = button(mActivity.getString(R.string.arc_new_folder), () -> {
@@ -466,14 +468,36 @@ public final class ArcCollectionsView extends LinearLayout {
 
     private void showEntryMenu(View anchor, ArcSidebarState.Entry entry) {
         if (mDestroyed) return;
+        ArcSidebarState state;
+        ArcSidebarState.Entry selected;
+        boolean canClose;
+        try {
+            state = mController.state();
+            selected = state.entry(entry.id);
+            canClose = mController.canClose(selected.id);
+        } catch (RuntimeException unavailable) {
+            Toast.makeText(mActivity, R.string.arc_collection_error, Toast.LENGTH_SHORT).show();
+            return;
+        }
         PopupMenu menu = new PopupMenu(mActivity, anchor);
         mMenu = menu;
-        menu.getMenu().add(0, 0, 0, R.string.arc_remove_entry);
-        if (!entry.favorite) menu.getMenu().add(0, 1, 1, R.string.arc_move_to_folder);
+        String removeLabel = mActivity.getString(R.string.arc_remove_entry);
+        if (!selected.favorite) {
+            for (ArcSidebarState.Space space : state.spaces()) {
+                if (space.id.equals(selected.spaceId)) {
+                    removeLabel = mActivity.getString(R.string.arc_remove_from_space, space.name);
+                    break;
+                }
+            }
+        }
+        menu.getMenu().add(0, 0, 0, removeLabel);
+        if (!selected.favorite) menu.getMenu().add(0, 1, 1, R.string.arc_move_to_folder);
+        if (canClose) menu.getMenu().add(0, 2, 2, R.string.arc_close_tab);
         menu.setOnMenuItemClickListener(item -> {
             runCommand(() -> {
-                if (item.getItemId() == 0) mController.remove(entry.id);
-                else showFolderChoices(anchor, entry);
+                if (item.getItemId() == 0) mController.remove(selected.id);
+                else if (item.getItemId() == 2) mController.close(selected.id);
+                else showFolderChoices(anchor, selected);
             });
             return true;
         });

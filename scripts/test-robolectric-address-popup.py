@@ -19,6 +19,11 @@ def delivered(path):
  if revision:
   return subprocess.check_output(['git','show',revision+':'+path],cwd=ROOT,text=True)
  return (ROOT/path).read_text()
+sys.path.insert(0,str(ROOT/'tests'))
+from arc_toolbar_probe import method_body
+coordinator=delivered('chromium/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java')
+entry=(method_body(coordinator,r'private boolean openAddressCommandBar\(')
+       if 'private boolean openAddressCommandBar(' in coordinator else '{return false;}')
 source=delivered('.source-modified/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarLayout.java')
 if 'setArcAddressPopupOpener(' in source:
  start=source.index('    private @Nullable BooleanSupplier mArcAddressPopupOpener;')
@@ -135,6 +140,31 @@ public class AddressPopupProbe {
   touch(v,MotionEvent.ACTION_DOWN,0,100,24);touch(v,MotionEvent.ACTION_CANCEL,0,100,24);
   touch(v,MotionEvent.ACTION_DOWN,0,100,24);assertEquals(2,opens.get());v.setArcAddressPopupOpener(null);
   touch(v,MotionEvent.ACTION_UP,0,100,24);touch(v,MotionEvent.ACTION_DOWN,0,100,24);assertEquals(2,opens.get());}
+ static class ArcDesktopAppearance {
+  static final int ADDRESS_SIDEBAR=0,ADDRESS_TOP=1;static int position;static boolean desktop=true;
+  static boolean isDesktopWindow(Activity a){return desktop;}static int getAddressBarPosition(Activity a){return position;}
+ }
+ static class Coordinator {
+  boolean mDestroyed;Activity mActivity;ArcCommandBar mCommandBar;Runnable mFocusAddressBar,mEndAddressInput;
+  static class Compact {void restore(){}}Compact mCompactOmnibox=new Compact();
+  private boolean openAddressCommandBar() ENTRY
+ }
+ @Test public void visibleTopAndSidebarAddressUseSameCommandBarOnFirstMouseClick() throws Exception {
+  for(int position:new int[]{ArcDesktopAppearance.ADDRESS_SIDEBAR,ArcDesktopAppearance.ADDRESS_TOP}){
+   ArcDesktopAppearance.position=position;ArcDesktopAppearance.desktop=true;
+   Session session=new Session(activity);Coordinator coordinator=new Coordinator();
+   coordinator.mActivity=activity;coordinator.mCommandBar=session.bar;coordinator.mEndAddressInput=()->{};
+   coordinator.mFocusAddressBar=()->{session.addresses.incrementAndGet();session.editor.requestFocus();session.editor.setText(session.url);};
+   Location target=location();target.setArcAddressPopupOpener(coordinator::openAddressCommandBar);
+   touch(target,MotionEvent.ACTION_DOWN,MotionEvent.BUTTON_PRIMARY,100,24);touch(target,MotionEvent.ACTION_UP,0,100,24);
+   assertTrue(session.bar.isShowing());assertTrue(session.bar.isEditingAddress());assertEquals(1,session.addresses.get());
+   session.bar.finishAnimationForTesting();session.editor.setText("preserved");
+   touch(target,MotionEvent.ACTION_DOWN,MotionEvent.BUTTON_PRIMARY,100,24);touch(target,MotionEvent.ACTION_UP,0,100,24);
+   assertEquals(1,session.addresses.get());assertEquals("preserved",session.editor.getText().toString());
+   session.bar.close(false,null);ArcDesktopAppearance.desktop=false;
+   assertFalse(coordinator.openAddressCommandBar());session.bar.destroy();
+  }
+ }
  static class Session {
   final FrameLayout root,original,holder;final EditText editor;final ArcOmniboxPlacement placement;final ArcCommandBar bar;
   final AtomicInteger blanks=new AtomicInteger(),addresses=new AtomicInteger(),ends=new AtomicInteger();
@@ -160,7 +190,7 @@ public class AddressPopupProbe {
   assertEquals("edited",s.editor.getText().toString());assertEquals(1,s.addresses.get());s.bar.close(false,null);
   s.bar.open(false);s.bar.finishAnimationForTesting();assertEquals("",s.editor.getText().toString());assertEquals(1,s.blanks.get());s.bar.destroy();}
 }
-'''.replace('  TOUCH\n','  '+touch+'\n')
+'''.replace('  TOUCH\n','  '+touch+'\n').replace('ENTRY',entry)
 f=a.work/'AddressPopupProbe.java';f.write_text(fixture)
 cp=a.classpath_file.read_text().strip();classes=a.work/'classes';classes.mkdir(exist_ok=True)
 arc=ROOT/'chromium/chrome/android/java/src/org/chromium/chrome/browser/arc'

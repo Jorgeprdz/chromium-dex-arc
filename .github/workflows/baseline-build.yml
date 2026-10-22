@@ -50,7 +50,7 @@ jobs:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
         run: |
           set -euo pipefail
-          test "$GITHUB_REF_NAME" = assistant/archium-r5-final-mobile
+          test "$GITHUB_REF_NAME" = assistant/archium-r5-desktop-native-mobile
           test "$EXPECTED_SHA" = "$GITHUB_SHA"
           [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
       - name: Reject concurrent native workflow from historical branches

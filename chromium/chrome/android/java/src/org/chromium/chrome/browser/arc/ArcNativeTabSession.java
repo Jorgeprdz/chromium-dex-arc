@@ -42,20 +42,11 @@ public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
     private final TabWindowManager mWindowManager;
     private final TabWindowManager.Observer mWindowObserver;
     private RestoreState mRestoreState;
-    private final boolean mRestoreSpaceSelection;
-    private boolean mPendingSpaceSelection;
     private boolean mDestroyed;
 
     public ArcNativeTabSession(TabModel model, TabCreator creator,
             BooleanSupplier isCurrentModel, Runnable onStateChanged) {
-        this(model, creator, isCurrentModel, onStateChanged, true);
-    }
-
-    /** Mobile uses the same metadata without replacing the native tab selected during restore. */
-    public ArcNativeTabSession(TabModel model, TabCreator creator,
-            BooleanSupplier isCurrentModel, Runnable onStateChanged, boolean restoreSpaceSelection) {
         ThreadUtils.assertOnUiThread();
-        mRestoreSpaceSelection = restoreSpaceSelection;
         Profile profile = model.getProfile();
         if (profile == null || profile.shutdownStarted()) {
             throw new IllegalStateException("Arc tab profile is not initialized");
@@ -249,10 +240,9 @@ public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
     }
 
     private void selectForActiveSpaceAfterRestore() {
-        if ((!mRestoreSpaceSelection && !mPendingSpaceSelection) || !active() || !restoreComplete()) return;
+        if (!active() || !restoreComplete()) return;
         try {
             selectForActiveSpace(mStore.load());
-            mPendingSpaceSelection = false;
         } catch (RuntimeException ignored) {
             // Metadata failure must not close, move, or otherwise mutate native tabs.
         }
@@ -331,7 +321,6 @@ public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
         // Do not create/select based on an incomplete restore. The persisted Space selection is
         // already committed; once restoreCompleted() arrives we choose a valid real tab.
         if (restoreComplete()) selectForActiveSpace(state);
-        else mPendingSpaceSelection = true;
         mOnStateChanged.run();
     }
 

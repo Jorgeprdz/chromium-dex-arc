@@ -897,7 +897,7 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
             mApplicationLabel = mActivity.getResources().getString(R.string.app_name);
         }
         mArcWindowObserver = new ArcDesktopWindowObserver(mActivity, mActivityLifecycleDispatcher,
-                this::prepareArcMobileNavigation, () -> {
+                () -> {}, () -> {
                     View controls = mActivity.findViewById(R.id.control_container);
                     if (controls != null) org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.applyUiFont(controls);
                 });
@@ -2005,11 +2005,6 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
                 GlicPromoCoordinator.maybeShowPromo(
                         mActivity, mProfileSupplier.get(), bottomSheetController);
         return mGlicPromoCoordinator != null;
-    }
-
-    private void prepareArcMobileNavigation() {
-        // Recreating the native UI must preserve each tab's explicit site/UA preference.
-        // Mobile/Desktop chrome is selected from window policy, never page site mode.
     }
 
     private void setArcToolbarSuppressed(boolean suppressed) {

@@ -78,4 +78,23 @@ public class ArcSplitContentHostTest {
         host.clear();assertSame(original,one.getView().getLayoutParams());a.finish();
     }
 
+    @Test public void repeatedQuarterAndThreeQuarterLayoutsKeepIndependentViews() {
+        Activity a=Robolectric.buildActivity(Activity.class).setup().get();
+        FrameLayout parent=new FrameLayout(a);a.setContentView(parent);
+        Tab left=tab(a,17),right=tab(a,42);View lv=left.getView(),rv=right.getView();
+        ArcSplitContentHost host=new ArcSplitContentHost(parent);host.setFrameSpacing(4,8);
+        for(float ratio:new float[]{.5f,.25f,.5f,.25f,.75f,.25f}) {
+            assertTrue(host.show(left,right,new Rect(0,0,1200,800),ratio));
+            parent.forceLayout();
+            parent.measure(View.MeasureSpec.makeMeasureSpec(1200,View.MeasureSpec.EXACTLY),
+                    View.MeasureSpec.makeMeasureSpec(800,View.MeasureSpec.EXACTLY));
+            parent.layout(0,0,1200,800);
+            assertEquals(Math.round(1200*ratio)-8,lv.getWidth());
+            assertEquals(1200-Math.round(1200*ratio)-8,rv.getWidth());
+            assertEquals(792,lv.getHeight());assertEquals(792,rv.getHeight());
+            assertSame(lv,left.getView());assertSame(rv,right.getView());
+        }
+        host.clear();a.finish();
+    }
+
 }

@@ -43,7 +43,7 @@ public final class ArcDesktopWindowObserver implements ConfigurationChangedObser
         mDesktopAtCreation = ArcDesktopAppearance.isDesktopWindow(activity);
         mPreferences = ArcDesktopAppearance.preferences(activity);
         mFontLayoutListener = () -> {
-            if (mDestroyed) return;
+            if (mDestroyed || !ArcDesktopAppearance.isDesktopWindow(mActivity)) return;
             mApplyUiFont.run();
         };
         mActivity.getWindow().getDecorView().getViewTreeObserver().addOnGlobalLayoutListener(mFontLayoutListener);

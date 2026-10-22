@@ -3,7 +3,7 @@
 set -euo pipefail
 readonly chromium_revision=cfd94726b7b5fb48aedcc32662f2f3fbdbadec35
 readonly depot_revision=8a5434051036b32412a2ecb10c213a72e3f3ccb9
-readonly recovery_branch=assistant/archium-r5-final-mobile
+readonly recovery_branch=assistant/archium-r5-desktop-native-mobile
 die() { printf '%s\n' "$*" >&2; exit 2; }
 [[ "${GITHUB_ACTIONS:-}" == true && "${GITHUB_REPOSITORY:-}" == Jorgeprdz/chromium-dex-arc ]] ||
     die 'Runner requires the dedicated CI repository.'
@@ -241,7 +241,6 @@ for suite in \
     'org.chromium.chrome.browser.arc.ArcOmniboxPlacementTest.*' \
     'org.chromium.chrome.browser.omnibox.LocationBarMediatorUnitTest.testArcCommand*' \
     'org.chromium.chrome.browser.arc.ArcCollectionsFocusTest.*' \
-    'org.chromium.chrome.browser.arc.ArcMobileControlsTest.*' \
     'org.chromium.chrome.browser.toolbar.top.ArcToolbarReparentingTest.*' \
     'org.chromium.chrome.browser.omnibox.OmniboxSuggestionsDropdownEmbedderImplUnitTest.*' \
     'org.chromium.chrome.browser.omnibox.LocationBarTabletUnitTest.*' \

@@ -2038,6 +2038,11 @@ public class CompositorViewHolder extends FrameLayout
         if (changed) onViewportChanged();
         super.onLayout(changed, l, t, r, b);
 
+        // Child-only layout (divider drag) does not change this holder's bounds. Publish both
+        // pane sizes after Android has laid out the ContentViews, including the inactive pane.
+        // Earlier onSizeChanged/initialization can still have the previous split geometry.
+        if (mArcSplitLeft != null) updateArcSplitPresentation();
+
         invalidateAccessibilityProvider();
     }
 

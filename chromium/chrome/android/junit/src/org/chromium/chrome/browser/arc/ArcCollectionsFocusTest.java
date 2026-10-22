@@ -56,6 +56,43 @@ public class ArcCollectionsFocusTest {
     }
 
     @Test
+    public void rightClickCanRemovePinWithoutClosingAndRemovalPersists() {
+        Fixture f=new Fixture();
+        String id=f.controller.rememberTab(7,"https://example.test","Pinned",false);
+        String other=f.controller.rememberTab(8,"https://other.test","Favorite",true);
+        f.view.refresh();View row=f.view.findViewWithTag("arc-entry:"+id);
+        assertTrue(row.performContextClick());
+        android.widget.PopupMenu menu=org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu();
+        assertTrue(menu.getMenu().performIdentifierAction(0,0));
+        verify(f.tabs).unpin(7);verify(f.tabs,never()).close(anyInt());
+        ArcSidebarState restored=ArcSidebarState.deserialize(f.controller.state().serialize());
+        assertTrue(restored.entries(restored.selectedSpace()).isEmpty());
+        assertEquals(other,restored.favorites().get(0).id);
+        f.view.refresh();assertNull(f.view.findViewWithTag("arc-entry:"+id));
+    }
+
+    @Test
+    public void longPressCloseUsesNativeTabAndPreservesSavedEntryUntilConfirmation() {
+        Fixture f=new Fixture();String id=f.controller.rememberTab(7,"https://example.test","Pinned",false);
+        f.view.refresh();View row=f.view.findViewWithTag("arc-entry:"+id);
+        assertTrue(row.performLongClick());
+        android.widget.PopupMenu menu=org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu();
+        assertNotNull(menu.getMenu().findItem(2));
+        assertTrue(menu.getMenu().performIdentifierAction(2,0));
+        verify(f.tabs).close(7);verify(f.tabs,never()).unpin(anyInt());
+        assertEquals(Integer.valueOf(7),f.controller.state().entry(id).tabId);
+        assertEquals("https://example.test",f.controller.state().entry(id).url);
+    }
+
+    @Test
+    public void stalePinnedRowCannotCrashAfterItsMetadataWasRemoved() {
+        Fixture f=new Fixture();String id=f.controller.rememberTab(7,"https://example.test","Pinned",false);
+        f.view.refresh();View row=f.view.findViewWithTag("arc-entry:"+id);
+        f.controller.remove(id); // Native notification can precede the next view refresh.
+        assertTrue(row.performContextClick());verify(f.tabs,never()).close(anyInt());
+    }
+
+    @Test
     public void pointerHoverDoesNotHideKeyboardFocus() {
         Fixture f=new Fixture();f.view.setAppearance(0xffeeeeee,0xff111111,0xff777777);
         View space=f.view.findViewWithTag("arc-current-space");

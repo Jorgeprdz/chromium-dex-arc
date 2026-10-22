@@ -126,6 +126,45 @@ if a.controller:
    h.focusArcSplitTab(left);assertFalse(l.hasFocus());modal.setVisibility(View.GONE);h.window=false;
    h.focusArcSplitTab(left);assertFalse(l.hasFocus());h.window=true;h.focusArcSplitTab(left);assertTrue(l.hasFocus());a.finish();
   }
+  static class ViewportHolder extends FrameLayout {
+   Tab mArcSplitLeft,mArcSplitRight;boolean mArcSplitUpdating;
+   ArcSplitContentHost mArcSplitHost=new ArcSplitContentHost(this);float mArcSplitRatio=.5f;
+   LayoutSink mArcSplitLayout; static class LayoutSink {void setArcSplitTabs(int a,int b,RectF l,RectF r){}}
+   java.util.Map<Tab,Integer> published=new java.util.IdentityHashMap<>();
+   ViewportHolder(Activity a){super(a);}
+   android.graphics.Rect getArcSplitViewport(){return new android.graphics.Rect(0,0,getWidth(),getHeight());}
+   void clearArcSplitTabs(){throw new AssertionError("Unexpected split clear");}
+   void updateWebContentsSize(Tab t){published.put(t,Math.round(mArcSplitHost.bounds(t).width()));}
+   void onViewportChanged(){}void invalidateAccessibilityProvider(){}
+   private void updateArcSplitPresentation() UPDATE_PRESENTATION
+   @Override protected void onLayout(boolean changed,int l,int t,int r,int b) LAYOUT
+  }
+  @Test public void completedAndroidLayoutPublishesBothPaneWidthsInBothDirections(){
+   Activity a=org.robolectric.Robolectric.buildActivity(Activity.class).setup().get();
+   ViewportHolder p=new ViewportHolder(a);a.setContentView(p);
+   Tab left=mock(Tab.class),right=mock(Tab.class);
+   ContentView lv=ContentView.createContentView(a,null),rv=ContentView.createContentView(a,null);
+   when(left.getId()).thenReturn(17);when(right.getId()).thenReturn(18);
+   when(left.getContentView()).thenReturn(lv);when(right.getContentView()).thenReturn(rv);
+   when(left.getView()).thenReturn(lv);when(right.getView()).thenReturn(rv);
+   p.mArcSplitLeft=left;p.mArcSplitRight=right;
+   p.mArcSplitHost.setFrameSpacing(4,8);
+   for(float ratio:new float[]{.5f,.25f,.5f,.25f,.75f,.25f}){
+    p.mArcSplitRatio=ratio;p.published.clear();
+    p.requestLayout();
+    for(int frame=0;frame<2;frame++){
+     p.forceLayout(); // Explicit next traversal for requestLayout issued inside onLayout.
+     p.measure(View.MeasureSpec.makeMeasureSpec(1200,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(800,View.MeasureSpec.EXACTLY));
+     p.layout(0,0,1200,800);
+    }
+    assertEquals(2,p.published.size());
+    assertEquals(Math.round(1200*ratio)-8,(int)p.published.get(left));
+    assertEquals(1200-Math.round(1200*ratio)-8,(int)p.published.get(right));
+    assertEquals((int)p.published.get(left),lv.getWidth());assertEquals((int)p.published.get(right),rv.getWidth());
+    assertEquals(792,lv.getHeight());assertSame(lv,left.getView());assertSame(rv,right.getView());
+   }
+   verify(left,never()).loadUrl(any());verify(right,never()).loadUrl(any());a.finish();
+  }
   static class HolderProbe {
    Tab mArcSplitLeft,current;int mode;boolean mControlsResizeView;
    android.view.View mCompositorView=new android.view.View(org.robolectric.RuntimeEnvironment.getApplication());
@@ -163,7 +202,7 @@ if a.controller:
    layer.clearArcSplitTabs();verify(tap).setArcSplitTabs(7L,-1,-1,0f,0f,0f,0f,0f,0f,0f,0f);
   }
  }
- """.replace('SHOWN',method_body(layout,r'public void onShown\(')).replace('INITIALIZE',method_body(holder_source,r'private void initializeTab\(')).replace('FOCUS',method_body(holder_source,r'private void focusArcSplitTab\('))
+ """.replace('SHOWN',method_body(layout,r'public void onShown\(')).replace('INITIALIZE',method_body(holder_source,r'private void initializeTab\(')).replace('FOCUS',method_body(holder_source,r'private void focusArcSplitTab\(')).replace('UPDATE_PRESENTATION',method_body(holder_source,r'private void updateArcSplitPresentation\(')).replace('LAYOUT',method_body(holder_source,r'protected void onLayout\('))
  path=a.work/'NativeSplitBridgeTest.java';path.write_text(code);sources.append(path)
  assert 'focusArcSplitTab(tab);' in method_body(holder_source,r'private void setTab\('), 'Native rail selection must transfer pane focus'
  assert 'focusArcSplitTab(active);' in method_body(holder_source,r'public boolean setArcSplitTabs\('), 'Initial presentation must transfer pane focus'
