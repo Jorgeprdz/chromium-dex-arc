@@ -6,6 +6,8 @@ package org.chromium.chrome.browser.arc;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.content.res.ColorStateList;
+import android.content.res.Configuration;
+import android.util.TypedValue;
 import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -52,19 +54,22 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
         int tabCount();
         boolean webPage();
         boolean pinned();
+        default boolean homePage(){return false;}
         boolean desktopSite();
         int zoomPercent();
         int surface();
         void action(int action);
         void zoom(int direction);
     }
-    public static final int HEIGHT_DP=60;
+    public static final int HEIGHT_DP=76;
     private final FrameLayout mSlot;
     private final Context mContext;
     private final BottomSheetController mController;
     private final LinearLayout mBar;
     private final int mHeight;
+    private final int mBarHeight;
     private boolean mTabbedHost=true;
+    private boolean mPhoneModeActive=true;
     private final View[] mButtons=new View[4];
     private Host mHost;
     private BottomControlsVisibilityController mVisibility;
@@ -80,25 +85,31 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
     public ArcPhoneNavigation(FrameLayout slot, BottomSheetController controller,int height) {
         mHeight=height;
         mSlot=slot;mContext=slot.getContext();mController=controller;
+        mSurface=themeSurface();
+        mForeground=Color.luminance(mSurface)>.45?0xff202124:0xfff1f3f4;
+        mBarHeight=Math.min(mHeight,Math.max(dp(48),mHeight-dp(20)));
         mBar=new LinearLayout(mContext);mBar.setGravity(Gravity.CENTER);
         mBar.setTag("arc-phone-navigation");
+        mBar.setElevation(dp(6));
+        mBar.setOutlineAmbientShadowColor(0x240d244b);
+        mBar.setOutlineSpotShadowColor(0x240d244b);
         int[] labels={R.string.arc_phone_home,R.string.arc_phone_new,R.string.arc_phone_tabs,R.string.arc_phone_menu};
         String[] tags={"home","new","tabs","menu"};
         for(int i=0;i<4;i++) {
             final int action=i;
             LinearLayout button=new LinearLayout(mContext);button.setOrientation(LinearLayout.VERTICAL);
             button.setGravity(Gravity.CENTER);button.setPadding(0,dp(3),0,dp(3));
-            ImageView icon=new ImageView(mContext);icon.setImageDrawable(new Icon(i,Color.BLACK,""));
-            FrameLayout pill=new FrameLayout(mContext);pill.addView(icon,new FrameLayout.LayoutParams(Math.min(dp(26),mHeight-dp(26)),Math.min(dp(26),mHeight-dp(26)),Gravity.CENTER));
-            button.addView(pill,new LinearLayout.LayoutParams(dp(i==NEW_TAB?60:44),Math.max(dp(24),mHeight-dp(24))));
+            ImageView icon=new ImageView(mContext);icon.setImageDrawable(new Icon(i,mForeground,""));
+            FrameLayout pill=new FrameLayout(mContext);pill.addView(icon,new FrameLayout.LayoutParams(Math.min(dp(26),mBarHeight-dp(26)),Math.min(dp(26),mBarHeight-dp(26)),Gravity.CENTER));
+            button.addView(pill,new LinearLayout.LayoutParams(dp(i==NEW_TAB?60:44),Math.max(dp(24),mBarHeight-dp(24))));
             TextView text=text(mContext.getString(labels[i]),12);text.setGravity(Gravity.CENTER);
             button.addView(text,new LinearLayout.LayoutParams(-1,dp(18)));
             accessible(button,mContext.getString(labels[i]),"arc-phone-"+tags[i]);
             button.setOnClickListener(v->{if(mDestroyed||mHost==null)return;haptic(v);if(action==MENU)showMenu();else mHost.action(action);});
-            mBar.addView(button,new LinearLayout.LayoutParams(0,mHeight,1));mButtons[i]=button;
+            mBar.addView(button,new LinearLayout.LayoutParams(0,mBarHeight,1));mButtons[i]=button;
         }
         // Native BottomControlsCoordinator owns size, insets, fullscreen, keyboard and raster capture.
-        slot.addView(mBar,new FrameLayout.LayoutParams(-1,mHeight));
+        slot.addView(mBar,floatingLayout());
         refresh();
     }
     /** Let Chromium's tab switcher borrow the same view, never a duplicate bar. */
@@ -113,46 +124,80 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
     }
     public void attachBottomBarView(View view) {
         if(mDestroyed)return;
-        mSlot.addView(view,new FrameLayout.LayoutParams(-1,mHeight));refresh();
+        mSlot.addView(view,floatingLayout());refresh();
+    }
+    private FrameLayout.LayoutParams floatingLayout() {
+        FrameLayout.LayoutParams params=new FrameLayout.LayoutParams(-1,mBarHeight,Gravity.CENTER);
+        int vertical=(mHeight-mBarHeight)/2;
+        params.setMargins(dp(18),vertical,dp(18),vertical);
+        return params;
+    }
+    public static int getReservedHeight(Context context) {
+        return Math.round(HEIGHT_DP*context.getResources().getDisplayMetrics().density);
+    }
+    public void setPhoneModeActive(boolean active) {
+        if(mPhoneModeActive==active)return;
+        mPhoneModeActive=active;
+        if(!active)dismissMenu();
+        refresh();
     }
     public void bind(Host host){if(mDestroyed)return;mHost=host;refresh();}
     public void refresh() {
         if(mDestroyed)return;
         if(mSheet!=null && (mHost==null || mSheet.mToken!=mHost.pageToken()))dismissMenu();
-        mSurface=mHost==null?Color.WHITE:mHost.surface();
+        int oldSurface=mSurface;
+        int nativeSurface=mHost==null?themeSurface():mHost.surface();
+        mSurface=Color.luminance(nativeSurface)>.45?Color.WHITE:nativeSurface;
         mForeground=Color.luminance(mSurface)>.45?0xff202124:0xfff1f3f4;
-        mBar.setBackgroundColor(mSurface);
+        mSlot.setBackgroundColor(mSurface);
+        mBar.setBackground(shape((mSurface&0xffffff)|0xf9000000,100));
+        int active=mSheet!=null?MENU:!mTabbedHost?TABS:mHost!=null&&mHost.homePage()?HOME:-1;
         String count=mHost==null?"0":Integer.toString(Math.max(0,mHost.tabCount()));
         for(int i=0;i<4;i++) {
-            LinearLayout button=(LinearLayout)mButtons[i];button.setEnabled(mHost!=null);
-            button.setBackground(ripple(Color.TRANSPARENT,12));
+            LinearLayout button=(LinearLayout)mButtons[i];button.setEnabled(mHost!=null && mPhoneModeActive);
+            button.setBackground(ripple(Color.TRANSPARENT,24));
+            boolean selected=i==active;button.setSelected(selected);
+            int foreground=selected?(Color.luminance(mSurface)>.45?0xff155dff:0xff8ab4f8):mForeground;
             FrameLayout pill=(FrameLayout)button.getChildAt(0);
-            pill.setBackground(i==NEW_TAB?shape(Color.luminance(mSurface)>.45?Color.WHITE:0xff44464f,24):null);
-            ((ImageView)pill.getChildAt(0)).setImageDrawable(new Icon(i,mForeground,i==TABS?count:""));
-            ((TextView)button.getChildAt(1)).setTextColor(mForeground);
+            pill.setBackground(selected?shape(Color.luminance(mSurface)>.45?0xffeaf1ff:0xff263c60,24):null);
+            ((ImageView)pill.getChildAt(0)).setImageDrawable(new Icon(i,foreground,i==TABS?count:""));
+            ((TextView)button.getChildAt(1)).setTextColor(foreground);
         }
         mButtons[TABS].setContentDescription(mContext.getString(R.string.arc_phone_tabs)+", "+count);
         boolean countChanged=!mCount.equals(count);mCount=count;
-        if(mVisibility!=null)mVisibility.setBottomControlsVisible(mHost!=null && mTabbedHost);
+        if(mVisibility!=null)mVisibility.setBottomControlsVisible(mHost!=null && mTabbedHost && mPhoneModeActive);
+        if(mSheet!=null && oldSurface!=mSurface){
+            mSheet.applyPalette();
+            mController.onSheetBackgroundColorOverrideChanged();
+        }
         if(mCapture!=null)mCapture.onResult(countChanged?count:new Object());
     }
     @Override public void initializeWithNative(BottomControlsVisibilityController visibility,Callback<Object> capture){mVisibility=visibility;mCapture=capture;refresh();}
     @Override public int getScrollBehavior(){return LayerScrollBehavior.DEFAULT_SCROLL_OFF;}
     @Override public Integer getBackgroundColor(){return mSurface;}
     private void showMenu() {
-        if(mDestroyed||mHost==null||mSheet!=null)return;
+        if(mDestroyed||mHost==null||!mPhoneModeActive||mSheet!=null)return;
         MenuSheet sheet=new MenuSheet(mHost);mSheet=sheet;
         if(!mController.requestShowContent(sheet,ValueAnimator.areAnimatorsEnabled()))sheet.destroy();
+        refresh();
     }
     public void dismissMenu(){MenuSheet sheet=mSheet;if(sheet==null)return;mSheet=null;mController.hideContent(sheet,ValueAnimator.areAnimatorsEnabled());sheet.destroy();}
-    @Override public void destroy(){if(mDestroyed)return;dismissMenu();mDestroyed=true;mHost=null;mCapture=null;mVisibility=null;if(mBar.getParent() instanceof ViewGroup parent)parent.removeView(mBar);}
-    private boolean valid(MenuSheet sheet){return !mDestroyed && !sheet.mClosed && mHost!=null && sheet.mToken==mHost.pageToken();}
+    @Override public void destroy(){if(mDestroyed)return;mDestroyed=true;dismissMenu();mHost=null;mCapture=null;mVisibility=null;if(mBar.getParent() instanceof ViewGroup parent)parent.removeView(mBar);}
+    private boolean valid(MenuSheet sheet){return !mDestroyed && mPhoneModeActive && !sheet.mClosed && mHost!=null && sheet.mToken==mHost.pageToken();}
     private void act(MenuSheet sheet,int action){if(!valid(sheet))return;Host host=mHost;dismissMenu();host.action(action);refresh();}
     private void haptic(View view){view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);}
+    private int themeSurface() {
+        TypedValue color=new TypedValue();
+        if(mContext.getTheme().resolveAttribute(android.R.attr.colorBackground,color,true)) {
+            if(color.type>=TypedValue.TYPE_FIRST_COLOR_INT && color.type<=TypedValue.TYPE_LAST_COLOR_INT)return color.data;
+            if(color.resourceId!=0)return mContext.getColor(color.resourceId);
+        }
+        return (mContext.getResources().getConfiguration().uiMode&Configuration.UI_MODE_NIGHT_MASK)==Configuration.UI_MODE_NIGHT_YES?0xff202124:Color.WHITE;
+    }
     private int dp(int value){return Math.round(value*mContext.getResources().getDisplayMetrics().density);}
     private TextView text(String value,int sp){TextView t=new TextView(mContext);t.setText(value);t.setTextSize(sp);t.setTextColor(mForeground);return t;}
     private GradientDrawable shape(int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(radius));return d;}
-    private Drawable ripple(int background,int radius){return new RippleDrawable(ColorStateList.valueOf((mForeground&0xffffff)|0x1e000000),shape(background,radius),null);}
+    private Drawable ripple(int background,int radius){return new RippleDrawable(ColorStateList.valueOf((mForeground&0xffffff)|0x10000000),shape(background,radius),null);}
     private void accessible(View view,String label,String tag){view.setTag(tag);view.setContentDescription(label);view.setTooltipText(label);view.setFocusable(true);view.setClickable(true);view.setMinimumHeight(dp(48));}
 
     private final class MenuSheet implements BottomSheetContent {
@@ -168,7 +213,7 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
             mScroll.addView(mBody,new ScrollView.LayoutParams(-1,-2));
             // A non-null, zero-height toolbar prevents the native sheet's omnibox fallback.
             mEmptyToolbar=new View(mContext);mEmptyToolbar.setLayoutParams(new FrameLayout.LayoutParams(-1,0));
-            View grip=new View(mContext);grip.setBackground(shape((mForeground&0xffffff)|0x50000000,3));
+            View grip=new View(mContext);grip.setTag("arc-phone-menu-grip");grip.setBackground(shape((mForeground&0xffffff)|0x50000000,3));
             LinearLayout.LayoutParams gripSize=new LinearLayout.LayoutParams(dp(32),dp(4));gripSize.gravity=Gravity.CENTER_HORIZONTAL;gripSize.bottomMargin=dp(12);mBody.addView(grip,gripSize);
             LinearLayout header=new LinearLayout(mContext);header.setGravity(Gravity.CENTER_VERTICAL);header.setPadding(dp(8),dp(4),dp(8),dp(12));
             ImageView favicon=new ImageView(mContext);Bitmap bitmap=host.favicon();
@@ -195,7 +240,7 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
             TextView zoomTitle=text(mContext.getString(R.string.arc_phone_zoom),17);zoomRow.addView(zoomTitle,new LinearLayout.LayoutParams(0,dp(64),1));zoomTitle.setGravity(Gravity.CENTER_VERTICAL);zoomRow.addView(zoom);
             for(int direction:new int[]{-1,1}) {
                 TextView step=text(direction<0?"−":"+",26);step.setGravity(Gravity.CENTER);step.setBackground(ripple(Color.TRANSPARENT,24));
-                accessible(step,mContext.getString(direction<0?R.string.arc_phone_zoom_out:R.string.arc_phone_zoom_in),"arc-phone-zoom-"+(direction<0?"minus":"plus"));step.setEnabled(host.webPage());
+                accessible(step,mContext.getString(direction<0?R.string.arc_phone_zoom_out:R.string.arc_phone_zoom_in),"arc-phone-zoom-"+(direction<0?"minus":"plus"));step.setEnabled(host.webPage());step.setAlpha(host.webPage()?1f:.4f);
                 step.setOnClickListener(v->{if(!valid(this))return;haptic(v);mHost.zoom(direction);zoom.setText(mHost.zoomPercent()+"%");});zoomRow.addView(step,new LinearLayout.LayoutParams(dp(48),dp(48)));
             }
             mBody.addView(zoomRow);separator();
@@ -216,7 +261,26 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
             if(action==DESKTOP_SITE){row.setSelected(mHost.desktopSite());row.setContentDescription(mContext.getString(label)+", "+mContext.getString(mHost.desktopSite()?R.string.arc_phone_on:R.string.arc_phone_off));}
             row.setOnClickListener(v->{haptic(v);act(this,action);});mBody.addView(row,new LinearLayout.LayoutParams(-1,-2));
         }
-        private void separator(){View line=new View(mContext);line.setBackgroundColor((mForeground&0xffffff)|0x0d000000);mBody.addView(line,new LinearLayout.LayoutParams(-1,dp(1)));}
+        private void separator(){View line=new View(mContext);line.setTag("arc-phone-menu-divider");line.setBackgroundColor((mForeground&0xffffff)|0x0d000000);mBody.addView(line,new LinearLayout.LayoutParams(-1,dp(1)));}
+        private void applyPalette() {
+            ((GradientDrawable)mBody.getBackground()).setColor(mSurface);
+            recolor(mBody);
+        }
+        private void recolor(View view) {
+            if(view instanceof TextView label)label.setTextColor(mForeground);
+            if(view instanceof ImageView icon && icon.getDrawable() instanceof Icon vector)vector.setColor(mForeground);
+            Object tag=view.getTag();
+            if("arc-phone-menu-grip".equals(tag))((GradientDrawable)view.getBackground()).setColor((mForeground&0xffffff)|0x50000000);
+            if("arc-phone-menu-divider".equals(tag))view.setBackgroundColor((mForeground&0xffffff)|0x0d000000);
+            if(view.getBackground() instanceof RippleDrawable ripple) {
+                ripple.setColor(ColorStateList.valueOf((mForeground&0xffffff)|0x10000000));
+                if(("arc-phone-pin".equals(tag)||"arc-phone-find".equals(tag)||"arc-phone-share".equals(tag))
+                        && ripple.getDrawable(0) instanceof GradientDrawable tile) {
+                    tile.setColor(Color.luminance(mSurface)>.45?Color.WHITE:0xff363840);
+                }
+            }
+            if(view instanceof ViewGroup group)for(int i=0;i<group.getChildCount();i++)recolor(group.getChildAt(i));
+        }
         @Override public View getContentView(){return mScroll;}
         @Override public View getToolbarView(){return mEmptyToolbar;}
         @Override public int getVerticalScrollOffset(){return mScroll.getScrollY();}
@@ -230,12 +294,13 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
         @Override public int getSheetHalfHeightAccessibilityStringId(){return R.string.arc_phone_menu;}
         @Override public int getSheetFullHeightAccessibilityStringId(){return R.string.arc_phone_menu;}
         @Override public int getSheetClosedAccessibilityStringId(){return R.string.arc_phone_menu_closed;}
-        @Override public void destroy(){mClosed=true;if(mSheet==this)mSheet=null;}
+        @Override public void destroy(){mClosed=true;if(mSheet==this)mSheet=null;refresh();}
     }
     /** Small vectors drawn without bitmap allocation; no website content or snapshots are touched. */
     private static final class Icon extends Drawable {
-        private final int mKind,mColor;private final String mCount;private final Paint mPaint=new Paint(Paint.ANTI_ALIAS_FLAG);
+        private final int mKind;private int mColor;private final String mCount;private final Paint mPaint=new Paint(Paint.ANTI_ALIAS_FLAG);
         Icon(int kind,int color,String count){mKind=kind;mColor=color;mCount=count;}
+        void setColor(int color){mColor=color;invalidateSelf();}
         @Override public void draw(Canvas canvas){
             int save=canvas.save();canvas.translate(getBounds().left,getBounds().top);canvas.scale(getBounds().width()/24f,getBounds().height()/24f);
             mPaint.setColor(mColor);mPaint.setStyle(Paint.Style.STROKE);mPaint.setStrokeWidth(1.8f);mPaint.setStrokeCap(Paint.Cap.ROUND);mPaint.setStrokeJoin(Paint.Join.ROUND);

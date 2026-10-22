@@ -411,6 +411,7 @@ public class ToolbarManager
     private @Nullable ArcPhoneNavigation mArcPhoneNavigation;
     private ArcPhoneNavigation.@Nullable Host mArcPhoneHost;
     private @Nullable Callback<Integer> mArcPhoneCountObserver;
+    private SharedPreferences.@Nullable OnSharedPreferenceChangeListener mArcPhoneModeObserver;
     private final TopControlsStacker mTopControlsStacker;
     private final BrowserControlsSizer mBrowserControlsSizer;
     private final FullscreenManager mFullscreenManager;
@@ -950,6 +951,7 @@ public class ToolbarManager
                 new ComponentCallbacks() {
                     @Override
                     public void onConfigurationChanged(Configuration configuration) {
+                        if (mArcPhoneHost != null) updateArcPhoneFloatingSurfaces();
                         int newOrientation = configuration.orientation;
                         if (newOrientation == mCurrentOrientation) {
                             return;
@@ -1485,6 +1487,7 @@ public class ToolbarManager
 
                     @Override
                     public void onUrlUpdated(Tab tab) {
+                        if (mArcPhoneNavigation != null) mArcPhoneNavigation.refresh();
                         // Update the SSL security state as a result of this notification as it will
                         // sometimes be the only update we receive.
                         updateTabLoadingState(true);
@@ -2530,8 +2533,36 @@ public class ToolbarManager
 
     /** Native actions are supplied after the tabbed Activity initializes its models. */
     public void configureArcPhoneNavigation(ArcPhoneNavigation.Host host) {
+        if (org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.isDesktopWindow(mActivity)) return;
         mArcPhoneHost = host;
+        if (mArcPhoneModeObserver == null) {
+            mArcPhoneModeObserver = (prefs, key) -> {
+                if (org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.UI_MODE_KEY.equals(key)) {
+                    updateArcPhoneFloatingSurfaces();
+                }
+            };
+            org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.preferences(mActivity)
+                    .registerOnSharedPreferenceChangeListener(mArcPhoneModeObserver);
+        }
+        updateArcPhoneFloatingSurfaces();
         if (mArcPhoneNavigation != null) mArcPhoneNavigation.bind(host);
+    }
+
+    private void updateArcPhoneFloatingSurfaces() {
+        boolean enabled = mArcPhoneHost != null
+                && !org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.isDesktopWindow(mActivity);
+        if (mToolbarLayout instanceof ToolbarPhone phone) {
+            mToolbarThemeColorProvider.setArcPhoneFloatingSurfaceEnabled(enabled);
+            if (mAdjustedToolbarThemeColorProvider != null) {
+                mAdjustedToolbarThemeColorProvider.setArcPhoneFloatingSurfaceEnabled(enabled);
+            }
+            phone.setArcPhoneFloatingSurfaceEnabled(enabled);
+            mStatusBarColorController.setArcPhoneFloatingSurfaceEnabled(enabled);
+        }
+        if (mArcPhoneNavigation != null) {
+            mArcPhoneNavigation.setPhoneModeActive(enabled);
+            mArcPhoneNavigation.refresh();
+        }
     }
 
     /** Enable the bottom controls. */
@@ -2624,7 +2655,7 @@ public class ToolbarManager
         if (arcPhone) {
             mArcPhoneNavigation = new ArcPhoneNavigation(
                     bottomAppBarContainer.findViewById(R.id.bottom_container_slot), mBottomSheetController,
-                    BottomBarUtils.getBottomBarHeight(mActivity));
+                    ArcPhoneNavigation.getReservedHeight(mActivity));
             if (mArcPhoneHost != null) mArcPhoneNavigation.bind(mArcPhoneHost);
             bottomBarContainerOneshotSupplier.set(mArcPhoneNavigation);
             if (mBottomBarHostManager != null) {
@@ -2671,7 +2702,8 @@ public class ToolbarManager
                         mActivityTabProvider.asObservable(),
                         (ScrollingBottomViewResourceFrameLayout) bottomAppBarContainer,
                         LayerType.BOTTOM_APP_BAR,
-                        BottomBarUtils.getBottomBarHeight(mActivity),
+                        arcPhone ? ArcPhoneNavigation.getReservedHeight(mActivity)
+                                : BottomBarUtils.getBottomBarHeight(mActivity),
                         bottomBarContainerOneshotSupplier,
                         mTabObscuringHandler,
                         mLayoutManager.getOverlayPanelManager().getPanelStateSupplier(),
@@ -3087,6 +3119,11 @@ public class ToolbarManager
         if (mArcPhoneCountObserver != null) {
             mOverridableTabCount.getObservable().removeObserver(mArcPhoneCountObserver);
             mArcPhoneCountObserver = null;
+        }
+        if (mArcPhoneModeObserver != null) {
+            org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.preferences(mActivity)
+                    .unregisterOnSharedPreferenceChangeListener(mArcPhoneModeObserver);
+            mArcPhoneModeObserver = null;
         }
         mArcPhoneHost = null;
         BottomControlsCoordinator bottomAppBarCoordinator = mBottomAppBarCoordinatorSupplier.get();

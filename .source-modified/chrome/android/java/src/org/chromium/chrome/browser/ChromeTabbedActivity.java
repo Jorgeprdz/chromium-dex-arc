@@ -1557,6 +1557,12 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
                 String scheme = tab.getUrl().getScheme();
                 return "https".equals(scheme) || "http".equals(scheme);
             }
+            public boolean homePage() {
+                Tab tab=getActivityTab();
+                return tab!=null && (UrlUtilities.isNtpUrl(tab.getUrl())
+                        || tab.getUrl().equals(HomepageManager.getInstance()
+                                .getHomepageGurlForZeroTabs(getCurrentTabModel().isIncognito())));
+            }
             public boolean pinned() { Tab tab=getActivityTab();return tab!=null && tab.getIsPinned(); }
             public boolean desktopSite() {
                 Tab tab=getActivityTab();

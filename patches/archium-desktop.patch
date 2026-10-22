@@ -1720,7 +1720,7 @@ diff --git a/chrome/android/java/res_chromium_base/values/channel_constants.xml 
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
 --- a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java
-@@ -1526,12 +1526,101 @@
+@@ -1526,12 +1526,107 @@
                      mUndoBarPopupController,
                      contextMenuPopulatorFactory,
                      new ChromeSelectionDropdownMenuDelegate());
@@ -1754,6 +1754,12 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedAct
 +                if(contents==null || contents.isDestroyed())return false;
 +                String scheme = tab.getUrl().getScheme();
 +                return "https".equals(scheme) || "http".equals(scheme);
++            }
++            public boolean homePage() {
++                Tab tab=getActivityTab();
++                return tab!=null && (UrlUtilities.isNtpUrl(tab.getUrl())
++                        || tab.getUrl().equals(HomepageManager.getInstance()
++                                .getHomepageGurlForZeroTabs(getCurrentTabModel().isIncognito())));
 +            }
 +            public boolean pinned() { Tab tab=getActivityTab();return tab!=null && tab.getIsPinned(); }
 +            public boolean desktopSite() {
@@ -1822,7 +1828,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedAct
      }
 
      private void maybeCreateIncognitoTabSnapshotController() {
-@@ -4438,6 +4527,8 @@
+@@ -4438,6 +4533,8 @@
          final Tab currentTab = getActivityTab();
          boolean currentTabIsNtp = isTabNtp(currentTab);
          if (id == R.id.new_tab_menu_id) {
@@ -1831,7 +1837,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedAct
              if (!mTabModelSelector.isTabStateInitialized()) {
                  RecordUserAction.record("MobileMenuNewTab.BeforeTabRestore");
              }
-@@ -5618,6 +5709,8 @@
+@@ -5618,6 +5715,8 @@
 
      @Override
      public boolean dispatchKeyEvent(KeyEvent event) {
@@ -3008,24 +3014,69 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
  import org.chromium.chrome.browser.browser_controls.BottomControlsStacker;
  import org.chromium.chrome.browser.browser_controls.BottomControlsStacker.LayerType;
  import org.chromium.chrome.browser.browser_controls.BrowserControlsSizer;
-@@ -407,6 +408,9 @@
+@@ -407,6 +408,10 @@
      private final AppMenuDelegate mAppMenuDelegate;
      private final CompositorViewHolder mCompositorViewHolder;
      private final BottomControlsStacker mBottomControlsStacker;
 +    private @Nullable ArcPhoneNavigation mArcPhoneNavigation;
 +    private ArcPhoneNavigation.@Nullable Host mArcPhoneHost;
 +    private @Nullable Callback<Integer> mArcPhoneCountObserver;
++    private SharedPreferences.@Nullable OnSharedPreferenceChangeListener mArcPhoneModeObserver;
      private final TopControlsStacker mTopControlsStacker;
      private final BrowserControlsSizer mBrowserControlsSizer;
      private final FullscreenManager mFullscreenManager;
-@@ -2524,8 +2528,19 @@
+@@ -946,6 +951,7 @@
+                 new ComponentCallbacks() {
+                     @Override
+                     public void onConfigurationChanged(Configuration configuration) {
++                        if (mArcPhoneHost != null) updateArcPhoneFloatingSurfaces();
+                         int newOrientation = configuration.orientation;
+                         if (newOrientation == mCurrentOrientation) {
+                             return;
+@@ -1481,6 +1487,7 @@
+
+                     @Override
+                     public void onUrlUpdated(Tab tab) {
++                        if (mArcPhoneNavigation != null) mArcPhoneNavigation.refresh();
+                         // Update the SSL security state as a result of this notification as it will
+                         // sometimes be the only update we receive.
+                         updateTabLoadingState(true);
+@@ -2524,8 +2531,47 @@
          return ((LocationBarCoordinator) mLocationBar).getUrlBarViewRectProvider();
      }
 
 +    /** Native actions are supplied after the tabbed Activity initializes its models. */
 +    public void configureArcPhoneNavigation(ArcPhoneNavigation.Host host) {
++        if (org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.isDesktopWindow(mActivity)) return;
 +        mArcPhoneHost = host;
++        if (mArcPhoneModeObserver == null) {
++            mArcPhoneModeObserver = (prefs, key) -> {
++                if (org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.UI_MODE_KEY.equals(key)) {
++                    updateArcPhoneFloatingSurfaces();
++                }
++            };
++            org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.preferences(mActivity)
++                    .registerOnSharedPreferenceChangeListener(mArcPhoneModeObserver);
++        }
++        updateArcPhoneFloatingSurfaces();
 +        if (mArcPhoneNavigation != null) mArcPhoneNavigation.bind(host);
++    }
++
++    private void updateArcPhoneFloatingSurfaces() {
++        boolean enabled = mArcPhoneHost != null
++                && !org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.isDesktopWindow(mActivity);
++        if (mToolbarLayout instanceof ToolbarPhone phone) {
++            mToolbarThemeColorProvider.setArcPhoneFloatingSurfaceEnabled(enabled);
++            if (mAdjustedToolbarThemeColorProvider != null) {
++                mAdjustedToolbarThemeColorProvider.setArcPhoneFloatingSurfaceEnabled(enabled);
++            }
++            phone.setArcPhoneFloatingSurfaceEnabled(enabled);
++            mStatusBarColorController.setArcPhoneFloatingSurfaceEnabled(enabled);
++        }
++        if (mArcPhoneNavigation != null) {
++            mArcPhoneNavigation.setPhoneModeActive(enabled);
++            mArcPhoneNavigation.refresh();
++        }
 +    }
 +
      /** Enable the bottom controls. */
@@ -3038,7 +3089,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          enableTabGroupUiControls();
          if (BottomBarConfigUtils.isBottomBarEnabled(mActivity)) {
              enableBottomBar();
-@@ -2605,26 +2620,43 @@
+@@ -2605,26 +2651,43 @@
          OneshotSupplier<String> countrySupplier =
                  mCountrySupplier != null ? mCountrySupplier : new OneshotSupplierImpl<>();
 
@@ -3066,7 +3117,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 +        if (arcPhone) {
 +            mArcPhoneNavigation = new ArcPhoneNavigation(
 +                    bottomAppBarContainer.findViewById(R.id.bottom_container_slot), mBottomSheetController,
-+                    BottomBarUtils.getBottomBarHeight(mActivity));
++                    ArcPhoneNavigation.getReservedHeight(mActivity));
 +            if (mArcPhoneHost != null) mArcPhoneNavigation.bind(mArcPhoneHost);
 +            bottomBarContainerOneshotSupplier.set(mArcPhoneNavigation);
 +            if (mBottomBarHostManager != null) {
@@ -3102,13 +3153,28 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          }
 
          var bottomAppBarCoordinator =
-@@ -3052,9 +3084,15 @@
+@@ -2639,7 +2702,8 @@
+                         mActivityTabProvider.asObservable(),
+                         (ScrollingBottomViewResourceFrameLayout) bottomAppBarContainer,
+                         LayerType.BOTTOM_APP_BAR,
+-                        BottomBarUtils.getBottomBarHeight(mActivity),
++                        arcPhone ? ArcPhoneNavigation.getReservedHeight(mActivity)
++                                : BottomBarUtils.getBottomBarHeight(mActivity),
+                         bottomBarContainerOneshotSupplier,
+                         mTabObscuringHandler,
+                         mLayoutManager.getOverlayPanelManager().getPanelStateSupplier(),
+@@ -3052,9 +3116,20 @@
              mTabGroupUiBottomControlsCoordinatorSupplier = null;
          }
 
 +        if (mArcPhoneCountObserver != null) {
 +            mOverridableTabCount.getObservable().removeObserver(mArcPhoneCountObserver);
 +            mArcPhoneCountObserver = null;
++        }
++        if (mArcPhoneModeObserver != null) {
++            org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.preferences(mActivity)
++                    .unregisterOnSharedPreferenceChangeListener(mArcPhoneModeObserver);
++            mArcPhoneModeObserver = null;
 +        }
 +        mArcPhoneHost = null;
          BottomControlsCoordinator bottomAppBarCoordinator = mBottomAppBarCoordinatorSupplier.get();
@@ -3118,7 +3184,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
              mBottomAppBarCoordinatorSupplier = null;
          }
 
-@@ -3318,6 +3356,10 @@
+@@ -3318,6 +3393,10 @@
       */
      @Override
      public void onThemeColorChanged(int color, boolean shouldAnimate) {
@@ -3129,7 +3195,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          if (!mShouldUpdateToolbarPrimaryColor) return;
 
          boolean colorChanged = mCurrentThemeColor != color;
-@@ -3658,6 +3700,7 @@
+@@ -3658,6 +3737,7 @@
 
          updateButtonStatus();
          mCurrentTabSupplier.set(tab);
@@ -3137,7 +3203,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          mFormFieldFocusedSupplier.onWebContentsChanged(tab == null ? null : tab.getWebContents());
      }
 
-@@ -3945,8 +3988,17 @@
+@@ -3945,8 +4025,17 @@
          updateToolbarSceneLayerSuppression();
      }
 
@@ -3156,6 +3222,72 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
      }
 
      @VisibleForTesting
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ui/system/StatusBarColorController.java b/chrome/android/java/src/org/chromium/chrome/browser/ui/system/StatusBarColorController.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/ui/system/StatusBarColorController.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/ui/system/StatusBarColorController.java
+@@ -97,6 +97,7 @@
+         int getBaseStatusBarColor(@Nullable Tab tab);
+     }
+
++    private boolean mArcPhoneFloatingSurface;
+     private final Window mWindow;
+     private final boolean mIsTablet;
+     private final Activity mActivity;
+@@ -496,14 +497,43 @@
+         }
+     }
+
++    /** Opt in from the tabbed phone toolbar; Desktop and custom tabs keep native coloring. */
++    public void setArcPhoneFloatingSurfaceEnabled(boolean enabled) {
++        if (mArcPhoneFloatingSurface == enabled) return;
++        mArcPhoneFloatingSurface = enabled;
++        updateStatusBarColor();
++    }
++
++    private @ColorInt int getArcPhoneSurfaceColor() {
++        return ColorUtils.shouldUseLightForegroundOnBackground(calculateDefaultStatusBarColor())
++                ? 0xff202124 : Color.WHITE;
++    }
++
+     /** Calculate and update the status bar's color. */
+     public void updateStatusBarColor() {
+         @ColorInt int statusBarColor = calculateFinalStatusBarColor();
++        boolean floatingPhoneSurface = mArcPhoneFloatingSurface && !mIsOmniboxFocused
++                && !isStandardNtp() && statusBarColor == getArcPhoneSurfaceColor();
++        // Keep contrast with the native owner so later inset/delegate updates cannot lose it.
++        mEdgeToEdgeSystemBarColorHelper.setStatusBarIconContrastColorOverride(
++                floatingPhoneSurface ? Integer.valueOf(statusBarColor) : null);
+         setStatusBarColor(
+                 mEdgeToEdgeSystemBarColorHelper,
+                 mActivity,
+                 statusBarColor,
+                 mForceLightIconColorForNtp && isStandardNtp() && !mIsOmniboxFocused);
++
++        // Leave indicator/scrim/focus/NTP colors with their native owners. Only the normal
++        // phone surface is transparent; icon contrast uses the actual light/dark backing.
++        if (floatingPhoneSurface) {
++            if (mEdgeToEdgeSystemBarColorHelper.canSetStatusBarColor()) {
++                mEdgeToEdgeSystemBarColorHelper.setStatusBarColor(Color.TRANSPARENT, false);
++            } else {
++                UiUtils.setStatusBarColor(mWindow, Color.TRANSPARENT);
++                UiUtils.setStatusBarIconColor(mWindow.getDecorView().getRootView(),
++                        !ColorUtils.shouldUseLightForegroundOnBackground(statusBarColor));
++            }
++        }
+
+         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+             @ColorInt
+@@ -567,6 +597,10 @@
+         }
+         if (baseStatusBarColor != UNDEFINED_STATUS_BAR_COLOR) {
+             return baseStatusBarColor;
++        }
++
++        if (mArcPhoneFloatingSurface && !mIsOmniboxFocused && !isStandardNtp()) {
++            return getArcPhoneSurfaceColor();
+         }
+
+         if (mIsTablet) {
 diff --git a/chrome/android/junit/BUILD.gn b/chrome/android/junit/BUILD.gn
 --- a/chrome/android/junit/BUILD.gn
 +++ b/chrome/android/junit/BUILD.gn
@@ -5376,6 +5508,134 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
      }
 
      @Test
+diff --git a/chrome/browser/ui/android/theme/java/src/org/chromium/chrome/browser/theme/ToolbarThemeColorProvider.java b/chrome/browser/ui/android/theme/java/src/org/chromium/chrome/browser/theme/ToolbarThemeColorProvider.java
+--- a/chrome/browser/ui/android/theme/java/src/org/chromium/chrome/browser/theme/ToolbarThemeColorProvider.java
++++ b/chrome/browser/ui/android/theme/java/src/org/chromium/chrome/browser/theme/ToolbarThemeColorProvider.java
+@@ -6,6 +6,7 @@
+
+ import android.content.Context;
+ import android.content.res.ColorStateList;
++import android.graphics.Color;
+
+ import androidx.annotation.ColorInt;
+
+@@ -18,6 +19,8 @@
+ import org.chromium.chrome.browser.theme.ThemeColorProvider.TintObserver;
+ import org.chromium.chrome.browser.ui.bottombar.BottomBarConfigUtils;
+ import org.chromium.chrome.browser.ui.theme.BrandedColorScheme;
++import org.chromium.components.browser_ui.styles.ChromeColors;
++import org.chromium.ui.util.ColorUtils;
+
+ /**
+  * Theme color provider for the toolbar. It listens to {@link TopUiThemeColorProvider} by default.
+@@ -27,6 +30,8 @@
+ @NullMarked
+ public class ToolbarThemeColorProvider extends ThemeColorProvider
+         implements BrowserControlsStateProvider.Observer, ThemeColorObserver, TintObserver {
++    private final Context mArcContext;
++    private boolean mArcPhoneFloatingSurface;
+     private final TopUiThemeColorProvider mTopUiThemeColorProvider;
+     private final BottomUiThemeColorProvider mBottomUiThemeColorProvider;
+     private final BrowserControlsStateProvider mBrowserControlsStateProvider;
+@@ -48,6 +53,7 @@
+             BottomUiThemeColorProvider bottomUiThemeColorProvider,
+             BrowserControlsStateProvider browserControlsStateProvider) {
+         super(context);
++        mArcContext = context;
+         mTopUiThemeColorProvider = topUiThemeColorProvider;
+         mBottomUiThemeColorProvider = bottomUiThemeColorProvider;
+         mBrowserControlsStateProvider = browserControlsStateProvider;
+@@ -58,6 +64,24 @@
+         updateActiveProvider(/* animate= */ false);
+     }
+
++    /** Phone-only palette opt-in; use the same native color scheme for surface and icons. */
++    public void setArcPhoneFloatingSurfaceEnabled(boolean enabled) {
++        if (mArcPhoneFloatingSurface == enabled
++                && (!enabled || getThemeColor() == getArcPhoneSurfaceColor())) return;
++        mArcPhoneFloatingSurface = enabled;
++        if (mActiveProvider == null) return;
++        onThemeColorChanged(mActiveProvider.getThemeColor(), /* shouldAnimate= */ false);
++        onTintChanged(mActiveProvider.getTint(), mActiveProvider.getActivityFocusTint(),
++                mActiveProvider.getBrandedColorScheme());
++    }
++
++    private @ColorInt int getArcPhoneSurfaceColor() {
++        boolean incognito = mActiveProvider != null
++                && mActiveProvider.getBrandedColorScheme() == BrandedColorScheme.INCOGNITO;
++        int color = ChromeColors.getDefaultThemeColor(mArcContext, incognito);
++        return ColorUtils.shouldUseLightForegroundOnBackground(color) ? 0xff202124 : Color.WHITE;
++    }
++
+     /**
+      * @param tab The {@link Tab} on which the theme color is used.
+      * @param fallbackColor The fallback color to use if the default color is used or there is no
+@@ -66,6 +90,7 @@
+      *     current tab.
+      */
+     public @ColorInt int getThemeColorOrFallback(@Nullable Tab tab, @ColorInt int fallbackColor) {
++        if (mArcPhoneFloatingSurface) return getArcPhoneSurfaceColor();
+         if (mActiveProvider == mTopUiThemeColorProvider) {
+             return mTopUiThemeColorProvider.getThemeColorOrFallback(tab, fallbackColor);
+         }
+@@ -77,6 +102,7 @@
+      * @return Returns the toolbar background color.
+      */
+     public @ColorInt int getToolbarBackgroundColor(Tab tab) {
++        if (mArcPhoneFloatingSurface) return getArcPhoneSurfaceColor();
+         if (mActiveProvider == mTopUiThemeColorProvider) {
+             return mTopUiThemeColorProvider.getToolbarBackgroundColor(tab);
+         }
+@@ -102,7 +128,7 @@
+
+     @Override
+     public void onThemeColorChanged(int color, boolean shouldAnimate) {
+-        updatePrimaryColor(color, shouldAnimate);
++        updatePrimaryColor(mArcPhoneFloatingSurface ? getArcPhoneSurfaceColor() : color, shouldAnimate);
+     }
+
+     @Override
+@@ -110,7 +136,19 @@
+             @Nullable ColorStateList tint,
+             @Nullable ColorStateList activityFocusTint,
+             @BrandedColorScheme int brandedColorScheme) {
++        if (mArcPhoneFloatingSurface) {
++            brandedColorScheme = brandedColorScheme == BrandedColorScheme.INCOGNITO
++                    ? BrandedColorScheme.INCOGNITO : BrandedColorScheme.APP_DEFAULT;
++            ColorStateList nativeTint = ThemeUtils.getThemedToolbarIconTint(mArcContext, brandedColorScheme);
++            activityFocusTint = activityFocusTint == null ? null
++                    : nativeTint.withAlpha(Color.alpha(activityFocusTint.getDefaultColor()));
++            tint = nativeTint;
++        }
+         updateTint(tint, activityFocusTint, brandedColorScheme);
++        if (mArcPhoneFloatingSurface) {
++            // Incognito/night changes may notify tint after the primary-color event.
++            updatePrimaryColor(getArcPhoneSurfaceColor(), /* shouldAnimate= */ false);
++        }
+     }
+
+     private void updateActiveProvider(boolean animate) {
+@@ -130,11 +168,15 @@
+             mActiveProvider.addThemeColorObserver(this);
+             mActiveProvider.addTintObserver(this);
+
+-            updatePrimaryColor(mActiveProvider.getThemeColor(), animate);
+-            updateTint(
+-                    mActiveProvider.getTint(),
+-                    mActiveProvider.getActivityFocusTint(),
+-                    mActiveProvider.getBrandedColorScheme());
++            if (mArcPhoneFloatingSurface) {
++                onThemeColorChanged(mActiveProvider.getThemeColor(), animate);
++                onTintChanged(mActiveProvider.getTint(), mActiveProvider.getActivityFocusTint(),
++                        mActiveProvider.getBrandedColorScheme());
++            } else {
++                updatePrimaryColor(mActiveProvider.getThemeColor(), animate);
++                updateTint(mActiveProvider.getTint(), mActiveProvider.getActivityFocusTint(),
++                        mActiveProvider.getBrandedColorScheme());
++            }
+         }
+     }
+ }
 diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarLayout.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarLayout.java
 --- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarLayout.java
 +++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarLayout.java
@@ -5409,6 +5669,97 @@ diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/brow
          outRect.offset(mTempPosition[0], mTempPosition[1]);
      }
 
+diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarPhone.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarPhone.java
+--- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarPhone.java
++++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarPhone.java
+@@ -211,6 +211,9 @@
+
+     private float mNtpSearchBoxScrollFraction = UNINITIALIZED_FRACTION;
+     protected ColorDrawable mToolbarBackground;
++    private boolean mArcPhoneFloatingSurface;
++    private @Nullable ViewOutlineProvider mArcOriginalLocationBarOutline;
++    private float mArcOriginalLocationBarElevation;
+
+     /** The omnibox background (white with a shadow). */
+     private LocationBarBackgroundDrawable mLocationBarBackground;
+@@ -576,6 +579,9 @@
+
+     /** Set the background color of the location bar to appropriately match the theme color. */
+     private void updateModernLocationBarColor(@ColorInt int color) {
++        if (mArcPhoneFloatingSurface && !urlHasFocus() && !isLocationBarShownInNtp()) {
++            color = ColorUtils.setAlphaComponent(getArcPhoneSurfaceColor(), 249);
++        }
+         if (mCurrentLocationBarColor == color) return;
+         mCurrentLocationBarColor = color;
+         mLocationBarBackground.setBackgroundColor(color);
+@@ -598,7 +604,17 @@
+                 (int)
+                         MathUtils.interpolate(
+                                 nonFocusedRadius, focusedRadius, mUrlFocusChangeFraction);
++        if (mArcPhoneFloatingSurface && !urlHasFocus() && !isLocationBarShownInNtp()) {
++            radius = getResources().getDimensionPixelSize(R.dimen.toolbar_height_no_shadow);
++        }
+         mLocationBarBackground.setCornerRadius(radius);
++        if (mArcPhoneFloatingSurface) {
++            View surface = ChromeFeatureList.sToolbarPhoneAnimationRefactor.isEnabled()
++                    ? mActiveLocationBarBackgroundView : mLocationBar.getContainerView();
++            surface.setElevation(urlHasFocus() || isLocationBarShownInNtp() ? 0
++                    : 3f * getResources().getDisplayMetrics().density);
++            surface.invalidateOutline();
++        }
+         if (ChromeFeatureList.sToolbarPhoneAnimationRefactor.isEnabled()) {
+             mLocationBar.getContainerView().invalidateOutline();
+         }
+@@ -926,7 +942,49 @@
+         return Math.max(mToolbarSidePaddingForNtp, toolbarButtonsContainerWidth);
+     }
+
++    /** Phone-only surface treatment; native URL bounds, focus and hit targets are unchanged. */
++    public void setArcPhoneFloatingSurfaceEnabled(boolean enabled) {
++        if (mArcPhoneFloatingSurface == enabled) return;
++        View surface = ChromeFeatureList.sToolbarPhoneAnimationRefactor.isEnabled()
++                ? mActiveLocationBarBackgroundView : mLocationBar.getContainerView();
++        if (enabled) {
++            mArcOriginalLocationBarOutline = surface.getOutlineProvider();
++            mArcOriginalLocationBarElevation = surface.getElevation();
++            if (!ChromeFeatureList.sToolbarPhoneAnimationRefactor.isEnabled()) {
++                surface.setOutlineProvider(new ViewOutlineProvider() {
++                    @Override
++                    public void getOutline(View view, Outline outline) {
++                        outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(),
++                                view.getHeight() / 2f);
++                    }
++                });
++            }
++        } else {
++            surface.setOutlineProvider(mArcOriginalLocationBarOutline);
++            surface.setElevation(mArcOriginalLocationBarElevation);
++        }
++        mArcPhoneFloatingSurface = enabled;
++        updateToolbarAndLocationBarColorForFocusChange();
++        updateModernLocationBarCorners();
++        updateHairlineVisibility();
++        invalidate();
++    }
++
++    private @ColorInt int getArcPhoneSurfaceColor() {
++        return ColorUtils.shouldUseLightForegroundOnBackground(
++                getToolbarDefaultColor(/* shouldUseFocusColor= */ false))
++                ? 0xff202124 : Color.WHITE;
++    }
++
++    @Override
++    protected boolean shouldDrawHairline() {
++        return !mArcPhoneFloatingSurface && super.shouldDrawHairline();
++    }
++
+     private void updateToolbarBackground(@ColorInt int color) {
++        if (mArcPhoneFloatingSurface && !urlHasFocus() && !isLocationBarShownInNtp()) {
++            color = getArcPhoneSurfaceColor();
++        }
+         if (mToolbarBackground.getColor() == color) return;
+         mToolbarBackground.setColor(color);
+         setToolbarHairlineColor(color);
 diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java
 --- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java
 +++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarTablet.java
@@ -6859,6 +7210,46 @@ diff --git a/components/signin/public/android/java/src/org/chromium/components/s
      }
 
      @Override
+diff --git a/ui/edge_to_edge/android/java/src/org/chromium/ui/edge_to_edge/EdgeToEdgeSystemBarColorHelper.java b/ui/edge_to_edge/android/java/src/org/chromium/ui/edge_to_edge/EdgeToEdgeSystemBarColorHelper.java
+--- a/ui/edge_to_edge/android/java/src/org/chromium/ui/edge_to_edge/EdgeToEdgeSystemBarColorHelper.java
++++ b/ui/edge_to_edge/android/java/src/org/chromium/ui/edge_to_edge/EdgeToEdgeSystemBarColorHelper.java
+@@ -33,6 +33,7 @@
+     protected boolean mIsActivityEdgeToEdge;
+     protected boolean mCanColorStatusBarColor;
+     private final boolean mCanSetTransparentStatusBarWithoutDelegate;
++    private @Nullable Integer mStatusBarIconContrastColorOverride;
+
+     /**
+      * @param window Window from {@link android.app.Activity#getWindow()}.
+@@ -142,6 +143,16 @@
+         updateNavigationBarIconColor(mWindow.getDecorView(), mNavBarColor);
+     }
+
++    /**
++     * Sets the actual backing used for icon contrast when the status bar itself is transparent.
++     * Pass null to restore native color-based contrast. Survives delegate/inset refreshes.
++     */
++    public void setStatusBarIconContrastColorOverride(@Nullable Integer color) {
++        if (java.util.Objects.equals(mStatusBarIconContrastColorOverride, color)) return;
++        mStatusBarIconContrastColorOverride = color;
++        updateStatusBarColor();
++    }
++
+     private void updateStatusBarColor() {
+         if (!canSetStatusBarColor()) {
+             return;
+@@ -166,7 +177,10 @@
+         if (mForceLightStatusBarColor) {
+             updateStatusBarWithLightIconColor(mWindow.getDecorView());
+         } else {
+-            updateStatusBarIconColor(mWindow.getDecorView(), mStatusBarColor);
++            updateStatusBarIconColor(
++                    mWindow.getDecorView(),
++                    mStatusBarIconContrastColorOverride != null
++                            ? mStatusBarIconContrastColorOverride : mStatusBarColor);
+         }
+     }
+
 diff --git a/chrome/android/java/res/values/arc_strings.xml b/chrome/android/java/res/values/arc_strings.xml
 new file mode 100644
 --- /dev/null
@@ -10867,7 +11258,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneNav
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneNavigation.java
-@@ -0,0 +1,259 @@
+@@ -0,0 +1,324 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -10876,6 +11267,8 @@ new file mode 100644
 +import android.animation.ValueAnimator;
 +import android.content.Context;
 +import android.content.res.ColorStateList;
++import android.content.res.Configuration;
++import android.util.TypedValue;
 +import android.graphics.Bitmap;
 +import android.graphics.Canvas;
 +import android.graphics.Color;
@@ -10922,19 +11315,22 @@ new file mode 100644
 +        int tabCount();
 +        boolean webPage();
 +        boolean pinned();
++        default boolean homePage(){return false;}
 +        boolean desktopSite();
 +        int zoomPercent();
 +        int surface();
 +        void action(int action);
 +        void zoom(int direction);
 +    }
-+    public static final int HEIGHT_DP=60;
++    public static final int HEIGHT_DP=76;
 +    private final FrameLayout mSlot;
 +    private final Context mContext;
 +    private final BottomSheetController mController;
 +    private final LinearLayout mBar;
 +    private final int mHeight;
++    private final int mBarHeight;
 +    private boolean mTabbedHost=true;
++    private boolean mPhoneModeActive=true;
 +    private final View[] mButtons=new View[4];
 +    private Host mHost;
 +    private BottomControlsVisibilityController mVisibility;
@@ -10950,25 +11346,31 @@ new file mode 100644
 +    public ArcPhoneNavigation(FrameLayout slot, BottomSheetController controller,int height) {
 +        mHeight=height;
 +        mSlot=slot;mContext=slot.getContext();mController=controller;
++        mSurface=themeSurface();
++        mForeground=Color.luminance(mSurface)>.45?0xff202124:0xfff1f3f4;
++        mBarHeight=Math.min(mHeight,Math.max(dp(48),mHeight-dp(20)));
 +        mBar=new LinearLayout(mContext);mBar.setGravity(Gravity.CENTER);
 +        mBar.setTag("arc-phone-navigation");
++        mBar.setElevation(dp(6));
++        mBar.setOutlineAmbientShadowColor(0x240d244b);
++        mBar.setOutlineSpotShadowColor(0x240d244b);
 +        int[] labels={R.string.arc_phone_home,R.string.arc_phone_new,R.string.arc_phone_tabs,R.string.arc_phone_menu};
 +        String[] tags={"home","new","tabs","menu"};
 +        for(int i=0;i<4;i++) {
 +            final int action=i;
 +            LinearLayout button=new LinearLayout(mContext);button.setOrientation(LinearLayout.VERTICAL);
 +            button.setGravity(Gravity.CENTER);button.setPadding(0,dp(3),0,dp(3));
-+            ImageView icon=new ImageView(mContext);icon.setImageDrawable(new Icon(i,Color.BLACK,""));
-+            FrameLayout pill=new FrameLayout(mContext);pill.addView(icon,new FrameLayout.LayoutParams(Math.min(dp(26),mHeight-dp(26)),Math.min(dp(26),mHeight-dp(26)),Gravity.CENTER));
-+            button.addView(pill,new LinearLayout.LayoutParams(dp(i==NEW_TAB?60:44),Math.max(dp(24),mHeight-dp(24))));
++            ImageView icon=new ImageView(mContext);icon.setImageDrawable(new Icon(i,mForeground,""));
++            FrameLayout pill=new FrameLayout(mContext);pill.addView(icon,new FrameLayout.LayoutParams(Math.min(dp(26),mBarHeight-dp(26)),Math.min(dp(26),mBarHeight-dp(26)),Gravity.CENTER));
++            button.addView(pill,new LinearLayout.LayoutParams(dp(i==NEW_TAB?60:44),Math.max(dp(24),mBarHeight-dp(24))));
 +            TextView text=text(mContext.getString(labels[i]),12);text.setGravity(Gravity.CENTER);
 +            button.addView(text,new LinearLayout.LayoutParams(-1,dp(18)));
 +            accessible(button,mContext.getString(labels[i]),"arc-phone-"+tags[i]);
 +            button.setOnClickListener(v->{if(mDestroyed||mHost==null)return;haptic(v);if(action==MENU)showMenu();else mHost.action(action);});
-+            mBar.addView(button,new LinearLayout.LayoutParams(0,mHeight,1));mButtons[i]=button;
++            mBar.addView(button,new LinearLayout.LayoutParams(0,mBarHeight,1));mButtons[i]=button;
 +        }
 +        // Native BottomControlsCoordinator owns size, insets, fullscreen, keyboard and raster capture.
-+        slot.addView(mBar,new FrameLayout.LayoutParams(-1,mHeight));
++        slot.addView(mBar,floatingLayout());
 +        refresh();
 +    }
 +    /** Let Chromium's tab switcher borrow the same view, never a duplicate bar. */
@@ -10983,46 +11385,80 @@ new file mode 100644
 +    }
 +    public void attachBottomBarView(View view) {
 +        if(mDestroyed)return;
-+        mSlot.addView(view,new FrameLayout.LayoutParams(-1,mHeight));refresh();
++        mSlot.addView(view,floatingLayout());refresh();
++    }
++    private FrameLayout.LayoutParams floatingLayout() {
++        FrameLayout.LayoutParams params=new FrameLayout.LayoutParams(-1,mBarHeight,Gravity.CENTER);
++        int vertical=(mHeight-mBarHeight)/2;
++        params.setMargins(dp(18),vertical,dp(18),vertical);
++        return params;
++    }
++    public static int getReservedHeight(Context context) {
++        return Math.round(HEIGHT_DP*context.getResources().getDisplayMetrics().density);
++    }
++    public void setPhoneModeActive(boolean active) {
++        if(mPhoneModeActive==active)return;
++        mPhoneModeActive=active;
++        if(!active)dismissMenu();
++        refresh();
 +    }
 +    public void bind(Host host){if(mDestroyed)return;mHost=host;refresh();}
 +    public void refresh() {
 +        if(mDestroyed)return;
 +        if(mSheet!=null && (mHost==null || mSheet.mToken!=mHost.pageToken()))dismissMenu();
-+        mSurface=mHost==null?Color.WHITE:mHost.surface();
++        int oldSurface=mSurface;
++        int nativeSurface=mHost==null?themeSurface():mHost.surface();
++        mSurface=Color.luminance(nativeSurface)>.45?Color.WHITE:nativeSurface;
 +        mForeground=Color.luminance(mSurface)>.45?0xff202124:0xfff1f3f4;
-+        mBar.setBackgroundColor(mSurface);
++        mSlot.setBackgroundColor(mSurface);
++        mBar.setBackground(shape((mSurface&0xffffff)|0xf9000000,100));
++        int active=mSheet!=null?MENU:!mTabbedHost?TABS:mHost!=null&&mHost.homePage()?HOME:-1;
 +        String count=mHost==null?"0":Integer.toString(Math.max(0,mHost.tabCount()));
 +        for(int i=0;i<4;i++) {
-+            LinearLayout button=(LinearLayout)mButtons[i];button.setEnabled(mHost!=null);
-+            button.setBackground(ripple(Color.TRANSPARENT,12));
++            LinearLayout button=(LinearLayout)mButtons[i];button.setEnabled(mHost!=null && mPhoneModeActive);
++            button.setBackground(ripple(Color.TRANSPARENT,24));
++            boolean selected=i==active;button.setSelected(selected);
++            int foreground=selected?(Color.luminance(mSurface)>.45?0xff155dff:0xff8ab4f8):mForeground;
 +            FrameLayout pill=(FrameLayout)button.getChildAt(0);
-+            pill.setBackground(i==NEW_TAB?shape(Color.luminance(mSurface)>.45?Color.WHITE:0xff44464f,24):null);
-+            ((ImageView)pill.getChildAt(0)).setImageDrawable(new Icon(i,mForeground,i==TABS?count:""));
-+            ((TextView)button.getChildAt(1)).setTextColor(mForeground);
++            pill.setBackground(selected?shape(Color.luminance(mSurface)>.45?0xffeaf1ff:0xff263c60,24):null);
++            ((ImageView)pill.getChildAt(0)).setImageDrawable(new Icon(i,foreground,i==TABS?count:""));
++            ((TextView)button.getChildAt(1)).setTextColor(foreground);
 +        }
 +        mButtons[TABS].setContentDescription(mContext.getString(R.string.arc_phone_tabs)+", "+count);
 +        boolean countChanged=!mCount.equals(count);mCount=count;
-+        if(mVisibility!=null)mVisibility.setBottomControlsVisible(mHost!=null && mTabbedHost);
++        if(mVisibility!=null)mVisibility.setBottomControlsVisible(mHost!=null && mTabbedHost && mPhoneModeActive);
++        if(mSheet!=null && oldSurface!=mSurface){
++            mSheet.applyPalette();
++            mController.onSheetBackgroundColorOverrideChanged();
++        }
 +        if(mCapture!=null)mCapture.onResult(countChanged?count:new Object());
 +    }
 +    @Override public void initializeWithNative(BottomControlsVisibilityController visibility,Callback<Object> capture){mVisibility=visibility;mCapture=capture;refresh();}
 +    @Override public int getScrollBehavior(){return LayerScrollBehavior.DEFAULT_SCROLL_OFF;}
 +    @Override public Integer getBackgroundColor(){return mSurface;}
 +    private void showMenu() {
-+        if(mDestroyed||mHost==null||mSheet!=null)return;
++        if(mDestroyed||mHost==null||!mPhoneModeActive||mSheet!=null)return;
 +        MenuSheet sheet=new MenuSheet(mHost);mSheet=sheet;
 +        if(!mController.requestShowContent(sheet,ValueAnimator.areAnimatorsEnabled()))sheet.destroy();
++        refresh();
 +    }
 +    public void dismissMenu(){MenuSheet sheet=mSheet;if(sheet==null)return;mSheet=null;mController.hideContent(sheet,ValueAnimator.areAnimatorsEnabled());sheet.destroy();}
-+    @Override public void destroy(){if(mDestroyed)return;dismissMenu();mDestroyed=true;mHost=null;mCapture=null;mVisibility=null;if(mBar.getParent() instanceof ViewGroup parent)parent.removeView(mBar);}
-+    private boolean valid(MenuSheet sheet){return !mDestroyed && !sheet.mClosed && mHost!=null && sheet.mToken==mHost.pageToken();}
++    @Override public void destroy(){if(mDestroyed)return;mDestroyed=true;dismissMenu();mHost=null;mCapture=null;mVisibility=null;if(mBar.getParent() instanceof ViewGroup parent)parent.removeView(mBar);}
++    private boolean valid(MenuSheet sheet){return !mDestroyed && mPhoneModeActive && !sheet.mClosed && mHost!=null && sheet.mToken==mHost.pageToken();}
 +    private void act(MenuSheet sheet,int action){if(!valid(sheet))return;Host host=mHost;dismissMenu();host.action(action);refresh();}
 +    private void haptic(View view){view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);}
++    private int themeSurface() {
++        TypedValue color=new TypedValue();
++        if(mContext.getTheme().resolveAttribute(android.R.attr.colorBackground,color,true)) {
++            if(color.type>=TypedValue.TYPE_FIRST_COLOR_INT && color.type<=TypedValue.TYPE_LAST_COLOR_INT)return color.data;
++            if(color.resourceId!=0)return mContext.getColor(color.resourceId);
++        }
++        return (mContext.getResources().getConfiguration().uiMode&Configuration.UI_MODE_NIGHT_MASK)==Configuration.UI_MODE_NIGHT_YES?0xff202124:Color.WHITE;
++    }
 +    private int dp(int value){return Math.round(value*mContext.getResources().getDisplayMetrics().density);}
 +    private TextView text(String value,int sp){TextView t=new TextView(mContext);t.setText(value);t.setTextSize(sp);t.setTextColor(mForeground);return t;}
 +    private GradientDrawable shape(int color,int radius){GradientDrawable d=new GradientDrawable();d.setColor(color);d.setCornerRadius(dp(radius));return d;}
-+    private Drawable ripple(int background,int radius){return new RippleDrawable(ColorStateList.valueOf((mForeground&0xffffff)|0x1e000000),shape(background,radius),null);}
++    private Drawable ripple(int background,int radius){return new RippleDrawable(ColorStateList.valueOf((mForeground&0xffffff)|0x10000000),shape(background,radius),null);}
 +    private void accessible(View view,String label,String tag){view.setTag(tag);view.setContentDescription(label);view.setTooltipText(label);view.setFocusable(true);view.setClickable(true);view.setMinimumHeight(dp(48));}
 +
 +    private final class MenuSheet implements BottomSheetContent {
@@ -11038,7 +11474,7 @@ new file mode 100644
 +            mScroll.addView(mBody,new ScrollView.LayoutParams(-1,-2));
 +            // A non-null, zero-height toolbar prevents the native sheet's omnibox fallback.
 +            mEmptyToolbar=new View(mContext);mEmptyToolbar.setLayoutParams(new FrameLayout.LayoutParams(-1,0));
-+            View grip=new View(mContext);grip.setBackground(shape((mForeground&0xffffff)|0x50000000,3));
++            View grip=new View(mContext);grip.setTag("arc-phone-menu-grip");grip.setBackground(shape((mForeground&0xffffff)|0x50000000,3));
 +            LinearLayout.LayoutParams gripSize=new LinearLayout.LayoutParams(dp(32),dp(4));gripSize.gravity=Gravity.CENTER_HORIZONTAL;gripSize.bottomMargin=dp(12);mBody.addView(grip,gripSize);
 +            LinearLayout header=new LinearLayout(mContext);header.setGravity(Gravity.CENTER_VERTICAL);header.setPadding(dp(8),dp(4),dp(8),dp(12));
 +            ImageView favicon=new ImageView(mContext);Bitmap bitmap=host.favicon();
@@ -11065,7 +11501,7 @@ new file mode 100644
 +            TextView zoomTitle=text(mContext.getString(R.string.arc_phone_zoom),17);zoomRow.addView(zoomTitle,new LinearLayout.LayoutParams(0,dp(64),1));zoomTitle.setGravity(Gravity.CENTER_VERTICAL);zoomRow.addView(zoom);
 +            for(int direction:new int[]{-1,1}) {
 +                TextView step=text(direction<0?"−":"+",26);step.setGravity(Gravity.CENTER);step.setBackground(ripple(Color.TRANSPARENT,24));
-+                accessible(step,mContext.getString(direction<0?R.string.arc_phone_zoom_out:R.string.arc_phone_zoom_in),"arc-phone-zoom-"+(direction<0?"minus":"plus"));step.setEnabled(host.webPage());
++                accessible(step,mContext.getString(direction<0?R.string.arc_phone_zoom_out:R.string.arc_phone_zoom_in),"arc-phone-zoom-"+(direction<0?"minus":"plus"));step.setEnabled(host.webPage());step.setAlpha(host.webPage()?1f:.4f);
 +                step.setOnClickListener(v->{if(!valid(this))return;haptic(v);mHost.zoom(direction);zoom.setText(mHost.zoomPercent()+"%");});zoomRow.addView(step,new LinearLayout.LayoutParams(dp(48),dp(48)));
 +            }
 +            mBody.addView(zoomRow);separator();
@@ -11086,7 +11522,26 @@ new file mode 100644
 +            if(action==DESKTOP_SITE){row.setSelected(mHost.desktopSite());row.setContentDescription(mContext.getString(label)+", "+mContext.getString(mHost.desktopSite()?R.string.arc_phone_on:R.string.arc_phone_off));}
 +            row.setOnClickListener(v->{haptic(v);act(this,action);});mBody.addView(row,new LinearLayout.LayoutParams(-1,-2));
 +        }
-+        private void separator(){View line=new View(mContext);line.setBackgroundColor((mForeground&0xffffff)|0x0d000000);mBody.addView(line,new LinearLayout.LayoutParams(-1,dp(1)));}
++        private void separator(){View line=new View(mContext);line.setTag("arc-phone-menu-divider");line.setBackgroundColor((mForeground&0xffffff)|0x0d000000);mBody.addView(line,new LinearLayout.LayoutParams(-1,dp(1)));}
++        private void applyPalette() {
++            ((GradientDrawable)mBody.getBackground()).setColor(mSurface);
++            recolor(mBody);
++        }
++        private void recolor(View view) {
++            if(view instanceof TextView label)label.setTextColor(mForeground);
++            if(view instanceof ImageView icon && icon.getDrawable() instanceof Icon vector)vector.setColor(mForeground);
++            Object tag=view.getTag();
++            if("arc-phone-menu-grip".equals(tag))((GradientDrawable)view.getBackground()).setColor((mForeground&0xffffff)|0x50000000);
++            if("arc-phone-menu-divider".equals(tag))view.setBackgroundColor((mForeground&0xffffff)|0x0d000000);
++            if(view.getBackground() instanceof RippleDrawable ripple) {
++                ripple.setColor(ColorStateList.valueOf((mForeground&0xffffff)|0x10000000));
++                if(("arc-phone-pin".equals(tag)||"arc-phone-find".equals(tag)||"arc-phone-share".equals(tag))
++                        && ripple.getDrawable(0) instanceof GradientDrawable tile) {
++                    tile.setColor(Color.luminance(mSurface)>.45?Color.WHITE:0xff363840);
++                }
++            }
++            if(view instanceof ViewGroup group)for(int i=0;i<group.getChildCount();i++)recolor(group.getChildAt(i));
++        }
 +        @Override public View getContentView(){return mScroll;}
 +        @Override public View getToolbarView(){return mEmptyToolbar;}
 +        @Override public int getVerticalScrollOffset(){return mScroll.getScrollY();}
@@ -11100,12 +11555,13 @@ new file mode 100644
 +        @Override public int getSheetHalfHeightAccessibilityStringId(){return R.string.arc_phone_menu;}
 +        @Override public int getSheetFullHeightAccessibilityStringId(){return R.string.arc_phone_menu;}
 +        @Override public int getSheetClosedAccessibilityStringId(){return R.string.arc_phone_menu_closed;}
-+        @Override public void destroy(){mClosed=true;if(mSheet==this)mSheet=null;}
++        @Override public void destroy(){mClosed=true;if(mSheet==this)mSheet=null;refresh();}
 +    }
 +    /** Small vectors drawn without bitmap allocation; no website content or snapshots are touched. */
 +    private static final class Icon extends Drawable {
-+        private final int mKind,mColor;private final String mCount;private final Paint mPaint=new Paint(Paint.ANTI_ALIAS_FLAG);
++        private final int mKind;private int mColor;private final String mCount;private final Paint mPaint=new Paint(Paint.ANTI_ALIAS_FLAG);
 +        Icon(int kind,int color,String count){mKind=kind;mColor=color;mCount=count;}
++        void setColor(int color){mColor=color;invalidateSelf();}
 +        @Override public void draw(Canvas canvas){
 +            int save=canvas.save();canvas.translate(getBounds().left,getBounds().top);canvas.scale(getBounds().width()/24f,getBounds().height()/24f);
 +            mPaint.setColor(mColor);mPaint.setStyle(Paint.Style.STROKE);mPaint.setStrokeWidth(1.8f);mPaint.setStrokeCap(Paint.Cap.ROUND);mPaint.setStrokeJoin(Paint.Join.ROUND);
@@ -14533,7 +14989,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneNa
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneNavigationTest.java
-@@ -0,0 +1,140 @@
+@@ -0,0 +1,291 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -14545,6 +15001,12 @@ new file mode 100644
 +
 +import android.app.Activity;
 +import android.graphics.Bitmap;
++import android.graphics.Color;
++import android.graphics.drawable.GradientDrawable;
++import android.widget.LinearLayout;
++import android.widget.TextView;
++import android.widget.ScrollView;
++import android.graphics.drawable.RippleDrawable;
 +import android.view.View;
 +import android.view.ViewGroup;
 +import android.widget.EditText;
@@ -14559,28 +15021,46 @@ new file mode 100644
 +import org.robolectric.annotation.Config;
 +import org.robolectric.annotation.GraphicsMode;
 +import org.robolectric.annotation.SQLiteMode;
++import org.robolectric.annotation.Implements;
++import org.robolectric.annotation.Implementation;
 +import org.chromium.components.browser_ui.bottomsheet.BottomSheetContent;
 +import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
 +
 +/** Real Android views and delivered sheet; Chromium controller/action boundaries are mocks. */
 +@RunWith(RobolectricTestRunner.class)
-+@Config(manifest=Config.NONE,sdk={30,36},qualifiers="mdpi")
++@Config(manifest=Config.NONE,sdk={30,36},qualifiers="mdpi",
++        instrumentedPackages={"org.chromium.components.browser_ui.styles", "org.chromium.chrome.browser.theme", "org.chromium.chrome.browser.ui.bottombar"},
++        shadows={ArcPhoneNavigationTest.PhoneColors.class,ArcPhoneNavigationTest.PhoneTints.class,ArcPhoneNavigationTest.PhoneBottomConfig.class})
 +@GraphicsMode(GraphicsMode.Mode.LEGACY)
 +@SQLiteMode(SQLiteMode.Mode.LEGACY)
 +public class ArcPhoneNavigationTest {
++    @Implements(value=org.chromium.components.browser_ui.styles.ChromeColors.class,isInAndroidSdk=false)
++    public static class PhoneColors {
++        static boolean dark;
++        @Implementation protected static int getDefaultThemeColor(android.content.Context context,boolean incognito){return dark||incognito?0xff202124:Color.WHITE;}
++    }
++    @Implements(value=org.chromium.chrome.browser.theme.ThemeUtils.class,isInAndroidSdk=false)
++    public static class PhoneTints {
++        @Implementation protected static android.content.res.ColorStateList getThemedToolbarIconTint(android.content.Context context,int scheme){return android.content.res.ColorStateList.valueOf(PhoneColors.dark||scheme==org.chromium.chrome.browser.ui.theme.BrandedColorScheme.INCOGNITO?Color.WHITE:Color.BLACK);}
++    }
++    @Implements(value=org.chromium.chrome.browser.ui.bottombar.BottomBarConfigUtils.class,isInAndroidSdk=false)
++    public static class PhoneBottomConfig {
++        @Implementation protected static boolean isBottomBarEnabled(android.content.Context context){return false;}
++    }
 +    private org.robolectric.android.controller.ActivityController<Activity> mActivity;
 +    private FrameLayout mSlot;
 +    private ArcPhoneNavigation mNavigation;
 +    private BottomSheetController mController;
 +    private FakeHost mHost;
 +    private static class FakeHost implements ArcPhoneNavigation.Host {
-+        Object token=new Object(); int action=-1,zoom=100,count=8,color=0xfff0f0f6; boolean web=true,pinned;
++        Object token=new Object(); int action=-1,zoom=100,count=8,color=0xfff0f0f6; boolean web=true,pinned,home;
 +        public Object pageToken(){return token;}
 +        public String domain(){return "example.test";}
 +        public Bitmap favicon(){return null;}
 +        public int tabCount(){return count;}
 +        public boolean webPage(){return web;}
 +        public boolean pinned(){return pinned;}
++        public boolean homePage(){return home;}
 +        public boolean desktopSite(){return false;}
 +        public int zoomPercent(){return zoom;}
 +        public int surface(){return color;}
@@ -14588,6 +15068,7 @@ new file mode 100644
 +        public void zoom(int direction){zoom+=direction*10;}
 +    }
 +    @Before public void setUp(){
++        PhoneColors.dark=false;
 +        mActivity=Robolectric.buildActivity(Activity.class).setup();
 +        mSlot=new FrameLayout(mActivity.get());mActivity.get().setContentView(mSlot);
 +        mController=mock(BottomSheetController.class);
@@ -14666,6 +15147,30 @@ new file mode 100644
 +        mSlot.measure(View.MeasureSpec.makeMeasureSpec(320,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(48,View.MeasureSpec.EXACTLY));mSlot.layout(0,0,320,48);
 +        for(String tag:new String[]{"home","new","tabs","menu"}){View v=find("arc-phone-"+tag);assertTrue(v.getWidth()>=48);assertEquals(48,v.getHeight());}
 +    }
++    @Test public void floatingPillHasSideMarginsAndBreathingRoomInsideNativeSlot(){
++        mSlot.measure(View.MeasureSpec.makeMeasureSpec(400,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(80,View.MeasureSpec.EXACTLY));mSlot.layout(0,0,400,80);
++        ViewGroup bar=(ViewGroup)mSlot.getChildAt(0);
++        assertTrue(bar.getLeft()>=16);assertTrue(bar.getRight()<=384);
++        assertTrue(bar.getTop()>=8);assertTrue(bar.getBottom()<=72);
++        assertTrue(bar.getElevation()>0);assertTrue(bar.getBackground() instanceof GradientDrawable);
++        assertTrue(((GradientDrawable)bar.getBackground()).getCornerRadius()>=bar.getHeight()/2f);
++        for(String tag:new String[]{"home","new","tabs","menu"}){View v=find("arc-phone-"+tag);assertTrue(v.getWidth()>=48);assertTrue(v.getHeight()>=48);}
++    }
++    @Test public void homeAndHubSelectionFollowNativeState(){
++        mHost.home=true;mNavigation.refresh();assertTrue(find("arc-phone-home").isSelected());
++        TextView label=(TextView)((LinearLayout)find("arc-phone-home")).getChildAt(1);
++        assertEquals(0xff155dff,label.getCurrentTextColor());
++        mHost.home=false;mNavigation.getBottomBar().setParent(1);
++        assertFalse(find("arc-phone-home").isSelected());assertTrue(find("arc-phone-tabs").isSelected());
++    }
++    @Test public void menuSelectionClearsWhenNativeSheetCloses(){
++        var sheet=menu();assertTrue(find("arc-phone-menu").isSelected());
++        sheet.destroy();assertFalse(find("arc-phone-menu").isSelected());
++    }
++    @Test public void lightPaletteUsesCleanWhiteOutsideCapsule(){
++        mHost.color=0xfff0f0f6;mNavigation.refresh();
++        assertEquals(Color.WHITE,mNavigation.getBackgroundColor().intValue());
++    }
 +    @Test public void liveCounterReflectsCurrentModelCount(){
 +        mHost.count=12;mNavigation.refresh();assertTrue(find("arc-phone-tabs").getContentDescription().toString().contains("12"));
 +    }
@@ -14673,6 +15178,108 @@ new file mode 100644
 +        mHost.color=0xff202124;mNavigation.refresh();assertEquals(0xff202124,mNavigation.getBackgroundColor().intValue());
 +        assertEquals(0xff202124,menu().getSheetBackgroundColorOverride());
 +    }
++    @Test public void leavingPhoneModeReleasesControlsAndClosesSheetWithoutDuplicatingViews(){
++        final boolean[] visible={true};mNavigation.initializeWithNative(v->visible[0]=v,t->{});
++        var sheet=menu();View bar=mSlot.getChildAt(0);
++        mNavigation.setPhoneModeActive(false);assertFalse(visible[0]);assertFalse(find("arc-phone-home").isEnabled());
++        verify(mController).hideContent(eq(sheet),anyBoolean());
++        mNavigation.setPhoneModeActive(true);assertTrue(visible[0]);assertSame(bar,mSlot.getChildAt(0));assertEquals(1,mSlot.getChildCount());
++    }
++    @Test public void destroyDoesNotPublishToReleasedNativeCaptureOrVisibility(){
++        final int[] callbacks={0};mNavigation.initializeWithNative(v->callbacks[0]++,t->callbacks[0]++);
++        menu();callbacks[0]=0;mNavigation.destroy();assertEquals(0,callbacks[0]);
++    }
++    @Test public void floatingPillKeepsAllTargetsAtNarrowAndWidePhoneWidths(){
++        for(int width:new int[]{240,320,800}){
++            mSlot.measure(View.MeasureSpec.makeMeasureSpec(width,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(80,View.MeasureSpec.EXACTLY));mSlot.layout(0,0,width,80);
++            ViewGroup bar=(ViewGroup)mSlot.getChildAt(0);assertTrue(bar.getRight()<=width-16);
++            for(String tag:new String[]{"home","new","tabs","menu"}){View v=find("arc-phone-"+tag);assertTrue(v.getWidth()>=48);assertTrue(v.getHeight()>=48);}
++        }
++    }
++    @Test public void darkSurfaceIsUsedBeforeNativeHostBinds(){
++        var context=new android.view.ContextThemeWrapper(mActivity.get(),android.R.style.Theme_Material_NoActionBar);
++        FrameLayout slot=new FrameLayout(context);var navigation=new ArcPhoneNavigation(slot,mController);
++        assertTrue(Color.luminance(navigation.getBackgroundColor())<.45);navigation.destroy();
++    }
++    @Test public void visibleMenuRecolorsWithoutReopeningOrLosingScroll(){
++        mSlot.measure(View.MeasureSpec.makeMeasureSpec(320,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(ArcPhoneNavigation.getReservedHeight(mActivity.get()),View.MeasureSpec.EXACTLY));mSlot.layout(0,0,320,ArcPhoneNavigation.getReservedHeight(mActivity.get()));
++        View bar=mSlot.getChildAt(0);android.graphics.Rect bounds=new android.graphics.Rect(bar.getLeft(),bar.getTop(),bar.getRight(),bar.getBottom());
++        var sheet=menu();var scroll=(ScrollView)sheet.getContentView();var body=(ViewGroup)scroll.getChildAt(0);
++        scroll.measure(View.MeasureSpec.makeMeasureSpec(320,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(360,View.MeasureSpec.EXACTLY));scroll.layout(0,0,320,360);scroll.scrollTo(0,80);int offset=scroll.getScrollY();
++        for(int color:new int[]{0xff202124,Color.WHITE}){
++            mHost.color=color;mNavigation.refresh();
++            assertSame(scroll,sheet.getContentView());assertSame(body,scroll.getChildAt(0));assertEquals(offset,scroll.getScrollY());
++            assertEquals(color,((GradientDrawable)body.getBackground()).getColor().getDefaultColor());
++            TextView domain=body.findViewWithTag("arc-phone-domain");assertEquals(color==Color.WHITE?0xff202124:0xfff1f3f4,domain.getCurrentTextColor());
++            assertEquals(bounds,new android.graphics.Rect(bar.getLeft(),bar.getTop(),bar.getRight(),bar.getBottom()));
++        }
++        verify(mController,times(1)).requestShowContent(eq(sheet),anyBoolean());verify(mController,never()).hideContent(any(),anyBoolean());
++        verify(mController,times(2)).onSheetBackgroundColorOverrideChanged();
++    }
++    @Test public void disabledZoomButtonsHaveMatchingDisabledPresentation(){
++        mHost.web=false;var content=menu().getContentView();
++        for(String tag:new String[]{"minus","plus"}){View step=content.findViewWithTag("arc-phone-zoom-"+tag);assertFalse(step.isEnabled());assertTrue(step.getAlpha()<=.4f);}
++    }
++    private double contrast(int a,int b){double x=Color.luminance(a),y=Color.luminance(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05);}
++    private int composite(int color,int backing){float alpha=Color.alpha(color)/255f;return Color.rgb(Math.round(Color.red(color)*alpha+Color.red(backing)*(1-alpha)),Math.round(Color.green(color)*alpha+Color.green(backing)*(1-alpha)),Math.round(Color.blue(color)*alpha+Color.blue(backing)*(1-alpha)));}
++    @Test public void enabledNavigationLabelsMeetAAInLightDarkAndPressedColors(){
++        for(int surface:new int[]{Color.WHITE,0xff202124}){
++            mHost.color=surface;mHost.home=true;mNavigation.refresh();
++            for(String tag:new String[]{"home","new","tabs","menu"}){
++                LinearLayout button=(LinearLayout)find("arc-phone-"+tag);TextView label=(TextView)button.getChildAt(1);
++                assertTrue(contrast(label.getCurrentTextColor(),surface)>=4.5);
++                RippleDrawable ripple=(RippleDrawable)button.getBackground();android.content.res.ColorStateList rippleColor=org.robolectric.util.ReflectionHelpers.getField(ripple.getConstantState(),"mColor");int pressed=composite(rippleColor.getDefaultColor(),surface);
++                assertTrue(contrast(label.getCurrentTextColor(),pressed)>=4.5);
++                FrameLayout iconHost=(FrameLayout)button.getChildAt(0);android.widget.ImageView icon=(android.widget.ImageView)iconHost.getChildAt(0);
++                int iconColor=org.robolectric.util.ReflectionHelpers.getField(icon.getDrawable(),"mColor");
++                int iconBacking=iconHost.getBackground() instanceof GradientDrawable bg?bg.getColor().getDefaultColor():surface;
++                assertTrue(contrast(iconColor,iconBacking)>=3.0);
++                System.out.println("WCAG_NAV surface="+Integer.toHexString(surface)+" action="+tag+" text="+contrast(label.getCurrentTextColor(),surface)+" pressed="+contrast(label.getCurrentTextColor(),pressed)+" icon="+contrast(iconColor,iconBacking));
++                assertTrue(button.isFocusable());assertTrue(button.getBackground().isStateful());
++            }
++        }
++    }
++    @Test public void phonePaletteKeepsNativeDefaultsUntilExplicitOptIn(){ verifyNativePalette(false); }
++    @Test public void phonePalettePreservesDarkAndIncognitoContrast(){ verifyNativePalette(true); }
++    private void verifyNativePalette(boolean dark) {
++        PhoneColors.dark=dark;
++        {
++            var top=mock(org.chromium.chrome.browser.theme.TopUiThemeColorProvider.class);
++            var bottom=mock(org.chromium.chrome.browser.theme.BottomUiThemeColorProvider.class);
++            var controls=mock(org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider.class);
++            when(controls.getControlsPosition()).thenReturn(org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider.ControlsPosition.TOP);
++            int scheme=dark?org.chromium.chrome.browser.ui.theme.BrandedColorScheme.INCOGNITO:org.chromium.chrome.browser.ui.theme.BrandedColorScheme.APP_DEFAULT;
++            var siteTint=android.content.res.ColorStateList.valueOf(0xffffffff);
++            when(top.getThemeColor()).thenReturn(Color.RED);when(top.getTint()).thenReturn(siteTint);
++            when(top.getActivityFocusTint()).thenReturn(siteTint);when(top.getBrandedColorScheme()).thenReturn(scheme);
++            var provider=new org.chromium.chrome.browser.theme.ToolbarThemeColorProvider(mActivity.get(),top,bottom,controls);
++            assertEquals(Color.RED,provider.getThemeColor());assertSame(siteTint,provider.getTint());
++            provider.setArcPhoneFloatingSurfaceEnabled(true);
++            assertEquals(dark?0xff202124:Color.WHITE,provider.getThemeColor());
++            assertEquals(dark?Color.WHITE:Color.BLACK,provider.getTint().getDefaultColor());
++            provider.onThemeColorChanged(Color.BLUE,false);
++            provider.onTintChanged(siteTint,siteTint.withAlpha(128),scheme);
++            assertEquals(dark?0xff202124:Color.WHITE,provider.getThemeColor());
++            assertEquals(128,Color.alpha(provider.getActivityFocusTint().getDefaultColor()));
++            if(!dark){
++                when(top.getBrandedColorScheme()).thenReturn(org.chromium.chrome.browser.ui.theme.BrandedColorScheme.DARK_BRANDED_THEME);
++                provider.onTintChanged(siteTint,siteTint,org.chromium.chrome.browser.ui.theme.BrandedColorScheme.DARK_BRANDED_THEME);
++                assertEquals(Color.WHITE,provider.getThemeColor());assertEquals(Color.BLACK,provider.getTint().getDefaultColor());
++                assertEquals(org.chromium.chrome.browser.ui.theme.BrandedColorScheme.APP_DEFAULT,provider.getBrandedColorScheme());
++                when(top.getBrandedColorScheme()).thenReturn(org.chromium.chrome.browser.ui.theme.BrandedColorScheme.INCOGNITO);
++                provider.onTintChanged(siteTint,siteTint,org.chromium.chrome.browser.ui.theme.BrandedColorScheme.INCOGNITO);
++                assertEquals(0xff202124,provider.getThemeColor());
++                when(top.getBrandedColorScheme()).thenReturn(scheme);
++                provider.onTintChanged(siteTint,siteTint,scheme);assertEquals(Color.WHITE,provider.getThemeColor());
++                PhoneColors.dark=true;provider.setArcPhoneFloatingSurfaceEnabled(true);assertEquals(0xff202124,provider.getThemeColor());
++                PhoneColors.dark=false;provider.setArcPhoneFloatingSurfaceEnabled(true);assertEquals(Color.WHITE,provider.getThemeColor());
++            }
++            provider.setArcPhoneFloatingSurfaceEnabled(false);
++            assertEquals(Color.RED,provider.getThemeColor());assertSame(siteTint,provider.getTint());
++            provider.destroy();verify(controls).removeObserver(provider);
++        }
++    }
++
 +}
 diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitContentHostTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitContentHostTest.java
 new file mode 100644

@@ -9,6 +9,12 @@ import static org.mockito.Mockito.*;
 
 import android.app.Activity;
 import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.ScrollView;
+import android.graphics.drawable.RippleDrawable;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.EditText;
@@ -23,28 +29,46 @@ import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.GraphicsMode;
 import org.robolectric.annotation.SQLiteMode;
+import org.robolectric.annotation.Implements;
+import org.robolectric.annotation.Implementation;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetContent;
 import org.chromium.components.browser_ui.bottomsheet.BottomSheetController;
 
 /** Real Android views and delivered sheet; Chromium controller/action boundaries are mocks. */
 @RunWith(RobolectricTestRunner.class)
-@Config(manifest=Config.NONE,sdk={30,36},qualifiers="mdpi")
+@Config(manifest=Config.NONE,sdk={30,36},qualifiers="mdpi",
+        instrumentedPackages={"org.chromium.components.browser_ui.styles", "org.chromium.chrome.browser.theme", "org.chromium.chrome.browser.ui.bottombar"},
+        shadows={ArcPhoneNavigationTest.PhoneColors.class,ArcPhoneNavigationTest.PhoneTints.class,ArcPhoneNavigationTest.PhoneBottomConfig.class})
 @GraphicsMode(GraphicsMode.Mode.LEGACY)
 @SQLiteMode(SQLiteMode.Mode.LEGACY)
 public class ArcPhoneNavigationTest {
+    @Implements(value=org.chromium.components.browser_ui.styles.ChromeColors.class,isInAndroidSdk=false)
+    public static class PhoneColors {
+        static boolean dark;
+        @Implementation protected static int getDefaultThemeColor(android.content.Context context,boolean incognito){return dark||incognito?0xff202124:Color.WHITE;}
+    }
+    @Implements(value=org.chromium.chrome.browser.theme.ThemeUtils.class,isInAndroidSdk=false)
+    public static class PhoneTints {
+        @Implementation protected static android.content.res.ColorStateList getThemedToolbarIconTint(android.content.Context context,int scheme){return android.content.res.ColorStateList.valueOf(PhoneColors.dark||scheme==org.chromium.chrome.browser.ui.theme.BrandedColorScheme.INCOGNITO?Color.WHITE:Color.BLACK);}
+    }
+    @Implements(value=org.chromium.chrome.browser.ui.bottombar.BottomBarConfigUtils.class,isInAndroidSdk=false)
+    public static class PhoneBottomConfig {
+        @Implementation protected static boolean isBottomBarEnabled(android.content.Context context){return false;}
+    }
     private org.robolectric.android.controller.ActivityController<Activity> mActivity;
     private FrameLayout mSlot;
     private ArcPhoneNavigation mNavigation;
     private BottomSheetController mController;
     private FakeHost mHost;
     private static class FakeHost implements ArcPhoneNavigation.Host {
-        Object token=new Object(); int action=-1,zoom=100,count=8,color=0xfff0f0f6; boolean web=true,pinned;
+        Object token=new Object(); int action=-1,zoom=100,count=8,color=0xfff0f0f6; boolean web=true,pinned,home;
         public Object pageToken(){return token;}
         public String domain(){return "example.test";}
         public Bitmap favicon(){return null;}
         public int tabCount(){return count;}
         public boolean webPage(){return web;}
         public boolean pinned(){return pinned;}
+        public boolean homePage(){return home;}
         public boolean desktopSite(){return false;}
         public int zoomPercent(){return zoom;}
         public int surface(){return color;}
@@ -52,6 +76,7 @@ public class ArcPhoneNavigationTest {
         public void zoom(int direction){zoom+=direction*10;}
     }
     @Before public void setUp(){
+        PhoneColors.dark=false;
         mActivity=Robolectric.buildActivity(Activity.class).setup();
         mSlot=new FrameLayout(mActivity.get());mActivity.get().setContentView(mSlot);
         mController=mock(BottomSheetController.class);
@@ -130,6 +155,30 @@ public class ArcPhoneNavigationTest {
         mSlot.measure(View.MeasureSpec.makeMeasureSpec(320,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(48,View.MeasureSpec.EXACTLY));mSlot.layout(0,0,320,48);
         for(String tag:new String[]{"home","new","tabs","menu"}){View v=find("arc-phone-"+tag);assertTrue(v.getWidth()>=48);assertEquals(48,v.getHeight());}
     }
+    @Test public void floatingPillHasSideMarginsAndBreathingRoomInsideNativeSlot(){
+        mSlot.measure(View.MeasureSpec.makeMeasureSpec(400,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(80,View.MeasureSpec.EXACTLY));mSlot.layout(0,0,400,80);
+        ViewGroup bar=(ViewGroup)mSlot.getChildAt(0);
+        assertTrue(bar.getLeft()>=16);assertTrue(bar.getRight()<=384);
+        assertTrue(bar.getTop()>=8);assertTrue(bar.getBottom()<=72);
+        assertTrue(bar.getElevation()>0);assertTrue(bar.getBackground() instanceof GradientDrawable);
+        assertTrue(((GradientDrawable)bar.getBackground()).getCornerRadius()>=bar.getHeight()/2f);
+        for(String tag:new String[]{"home","new","tabs","menu"}){View v=find("arc-phone-"+tag);assertTrue(v.getWidth()>=48);assertTrue(v.getHeight()>=48);}
+    }
+    @Test public void homeAndHubSelectionFollowNativeState(){
+        mHost.home=true;mNavigation.refresh();assertTrue(find("arc-phone-home").isSelected());
+        TextView label=(TextView)((LinearLayout)find("arc-phone-home")).getChildAt(1);
+        assertEquals(0xff155dff,label.getCurrentTextColor());
+        mHost.home=false;mNavigation.getBottomBar().setParent(1);
+        assertFalse(find("arc-phone-home").isSelected());assertTrue(find("arc-phone-tabs").isSelected());
+    }
+    @Test public void menuSelectionClearsWhenNativeSheetCloses(){
+        var sheet=menu();assertTrue(find("arc-phone-menu").isSelected());
+        sheet.destroy();assertFalse(find("arc-phone-menu").isSelected());
+    }
+    @Test public void lightPaletteUsesCleanWhiteOutsideCapsule(){
+        mHost.color=0xfff0f0f6;mNavigation.refresh();
+        assertEquals(Color.WHITE,mNavigation.getBackgroundColor().intValue());
+    }
     @Test public void liveCounterReflectsCurrentModelCount(){
         mHost.count=12;mNavigation.refresh();assertTrue(find("arc-phone-tabs").getContentDescription().toString().contains("12"));
     }
@@ -137,4 +186,106 @@ public class ArcPhoneNavigationTest {
         mHost.color=0xff202124;mNavigation.refresh();assertEquals(0xff202124,mNavigation.getBackgroundColor().intValue());
         assertEquals(0xff202124,menu().getSheetBackgroundColorOverride());
     }
+    @Test public void leavingPhoneModeReleasesControlsAndClosesSheetWithoutDuplicatingViews(){
+        final boolean[] visible={true};mNavigation.initializeWithNative(v->visible[0]=v,t->{});
+        var sheet=menu();View bar=mSlot.getChildAt(0);
+        mNavigation.setPhoneModeActive(false);assertFalse(visible[0]);assertFalse(find("arc-phone-home").isEnabled());
+        verify(mController).hideContent(eq(sheet),anyBoolean());
+        mNavigation.setPhoneModeActive(true);assertTrue(visible[0]);assertSame(bar,mSlot.getChildAt(0));assertEquals(1,mSlot.getChildCount());
+    }
+    @Test public void destroyDoesNotPublishToReleasedNativeCaptureOrVisibility(){
+        final int[] callbacks={0};mNavigation.initializeWithNative(v->callbacks[0]++,t->callbacks[0]++);
+        menu();callbacks[0]=0;mNavigation.destroy();assertEquals(0,callbacks[0]);
+    }
+    @Test public void floatingPillKeepsAllTargetsAtNarrowAndWidePhoneWidths(){
+        for(int width:new int[]{240,320,800}){
+            mSlot.measure(View.MeasureSpec.makeMeasureSpec(width,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(80,View.MeasureSpec.EXACTLY));mSlot.layout(0,0,width,80);
+            ViewGroup bar=(ViewGroup)mSlot.getChildAt(0);assertTrue(bar.getRight()<=width-16);
+            for(String tag:new String[]{"home","new","tabs","menu"}){View v=find("arc-phone-"+tag);assertTrue(v.getWidth()>=48);assertTrue(v.getHeight()>=48);}
+        }
+    }
+    @Test public void darkSurfaceIsUsedBeforeNativeHostBinds(){
+        var context=new android.view.ContextThemeWrapper(mActivity.get(),android.R.style.Theme_Material_NoActionBar);
+        FrameLayout slot=new FrameLayout(context);var navigation=new ArcPhoneNavigation(slot,mController);
+        assertTrue(Color.luminance(navigation.getBackgroundColor())<.45);navigation.destroy();
+    }
+    @Test public void visibleMenuRecolorsWithoutReopeningOrLosingScroll(){
+        mSlot.measure(View.MeasureSpec.makeMeasureSpec(320,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(ArcPhoneNavigation.getReservedHeight(mActivity.get()),View.MeasureSpec.EXACTLY));mSlot.layout(0,0,320,ArcPhoneNavigation.getReservedHeight(mActivity.get()));
+        View bar=mSlot.getChildAt(0);android.graphics.Rect bounds=new android.graphics.Rect(bar.getLeft(),bar.getTop(),bar.getRight(),bar.getBottom());
+        var sheet=menu();var scroll=(ScrollView)sheet.getContentView();var body=(ViewGroup)scroll.getChildAt(0);
+        scroll.measure(View.MeasureSpec.makeMeasureSpec(320,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(360,View.MeasureSpec.EXACTLY));scroll.layout(0,0,320,360);scroll.scrollTo(0,80);int offset=scroll.getScrollY();
+        for(int color:new int[]{0xff202124,Color.WHITE}){
+            mHost.color=color;mNavigation.refresh();
+            assertSame(scroll,sheet.getContentView());assertSame(body,scroll.getChildAt(0));assertEquals(offset,scroll.getScrollY());
+            assertEquals(color,((GradientDrawable)body.getBackground()).getColor().getDefaultColor());
+            TextView domain=body.findViewWithTag("arc-phone-domain");assertEquals(color==Color.WHITE?0xff202124:0xfff1f3f4,domain.getCurrentTextColor());
+            assertEquals(bounds,new android.graphics.Rect(bar.getLeft(),bar.getTop(),bar.getRight(),bar.getBottom()));
+        }
+        verify(mController,times(1)).requestShowContent(eq(sheet),anyBoolean());verify(mController,never()).hideContent(any(),anyBoolean());
+        verify(mController,times(2)).onSheetBackgroundColorOverrideChanged();
+    }
+    @Test public void disabledZoomButtonsHaveMatchingDisabledPresentation(){
+        mHost.web=false;var content=menu().getContentView();
+        for(String tag:new String[]{"minus","plus"}){View step=content.findViewWithTag("arc-phone-zoom-"+tag);assertFalse(step.isEnabled());assertTrue(step.getAlpha()<=.4f);}
+    }
+    private double contrast(int a,int b){double x=Color.luminance(a),y=Color.luminance(b);return (Math.max(x,y)+.05)/(Math.min(x,y)+.05);}
+    private int composite(int color,int backing){float alpha=Color.alpha(color)/255f;return Color.rgb(Math.round(Color.red(color)*alpha+Color.red(backing)*(1-alpha)),Math.round(Color.green(color)*alpha+Color.green(backing)*(1-alpha)),Math.round(Color.blue(color)*alpha+Color.blue(backing)*(1-alpha)));}
+    @Test public void enabledNavigationLabelsMeetAAInLightDarkAndPressedColors(){
+        for(int surface:new int[]{Color.WHITE,0xff202124}){
+            mHost.color=surface;mHost.home=true;mNavigation.refresh();
+            for(String tag:new String[]{"home","new","tabs","menu"}){
+                LinearLayout button=(LinearLayout)find("arc-phone-"+tag);TextView label=(TextView)button.getChildAt(1);
+                assertTrue(contrast(label.getCurrentTextColor(),surface)>=4.5);
+                RippleDrawable ripple=(RippleDrawable)button.getBackground();android.content.res.ColorStateList rippleColor=org.robolectric.util.ReflectionHelpers.getField(ripple.getConstantState(),"mColor");int pressed=composite(rippleColor.getDefaultColor(),surface);
+                assertTrue(contrast(label.getCurrentTextColor(),pressed)>=4.5);
+                FrameLayout iconHost=(FrameLayout)button.getChildAt(0);android.widget.ImageView icon=(android.widget.ImageView)iconHost.getChildAt(0);
+                int iconColor=org.robolectric.util.ReflectionHelpers.getField(icon.getDrawable(),"mColor");
+                int iconBacking=iconHost.getBackground() instanceof GradientDrawable bg?bg.getColor().getDefaultColor():surface;
+                assertTrue(contrast(iconColor,iconBacking)>=3.0);
+                System.out.println("WCAG_NAV surface="+Integer.toHexString(surface)+" action="+tag+" text="+contrast(label.getCurrentTextColor(),surface)+" pressed="+contrast(label.getCurrentTextColor(),pressed)+" icon="+contrast(iconColor,iconBacking));
+                assertTrue(button.isFocusable());assertTrue(button.getBackground().isStateful());
+            }
+        }
+    }
+    @Test public void phonePaletteKeepsNativeDefaultsUntilExplicitOptIn(){ verifyNativePalette(false); }
+    @Test public void phonePalettePreservesDarkAndIncognitoContrast(){ verifyNativePalette(true); }
+    private void verifyNativePalette(boolean dark) {
+        PhoneColors.dark=dark;
+        {
+            var top=mock(org.chromium.chrome.browser.theme.TopUiThemeColorProvider.class);
+            var bottom=mock(org.chromium.chrome.browser.theme.BottomUiThemeColorProvider.class);
+            var controls=mock(org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider.class);
+            when(controls.getControlsPosition()).thenReturn(org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider.ControlsPosition.TOP);
+            int scheme=dark?org.chromium.chrome.browser.ui.theme.BrandedColorScheme.INCOGNITO:org.chromium.chrome.browser.ui.theme.BrandedColorScheme.APP_DEFAULT;
+            var siteTint=android.content.res.ColorStateList.valueOf(0xffffffff);
+            when(top.getThemeColor()).thenReturn(Color.RED);when(top.getTint()).thenReturn(siteTint);
+            when(top.getActivityFocusTint()).thenReturn(siteTint);when(top.getBrandedColorScheme()).thenReturn(scheme);
+            var provider=new org.chromium.chrome.browser.theme.ToolbarThemeColorProvider(mActivity.get(),top,bottom,controls);
+            assertEquals(Color.RED,provider.getThemeColor());assertSame(siteTint,provider.getTint());
+            provider.setArcPhoneFloatingSurfaceEnabled(true);
+            assertEquals(dark?0xff202124:Color.WHITE,provider.getThemeColor());
+            assertEquals(dark?Color.WHITE:Color.BLACK,provider.getTint().getDefaultColor());
+            provider.onThemeColorChanged(Color.BLUE,false);
+            provider.onTintChanged(siteTint,siteTint.withAlpha(128),scheme);
+            assertEquals(dark?0xff202124:Color.WHITE,provider.getThemeColor());
+            assertEquals(128,Color.alpha(provider.getActivityFocusTint().getDefaultColor()));
+            if(!dark){
+                when(top.getBrandedColorScheme()).thenReturn(org.chromium.chrome.browser.ui.theme.BrandedColorScheme.DARK_BRANDED_THEME);
+                provider.onTintChanged(siteTint,siteTint,org.chromium.chrome.browser.ui.theme.BrandedColorScheme.DARK_BRANDED_THEME);
+                assertEquals(Color.WHITE,provider.getThemeColor());assertEquals(Color.BLACK,provider.getTint().getDefaultColor());
+                assertEquals(org.chromium.chrome.browser.ui.theme.BrandedColorScheme.APP_DEFAULT,provider.getBrandedColorScheme());
+                when(top.getBrandedColorScheme()).thenReturn(org.chromium.chrome.browser.ui.theme.BrandedColorScheme.INCOGNITO);
+                provider.onTintChanged(siteTint,siteTint,org.chromium.chrome.browser.ui.theme.BrandedColorScheme.INCOGNITO);
+                assertEquals(0xff202124,provider.getThemeColor());
+                when(top.getBrandedColorScheme()).thenReturn(scheme);
+                provider.onTintChanged(siteTint,siteTint,scheme);assertEquals(Color.WHITE,provider.getThemeColor());
+                PhoneColors.dark=true;provider.setArcPhoneFloatingSurfaceEnabled(true);assertEquals(0xff202124,provider.getThemeColor());
+                PhoneColors.dark=false;provider.setArcPhoneFloatingSurfaceEnabled(true);assertEquals(Color.WHITE,provider.getThemeColor());
+            }
+            provider.setArcPhoneFloatingSurfaceEnabled(false);
+            assertEquals(Color.RED,provider.getThemeColor());assertSame(siteTint,provider.getTint());
+            provider.destroy();verify(controls).removeObserver(provider);
+        }
+    }
+
 }

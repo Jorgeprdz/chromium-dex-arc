@@ -595,3 +595,15 @@ Evidencia y alcance: [checkpoint Mobile](docs/validation/R5_MOBILE_APPROVED_REDE
 - Checkpoint publicado39729088298-1, fuente7c4ece8; gates de integridad/compatibilidad obligatorios antes de una futura restauración.
 
 Detalle y evidencia: [registro del fallo C++](docs/validation/R5_MOBILE_APPROVED_REDESIGN.md#run39729088298--corrección-de-buffer-nativo).
+
+
+## Floating Mobile aprobado + auditoría Light/Dark — 22-oct-2026
+
+- [x] PNG de Pictures inspeccionados y hasheados; segunda imagen blanca como referencia principal. Mantener ancho/alto actuales de omnibar, según instrucción posterior.
+- [x] Candidato local: superficie de omnibar nativa y status bar; una cápsula inferior en el slot existente, reserva/insets nativos, cuatro acciones y azul activo adaptado al tema. Sin modificar Desktop/engine/páginas.
+- [x] Auditoría local: sincronizar tint/fondo de incógnito y contexto DayNight, recolorear sheet abierto conservando scroll, fondo inicial oscuro, estado de zoom deshabilitado, contraste al presionar y contraste de iconos de status bar conservado por el owner al actualizar insets/delegate. Sin cambios de geometría durante esta auditoría.
+- [x] Pruebas locales y evidencia RED/GREEN documentadas. No equivalen a aceptación gráfica de dispositivo.
+- [ ] Compilación integrada de componentes nativos y APK del candidato: NOT RUN; sin Actions ni checkpoints pesados.
+- [ ] Matriz visual real completa: PENDIENTE en claro/oscuro (status, omnibar, pill, menús, Hub, IME/foco, fullscreen, insets, seguir sistema, reinicio y transiciones Desktop↔Phone). No declarar READY FOR BUILD todavía.
+
+Checkpoint recuperable y diferencias respecto al render: [R5_FLOATING_MOBILE_LIGHT_DARK.md](docs/validation/R5_FLOATING_MOBILE_LIGHT_DARK.md). Base instalada92c24df/run39781720300; ese éxito no valida los cambios nuevos.

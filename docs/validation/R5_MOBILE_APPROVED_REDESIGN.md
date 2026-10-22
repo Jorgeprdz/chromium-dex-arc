@@ -1,5 +1,7 @@
 # R5 — Mobile aprobado: navegación y menú
 
+> Actualización: run39781720300 compiló e instaló92c24df con verificación. El candidato posterior Floating UI y su auditoría Light/Dark están en [R5_FLOATING_MOBILE_LIGHT_DARK.md](R5_FLOATING_MOBILE_LIGHT_DARK.md); todavía no tiene APK. El resto registra tandas anteriores.
+
 Fecha: 2026-10-22. Rama: `assistant/archium-r5-desktop-native-mobile`.
 Base de esta tanda: `2f7152bb52ce3439422a28d6359066d062a9d414` (candidato Split View conservado, sin compilar).
 
