@@ -13,16 +13,17 @@ class CompositedToolbarTest(unittest.TestCase):
         path = ROOT / '.source-modified/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java'
         body = method_body(path.read_text(), r'private void updateToolbarSceneLayerSuppression\(')
         source = '''public class SuppressionProbe {
-            boolean mIsXrFsm, mIsVerticalTabsHiddenDueToNarrow, mIsArcToolbarSuppressed;
+            boolean mIsXrFsm, mIsVerticalTabsHiddenDueToNarrow, mIsArcToolbarSuppressed, mArcPhoneOverlayActive;
             static class Supplier { boolean value; void set(boolean v) { value=v; } }
             final Supplier mSuppressToolbarSceneLayerSupplier=new Supplier();
             void updateToolbarSceneLayerSuppression() BODY
             public static void main(String[] args) {
                 SuppressionProbe p=new SuppressionProbe();
-                for(int mask=0;mask<8;mask++) {
+                for(int mask=0;mask<16;mask++) {
                     p.mIsXrFsm=(mask&1)!=0;
                     p.mIsVerticalTabsHiddenDueToNarrow=(mask&2)!=0;
                     p.mIsArcToolbarSuppressed=(mask&4)!=0;
+                    p.mArcPhoneOverlayActive=(mask&8)!=0;
                     p.updateToolbarSceneLayerSuppression();
                     if(p.mSuppressToolbarSceneLayerSupplier.value!=(mask!=0))
                         throw new AssertionError("texture suppression lost for mask="+mask);
@@ -32,7 +33,9 @@ class CompositedToolbarTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             file = Path(directory)/'SuppressionProbe.java'
             file.write_text(source)
-            subprocess.run(['javac', '-d', directory, str(file)], check=True, capture_output=True)
+            compiled = subprocess.run(['javac', '-d', directory, str(file)],
+                                      text=True, capture_output=True)
+            self.assertEqual(0, compiled.returncode, compiled.stdout+compiled.stderr)
             result = subprocess.run(['java', '-ea', '-cp', directory, 'SuppressionProbe'],
                                     text=True, capture_output=True)
             self.assertEqual(result.returncode, 0, result.stdout+result.stderr)

@@ -104,3 +104,23 @@ Eliminado el conjunto completo `archium-checkpoint-39729088298-1`: artifacts1240
 Autorizado por el prompt actual **un solo** build incremental después de los gates, preflight completo, QEMU false, sin reintentos ni reparaciones automáticas. Estado/dispatch/monitor se guardarán en un directorio nuevo bajo `/workspace/.local/state/archium-r5-floating-runtime-*`; el run anterior permanece intacto. La instalación exige recibo/artefacto del SHA exacto, verificación de paquete/ABI/firma/hash/versión y respaldo previo de la APK instalada.
 
 No declarar visual PASS del candidato antes de instalar y comparar capturas. Pendientes: dibujo real y logs PixelCopy, ambos renders, modo claro/oscuro, status/gestos/cámara, scroll y acceso a controles inferiores, teclado, menú, selector, rotación y Desktop↔Phone. Las capturas propias del run39898129497 prueban el fallo y cambio de tema nativo, no la corrección nueva ni toda la matriz de aceptación.
+
+## Run39907023931 — preflight bloqueado por probe desactualizado
+
+SHA compilación solicitada: `2c78ab3dc3a08a0aa1663abd774e66f556d88f32`. Resultado: authorize PASS; preflight FAIL; build y QEMU SKIPPED; checkpoint no restaurado, sin nuevo checkpoint ni APK. No hubo instalación ni relanzamiento.
+
+Primer error causal: `tests/test_r4_composited_toolbar.py` extrae el cuerpo real de `ToolbarManager.updateToolbarSceneLayerSuppression()` y lo compila en `SuppressionProbe`. La clase auxiliar declaraba sólo los tres motivos antiguos; faltaba `mArcPhoneOverlayActive`, agregado por Floating. Javac rechaza esa clase auxiliar con `cannot find symbol`, y el preflight se detiene. CI ejecutó 413 tests: 412 aprobados y un error. La preparación SDK/parche anterior a la suite sí pasó; eso no constituye compilación nativa integrada.
+
+Corrección localizada, sin cambios de producción: declarar el cuarto campo en el probe, recorrer sus 16 combinaciones (antes8) y mostrar stderr de javac si vuelve a fallar. No se elimina ni relaja el gate. Prueba aislada RED/GREEN PASS; mutación que retira la condición móvil rechazada exactamente en `mask=8`, preservando los motivos Desktop/XR/narrow originales.
+
+Evidencia: `run39907023931-preflight.log`, `suppression-probe-red-detail.log`, `suppression-probe-green.log`, `suppression-mutant.log`, en `/workspace/archium-evidence/floating-v2-runtime-fix/`. El monitor existente conserva el fallo real. La APK anterior y los checkpoints fuente/fallback siguen intactos. Se requiere nueva autorización para otro run; no se usó una segunda ejecución remota.
+
+Validación local de la corrección, 23-oct-2026 CDMX:
+
+- Probe corregido: PASS, 16 combinaciones. Mutante sin condición móvil: rechazado enmask8, PASS del control negativo.
+- Suite host completa ejecutada: 413 tests; 411 PASS y2 ERROR del entorno local por seleccionar `/usr/bin/aapt2` de Debian2.19, que no lee `resources.arsc` del SDK37.2 (`entry offsets overlap actual entry data`). No se presenta esa invocación como PASS.
+- Las dos pruebas de recursos se repitieron sin cambios con el AAPT2 37.0 existente y SDK37.0: ambas PASS; fixture real18 recursos PASS. Logs `host-complete-after-fix.log` y `aapt37-resource-rerun.log`. Las pruebas restantes, incluida la regresión que bloqueó CI, pasaron en la suite completa.
+- Herramientas locales de esa ejecución: JDK21, GN genuino1000 (no el pin de GN usado por CI); la repetición de recursos usó AAPT2 2.20-15087165 del SDK. No se instalaron ni actualizaron dependencias, no se relajaron gates y no se modificó producción.
+- Regeneración: patch/manifest idénticos a2c78ab3; diff limpio. La integración nativa y aceptación visual siguen pendientes de otro run autorizado.
+
+Para futuras comprobaciones locales usar explícitamente `ARCHIUM_TEST_AAPT2=/opt/android-sdk/build-tools/37.0.0/aapt2` y un SDK compatible; no seleccionar el AAPT2 de Debian por PATH. El CI existente ya usa el AAPT2 del SDK.

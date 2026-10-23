@@ -659,3 +659,10 @@ Matriz y límites: [auditoría en R5_FLOATING_V2.md](docs/validation/R5_FLOATING
 - [x] Limpieza autorizada: checkpoint39729088298-1 eliminado completo; 26.530.254.497 bytes liberados. Preservados fuente39829306775-1, fallback39817793524-1, APKs y respaldos.
 - [ ] Único build incremental del candidato, monitor Termux CDMX e instalación verificada: seguir recibo/estado nuevo en `.local/state/archium-r5-floating-runtime-*`.
 - [ ] Aceptación visual real del candidato en ambos temas y regresiones: PENDIENTE; no declarar DONE.
+
+## Run39907023931 — preflight y corrección del probe
+
+- [x] Causa identificada y reproducida: SuppressionProbe no declaraba `mArcPhoneOverlayActive`; único error entre413 tests remotos. Sin restauración, compilación Chromium ni APK nueva.
+- [x] Actualizado sólo el test: cuatro flags y16 combinaciones; stderr de javac visible. RED/GREEN y mutante sin condición móvil rechazado PASS; producción intacta.
+- [ ] Validación integrada y APK del fix: PENDIENTE; requiere autorización nueva. No se relanzó Actions. Ver R5_FLOATING_V2.md.
+- [x] Revisión host completa tras el fix: 411 PASS;2 pruebas de recursos fallaron con AAPT2 Debian/SDK37.2 y ambas pasaron al repetir con AAPT2 SDK37.0, sin cambiar tests. No declarar PASS de la primera invocación completa. Patch de producción idéntico; detalles y logs en el checkpoint.
