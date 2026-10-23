@@ -419,6 +419,12 @@ public class ToolbarManager
     private @Nullable View mArcPhoneBottomContainer;
     private @Nullable Drawable mArcPhoneBottomBackground;
     private boolean mArcPhoneBottomTransparent;
+    private boolean mArcPhoneOverlayActive;
+    private boolean mArcPhoneMarginOwned;
+    private int mArcPhoneOriginalTopMargin;
+    private int mArcPhoneOriginalProgressMargin;
+    private boolean mArcPhoneOriginalStatusContrast;
+    private View.@Nullable OnLayoutChangeListener mArcPhoneInsetLayoutListener;
     private boolean mArcPhoneResumed = true;
     private boolean mArcPhoneFullscreen;
     private boolean mArcPhoneTransparentContainer;
@@ -2574,6 +2580,12 @@ public class ToolbarManager
             };
             mActivityLifecycleDispatcher.register(mArcPhoneLifecycle);
         }
+        if (mArcPhoneInsetLayoutListener == null) {
+            mArcPhoneInsetLayoutListener = (view, l, t, r, b, ol, ot, or, ob) -> {
+                if (mArcPhoneOverlayActive) updateArcPhoneTopInset();
+            };
+            mControlContainer.getView().addOnLayoutChangeListener(mArcPhoneInsetLayoutListener);
+        }
         updateArcPhoneFloatingSurfaces();
         if (mArcPhoneNavigation != null) mArcPhoneNavigation.bind(host);
     }
@@ -2604,6 +2616,22 @@ public class ToolbarManager
             }
             if (mArcPhoneTopGlass != null) mArcPhoneTopGlass.setSurface(mToolbarThemeColorProvider.getThemeColor());
             phone.setArcPhoneGlassBackground(glass ? mArcPhoneTopGlass : null);
+            if (mArcPhoneOverlayActive != glass) {
+                if (glass) {
+                    mArcPhoneOriginalStatusContrast = mActivity.getWindow().isStatusBarContrastEnforced();
+                    mActivity.getWindow().setStatusBarContrastEnforced(true);
+                } else {
+                    mActivity.getWindow().setStatusBarContrastEnforced(mArcPhoneOriginalStatusContrast);
+                }
+                mArcPhoneOverlayActive = glass;
+                android.util.Log.i("ArchiumGlass", "phone overlay=" + glass);
+                updateToolbarSceneLayerSuppression();
+            }
+            var edgeController = mEdgeToEdgeControllerSupplier.get();
+            if (edgeController != null) edgeController.setArcPhoneControlsOverlay(glass);
+            updateArcPhoneTopInset();
+            BottomControlsCoordinator phoneBottom = mBottomAppBarCoordinatorSupplier.get();
+            if (phoneBottom != null) phoneBottom.setArcPhoneControlsOverlay(glass);
             if (mArcPhoneTransparentContainer != glass) {
                 if (glass) {
                     mArcPhoneContainerBackground=mControlContainer.getView().getBackground();
@@ -2631,6 +2659,7 @@ public class ToolbarManager
             }
             if (mArcPhoneNavigation != null && mArcPhoneBottomGlass != null) {
                 mArcPhoneNavigation.setGlassBackdrop(mArcPhoneBottomGlass, glass);
+                mBottomControlsStacker.requestLayerUpdate(false);
             }
             mToolbarThemeColorProvider.setArcPhoneFloatingSurfaceEnabled(enabled);
             if (mAdjustedToolbarThemeColorProvider != null) {
@@ -2643,6 +2672,35 @@ public class ToolbarManager
             mArcPhoneNavigation.setPhoneModeActive(enabled);
             mArcPhoneNavigation.refresh();
         }
+    }
+
+    /** Legacy top-inset owner does not position web-page controls beneath a consumed status bar. */
+    private void updateArcPhoneTopInset() {
+        View controls = mControlContainer.getView();
+        if (!(controls.getLayoutParams() instanceof ViewGroup.MarginLayoutParams top)
+                || !(mProgressBarContainer.getLayoutParams() instanceof ViewGroup.MarginLayoutParams progress)) return;
+        boolean ownMargin = mArcPhoneOverlayActive
+                && !org.chromium.chrome.browser.ui.edge_to_edge.EdgeToEdgeUtils.isEdgeToEdgeRefactorEnabled();
+        if (ownMargin && !mArcPhoneMarginOwned) {
+            mArcPhoneOriginalTopMargin = top.topMargin;
+            mArcPhoneOriginalProgressMargin = progress.topMargin;
+            mArcPhoneMarginOwned = true;
+        }
+        if (!mArcPhoneMarginOwned) return;
+        int inset = 0;
+        if (ownMargin) {
+            android.view.WindowInsets raw = mActivity.getWindow().getDecorView().getRootWindowInsets();
+            if (raw != null) {
+                inset = raw.getSystemWindowInsetTop();
+                android.view.DisplayCutout cutout = raw.getDisplayCutout();
+                if (cutout != null) inset = Math.max(inset, cutout.getSafeInsetTop());
+            }
+        }
+        int desiredTop = mArcPhoneOriginalTopMargin + inset;
+        int desiredProgress = mArcPhoneOriginalProgressMargin + inset;
+        if (top.topMargin != desiredTop) {top.topMargin = desiredTop; controls.setLayoutParams(top);}
+        if (progress.topMargin != desiredProgress) {progress.topMargin = desiredProgress; mProgressBarContainer.setLayoutParams(progress);}
+        if (!ownMargin) mArcPhoneMarginOwned = false;
     }
 
     /** Enable the bottom controls. */
@@ -3138,6 +3196,10 @@ public class ToolbarManager
     public void destroy() {
         if (mIsDestroyed) return;
         mIsDestroyed = true;
+        if (mArcPhoneInsetLayoutListener != null) {
+            mControlContainer.getView().removeOnLayoutChangeListener(mArcPhoneInsetLayoutListener);
+            mArcPhoneInsetLayoutListener = null;
+        }
         if (mArcPhoneLifecycle != null) {mActivityLifecycleDispatcher.unregister(mArcPhoneLifecycle);mArcPhoneLifecycle=null;}
         if (mArcPhoneMotionObserver != null) {
             mCompositorViewHolder.getInMotionSupplier().removeObserver(mArcPhoneMotionObserver);
@@ -4126,7 +4188,7 @@ public class ToolbarManager
 
     private void updateToolbarSceneLayerSuppression() {
         mSuppressToolbarSceneLayerSupplier.set(
-                mIsXrFsm || mIsVerticalTabsHiddenDueToNarrow || mIsArcToolbarSuppressed);
+                mIsXrFsm || mIsVerticalTabsHiddenDueToNarrow || mIsArcToolbarSuppressed || mArcPhoneOverlayActive);
     }
 
     @VisibleForTesting

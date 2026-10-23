@@ -410,6 +410,7 @@ public class BrowserControlsManager implements ActivityStateListener, BrowserCon
 
     @Override
     public float getTopControlHiddenRatio() {
+        if (mArcPhoneOverlay) return 0f;
         return getTopControlsHeight() == 0
                 ? 1.0f
                 : Math.abs((float) getTopControlOffset() / getTopControlsHeight());
@@ -417,6 +418,7 @@ public class BrowserControlsManager implements ActivityStateListener, BrowserCon
 
     @Override
     public float getBottomControlHiddenRatio() {
+        if (mArcPhoneOverlay) return 0f;
         return getBottomControlsHeight() == 0
                 ? 1.0f
                 : Math.abs((float) getBottomControlOffset() / getBottomControlsHeight());

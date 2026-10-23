@@ -649,3 +649,13 @@ Checkpoint vigente: [R5_FLOATING_V2.md](docs/validation/R5_FLOATING_V2.md). Sust
 - [ ] Prueba física de seguir sistema, legibilidad status/omnibar sobre páginas opuestas, sugerencias, Hub, teclado, cambios dinámicos y persistencia al reiniciar: PENDIENTE. No se compiló una APK nueva.
 
 Matriz y límites: [auditoría en R5_FLOATING_V2.md](docs/validation/R5_FLOATING_V2.md#auditoría-automática-lightdark--22-oct-2026-cdmx).
+
+## Corrección Floating tras fallo físico — 22-oct-2026 CDMX
+
+- [x] Run39898129497 compiló e instaló; aceptación visual FAIL confirmado con capturas del usuario y propias. Actualiza los NOT RUN históricos anteriores.
+- [x] Causa concreta: alturas overlay cero se interpretaban como controles totalmente ocultos; la vista superior invisible impedía el muestreo. Corregidos ratios y retiradas texturas duplicadas sólo durante overlay.
+- [x] Top edge-to-edge reversible en owner nativo, márgenes legacy por inset/cutout sin redimensionar omnibar, restauración y diagnóstico acotado de copia/dibujo.
+- [x] RED/GREEN y gates locales documentados en R5_FLOATING_V2.md. No equivalen a aceptación de APK.
+- [x] Limpieza autorizada: checkpoint39729088298-1 eliminado completo; 26.530.254.497 bytes liberados. Preservados fuente39829306775-1, fallback39817793524-1, APKs y respaldos.
+- [ ] Único build incremental del candidato, monitor Termux CDMX e instalación verificada: seguir recibo/estado nuevo en `.local/state/archium-r5-floating-runtime-*`.
+- [ ] Aceptación visual real del candidato en ambos temas y regresiones: PENDIENTE; no declarar DONE.

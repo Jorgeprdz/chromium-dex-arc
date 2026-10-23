@@ -70,3 +70,37 @@ Comprobaciones nuevas:
 **Toda aceptación real en dispositivo continúa PENDIENTE**, también para las filas PASS locales. En particular, no se ha comprobado visibilidad de iconos de status bar sobre páginas de color contrario al tema, raster del texto de omnibar, barras del sistema, teclado/menú durante un cambio real, reinicio conservando preferencia ni seguir el horario del sistema. No declarar WCAG AA global a partir de las pruebas de la cápsula inferior.
 
 Evidencia nueva en el mismo directorio externo: `theme-audit.log` (76 ejecuciones SDK30/36, política original 38 métodos), `theme-host.log` (9 PASS), `theme-status-owner.log` (1 PASS), `theme-patch.log` (7 PASS), `theme-transition.log` (17 PASS). Patch/manifest regenerados y comprobados reproducibles. Sin nuevo build, instalación ni Actions. La preparación SDK previa continúa aplicando al código de producción sin cambios; los tests nuevos sí se compilaron/ejecutaron en el runner local.
+
+## Fallo físico confirmado y corrección de composición — 22-oct-2026 CDMX
+
+Run39898129497 / `2ef296770a2face3495166fe91933fcf2b4f24da`: compilación e instalación **PASS**, aceptación visual **FAIL**. Hash de APK instalada comprobado otra vez en el teléfono: `7371ebc49e7f0c756a78647c5f0516b191affd6bc3fd26ec70e688188ccd46bc`. Los estados NOT RUN anteriores describen el momento en que se escribieron; este resultado los actualiza.
+
+Evidencia nueva: `/workspace/archium-evidence/floating-v2-runtime-fix/`. Se inspeccionaron ambos renders, las cuatro capturas del usuario y capturas propias con franjas de colores en una página de diagnóstico aislada. No se inyectó diseño en una web externa. Se utilizó la pestaña que estaba en blanco y se restituyó `about:blank`; modo nocturno restaurado a `auto`. El teléfono se devolvió al usuario y a Termux.
+
+### Causa demostrada y alcance de la corrección
+
+La jerarquía estable muestra `ToolbarControlContainer` **INVISIBLE**, su `SurfaceView` a 904×1880 y el contenido bajo controles. Los métodos entregados `getTopControlHiddenRatio()`/`getBottomControlHiddenRatio()` devolvían 1 al ser cero la altura expuesta por el modo overlay. El código Chromium fijado `BrowserControlsUtils.drawControlsAsTexture()` interpreta ese ratio positivo como dibujo mediante textura; `BrowserControlsManager.shouldShowAndroidControls()` oculta entonces la vista real. `ArcPhoneGlass` exige `view.isShown()` antes de copiar: para el target superior oculto nunca podía entregar una muestra. Esto explica una ruta fallida concreta que los tests anteriores de alturas/offsets no cubrían.
+
+La captura de franjas confirma además que el padre de la superficie sigue empezando a y=86: hacer transparente el color de status bar no elimina su reserva de espacio. El owner fijado sólo permite top edge-to-edge para sus páginas nativas admitidas, sin opt-in para una web con Floating.
+
+- Ratio de ocultamiento cero exclusivamente durante overlay móvil. Fuera del opt-in se conservan los cálculos originales, hiding tokens, animaciones y fullscreen.
+- Se reutiliza `mSuppressToolbarSceneLayerSupplier` para retirar la textura superior duplicada, conservando motivos XR/vertical-tabs/Arc existentes. La escena inferior también se suprime durante el overlay, manteniendo el mismo slot Android. Así PixelCopy no vuelve a muestrear las propias cápsulas/textos compositados. La escena inferior original era visible incluso con el slot Android visible; identificar cada píxel blanco del run anterior no es posible con el dump de bounds y no se afirma haberlo demostrado.
+- Opt-in reversible en el owner `EdgeToEdgeController` para que web llegue bajo status bar. En la ruta legacy sólo se desplazan los márgenes superiores de los controles y progress bar por el inset real/cutout; se guardan/restauran los originales. Ancho/alto de omnibar no cambian. La ruta moderna conserva su owner nativo de posición. IME, NTP, Hub, editor, fullscreen y Desktop salen del opt-in.
+- Contraste de status bar: se pide enforcement nativo de Android mientras está transparente y se restaura el valor anterior al salir; queda pendiente comprobar su resultado sobre páginas reales y versiones del sistema.
+- Diagnóstico acotado `ArchiumGlass`: cambios de activación, primer resultado de copia por target/generación y primer dibujo de muestra. Sólo metadatos/bounds, sin URL, píxeles o capturas persistidas. Permite verificar en el candidato que el frame llega a dibujarse.
+
+RED/GREEN conservado: `hidden-ratio-red.log`, `composition-red.log`, `insets-red.log` contra implementación anterior; `overlay-green.log`. Se ejecutan cuerpos entregados de los getters, visibilidad de escena y políticas de insets con dependencias sintéticas: no son aceptación gráfica ni una compilación de todo Chromium.
+
+Gates locales del candidato: 76 ejecuciones Robolectric SDK30/36 y política Chromium38 métodos; host phone13, ownership5, status-owner1, coverage2, aplicación7 y transición17 PASS. Preparación SDK37.2/JDK21 y parche/manifest de 173 archivos reproducibles PASS. Ningún archivo específico de Desktop/Spaces/Split cambia; se amplían únicamente integraciones móviles y owners compartidos detrás de opt-in.
+
+### Limpieza autorizada
+
+Inventario paginado completo: 12 artifacts de checkpoints, 1 release normal, sin releases de checkpoints ni runs activos al borrar. Se verificaron manifest/pin/grupos y se compararon IDs, digest y tamaños inmutables de los preservados con los consumidos por CI: fuente39829306775-1 restaurada por run39898129497; fallback39817793524-1 restaurado por run39829306775. Ambos pasos `S1 restore once and transition patches` PASS. No se hizo aquí una descarga completa de sus partes; CI debe volver a verificar los bytes antes de restaurar.
+
+Eliminado el conjunto completo `archium-checkpoint-39729088298-1`: artifacts12407577182,12407357649,12406988634,12406883793. Total **26.530.254.497 bytes** (26,53 GB decimales). Fuente39829306775-1 y fallback39817793524-1 conservados y comprobados presentes después. APKs, respaldos, logs, release preview y outputs no se borraron. Recibo persistente: `cleanup-receipt.json` en la evidencia nueva.
+
+### Build y aceptación pendientes del candidato
+
+Autorizado por el prompt actual **un solo** build incremental después de los gates, preflight completo, QEMU false, sin reintentos ni reparaciones automáticas. Estado/dispatch/monitor se guardarán en un directorio nuevo bajo `/workspace/.local/state/archium-r5-floating-runtime-*`; el run anterior permanece intacto. La instalación exige recibo/artefacto del SHA exacto, verificación de paquete/ABI/firma/hash/versión y respaldo previo de la APK instalada.
+
+No declarar visual PASS del candidato antes de instalar y comparar capturas. Pendientes: dibujo real y logs PixelCopy, ambos renders, modo claro/oscuro, status/gestos/cámara, scroll y acceso a controles inferiores, teclado, menú, selector, rotación y Desktop↔Phone. Las capturas propias del run39898129497 prueban el fallo y cambio de tema nativo, no la corrección nueva ni toda la matriz de aceptación.

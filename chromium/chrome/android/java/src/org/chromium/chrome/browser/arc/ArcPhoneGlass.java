@@ -38,9 +38,10 @@ public final class ArcPhoneGlass {
         private Bitmap mFrame;
         private int mTint=0x99ffffff;
         private int mAlpha=255;
+        private boolean mPaintReported;
         public void setSurface(int color){mTint=(color&0xffffff)|(Color.luminance(color)>.45?0x99000000:0xb3000000);invalidateSelf();}
         public void setFrame(Bitmap image){mFrame=image;invalidateSelf();}
-        public void clear(){mFrame=null;invalidateSelf();}
+        public void clear(){mFrame=null;mPaintReported=false;invalidateSelf();}
         boolean hasFrame(){return mFrame!=null;}
         int tintColor(){return mTint;}
         @Override public void draw(Canvas canvas){
@@ -48,7 +49,10 @@ public final class ArcPhoneGlass {
             mClip.reset();mClip.addRoundRect(mRect,mRect.height()/2,mRect.height()/2,Path.Direction.CW);
             int save=canvas.save();canvas.clipPath(mClip);
             mPaint.setAlpha(mAlpha);
-            if(mFrame!=null)canvas.drawBitmap(mFrame,null,mRect,mPaint);
+            if(mFrame!=null){
+                canvas.drawBitmap(mFrame,null,mRect,mPaint);
+                if(!mPaintReported){android.util.Log.i("ArchiumGlass","painted frame bounds="+getBounds().toShortString());mPaintReported=true;}
+            }
             mPaint.setColor(mTint);mPaint.setAlpha(Color.alpha(mTint)*mAlpha/255);canvas.drawRect(mRect,mPaint);
             canvas.restoreToCount(save);
         }
@@ -59,7 +63,7 @@ public final class ArcPhoneGlass {
     }
     private static final class Target {
         final View view;final Consumer<Rect> bounds;final Backdrop backdrop=new Backdrop();
-        Bitmap spare;
+        Bitmap spare;boolean copyReported;
         Target(View view,Consumer<Rect> bounds){this.view=view;this.bounds=bounds;}
     }
     private final View mClock;
@@ -76,7 +80,7 @@ public final class ArcPhoneGlass {
         if(mDestroyed||mEnabled==enabled)return;mEnabled=enabled;
         if(!enabled){mClock.removeCallbacks(mTick);invalidateSource();mCapture.close();}else mClock.postOnAnimation(mTick);
     }
-    public void invalidateSource(){mGeneration++;for(Target t:mTargets){t.backdrop.clear();t.spare=null;}}
+    public void invalidateSource(){mGeneration++;for(Target t:mTargets){t.backdrop.clear();t.spare=null;t.copyReported=false;}}
     private void schedule(){mClock.removeCallbacks(mTick);if(mEnabled&&!mDestroyed)mClock.postDelayed(mTick,mInterval);}
     /** Package visible for deterministic state tests; GPU capture remains an explicit boundary. */
     void sampleNow(){
@@ -93,6 +97,9 @@ public final class ArcPhoneGlass {
         mCapture.copy(bounds,pending,success->{
             mInFlight=false;
             if(mDestroyed||!mEnabled||generation!=mGeneration)return;
+            if(!target.copyReported){
+                android.util.Log.i("ArchiumGlass","copy success="+success+" sample="+pending.getWidth()+"x"+pending.getHeight());target.copyReported=true;
+            }
             Rect current=new Rect();target.bounds.accept(current);
             int[] now=new int[2];target.view.getLocationInWindow(now);current.offset(now[0],now[1]);
             if(!success||!bounds.equals(current)){target.backdrop.clear();target.spare=pending;return;}

@@ -6,7 +6,7 @@ SOURCE=ROOT/'.source-modified/chrome/android/java/src/org/chromium/chrome/browse
 class PhoneOverlayViewportTests(unittest.TestCase):
     def test_delivered_getters_preserve_native_state_and_remove_only_phone_reservation(self):
         text=SOURCE.read_text();methods=[]
-        names=['getTopControlsHeight','getTopControlsMinHeight','getBottomControlsHeight','getBottomControlsMinHeight','getContentOffset','getTopControlOffset','getBottomControlOffset','getTopVisibleContentOffset','getTopControlsMinHeightOffset','getBottomControlsMinHeightOffset']
+        names=['getTopControlsHeight','getTopControlsMinHeight','getBottomControlsHeight','getBottomControlsMinHeight','getContentOffset','getTopControlOffset','getBottomControlOffset','getTopVisibleContentOffset','getTopControlsMinHeightOffset','getBottomControlsMinHeightOffset','getBrowserControlHiddenRatio','getTopControlHiddenRatio','getBottomControlHiddenRatio']
         for name in names:
             matches=list(re.finditer(r'public (?:int|float) '+name+r'\(\)\s*\{',text));self.assertEqual(1,len(matches),name)
             m=matches[0];end=m.end();depth=1
@@ -14,6 +14,8 @@ class PhoneOverlayViewportTests(unittest.TestCase):
             methods.append(text[m.start():end])
         code='''public class OverlayProbe {
 boolean mArcPhoneOverlay;
+static class ControlsPosition {static final int TOP=0,BOTTOM=1;}
+int mControlsPosition=ControlsPosition.TOP;
 int mTopControlsHeight=56,mTopControlsMinHeight=8,mBottomControlsHeight=76,mBottomControlsMinHeight=10;
 int mRendererTopContentOffset=56,mRendererTopControlOffset=0,mRendererBottomControlOffset=0,mRendererTopControlsMinHeightOffset=8,mRendererBottomControlsMinHeightOffset=10;
 '''+ '\n'.join(methods)+'''
@@ -21,6 +23,7 @@ static void check(boolean v){if(!v)throw new AssertionError("phone overlay viewp
 public static void main(String[] args){OverlayProbe p=new OverlayProbe();
 check(p.getTopControlsHeight()==56&&p.getBottomControlsHeight()==76&&p.getContentOffset()==56);
 p.mArcPhoneOverlay=true;
+check(p.getBrowserControlHiddenRatio()==0&&p.getTopControlHiddenRatio()==0&&p.getBottomControlHiddenRatio()==0);
 check(p.getTopControlsHeight()==0&&p.getTopControlsMinHeight()==0&&p.getBottomControlsHeight()==0&&p.getBottomControlsMinHeight()==0&&p.getContentOffset()==0&&p.getTopVisibleContentOffset()==0);
 p.mRendererTopControlOffset=-24;p.mRendererBottomControlOffset=30;
 check(p.getTopControlOffset()==0&&p.getBottomControlOffset()==0&&p.getTopControlsMinHeightOffset()==0&&p.getBottomControlsMinHeightOffset()==0);

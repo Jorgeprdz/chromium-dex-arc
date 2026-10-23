@@ -39,14 +39,15 @@ class MobileBottomOwnershipTests(unittest.TestCase):
         javac=shutil.which('javac')
         self.assertIsNotNone(javac,'JDK required for the native field syntax regression')
         source=(ROOT/'.source-modified/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java').read_text()
-        declarations=re.findall(r'^    private [^;\n]+ mArcPhone(?:Host|ModeObserver|TopGlass|BottomGlass);',source,re.MULTILINE)
-        self.assertEqual(4,len(declarations),'Mobile Host/observer integration field missing')
+        declarations=re.findall(r'^    private [^;\n]+ mArcPhone(?:Host|ModeObserver|TopGlass|BottomGlass|InsetLayoutListener);',source,re.MULTILINE)
+        self.assertEqual(5,len(declarations),'Mobile Host/observer integration field missing')
         with tempfile.TemporaryDirectory(prefix='archium-host-nullable-') as tmp:
             path=Path(tmp)/'ToolbarHostProbe.java'
             path.write_text('import java.lang.annotation.*;\n'
                 '@Target(ElementType.TYPE_USE) @interface Nullable {}\n'
                 'class ArcPhoneNavigation { interface Host {} }\n'
                 'class ArcPhoneGlass { static class Backdrop {} }\n'
+                'class View { interface OnLayoutChangeListener {} }\n'
                 'interface SharedPreferences { interface OnSharedPreferenceChangeListener {} }\n'
                 'class ToolbarHostProbe {\n'+'\n'.join(declarations)+'\n}\n')
             result=subprocess.run([javac,'-d',tmp,str(path)],capture_output=True,text=True)
