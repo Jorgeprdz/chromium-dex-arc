@@ -76,6 +76,7 @@ class HostGateCoverageTests(unittest.TestCase):
             "org.chromium.chrome.browser.arc.ArcPhoneGlassTest.*",
             "org.chromium.chrome.browser.arc.ArcCommandBarTest.*",
             "org.chromium.chrome.browser.arc.ArcDesktopMaterialTest.*",
+            "org.chromium.chrome.browser.arc.ArcPhoneStatusFadeTest.*",
             "org.chromium.chrome.browser.arc.ArcSplitStateTest.*",
             "org.chromium.chrome.browser.arc.ArcSplitViewportPolicyTest.*",
             "org.chromium.chrome.browser.arc.ArcSplitContentHostTest.*",

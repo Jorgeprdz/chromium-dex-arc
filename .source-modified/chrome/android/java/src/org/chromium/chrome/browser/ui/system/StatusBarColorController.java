@@ -25,6 +25,7 @@ import org.chromium.build.annotations.NullMarked;
 import org.chromium.build.annotations.Nullable;
 import org.chromium.chrome.R;
 import org.chromium.chrome.browser.ActivityTabProvider;
+import org.chromium.chrome.browser.arc.ArcPhoneStatusFade;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider.ControlsPosition;
 import org.chromium.chrome.browser.layouts.LayoutManager;
@@ -98,6 +99,8 @@ public class StatusBarColorController
     }
 
     private boolean mArcPhoneFloatingSurface;
+    private final ArcPhoneStatusFade mArcPhoneStatusFade;
+    private int mArcPhoneStatusSurface;
     private final Window mWindow;
     private final boolean mIsTablet;
     private final Activity mActivity;
@@ -193,6 +196,7 @@ public class StatusBarColorController
             BrowserControlsStateProvider browserControlsStateProvider) {
         mActivity = activity;
         mWindow = activity.getWindow();
+        mArcPhoneStatusFade = new ArcPhoneStatusFade(mWindow.getDecorView());
         mIsTablet = isTablet;
         mStatusBarColorProvider = statusBarColorProvider;
         mAllowToolbarColorOnTablets = false;
@@ -372,6 +376,7 @@ public class StatusBarColorController
     @Override
     @SuppressWarnings("NullAway")
     public void onDestroy() {
+        mArcPhoneStatusFade.destroy();
         mStatusBarColorTabObserver.destroy();
         if (mLayoutStateProvider != null) {
             mLayoutStateProvider.removeObserver(mLayoutStateObserver);
@@ -505,8 +510,13 @@ public class StatusBarColorController
     }
 
     private @ColorInt int getArcPhoneSurfaceColor() {
-        return ColorUtils.shouldUseLightForegroundOnBackground(calculateDefaultStatusBarColor())
-                ? 0xff202124 : Color.WHITE;
+        int fallback = calculateDefaultStatusBarColor();
+        // Honor native dark/incognito choices. Otherwise reuse Chromium's existing page palette;
+        // do not sample pixels or follow every scroll frame. The fade supplies a known backing.
+        int page = ColorUtils.shouldUseLightForegroundOnBackground(fallback) ? fallback
+                : mTopUiThemeColor.getThemeColorOrFallback(mCurrentTab, fallback);
+        mArcPhoneStatusSurface = ArcPhoneStatusFade.selectSurface(page, mArcPhoneStatusSurface);
+        return mArcPhoneStatusSurface;
     }
 
     /** Calculate and update the status bar's color. */
@@ -514,25 +524,22 @@ public class StatusBarColorController
         @ColorInt int statusBarColor = calculateFinalStatusBarColor();
         boolean floatingPhoneSurface = mArcPhoneFloatingSurface && !mIsOmniboxFocused
                 && !isStandardNtp() && statusBarColor == getArcPhoneSurfaceColor();
-        // Keep contrast with the native owner so later inset/delegate updates cannot lose it.
+        mArcPhoneStatusFade.update(floatingPhoneSurface, statusBarColor);
+        // Keep contrast with the native owner, including focused/native phone surfaces, so
+        // later inset/delegate updates cannot choose white icons from a transparent color.
         mEdgeToEdgeSystemBarColorHelper.setStatusBarIconContrastColorOverride(
-                floatingPhoneSurface ? Integer.valueOf(statusBarColor) : null);
+                mArcPhoneFloatingSurface ? Integer.valueOf(statusBarColor) : null);
         setStatusBarColor(
                 mEdgeToEdgeSystemBarColorHelper,
                 mActivity,
-                statusBarColor,
+                floatingPhoneSurface ? Color.TRANSPARENT : statusBarColor,
                 mForceLightIconColorForNtp && isStandardNtp() && !mIsOmniboxFocused);
 
-        // Leave indicator/scrim/focus/NTP colors with their native owners. Only the normal
-        // phone surface is transparent; icon contrast uses the actual light/dark backing.
-        if (floatingPhoneSurface) {
-            if (mEdgeToEdgeSystemBarColorHelper.canSetStatusBarColor()) {
-                mEdgeToEdgeSystemBarColorHelper.setStatusBarColor(Color.TRANSPARENT, false);
-            } else {
-                UiUtils.setStatusBarColor(mWindow, Color.TRANSPARENT);
-                UiUtils.setStatusBarIconColor(mWindow.getDecorView().getRootView(),
-                        !ColorUtils.shouldUseLightForegroundOnBackground(statusBarColor));
-            }
+        // Native indicator/scrim/focus/NTP owners retain their colors. The helper keeps the
+        // fade's contrast backing across delegate/inset updates, including transparent colors.
+        if (floatingPhoneSurface && !mEdgeToEdgeSystemBarColorHelper.canSetStatusBarColor()) {
+            UiUtils.setStatusBarIconColor(mWindow.getDecorView().getRootView(),
+                    !ColorUtils.shouldUseLightForegroundOnBackground(statusBarColor));
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

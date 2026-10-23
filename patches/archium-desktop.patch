@@ -22,7 +22,7 @@ diff --git a/chrome/android/chrome_java_resources.gni b/chrome/android/chrome_ja
 diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java_sources.gni
 --- a/chrome/android/chrome_java_sources.gni
 +++ b/chrome/android/chrome_java_sources.gni
-@@ -5,6 +5,39 @@
+@@ -5,6 +5,40 @@
  import("//content/public/common/features.gni")
 
  chrome_java_sources = [
@@ -40,6 +40,7 @@ diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java
 +  "java/src/org/chromium/chrome/browser/arc/ArcCompactOmnibox.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcCommandBar.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcDesktopMaterial.java",
++  "java/src/org/chromium/chrome/browser/arc/ArcPhoneStatusFade.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcDesktopMaterialDialog.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcSplitState.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcSplitPairStore.java",
@@ -3284,7 +3285,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          mFullscreenHairlineToken =
                                  setToolbarShadowVisibilityAndClearOldToken(
                                          true, mFullscreenHairlineToken);
-@@ -2524,8 +2565,201 @@
+@@ -2524,8 +2565,202 @@
          return ((LocationBarCoordinator) mLocationBar).getUrlBarViewRectProvider();
      }
 
@@ -3379,7 +3380,8 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 +            if (mArcPhoneOverlayActive != glass) {
 +                if (glass) {
 +                    mArcPhoneOriginalStatusContrast = mActivity.getWindow().isStatusBarContrastEnforced();
-+                    mActivity.getWindow().setStatusBarContrastEnforced(true);
++                    // Our status fade supplies contrast; a platform scrim would add a second band.
++                    mActivity.getWindow().setStatusBarContrastEnforced(false);
 +                } else {
 +                    mActivity.getWindow().setStatusBarContrastEnforced(mArcPhoneOriginalStatusContrast);
 +                }
@@ -3439,7 +3441,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 +                mAdjustedToolbarThemeColorProvider.setArcPhoneFloatingSurfaceEnabled(enabled);
 +            }
 +            phone.setArcPhoneFloatingSurfaceEnabled(enabled);
-+            mStatusBarColorController.setArcPhoneFloatingSurfaceEnabled(enabled);
++            mStatusBarColorController.setArcPhoneFloatingSurfaceEnabled(floating);
 +        }
 +        if (mArcPhoneNavigation != null) {
 +            mArcPhoneNavigation.setPhoneModeActive(enabled);
@@ -3486,7 +3488,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          enableTabGroupUiControls();
          if (BottomBarConfigUtils.isBottomBarEnabled(mActivity)) {
              enableBottomBar();
-@@ -2605,26 +2839,44 @@
+@@ -2605,26 +2840,44 @@
          OneshotSupplier<String> countrySupplier =
                  mCountrySupplier != null ? mCountrySupplier : new OneshotSupplierImpl<>();
 
@@ -3551,7 +3553,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          }
 
          var bottomAppBarCoordinator =
-@@ -2639,7 +2891,8 @@
+@@ -2639,7 +2892,8 @@
                          mActivityTabProvider.asObservable(),
                          (ScrollingBottomViewResourceFrameLayout) bottomAppBarContainer,
                          LayerType.BOTTOM_APP_BAR,
@@ -3561,7 +3563,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          bottomBarContainerOneshotSupplier,
                          mTabObscuringHandler,
                          mLayoutManager.getOverlayPanelManager().getPanelStateSupplier(),
-@@ -2652,6 +2905,7 @@
+@@ -2652,6 +2906,7 @@
              bottomAppBarCoordinator.initializeWithNative();
          }
          mBottomAppBarCoordinatorSupplier.set(bottomAppBarCoordinator);
@@ -3569,7 +3571,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
      }
 
      /**
-@@ -2992,6 +3246,22 @@
+@@ -2992,6 +3247,22 @@
      public void destroy() {
          if (mIsDestroyed) return;
          mIsDestroyed = true;
@@ -3592,7 +3594,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 
          if (mAppInstalledDelegate != null) {
              mAppInstalledDelegate.destroy();
-@@ -3052,9 +3322,20 @@
+@@ -3052,9 +3323,20 @@
              mTabGroupUiBottomControlsCoordinatorSupplier = null;
          }
 
@@ -3613,7 +3615,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
              mBottomAppBarCoordinatorSupplier = null;
          }
 
-@@ -3268,6 +3549,7 @@
+@@ -3268,6 +3550,7 @@
          }
 
          mToolbar.onUrlFocusChange(hasFocus);
@@ -3621,7 +3623,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 
          if (mFindToolbarManager != null && hasFocus) mFindToolbarManager.hideToolbar();
 
-@@ -3318,6 +3600,12 @@
+@@ -3318,6 +3601,12 @@
       */
      @Override
      public void onThemeColorChanged(int color, boolean shouldAnimate) {
@@ -3634,7 +3636,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          if (!mShouldUpdateToolbarPrimaryColor) return;
 
          boolean colorChanged = mCurrentThemeColor != color;
-@@ -3658,6 +3946,8 @@
+@@ -3658,6 +3947,8 @@
 
          updateButtonStatus();
          mCurrentTabSupplier.set(tab);
@@ -3643,7 +3645,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          mFormFieldFocusedSupplier.onWebContentsChanged(tab == null ? null : tab.getWebContents());
      }
 
-@@ -3945,8 +4235,17 @@
+@@ -3945,8 +4236,17 @@
          updateToolbarSceneLayerSuppression();
      }
 
@@ -3665,15 +3667,41 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ui/system/StatusBarColorController.java b/chrome/android/java/src/org/chromium/chrome/browser/ui/system/StatusBarColorController.java
 --- a/chrome/android/java/src/org/chromium/chrome/browser/ui/system/StatusBarColorController.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/ui/system/StatusBarColorController.java
-@@ -97,6 +97,7 @@
+@@ -25,6 +25,7 @@
+ import org.chromium.build.annotations.Nullable;
+ import org.chromium.chrome.R;
+ import org.chromium.chrome.browser.ActivityTabProvider;
++import org.chromium.chrome.browser.arc.ArcPhoneStatusFade;
+ import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider;
+ import org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider.ControlsPosition;
+ import org.chromium.chrome.browser.layouts.LayoutManager;
+@@ -97,6 +98,9 @@
          int getBaseStatusBarColor(@Nullable Tab tab);
      }
 
 +    private boolean mArcPhoneFloatingSurface;
++    private final ArcPhoneStatusFade mArcPhoneStatusFade;
++    private int mArcPhoneStatusSurface;
      private final Window mWindow;
      private final boolean mIsTablet;
      private final Activity mActivity;
-@@ -496,14 +497,43 @@
+@@ -192,6 +196,7 @@
+             BrowserControlsStateProvider browserControlsStateProvider) {
+         mActivity = activity;
+         mWindow = activity.getWindow();
++        mArcPhoneStatusFade = new ArcPhoneStatusFade(mWindow.getDecorView());
+         mIsTablet = isTablet;
+         mStatusBarColorProvider = statusBarColorProvider;
+         mAllowToolbarColorOnTablets = false;
+@@ -371,6 +376,7 @@
+     @Override
+     @SuppressWarnings("NullAway")
+     public void onDestroy() {
++        mArcPhoneStatusFade.destroy();
+         mStatusBarColorTabObserver.destroy();
+         if (mLayoutStateProvider != null) {
+             mLayoutStateProvider.removeObserver(mLayoutStateObserver);
+@@ -496,14 +502,45 @@
          }
      }
 
@@ -3685,8 +3713,13 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ui/system/Statu
 +    }
 +
 +    private @ColorInt int getArcPhoneSurfaceColor() {
-+        return ColorUtils.shouldUseLightForegroundOnBackground(calculateDefaultStatusBarColor())
-+                ? 0xff202124 : Color.WHITE;
++        int fallback = calculateDefaultStatusBarColor();
++        // Honor native dark/incognito choices. Otherwise reuse Chromium's existing page palette;
++        // do not sample pixels or follow every scroll frame. The fade supplies a known backing.
++        int page = ColorUtils.shouldUseLightForegroundOnBackground(fallback) ? fallback
++                : mTopUiThemeColor.getThemeColorOrFallback(mCurrentTab, fallback);
++        mArcPhoneStatusSurface = ArcPhoneStatusFade.selectSurface(page, mArcPhoneStatusSurface);
++        return mArcPhoneStatusSurface;
 +    }
 +
      /** Calculate and update the status bar's color. */
@@ -3694,30 +3727,28 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ui/system/Statu
          @ColorInt int statusBarColor = calculateFinalStatusBarColor();
 +        boolean floatingPhoneSurface = mArcPhoneFloatingSurface && !mIsOmniboxFocused
 +                && !isStandardNtp() && statusBarColor == getArcPhoneSurfaceColor();
-+        // Keep contrast with the native owner so later inset/delegate updates cannot lose it.
++        mArcPhoneStatusFade.update(floatingPhoneSurface, statusBarColor);
++        // Keep contrast with the native owner, including focused/native phone surfaces, so
++        // later inset/delegate updates cannot choose white icons from a transparent color.
 +        mEdgeToEdgeSystemBarColorHelper.setStatusBarIconContrastColorOverride(
-+                floatingPhoneSurface ? Integer.valueOf(statusBarColor) : null);
++                mArcPhoneFloatingSurface ? Integer.valueOf(statusBarColor) : null);
          setStatusBarColor(
                  mEdgeToEdgeSystemBarColorHelper,
                  mActivity,
-                 statusBarColor,
+-                statusBarColor,
++                floatingPhoneSurface ? Color.TRANSPARENT : statusBarColor,
                  mForceLightIconColorForNtp && isStandardNtp() && !mIsOmniboxFocused);
 +
-+        // Leave indicator/scrim/focus/NTP colors with their native owners. Only the normal
-+        // phone surface is transparent; icon contrast uses the actual light/dark backing.
-+        if (floatingPhoneSurface) {
-+            if (mEdgeToEdgeSystemBarColorHelper.canSetStatusBarColor()) {
-+                mEdgeToEdgeSystemBarColorHelper.setStatusBarColor(Color.TRANSPARENT, false);
-+            } else {
-+                UiUtils.setStatusBarColor(mWindow, Color.TRANSPARENT);
-+                UiUtils.setStatusBarIconColor(mWindow.getDecorView().getRootView(),
-+                        !ColorUtils.shouldUseLightForegroundOnBackground(statusBarColor));
-+            }
++        // Native indicator/scrim/focus/NTP owners retain their colors. The helper keeps the
++        // fade's contrast backing across delegate/inset updates, including transparent colors.
++        if (floatingPhoneSurface && !mEdgeToEdgeSystemBarColorHelper.canSetStatusBarColor()) {
++            UiUtils.setStatusBarIconColor(mWindow.getDecorView().getRootView(),
++                    !ColorUtils.shouldUseLightForegroundOnBackground(statusBarColor));
 +        }
 
          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
              @ColorInt
-@@ -567,6 +597,10 @@
+@@ -567,6 +604,10 @@
          }
          if (baseStatusBarColor != UNDEFINED_STATUS_BAR_COLOR) {
              return baseStatusBarColor;
@@ -3731,7 +3762,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ui/system/Statu
 diff --git a/chrome/android/junit/BUILD.gn b/chrome/android/junit/BUILD.gn
 --- a/chrome/android/junit/BUILD.gn
 +++ b/chrome/android/junit/BUILD.gn
-@@ -431,6 +431,25 @@
+@@ -431,6 +431,26 @@
    # down.
    robolectric_library("chrome_junit_tests_org.chromium.chrome.browser") {
      sources = [
@@ -3744,6 +3775,7 @@ diff --git a/chrome/android/junit/BUILD.gn b/chrome/android/junit/BUILD.gn
 +      "src/org/chromium/chrome/browser/arc/ArcPhoneGlassTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcCommandBarTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcDesktopMaterialTest.java",
++      "src/org/chromium/chrome/browser/arc/ArcPhoneStatusFadeTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcSplitStateTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcSplitViewportPolicyTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcSplitContentHostTest.java",
@@ -3757,7 +3789,7 @@ diff --git a/chrome/android/junit/BUILD.gn b/chrome/android/junit/BUILD.gn
        "//chrome/android/java/src/org/chromium/chrome/browser/bottombar/BottomBarAppMenuUpdateBadgeControllerUnitTest.java",
        "//chrome/android/java/src/org/chromium/chrome/browser/bottombar/BottomBarContainerCoordinatorUnitTest.java",
        "src/org/chromium/chrome/browser/BrowserExitReasonTrackerUnitTest.java",
-@@ -463,6 +482,7 @@
+@@ -463,6 +483,7 @@
      ]
 
      deps = [
@@ -13354,6 +13386,110 @@ new file mode 100644
 +        @Override public int getOpacity(){return PixelFormat.TRANSLUCENT;}
 +    }
 +}
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneStatusFade.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneStatusFade.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneStatusFade.java
+@@ -0,0 +1,99 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++import android.graphics.Canvas;
++import android.graphics.Color;
++import android.graphics.ColorFilter;
++import android.graphics.LinearGradient;
++import android.graphics.Paint;
++import android.graphics.PixelFormat;
++import android.graphics.Rect;
++import android.graphics.Shader;
++import android.graphics.drawable.Drawable;
++import android.os.Build;
++import android.view.View;
++import android.view.WindowInsets;
++
++import org.chromium.build.annotations.Nullable;
++
++/** Phone-only visual protection of status indicators; never owns layout, input or web insets. */
++public final class ArcPhoneStatusFade {
++    private final View mDecor;
++    private final Fade mFade = new Fade();
++    private final View.OnLayoutChangeListener mLayout = (v,l,t,r,b,ol,ot,or,ob) -> updateBounds();
++    private boolean mAttached;
++
++    public ArcPhoneStatusFade(View decor) { mDecor = decor; }
++
++    /** Metadata changes only: a dead band prevents a neutral page palette from flipping icons. */
++    public static int selectSurface(int pageColor, int previous) {
++        double luminance = Color.luminance(pageColor | 0xff000000);
++        if (luminance < .18) return 0xff202124;
++        if (luminance > .30) return Color.WHITE;
++        return previous == Color.WHITE ? Color.WHITE : 0xff202124;
++    }
++
++    public void update(boolean enabled, int surface) {
++        mFade.setSurface(surface);
++        if (enabled != mAttached) {
++            mAttached = enabled;
++            if (enabled) {
++                // Drawable overlays cannot receive touches or accessibility focus. System icons
++                // belong to a separate system window above the Activity overlay.
++                mDecor.getOverlay().add(mFade);
++                mDecor.addOnLayoutChangeListener(mLayout);
++            } else {
++                mDecor.getOverlay().remove(mFade);
++                mDecor.removeOnLayoutChangeListener(mLayout);
++            }
++        }
++        if (enabled) updateBounds();
++    }
++
++    private void updateBounds() {
++        WindowInsets raw = mDecor.getRootWindowInsets();
++        int top = raw == null ? 0 : Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
++                ? raw.getInsets(WindowInsets.Type.statusBars()).top : raw.getSystemWindowInsetTop();
++        // End before the toolbar: its approved color, shadow and size must remain untouched.
++        // Hidden status bars give zero; navigation/IME insets never enlarge this overlay.
++        Rect next = new Rect(0, 0, mDecor.getWidth(), Math.min(top, mDecor.getHeight()));
++        if (!mFade.getBounds().equals(next)) mFade.setBounds(next);
++    }
++
++    public void destroy() { update(false, Color.TRANSPARENT); }
++
++    static final class Fade extends Drawable {
++        private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++        private int mSurface;
++
++        void setSurface(int surface) {
++            int opaque = surface | 0xff000000;
++            if (mSurface == opaque) return;
++            mSurface = opaque;
++            updateShader();
++        }
++
++        static int[] colors(int surface) {
++            int rgb = surface & 0x00ffffff;
++            return new int[] {0xd9000000 | rgb, 0xcc000000 | rgb, rgb};
++        }
++
++        @Override protected void onBoundsChange(Rect bounds) { updateShader(); }
++
++        private void updateShader() {
++            Rect b = getBounds();
++            mPaint.setShader(b.isEmpty() ? null : new LinearGradient(0, b.top, 0, b.bottom,
++                    colors(mSurface), new float[] {0f, .70f, 1f}, Shader.TileMode.CLAMP));
++            invalidateSelf();
++        }
++
++        @Override public void draw(Canvas canvas) {
++            if (!getBounds().isEmpty()) canvas.drawRect(getBounds(), mPaint);
++        }
++        @Override public void setAlpha(int alpha) { mPaint.setAlpha(alpha); invalidateSelf(); }
++        @Override public void setColorFilter(@Nullable ColorFilter filter) { mPaint.setColorFilter(filter); invalidateSelf(); }
++        @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
++    }
++}
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarProfiles.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarProfiles.java
 new file mode 100644
 --- /dev/null
@@ -17491,6 +17627,150 @@ new file mode 100644
 +        }
 +    }
 +
++}
+diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneStatusFadeTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneStatusFadeTest.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneStatusFadeTest.java
+@@ -0,0 +1,139 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++import static org.junit.Assert.*;
++
++import android.app.Activity;
++import android.graphics.Color;
++import android.graphics.Insets;
++import android.graphics.Rect;
++import android.os.Build;
++import android.view.MotionEvent;
++import android.view.View;
++import android.view.WindowInsets;
++import android.widget.FrameLayout;
++
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.robolectric.Robolectric;
++import org.robolectric.RobolectricTestRunner;
++import org.robolectric.annotation.Config;
++import org.robolectric.annotation.GraphicsMode;
++import org.robolectric.annotation.SQLiteMode;
++
++@RunWith(RobolectricTestRunner.class)
++@Config(manifest=Config.NONE,sdk={30,36})
++@GraphicsMode(GraphicsMode.Mode.LEGACY)
++@SQLiteMode(SQLiteMode.Mode.LEGACY)
++public class ArcPhoneStatusFadeTest {
++    // OS inset delivery is explicit; overlay, layout, input and drawable are actual Android views.
++    private static class Decor extends FrameLayout {
++        WindowInsets raw;
++        Decor(Activity activity) { super(activity); raw = insets(30, 24, 0); }
++        @Override public WindowInsets getRootWindowInsets() { return raw; }
++    }
++    private static WindowInsets insets(int top, int bottom, int ime) {
++        WindowInsets.Builder builder = new WindowInsets.Builder()
++                .setSystemWindowInsets(Insets.of(0,top,0,bottom));
++        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
++            builder.setInsets(WindowInsets.Type.statusBars(), Insets.of(0,top,0,0))
++                    .setInsets(WindowInsets.Type.navigationBars(), Insets.of(0,0,0,bottom))
++                    .setInsets(WindowInsets.Type.ime(), Insets.of(0,0,0,ime));
++        }
++        return builder.build();
++    }
++    private static ArcPhoneStatusFade.Fade drawable(ArcPhoneStatusFade owner) throws Exception {
++        var field=ArcPhoneStatusFade.class.getDeclaredField("mFade");field.setAccessible(true);
++        return (ArcPhoneStatusFade.Fade) field.get(owner);
++    }
++    @Test public void gradientIsTranslucentAndEndsWithoutAnOpaqueStripe() {
++        for(int c:new int[]{Color.WHITE,0xff202124}) {
++            int[] stops=ArcPhoneStatusFade.Fade.colors(c);
++            assertEquals(217,Color.alpha(stops[0]));assertEquals(204,Color.alpha(stops[1]));
++            assertEquals(0,Color.alpha(stops[2]));
++            for(int s:stops)assertEquals(c&0x00ffffff,s&0x00ffffff);
++        }
++    }
++    @Test public void clockBackingMeetsAaEvenOverOppositePageColor() {
++        // The plateau under indicators is 80%; use worst-case black/white web backing.
++        for(int surface:new int[]{Color.WHITE,0xff202124}) {
++            int stop=ArcPhoneStatusFade.Fade.colors(surface)[1];
++            int page=surface==Color.WHITE?Color.BLACK:Color.WHITE;
++            double a=Color.alpha(stop)/255.;
++            int mixed=Color.rgb((int)(Color.red(stop)*a+Color.red(page)*(1-a)),
++                    (int)(Color.green(stop)*a+Color.green(page)*(1-a)),
++                    (int)(Color.blue(stop)*a+Color.blue(page)*(1-a)));
++            double l=Color.luminance(mixed);
++            assertTrue(surface==Color.WHITE?(l+.05)/.05>=4.5:1.05/(l+.05)>=4.5);
++        }
++    }
++    @Test public void liveThemeChangeUpdatesShaderWithoutReplacingOverlayOrContent() throws Exception {
++        var activity=Robolectric.buildActivity(Activity.class).setup();var decor=new Decor(activity.get());decor.layout(0,0,400,800);
++        var page=new View(activity.get());decor.addView(page);var owner=new ArcPhoneStatusFade(decor);
++        owner.update(true,Color.WHITE);var fade=drawable(owner);
++        var field=ArcPhoneStatusFade.Fade.class.getDeclaredField("mPaint");field.setAccessible(true);
++        var paint=(android.graphics.Paint)field.get(fade);var light=paint.getShader();assertNotNull(light);
++        owner.update(true,Color.WHITE);assertSame(light,paint.getShader());
++        owner.update(true,0xff202124);assertNotSame(light,paint.getShader());
++        assertSame(fade,drawable(owner));assertSame(page,decor.getChildAt(0));assertNotNull(fade.getCallback());
++        owner.destroy();activity.pause().stop().destroy();
++    }
++    @Test public void metadataHysteresisDoesNotFlipOnNeutralChanges() {
++        int light=ArcPhoneStatusFade.selectSurface(Color.WHITE,0);
++        int dark=ArcPhoneStatusFade.selectSurface(Color.BLACK,light);
++        assertEquals(Color.WHITE,light);assertEquals(0xff202124,dark);
++        int neutral=0xff808080;
++        assertEquals(light,ArcPhoneStatusFade.selectSurface(neutral,light));
++        assertEquals(dark,ArcPhoneStatusFade.selectSurface(neutral,dark));
++        assertEquals(light,ArcPhoneStatusFade.selectSurface(Color.WHITE,dark));
++    }
++    @Test @Config(sdk={29,30,36}) public void repeatedInsetsNeverPadOrMoveWebContentAndImeDoesNotExpandFade() throws Exception {
++        var activity=Robolectric.buildActivity(Activity.class).setup();var decor=new Decor(activity.get());
++        decor.setPadding(3,7,5,9);decor.layout(0,0,400,800);
++        var owner=new ArcPhoneStatusFade(decor);owner.update(true,Color.WHITE);
++        var fade=drawable(owner);assertEquals(new Rect(0,0,400,30),fade.getBounds());
++        for(int i=0;i<3;i++) {decor.raw=insets(30,24,300);owner.update(true,Color.WHITE);}
++        assertEquals(new Rect(0,0,400,30),fade.getBounds());
++        assertEquals(7,decor.getPaddingTop());assertEquals(9,decor.getPaddingBottom());
++        decor.raw=insets(24,0,0);decor.layout(0,0,800,400);
++        assertEquals(new Rect(0,0,800,24),fade.getBounds());
++        owner.destroy();activity.pause().stop().destroy();
++    }
++    @Test public void fullscreenHiddenIndicatorsAndResumeRestoreBounds() throws Exception {
++        var activity=Robolectric.buildActivity(Activity.class).setup();var decor=new Decor(activity.get());decor.layout(0,0,400,800);
++        var owner=new ArcPhoneStatusFade(decor);owner.update(true,Color.WHITE);
++        decor.raw=insets(0,0,0);owner.update(true,Color.WHITE);assertTrue(drawable(owner).getBounds().isEmpty());
++        owner.update(false,Color.WHITE);decor.raw=insets(30,24,0);owner.update(true,0xff202124);
++        assertEquals(new Rect(0,0,400,30),drawable(owner).getBounds());
++        owner.destroy();activity.pause().stop().destroy();
++    }
++    @Test public void visualOverlayDoesNotInterceptPageTouchesOrAccessibility() {
++        var activity=Robolectric.buildActivity(Activity.class).setup();var decor=new Decor(activity.get());
++        var content=new View(activity.get());final int[] touches={0};content.setOnTouchListener((v,event)->{touches[0]++;return true;});
++        decor.addView(content,new FrameLayout.LayoutParams(400,800));decor.layout(0,0,400,800);content.layout(0,0,400,800);
++        var owner=new ArcPhoneStatusFade(decor);owner.update(true,Color.WHITE);
++        for(int action:new int[]{MotionEvent.ACTION_DOWN,MotionEvent.ACTION_UP}) {
++            MotionEvent event=MotionEvent.obtain(1,2,action,20,10,0);assertTrue(decor.dispatchTouchEvent(event));event.recycle();
++        }
++        assertEquals(2,touches[0]);assertEquals(1,decor.getChildCount());
++        owner.destroy();activity.pause().stop().destroy();
++    }
++    @Test public void disablingDesktopAndDestroyRemoveDrawableAndLayoutListener() throws Exception {
++        var activity=Robolectric.buildActivity(Activity.class).setup();var decor=new Decor(activity.get());decor.layout(0,0,400,800);
++        var owner=new ArcPhoneStatusFade(decor);owner.update(true,Color.WHITE);var fade=drawable(owner);
++        assertNotNull(fade.getCallback());owner.update(false,Color.WHITE);assertNull(fade.getCallback());
++        Rect previous=new Rect(fade.getBounds());decor.raw=insets(90,24,0);decor.layout(0,0,410,800);assertEquals(previous,fade.getBounds());
++        owner.update(true,0xff202124);owner.destroy();assertNull(fade.getCallback());
++        activity.pause().stop().destroy();
++    }
++    @Test public void activityRecreationUsesFreshInsetsAndNoSavedOverlay() throws Exception {
++        for(int top:new int[]{30,24}) {
++            var activity=Robolectric.buildActivity(Activity.class).setup();var decor=new Decor(activity.get());
++            decor.raw=insets(top,24,0);decor.layout(0,0,400,800);var owner=new ArcPhoneStatusFade(decor);
++            owner.update(true,Color.WHITE);assertEquals(top,drawable(owner).getBounds().height());owner.destroy();
++            activity.pause().stop().destroy();
++        }
++    }
 +}
 diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitContentHostTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitContentHostTest.java
 new file mode 100644

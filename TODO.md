@@ -723,3 +723,14 @@ Verificación del checkpoint Desktop: suite host424 PASS; política Chromium61 m
 - [x] Producción móvil preservada como aprobó el usuario; sin cambios de motor, GPU, dependencias, layout ni Split View.
 - [ ] Único build incremental autorizado: registrar SHA y run en estado `archium-r5-material-control`.
 - [ ] Validación física Claro/Oscuro y del nuevo control tras instalar: PENDIENTE.
+
+## Mobile UI polish — status fade e insets, 23-oct-2026 CDMX
+
+- [x] Rama/base verificadas: assistant/archium-r5-desktop-native-mobile, a4d9bf7; se conserva Desktop preparado y UI móvil aceptada. Referencia física más reciente150306 inspeccionada.
+- [x] Fade nativo visual detrás de indicadores, ligado al inset real; no toca píldoras, sombras, fondo web, viewport ni input. Paleta Chromium/tema nativo y fallback con histéresis; no captura adicional.
+- [x] Contraste conservado al enfocar editor y tras refresh de delegates; sin escritura opaca/transparente doble, sin scrim de plataforma superpuesto; retiro en pause/fullscreen/Desktop/destroy.
+- [x] 153 ejecuciones Robolectric PASS, SDK29/30/36 según caso; política original76 métodos PASS. RED/GREEN de overlay ausente, backing en foco y scrim duplicado; preparación SDK37.2/JDK21 PASS. No equivalen a aceptación gráfica.
+- [x] Baseline físico: primer toque/teclado/sugerencias y Back observados; se recuperó la pestaña sin navegar y se devolvió Termux al usuario. Contraste en foco falla en la APK anterior; candidato nuevo pendiente de instalar. Flecha/dirección tenue pendiente, no declarada corregida.
+- [x] Host426:425 PASS/1 contrato estático obsoleto FAIL; suite afectada actualizada y repetida6 PASS; probes nuevos4 PASS. Recibos finales y parche192 reproducible/transición151 timestamps PASS; no presentar primera suite como verde.
+- [ ] Único dispatch incremental autorizado tras commit; fuente39829306775-1 conservada, sin clean/reintentos. Estado nuevo archium-r5-mobile-status-polish; build/APK pendientes, aceptación física pendiente.
+- [ ] Validación física del candidato: fade e indicadores claro/oscuro, cambio automático, teclados, YouTube/HTML5 fullscreen/orientación/resume, gestos, Desktop↔Phone. Ver docs/validation/R5_MOBILE_STATUS_POLISH.md.

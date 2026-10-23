@@ -58,9 +58,10 @@ public static void main(String[] args){Outline o=new Outline();ShadowProbe p=new
         self.assertTrue(STATUS.is_file(),'Native status surface hook missing')
         text=STATUS.read_text()
         self.assertIn('statusBarColor == getArcPhoneSurfaceColor()',text)
-        self.assertIn('setStatusBarColor(Color.TRANSPARENT, false)',text)
+        self.assertIn('floatingPhoneSurface ? Color.TRANSPARENT : statusBarColor',text)
+        self.assertNotIn('setStatusBarColor(Color.TRANSPARENT, false)',text)  # no opaque-then-transparent second write
         self.assertIn('setStatusBarIconContrastColorOverride(',text)
-        self.assertIn('floatingPhoneSurface ? Integer.valueOf(statusBarColor) : null',text)
+        self.assertIn('mArcPhoneFloatingSurface ? Integer.valueOf(statusBarColor) : null',text)
         self.assertIn('UiUtils.setStatusBarIconColor(',text)
         for preserved in ['applyStatusBarIndicatorColor(', 'applyCurrentScrimToColor(', 'applyTabStripOverlay(']:
             self.assertIn(preserved,text)

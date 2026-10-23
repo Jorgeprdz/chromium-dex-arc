@@ -2656,7 +2656,8 @@ public class ToolbarManager
             if (mArcPhoneOverlayActive != glass) {
                 if (glass) {
                     mArcPhoneOriginalStatusContrast = mActivity.getWindow().isStatusBarContrastEnforced();
-                    mActivity.getWindow().setStatusBarContrastEnforced(true);
+                    // Our status fade supplies contrast; a platform scrim would add a second band.
+                    mActivity.getWindow().setStatusBarContrastEnforced(false);
                 } else {
                     mActivity.getWindow().setStatusBarContrastEnforced(mArcPhoneOriginalStatusContrast);
                 }
@@ -2716,7 +2717,7 @@ public class ToolbarManager
                 mAdjustedToolbarThemeColorProvider.setArcPhoneFloatingSurfaceEnabled(enabled);
             }
             phone.setArcPhoneFloatingSurfaceEnabled(enabled);
-            mStatusBarColorController.setArcPhoneFloatingSurfaceEnabled(enabled);
+            mStatusBarColorController.setArcPhoneFloatingSurfaceEnabled(floating);
         }
         if (mArcPhoneNavigation != null) {
             mArcPhoneNavigation.setPhoneModeActive(enabled);
