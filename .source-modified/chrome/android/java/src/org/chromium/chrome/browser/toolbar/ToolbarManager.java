@@ -2600,8 +2600,8 @@ public class ToolbarManager
         boolean enabled = mArcPhoneHost != null
                 && !org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.isDesktopWindow(mActivity);
         Tab glassTab = mActivityTabProvider.get();
-        boolean glass = enabled && mArcPhoneResumed && !mArcPhoneFullscreen
-                && glassTab != null && !glassTab.isNativePage();
+        boolean floating = enabled && mArcPhoneResumed && !mArcPhoneFullscreen;
+        boolean glass = floating && glassTab != null && !glassTab.isNativePage();
         if (mToolbarLayout instanceof ToolbarPhone phone) {
             if (enabled && mArcPhoneGlass == null) {
                 mArcPhoneGlass = new ArcPhoneGlass(phone, ArcPhoneGlass.contentSource(
@@ -2687,15 +2687,15 @@ public class ToolbarManager
                 }
                 mArcPhoneTransparentContainer=glass;
             }
-            if (mArcPhoneBottomContainer != null && mArcPhoneBottomTransparent != glass) {
-                if (glass) {
+            if (mArcPhoneBottomContainer != null && mArcPhoneBottomTransparent != floating) {
+                if (floating) {
                     mArcPhoneBottomBackground = mArcPhoneBottomContainer.getBackground();
                     mArcPhoneBottomContainer.setBackground(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
                 } else {
                     mArcPhoneBottomContainer.setBackground(mArcPhoneBottomBackground);
                     mArcPhoneBottomBackground = null;
                 }
-                mArcPhoneBottomTransparent = glass;
+                mArcPhoneBottomTransparent = floating;
             }
             mActivity.getWindow().getDecorView().setTag(
                     org.chromium.ui.R.id.arc_phone_surface_decorator,

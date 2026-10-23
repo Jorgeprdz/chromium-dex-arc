@@ -203,6 +203,14 @@ def main():
              'chrome/browser/omnibox/LocationBarLayout.java').read_text(),
             (ROOT / '.source-reference/chrome/android/features/tab_ui/java/res/layout/'
              'vertical_tab_layout.xml').read_text())
+        # These are resource IDs and public APIs delivered by this patch, not invented stubs.
+        tablet_source = (checkout / 'chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java').read_text()
+        if 'public void setArcGlassBackground(@Nullable Drawable surface)' not in tablet_source:
+            raise RuntimeError('Missing delivered tablet glass API')
+        ids = (ROOT / '.source-modified/ui/android/java/res/values/ids.xml').read_text()
+        for name in ('arc_phone_surface_decorator', 'arc_phone_surface_layers'):
+            if 'name="' + name + '"' not in ids: raise RuntimeError('Missing delivered resource: ' + name)
+        definitions['org.chromium.ui.R'] = 'public class R {public static class id {public static final int arc_phone_surface_decorator=0x7f010001,arc_phone_surface_layers=0x7f010002;}}'
         definitions['org.chromium.chrome.R'] = synthetic_chromium_r(
             ROOT / 'chromium/chrome/android/java/res/values/arc_strings.xml')
         native_spec = importlib.util.spec_from_file_location(
@@ -212,19 +220,21 @@ def main():
         native_location_bar = (
             checkout / 'chrome/browser/ui/android/omnibox/java/src/org/chromium/'
             'chrome/browser/omnibox/LocationBarLayout.java').read_text()
+        if 'public void setArcGlassBackground(@Nullable Drawable surface)' not in native_location_bar: raise RuntimeError('Missing public native glass base hook')
         if not re.search(r'public\s+void\s+setArcAddressPopupOpener\s*\(\s*@Nullable\s+BooleanSupplier\s+opener\s*\)', native_location_bar):
             raise RuntimeError('Delivered LocationBarLayout lacks address popup callback authority')
         definitions.update({
             # Type-only adapter for the public base hook shipped in the same patch.
             # Actual color/focus behavior is verified separately with Android/Chromium tests.
             'org.chromium.chrome.browser.omnibox.LocationBarLayout':
-                    native_module.native_definition(native_location_bar).replace('\n}', '\npublic void setArcTopBar(boolean active) {}\npublic void setArcAddressPopupOpener(java.util.function.BooleanSupplier opener) {}\n}'),
+                    native_module.native_definition(native_location_bar).replace('\n}', '\npublic void setArcGlassBackground(android.graphics.drawable.Drawable surface) {}\npublic void getArcGlassBounds(android.graphics.Rect bounds) {}\npublic float getArcGlassCornerRadius(){return 0;}\npublic void setArcTopBar(boolean active) {}\npublic void setArcAddressPopupOpener(java.util.function.BooleanSupplier opener) {}\n}'),
             # Minimal type contracts from cfd94726's CompositorViewHolder,
             # TouchEventObserver and NullableObservableSupplier. Stub bodies are
             # never used as evidence of compositor/touch/browser runtime behavior.
             'org.chromium.chrome.browser.compositor.CompositorViewHolder': '''public class CompositorViewHolder extends android.widget.FrameLayout {
                 public CompositorViewHolder(android.content.Context c, android.util.AttributeSet attrs){super(c, attrs);}
                 public android.view.View getActiveSurfaceView(){return null;}
+                public CompositorView getCompositorView(){return null;}
                 public void setArcContentOffsetForRail(int width){}
                 public void beginArcRailViewportResize(int width){}
                 public void addTouchEventObserver(org.chromium.components.browser_ui.widget.TouchEventObserver o){}
@@ -290,6 +300,12 @@ def main():
                 'org.chromium.chrome.browser.tabwindow.TabWindowManager',
                 'org.chromium.chrome.browser.app.tabwindow.TabWindowManagerSingleton'):
             definitions[name] = arc_module.DEFINITIONS[name]
+        suggestions_source = (ROOT / '.source-modified/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/suggestions/OmniboxSuggestionsContainer.java').read_text()
+        if 'public void setArcPhoneGlassBackground(@Nullable Drawable background)' not in suggestions_source: raise RuntimeError('Missing native suggestions backdrop hook')
+        definitions['org.chromium.chrome.browser.omnibox.suggestions.OmniboxSuggestionsContainer'] = 'public class OmniboxSuggestionsContainer extends android.widget.FrameLayout {public OmniboxSuggestionsContainer(android.content.Context c){super(c);} public void setArcPhoneGlassBackground(android.graphics.drawable.Drawable background){}}'
+        compositor_source = (ROOT / '.source-modified/chrome/android/java/src/org/chromium/chrome/browser/compositor/CompositorView.java').read_text()
+        if 'public void copyArcPhoneBackdrop(' not in compositor_source: raise RuntimeError('Missing delivered compositor readback API')
+        definitions['org.chromium.chrome.browser.compositor.CompositorView'] = 'public class CompositorView {public void copyArcPhoneBackdrop(org.chromium.content_public.browser.WebContents w,android.graphics.Rect r,int width,int height,org.chromium.base.Callback<android.graphics.Bitmap> callback){}}'
         # Type-only split API adapters. These compile Arc callers, not native implementation.
         # Source contract authority is the delivered holder/vertical coordinator and pinned
         # NavigationController, Tab, WindowAndroid and ContentView, exercised separately.

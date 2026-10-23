@@ -10,6 +10,7 @@ import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Rect;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.LayerDrawable;
 import android.os.Handler;
@@ -114,6 +115,36 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
     private boolean mShowFocusRing;
     private boolean mArcTopBar;
     private @Nullable Integer mArcSurfaceColor;
+    private @Nullable Drawable mArcGlassBackground;
+    private @Nullable Drawable mArcGlassLayers;
+
+    /** Arc owns only the fill; Chromium retains its native focus/hover border and editor. */
+    @Override
+    public void setArcGlassBackground(@Nullable Drawable surface) {
+        if (mArcGlassBackground == surface) return;
+        mArcGlassBackground = surface;
+        mArcGlassLayers = null;
+        if (surface != null) {
+            LayerDrawable layers = new LayerDrawable(new Drawable[] {surface, mLocationBarBackground}) {
+                @Override public boolean getPadding(Rect padding) {
+                    return mLocationBarBackground.getPadding(padding);
+                }
+            };
+            layers.setLayerInset(0, 0, mModernToolbarBackgroundVerticalOffset,
+                    0, mModernToolbarBackgroundVerticalOffset);
+            mArcGlassLayers = layers;
+        }
+        // Fusebox owns its expanded popup. Restore the layered background on returning to normal.
+        if (getBackground() != mFocusedPopupDrawable) {
+            setBackground(mArcGlassLayers == null ? mLocationBarBackground : mArcGlassLayers);
+        }
+        updateBackgroundColor();
+    }
+    @Override public void getArcGlassBounds(Rect bounds) {
+        getDrawingRect(bounds);
+        bounds.inset(0, mModernToolbarBackgroundVerticalOffset);
+    }
+    @Override public float getArcGlassCornerRadius() { return mModernToolbarBackgroundCornerRadius; }
     private @Nullable MarginLayoutParams mArcCommandOriginalChildParams;
     private int mArcCommandOriginalPaddingBottom;
     private boolean mIsHovered;
@@ -182,7 +213,7 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
     @Override
     protected void onFinishInflate() {
         super.onFinishInflate();
-        setBackground(mLocationBarBackground);
+        setBackground(mArcGlassLayers == null ? mLocationBarBackground : mArcGlassLayers);
 
         mLocationBarIcon = findViewById(R.id.location_bar_status_icon);
         mBookmarkButton = findViewById(R.id.bookmark_button);
@@ -573,7 +604,7 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
         Context context = getContext();
         if (mShowFocusRing) {
             mLocationBarBackground.setBackgroundColor(
-                    tintArcBackground(OmniboxResourceProvider.getTabletToolbarTextBoxStandbyBackgroundColor(
+                    mArcGlassBackground != null ? android.graphics.Color.TRANSPARENT : tintArcBackground(OmniboxResourceProvider.getTabletToolbarTextBoxStandbyBackgroundColor(
                             context, mBrandedColorScheme)));
             @ColorInt
             int standbyBorderColor =
@@ -588,7 +619,8 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
                             color,
                             mBrandedColorScheme == BrandedColorScheme.INCOGNITO,
                             /* isCustomTab= */ false);
-            mLocationBarBackground.setBackgroundColor(tintArcBackground(textBoxColor));
+            mLocationBarBackground.setBackgroundColor(mArcGlassBackground != null
+                    ? android.graphics.Color.TRANSPARENT : tintArcBackground(textBoxColor));
         }
     }
 
@@ -849,7 +881,7 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
             ViewUtils.setAncestorsShouldClipChildren(this, true, View.NO_ID);
             // Reset our background to reflect non-zero suggestion count, which is the typical
             // state. Not setting this risks visual glitches when returning to the fusebox.
-            setBackground(mLocationBarBackground);
+            setBackground(mArcGlassLayers == null ? mLocationBarBackground : mArcGlassLayers);
         }
 
         // Put the focused foreground back into its starting state before swapping it out;

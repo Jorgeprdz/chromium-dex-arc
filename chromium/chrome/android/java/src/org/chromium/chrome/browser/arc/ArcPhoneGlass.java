@@ -9,6 +9,8 @@ import android.graphics.Color;
 import android.graphics.ColorFilter;
 import android.graphics.Outline;
 import android.graphics.Paint;
+import android.graphics.LinearGradient;
+import android.graphics.Shader;
 import android.graphics.Path;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
@@ -28,6 +30,7 @@ import java.util.function.Supplier;
 public final class ArcPhoneGlass {
     public interface Capture {
         boolean available();
+        default Rect clip(Rect screenBounds){return new Rect(screenBounds);}
         void copy(Rect windowBounds, Bitmap output, Consumer<Boolean> result);
         void close();
     }
@@ -36,6 +39,8 @@ public final class ArcPhoneGlass {
         private final Path mClip=new Path();
         private final RectF mRect=new RectF();
         private final RectF mEdgeRect=new RectF();
+        private final RectF mFrameFraction=new RectF(0,0,1,1);
+        private final RectF mFrameRect=new RectF();
         private final Paint mEdgePaint=new Paint(Paint.ANTI_ALIAS_FLAG);
         private boolean mEdgeEnabled;
         private float mCornerRadius=-1;
@@ -45,14 +50,39 @@ public final class ArcPhoneGlass {
         private float mEdgeWidth=0.5f;
         private Bitmap mFrame;
         private int mTint=0xb3ffffff;
+        private int mSurface=Color.WHITE;
+        private boolean mMilky;
+        private boolean mDesktop;
+        private Paint mSheen;
         private int mAlpha=255;
         private boolean mPaintReported;
-        public void setSurface(int color){mTint=Color.luminance(color)>.45?0xb3ffffff:0xc4202124;invalidateSelf();}
+        public void setSurface(int color){
+            if(mSurface==color&&mSurfaceInitialized)return;
+            mSurface=color;mSurfaceInitialized=true;
+            double luminance=Color.luminance(color);
+            // Mid-tone custom Spaces need an opaque fill to preserve Chromium's chosen foreground.
+            int alpha=mDesktop&&luminance>=.10&&luminance<=.32?255:230;
+            mTint=mMilky?(color&0xffffff)|(alpha<<24):luminance>.45?0xb3ffffff:0xc4202124;
+            updateSheen();invalidateSelf();
+        }
+        private boolean mSurfaceInitialized;
+        public void setMilky(boolean milky){mMilky=milky;mSurfaceInitialized=false;setSurface(mSurface);}
+        /** Dense desktop material; no full-window readback or wallpaper capture. */
+        public void setDesktopMaterial(){mDesktop=true;setMilky(true);mSheen=new Paint(Paint.ANTI_ALIAS_FLAG);updateSheen();}
+        int sheenColor(){double l=Color.luminance(mSurface);return (l+.05)/.05>=1.05/(l+.05)?0x12ffffff:0x12000000;}
+        private void updateSheen(){if(mSheen!=null)mSheen.setShader(new LinearGradient(0,getBounds().top,0,
+                Math.max(getBounds().top+1,getBounds().bottom),sheenColor(),sheenColor()&0xffffff,Shader.TileMode.CLAMP));}
+        @Override protected void onBoundsChange(Rect bounds){updateSheen();}
         public void setCornerRadius(float radius){mCornerRadius=radius;mTopCornersOnly=false;mCustomCorners=false;invalidateSelf();}
         public void setTopCorners(float radius){mCornerRadius=radius;mTopCornersOnly=true;mCustomCorners=false;invalidateSelf();}
         public void setCornerRadii(float[] radii){System.arraycopy(radii,0,mCornerRadii,0,8);mCustomCorners=true;invalidateSelf();}
         public void setEdgeEnabled(boolean enabled,float density){mEdgeEnabled=enabled;mEdgeWidth=Math.max(.5f,.5f*density);invalidateSelf();}
-        public void setFrame(Bitmap image){mFrame=image;invalidateSelf();}
+        public void setFrame(Bitmap image){mFrame=image;mFrameFraction.set(0,0,1,1);invalidateSelf();}
+        void setFrame(Bitmap image,Rect requested,Rect crop){
+            mFrame=image;mFrameFraction.set((float)(crop.left-requested.left)/requested.width(),
+                    (float)(crop.top-requested.top)/requested.height(),(float)(crop.right-requested.left)/requested.width(),
+                    (float)(crop.bottom-requested.top)/requested.height());invalidateSelf();
+        }
         public void clear(){mFrame=null;mPaintReported=false;invalidateSelf();}
         boolean hasFrame(){return mFrame!=null;}
         int tintColor(){return mTint;}
@@ -66,20 +96,23 @@ public final class ArcPhoneGlass {
             int save=canvas.save();canvas.clipPath(mClip);
             mPaint.setAlpha(mAlpha);
             if(mFrame!=null){
-                canvas.drawBitmap(mFrame,null,mRect,mPaint);
+                mFrameRect.set(mRect.left+mFrameFraction.left*mRect.width(),mRect.top+mFrameFraction.top*mRect.height(),
+                        mRect.left+mFrameFraction.right*mRect.width(),mRect.top+mFrameFraction.bottom*mRect.height());
+                canvas.drawBitmap(mFrame,null,mFrameRect,mPaint);
                 if(!mPaintReported){android.util.Log.i("ArchiumGlass","painted frame bounds="+getBounds().toShortString());mPaintReported=true;}
             }
-            mPaint.setColor(mTint);mPaint.setAlpha(Color.alpha(mTint)*mAlpha/255);canvas.drawRect(mRect,mPaint);
+            mPaint.setColor(mTint);mPaint.setAlpha((mMilky&&mFrame==null?255:Color.alpha(mTint))*mAlpha/255);canvas.drawRect(mRect,mPaint);
+            if(mSheen!=null){mSheen.setAlpha(mAlpha);canvas.drawPath(mClip,mSheen);}
             if(mEdgeEnabled){
                 mEdgeRect.set(mRect);mEdgeRect.inset(mEdgeWidth/2,mEdgeWidth/2);
                 mEdgePaint.setStyle(Paint.Style.STROKE);mEdgePaint.setStrokeWidth(mEdgeWidth);
                 int edge=Color.luminance(mTint)>.45?0x241d2733:0x2cffffff;
                 mEdgePaint.setColor(edge);mEdgePaint.setAlpha(Color.alpha(edge)*mAlpha/255);
-                canvas.drawRoundRect(mEdgeRect,mEdgeRect.height()/2,mEdgeRect.height()/2,mEdgePaint);
+                canvas.drawRoundRect(mEdgeRect,Math.max(0,radius-mEdgeWidth/2),Math.max(0,radius-mEdgeWidth/2),mEdgePaint);
             }
             canvas.restoreToCount(save);
         }
-        @Override public void getOutline(Outline outline){outline.setRoundRect(getBounds(),getBounds().height()/2f);outline.setAlpha(.12f);}
+        @Override public void getOutline(Outline outline){outline.setRoundRect(getBounds(),mCornerRadius<0?getBounds().height()/2f:Math.min(mCornerRadius,getBounds().height()/2f));outline.setAlpha(.12f);}
         @Override public void setAlpha(int alpha){mAlpha=alpha;invalidateSelf();}
         @Override public void setColorFilter(ColorFilter filter){mPaint.setColorFilter(filter);invalidateSelf();}
         @Override public int getOpacity(){return PixelFormat.TRANSLUCENT;}
@@ -92,6 +125,8 @@ public final class ArcPhoneGlass {
     private final IdentityHashMap<View, DecoratedSurface> mDecoratedSurfaces=new IdentityHashMap<>();
     private int mSurface=Color.WHITE;
     private int mSurfaceLayersTag;
+    private boolean mDesktopMaterial;
+    public void setDesktopMaterial(){mDesktopMaterial=true;for(DecoratedSurface surface:mDecoratedSurfaces.values())surface.backdrop.setDesktopMaterial();}
     public void setSurfaceLayersTag(int key){mSurfaceLayersTag=key;}
     private static final class SurfaceLayer {
         final View view;final Drawable original;final int left,top,right,bottom;
@@ -114,7 +149,7 @@ public final class ArcPhoneGlass {
             if(original!=null){Outline outline=new Outline();original.getOutline(outline);if(outline.getRadius()>=0)radius=outline.getRadius();}
             backdrop.setCornerRadius(radius);
             if(original instanceof GradientDrawable shape){float[] radii=shape.getCornerRadii();if(radii!=null)backdrop.setCornerRadii(radii);}
-            backdrop.setSurface(mSurface);
+            if(mDesktopMaterial)backdrop.setDesktopMaterial();else backdrop.setMilky(true);backdrop.setSurface(mSurface);
         }
         void apply(){view.setBackground(mEnabled?backdrop:original);view.setPadding(left,top,right,bottom);for(SurfaceLayer layer:layers)layer.apply(mEnabled);}
         void restore(){view.setBackground(original);view.setPadding(left,top,right,bottom);for(SurfaceLayer layer:layers)layer.apply(false);}
@@ -161,27 +196,38 @@ public final class ArcPhoneGlass {
         }
         return null;
     }
+    private static final class SampleRegion {
+        final Rect requested,local,screen;
+        SampleRegion(Rect requested,Rect local,Rect screen){this.requested=requested;this.local=local;this.screen=screen;}
+        boolean same(SampleRegion other){return other!=null&&requested.equals(other.requested)&&local.equals(other.local)&&screen.equals(other.screen);}
+    }
+    private SampleRegion sampleRegion(Target target){
+        Rect requested=new Rect();target.bounds.accept(requested);if(requested.isEmpty())return null;
+        Rect visible=new Rect();if(!target.view.getLocalVisibleRect(visible)||!visible.intersect(requested))return null;
+        int[] location=new int[2];target.view.getLocationOnScreen(location);
+        Rect screen=new Rect(visible);screen.offset(location[0],location[1]);screen=mCapture.clip(screen);
+        if(screen==null||screen.isEmpty())return null;
+        Rect local=new Rect(screen);local.offset(-location[0],-location[1]);
+        return new SampleRegion(requested,local,screen);
+    }
     /** Package visible for deterministic state tests; GPU capture remains an explicit boundary. */
     void sampleNow(){
         if(!mEnabled||mDestroyed||mInFlight||mTargets.isEmpty())return;
-        if(!mCapture.available()){invalidateSource();return;}
+        if(!mCapture.available()){invalidateSource();mCapture.close();return;}
         Target target=nextVisibleTarget();if(target==null)return;
-        Rect bounds=new Rect();target.bounds.accept(bounds);if(bounds.isEmpty())return;
-        int[] location=new int[2];target.view.getLocationOnScreen(location);bounds.offset(location[0],location[1]);
-        int[] size=copySize(bounds.width(),bounds.height());
+        SampleRegion region=sampleRegion(target);if(region==null){target.backdrop.clear();return;}
+        int[] size=copySize(region.screen.width(),region.screen.height());
         Bitmap output=target.spare;target.spare=null;
         if(output==null||output.getWidth()!=size[0]||output.getHeight()!=size[1])output=Bitmap.createBitmap(size[0],size[1],Bitmap.Config.ARGB_8888);
         final Bitmap pending=output;final int generation=mGeneration;mInFlight=true;
-        mCapture.copy(bounds,pending,success->{
+        mCapture.copy(region.screen,pending,success->{
             mInFlight=false;
             if(mDestroyed||!mEnabled||generation!=mGeneration||!mTargets.contains(target))return;
             if(!target.copyReported){
                 android.util.Log.i("ArchiumGlass","copy success="+success+" sample="+pending.getWidth()+"x"+pending.getHeight());target.copyReported=true;
             }
-            Rect current=new Rect();target.bounds.accept(current);
-            int[] now=new int[2];target.view.getLocationOnScreen(now);current.offset(now[0],now[1]);
-            if(!success||!bounds.equals(current)){target.backdrop.clear();target.spare=pending;return;}
-            Bitmap old=target.backdrop.mFrame;target.backdrop.setFrame(pending);target.spare=old;target.view.invalidate();
+            if(!success||!region.same(sampleRegion(target))){target.backdrop.clear();target.spare=pending;return;}
+            Bitmap old=target.backdrop.mFrame;target.backdrop.setFrame(pending,region.requested,region.local);target.spare=old;target.view.invalidate();
         });
     }
     public void destroy(){if(mDestroyed)return;mEnabled=false;mDestroyed=true;mClock.removeCallbacks(mTick);invalidateSource();mCapture.close();
@@ -230,20 +276,25 @@ public final class ArcPhoneGlass {
         return new Capture(){
             final Handler main=new Handler(Looper.getMainLooper());
             HandlerThread thread;Handler worker;int epoch;int[] pixels=new int[0],pass=new int[0];
-            public boolean available(){View v=supplier.get();return v!=null&&v.isShown();}
+            public boolean available(){View v=supplier.get();return v!=null&&v.isShown()&&v.getWindowVisibility()==View.VISIBLE;}
+            public Rect clip(Rect screenBounds){
+                View view=supplier.get();if(view==null||view.getWidth()<=0||view.getHeight()<=0)return null;
+                int[] origin=new int[2];view.getLocationOnScreen(origin);
+                Rect result=new Rect(screenBounds);return result.intersect(origin[0],origin[1],origin[0]+view.getWidth(),origin[1]+view.getHeight())?result:null;
+            }
             public void copy(Rect windowBounds,Bitmap output,Consumer<Boolean> result){
                 View view=supplier.get();Rect region=contentRegion(view,windowBounds);
                 if(region==null||!available()){result.accept(false);return;}
                 final int generation=epoch;
                 readback.copy(region,output.getWidth(),output.getHeight(),bitmap->{
-                    if(bitmap==null||generation!=epoch){result.accept(false);return;}
+                    if(bitmap==null||generation!=epoch||supplier.get()!=view||!available()){result.accept(false);return;}
                     if(worker==null){thread=new HandlerThread("ArchiumGlass");thread.start();worker=new Handler(thread.getLooper());}
                     worker.post(()->{
                         new Canvas(output).drawBitmap(bitmap,null,new Rect(0,0,output.getWidth(),output.getHeight()),null);
                         int count=output.getWidth()*output.getHeight();
                         if(pixels.length<count){pixels=new int[count];pass=new int[count];}
                         blur(output,pixels,pass);
-                        main.post(()->result.accept(generation==epoch));
+                        main.post(()->result.accept(generation==epoch&&supplier.get()==view&&available()));
                     });
                 });
             }

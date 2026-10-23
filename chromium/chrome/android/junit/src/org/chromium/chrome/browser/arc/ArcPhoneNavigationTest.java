@@ -87,7 +87,7 @@ public class ArcPhoneNavigationTest {
         assertSame(bar,mSlot.getChildAt(0));assertEquals(1,mSlot.getChildCount());assertSame(layout,bar.getLayoutParams());
         assertSame(glass,bar.getBackground());assertEquals(Integer.valueOf(Color.TRANSPARENT),mNavigation.getBackgroundColor());
         assertEquals(Color.TRANSPARENT,mNavigation.getBottomBar().getBackgroundColor());
-        mNavigation.setGlassBackdrop(glass,false);assertNotSame(glass,bar.getBackground());assertNotEquals(Integer.valueOf(Color.TRANSPARENT),mNavigation.getBackgroundColor());
+        mNavigation.setGlassBackdrop(glass,false);assertNotSame(glass,bar.getBackground());assertEquals(Integer.valueOf(Color.TRANSPARENT),mNavigation.getBackgroundColor());
         mNavigation.setGlassBackdrop(glass,true);mNavigation.setPhoneModeActive(false);
         assertNotSame(glass,bar.getBackground());assertNotEquals(Integer.valueOf(Color.TRANSPARENT),mNavigation.getBackgroundColor());
     }
@@ -108,6 +108,14 @@ public class ArcPhoneNavigationTest {
                 assertTrue("Glass text AA",(Math.max(a,b)+.05)/(Math.min(a,b)+.05)>=4.5);
             }
         }
+    }
+    @Test public void nativeNewTabKeepsFloatingPillWithoutSamplingWebContents(){
+        mHost.web=false;mHost.home=true;mNavigation.refresh();
+        View bar=mNavigation.getGlassTarget();assertTrue(bar.getBackground() instanceof GradientDrawable);
+        var params=(FrameLayout.LayoutParams)bar.getLayoutParams();assertTrue(params.leftMargin>=16);assertTrue(params.rightMargin>=16);
+        assertEquals(Color.TRANSPARENT,((android.graphics.drawable.ColorDrawable)mSlot.getBackground()).getColor());
+        assertEquals(Integer.valueOf(Color.TRANSPARENT),mNavigation.getBackgroundColor());
+        assertEquals(Color.TRANSPARENT,mNavigation.getBottomBar().getBackgroundColor());
     }
     @Test public void navigationCallsActualHostActions(){
         find("arc-phone-home").performClick();assertEquals(ArcPhoneNavigation.HOME,mHost.action);
@@ -187,15 +195,15 @@ public class ArcPhoneNavigationTest {
         var sheet=menu();assertTrue(find("arc-phone-menu").isSelected());
         sheet.destroy();assertFalse(find("arc-phone-menu").isSelected());
     }
-    @Test public void lightPaletteUsesCleanWhiteOutsideCapsule(){
+    @Test public void lightPaletteKeepsTransparentBackingOutsideCapsule(){
         mHost.color=0xfff0f0f6;mNavigation.refresh();
-        assertEquals(Color.WHITE,mNavigation.getBackgroundColor().intValue());
+        assertEquals(Color.TRANSPARENT,mNavigation.getBackgroundColor().intValue());
     }
     @Test public void liveCounterReflectsCurrentModelCount(){
         mHost.count=12;mNavigation.refresh();assertTrue(find("arc-phone-tabs").getContentDescription().toString().contains("12"));
     }
     @Test public void darkSurfaceAndSheetUseHostPaletteWithoutForcingWebTheme(){
-        mHost.color=0xff202124;mNavigation.refresh();assertEquals(0xff202124,mNavigation.getBackgroundColor().intValue());
+        mHost.color=0xff202124;mNavigation.refresh();assertEquals(Color.TRANSPARENT,mNavigation.getBackgroundColor().intValue());
         assertEquals(0xff202124,menu().getSheetBackgroundColorOverride());
     }
     @Test public void leavingPhoneModeReleasesControlsAndClosesSheetWithoutDuplicatingViews(){

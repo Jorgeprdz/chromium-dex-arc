@@ -58,6 +58,20 @@ public final class ArcCommandBar {
     private final View mDivider;
     private final TextView mHint;
     private final GradientDrawable mSurface = new GradientDrawable();
+    private ArcPhoneGlass mGlass;
+    private ArcPhoneGlass.Backdrop mGlassSurface;
+    public void setGlassSampler(ArcPhoneGlass glass) {
+        if (mGlass == glass) return;
+        if (mGlass != null && mGlassSurface != null) mGlass.remove(mGlassSurface);
+        mGlass = glass; mGlassSurface = null;
+        if (glass != null) {
+            mGlassSurface = glass.add(mPanel, mPanel::getDrawingRect);
+            mGlassSurface.setDesktopMaterial(); mGlassSurface.setCornerRadius(dp(12));
+            mGlassSurface.setEdgeEnabled(true, mActivity.getResources().getDisplayMetrics().density);
+            if (mSurface.getColor() != null) mGlassSurface.setSurface(mSurface.getColor().getDefaultColor());
+        }
+        mPanel.setBackground(mGlassSurface == null ? mSurface : mGlassSurface);
+    }
     private final TextWatcher mTextWatcher = new TextWatcher() {
         @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
         @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
@@ -130,6 +144,7 @@ public final class ArcCommandBar {
 
     public void setAppearance(int surface, int foreground, int selection) {
         mSurface.setColor(surface); mSurface.setStroke(dp(1), (foreground & 0xffffff) | 0x33000000);
+        if (mGlassSurface != null) mGlassSurface.setSurface(surface);
         mForeground = foreground; mSelection = selection;
         mHint.setTextColor(foreground); mDivider.setBackgroundColor((foreground & 0xffffff) | 0x22000000);
         if (isShowing()) rebuildResults();
@@ -367,6 +382,7 @@ public final class ArcCommandBar {
     public void destroy() {
         if (mDestroyed) return;
         cancelAnimator(); if (isShowing()) {mState = State.OPEN; close(false, null);}
+        setGlassSampler(null);
         mDestroyed = true;
     }
     LinearLayout panelForTesting() { return mPanel; }

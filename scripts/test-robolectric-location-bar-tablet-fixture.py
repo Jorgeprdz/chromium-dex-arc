@@ -59,7 +59,7 @@ def main():
         bodies.append(method(source, 'setArcTopBar'))
     native = native_definition((ROOT / '.source-modified' / REL / 'LocationBarLayout.java').read_text())
     native = native[native.index('    private @Nullable '):native.rfind('}')].replace('@Nullable ', '')
-    tablet_fields = '\n'.join(re.findall(r'^    private [^\n]+ mArc(?:CommandOriginal|TopBar)[^\n]*;', source, re.M)).replace('@Nullable ', '')
+    tablet_fields = '\n'.join(re.findall(r'^    private [^\n]+ mArc(?:CommandOriginal|TopBar|Glass)[^\n]*;', source, re.M)).replace('@Nullable ', '')
     if 'private View getExpansionContainer(' in source:
         bodies += [method(source, name) for name in ('getExpansionContainer', 'isAncestorOf')]
         if args.unsafe_container_mutant:
@@ -117,6 +117,7 @@ __MEASURE__
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Rect;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Gravity;
 import android.view.View;

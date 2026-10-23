@@ -31,6 +31,7 @@ def main():
     background=method_body(palette,r'private GradientDrawable background\(')
     tablet=(ROOT/'.source-modified/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java').read_text()
     native_background=method_body(tablet,r'private void updateBackgroundColor\(')
+    glass_background=method_body(tablet,r'public void setArcGlassBackground\(')
     tint=method_body(tablet,r'private int tintArcBackground\(') if 'private int tintArcBackground(' in tablet else '{return nativeColor;}'
     source=r'''
 import static org.junit.Assert.*;
@@ -88,7 +89,7 @@ public class ShellDrawableProbe {
         GradientDrawable background(int color,int radius) BACKGROUND
         void applyAppearance(ViewGroup group) STYLE
     }
-    static class NativePalette {
+    static class NativePalette extends FrameLayout {
         static class Background extends ColorDrawable {
             void setBackgroundColor(int color){setColor(color);}
             void setStandbyColor(int color){}
@@ -96,14 +97,32 @@ public class ShellDrawableProbe {
         static class Data {int getPrimaryColor(){return Color.WHITE;}}
         final Background mLocationBarBackground=new Background();
         final Data mLocationBarDataProvider=new Data();
-        final Activity context;
+        Drawable mArcGlassBackground, mArcGlassLayers;
+        final int mModernToolbarBackgroundVerticalOffset=6;
+        final Drawable mFocusedPopupDrawable=new ColorDrawable(Color.GRAY);
         Integer mArcSurfaceColor;
         boolean mShowFocusRing;
         int mBrandedColorScheme;
-        NativePalette(Activity a){context=a;}
-        android.content.Context getContext(){return context;}
+        NativePalette(Activity a){super(a);setBackground(mLocationBarBackground);}
+        public void setArcGlassBackground(Drawable surface) GLASS_HOOK_BODY
         int tintArcBackground(int nativeColor) ARC_TINT_BODY
         void updateBackgroundColor() NATIVE_COLOR_BODY
+    }
+    @Test public void glassFillRetainsNativeBorderAndRestoresNativeBackground() {
+        Activity a=Robolectric.buildActivity(Activity.class).setup().get();
+        try {
+            NativePalette p=new NativePalette(a);Drawable glass=new ColorDrawable(Color.GRAY);
+            p.setPadding(3,5,7,9);p.layout(0,0,200,50);
+            p.setArcGlassBackground(glass);assertTrue(p.getBackground() instanceof LayerDrawable);
+            LayerDrawable layers=(LayerDrawable)p.getBackground();assertSame(glass,layers.getDrawable(0));
+            assertSame(p.mLocationBarBackground,layers.getDrawable(1));
+            assertEquals(6,layers.getLayerInsetTop(0));assertEquals(6,layers.getLayerInsetBottom(0));
+            assertEquals(5,p.getPaddingTop());assertEquals(9,p.getPaddingBottom());assertEquals(50,p.getHeight());
+            for(boolean focus:new boolean[]{false,true}){p.mShowFocusRing=focus;p.updateBackgroundColor();assertEquals(Color.TRANSPARENT,p.mLocationBarBackground.getColor());}
+            p.setArcGlassBackground(null);assertSame(p.mLocationBarBackground,p.getBackground());
+            assertEquals(Color.WHITE,p.mLocationBarBackground.getColor());
+            p.setBackground(p.mFocusedPopupDrawable);p.setArcGlassBackground(glass);assertSame(p.mFocusedPopupDrawable,p.getBackground());
+        } finally {a.finish();}
     }
     @Test public void nativeOmniboxUsesArcPaletteWithAndWithoutFocusRing() {
         Activity a=Robolectric.buildActivity(Activity.class).setup().get();
@@ -150,7 +169,7 @@ public class ShellDrawableProbe {
         } finally {a.finish();}
     }
 }
-'''.replace('NEW_TAB',new_tab).replace('BACKGROUND',background).replace('STYLE',style).replace('NATIVE_COLOR_BODY',native_background).replace('ARC_TINT_BODY',tint)
+'''.replace('NEW_TAB',new_tab).replace('BACKGROUND',background).replace('STYLE',style).replace('NATIVE_COLOR_BODY',native_background).replace('GLASS_HOOK_BODY',glass_background).replace('ARC_TINT_BODY',tint)
     test=args.work/'ShellDrawableProbe.java';test.write_text(source)
     policy=ROOT/'chromium/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java'
     window=args.work/'ArchiumWindowClass.java'

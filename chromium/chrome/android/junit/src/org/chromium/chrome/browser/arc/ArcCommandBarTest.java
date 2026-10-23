@@ -47,6 +47,23 @@ public class ArcCommandBarTest {
         }
         void finish() {bar.destroy(); activity.finish();}
     }
+    @Test public void milkyCommandPanelRetainsGeometryAndUniqueNativeEditor() {
+        Fixture f = new Fixture();
+        var panel=f.bar.panelForTesting();int padding=panel.getPaddingLeft();float elevation=panel.getElevation();
+        var glass=new ArcPhoneGlass(f.root,new ArcPhoneGlass.Capture(){
+            public boolean available(){return false;}
+            public void copy(Rect r,android.graphics.Bitmap b,java.util.function.Consumer<Boolean> result){result.accept(false);}
+            public void close(){}
+        });
+        f.bar.setGlassSampler(glass);var background=panel.getBackground();assertTrue(background instanceof ArcPhoneGlass.Backdrop);
+        f.bar.setAppearance(0xff202124,0xffffffff,0xff404148);assertSame(background,panel.getBackground());
+        f.bar.open(false);f.bar.finishAnimationForTesting();assertSame(f.holder,f.editor.getParent());assertEquals(1,f.sessions.get());
+        assertEquals(padding,panel.getPaddingLeft());assertEquals(elevation,panel.getElevation(),0f);
+        f.bar.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN,KeyEvent.KEYCODE_ESCAPE));f.bar.finishAnimationForTesting();
+        assertSame(f.original,f.holder.getParent());assertEquals(0,f.sessions.get());
+        f.bar.setGlassSampler(null);assertTrue(panel.getBackground() instanceof android.graphics.drawable.GradientDrawable);
+        f.finish();glass.destroy();
+    }
     @Test public void openingAndEscapeCreateNoTabAndRestoreUniqueEditor() {
         Fixture f = new Fixture();
         f.bar.open(false); assertTrue(f.bar.isShowing()); assertEquals(0, f.commits.get());

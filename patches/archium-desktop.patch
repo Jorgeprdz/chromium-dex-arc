@@ -3321,8 +3321,8 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 +        boolean enabled = mArcPhoneHost != null
 +                && !org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.isDesktopWindow(mActivity);
 +        Tab glassTab = mActivityTabProvider.get();
-+        boolean glass = enabled && mArcPhoneResumed && !mArcPhoneFullscreen
-+                && glassTab != null && !glassTab.isNativePage();
++        boolean floating = enabled && mArcPhoneResumed && !mArcPhoneFullscreen;
++        boolean glass = floating && glassTab != null && !glassTab.isNativePage();
 +        if (mToolbarLayout instanceof ToolbarPhone phone) {
 +            if (enabled && mArcPhoneGlass == null) {
 +                mArcPhoneGlass = new ArcPhoneGlass(phone, ArcPhoneGlass.contentSource(
@@ -3408,15 +3408,15 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 +                }
 +                mArcPhoneTransparentContainer=glass;
 +            }
-+            if (mArcPhoneBottomContainer != null && mArcPhoneBottomTransparent != glass) {
-+                if (glass) {
++            if (mArcPhoneBottomContainer != null && mArcPhoneBottomTransparent != floating) {
++                if (floating) {
 +                    mArcPhoneBottomBackground = mArcPhoneBottomContainer.getBackground();
 +                    mArcPhoneBottomContainer.setBackground(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
 +                } else {
 +                    mArcPhoneBottomContainer.setBackground(mArcPhoneBottomBackground);
 +                    mArcPhoneBottomBackground = null;
 +                }
-+                mArcPhoneBottomTransparent = glass;
++                mArcPhoneBottomTransparent = floating;
 +            }
 +            mActivity.getWindow().getDecorView().setTag(
 +                    org.chromium.ui.R.id.arc_phone_surface_decorator,
@@ -4985,7 +4985,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
  /** This class represents the location bar where the user types in URLs and search terms. */
  @NullMarked
  public class LocationBarLayout extends ConstraintLayout {
-@@ -229,6 +233,96 @@
+@@ -229,6 +233,101 @@
 
      /* package */ void setDeleteButtonBackground(@DrawableRes int resourceId) {
          mDeleteButton.setBackgroundResource(resourceId);
@@ -4993,6 +4993,11 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
 +
 +    /** Optional window palette; phone layouts retain their native appearance. */
 +    public void setArcSurfaceColor(@Nullable Integer color) {}
++
++    /** Optional desktop fill; phone and upstream implementations retain native backgrounds. */
++    public void setArcGlassBackground(@Nullable Drawable surface) {}
++    public void getArcGlassBounds(Rect bounds) { getDrawingRect(bounds); }
++    public float getArcGlassCornerRadius() { return 0; }
 +
 +    /** Rectangular address row when the Arc shell places it above the page. */
 +    public void setArcTopBar(boolean active) {}
@@ -5270,18 +5275,65 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
 diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java
 --- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java
 +++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java
-@@ -112,6 +112,10 @@
+@@ -10,6 +10,7 @@
+ import android.content.Context;
+ import android.content.res.Resources;
+ import android.graphics.Rect;
++import android.graphics.drawable.Drawable;
+ import android.graphics.drawable.GradientDrawable;
+ import android.graphics.drawable.LayerDrawable;
+ import android.os.Handler;
+@@ -112,6 +113,40 @@
      private int mTargetPopoverLeftOffset;
      private @BrandedColorScheme int mBrandedColorScheme = BrandedColorScheme.APP_DEFAULT;
      private boolean mShowFocusRing;
 +    private boolean mArcTopBar;
 +    private @Nullable Integer mArcSurfaceColor;
++    private @Nullable Drawable mArcGlassBackground;
++    private @Nullable Drawable mArcGlassLayers;
++
++    /** Arc owns only the fill; Chromium retains its native focus/hover border and editor. */
++    @Override
++    public void setArcGlassBackground(@Nullable Drawable surface) {
++        if (mArcGlassBackground == surface) return;
++        mArcGlassBackground = surface;
++        mArcGlassLayers = null;
++        if (surface != null) {
++            LayerDrawable layers = new LayerDrawable(new Drawable[] {surface, mLocationBarBackground}) {
++                @Override public boolean getPadding(Rect padding) {
++                    return mLocationBarBackground.getPadding(padding);
++                }
++            };
++            layers.setLayerInset(0, 0, mModernToolbarBackgroundVerticalOffset,
++                    0, mModernToolbarBackgroundVerticalOffset);
++            mArcGlassLayers = layers;
++        }
++        // Fusebox owns its expanded popup. Restore the layered background on returning to normal.
++        if (getBackground() != mFocusedPopupDrawable) {
++            setBackground(mArcGlassLayers == null ? mLocationBarBackground : mArcGlassLayers);
++        }
++        updateBackgroundColor();
++    }
++    @Override public void getArcGlassBounds(Rect bounds) {
++        getDrawingRect(bounds);
++        bounds.inset(0, mModernToolbarBackgroundVerticalOffset);
++    }
++    @Override public float getArcGlassCornerRadius() { return mModernToolbarBackgroundCornerRadius; }
 +    private @Nullable MarginLayoutParams mArcCommandOriginalChildParams;
 +    private int mArcCommandOriginalPaddingBottom;
      private boolean mIsHovered;
      private boolean mIsGlifActive;
      private boolean mStartGlifOnNextLayout;
-@@ -512,28 +516,65 @@
+@@ -178,7 +213,7 @@
+     @Override
+     protected void onFinishInflate() {
+         super.onFinishInflate();
+-        setBackground(mLocationBarBackground);
++        setBackground(mArcGlassLayers == null ? mLocationBarBackground : mArcGlassLayers);
+
+         mLocationBarIcon = findViewById(R.id.location_bar_status_icon);
+         mBookmarkButton = findViewById(R.id.bookmark_button);
+@@ -512,28 +547,65 @@
          if (mLayoutMode == FuseboxLayoutMode.SUGGESTIONS_POPOVER) {
              @ColorInt
              int popoverColor =
@@ -5350,18 +5402,19 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
              mLocationBarBackground.setBackgroundColor(
 -                    OmniboxResourceProvider.getTabletToolbarTextBoxStandbyBackgroundColor(
 -                            context, mBrandedColorScheme));
-+                    tintArcBackground(OmniboxResourceProvider.getTabletToolbarTextBoxStandbyBackgroundColor(
++                    mArcGlassBackground != null ? android.graphics.Color.TRANSPARENT : tintArcBackground(OmniboxResourceProvider.getTabletToolbarTextBoxStandbyBackgroundColor(
 +                            context, mBrandedColorScheme)));
              @ColorInt
              int standbyBorderColor =
                      OmniboxResourceProvider.getColorPrimary(context, mBrandedColorScheme);
-@@ -547,8 +588,20 @@
+@@ -547,8 +619,21 @@
                              color,
                              mBrandedColorScheme == BrandedColorScheme.INCOGNITO,
                              /* isCustomTab= */ false);
 -            mLocationBarBackground.setBackgroundColor(textBoxColor);
 -        }
-+            mLocationBarBackground.setBackgroundColor(tintArcBackground(textBoxColor));
++            mLocationBarBackground.setBackgroundColor(mArcGlassBackground != null
++                    ? android.graphics.Color.TRANSPARENT : tintArcBackground(textBoxColor));
 +        }
 +    }
 +
@@ -5378,7 +5431,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
      }
 
      @Override
-@@ -607,6 +660,7 @@
+@@ -607,6 +692,7 @@
              mGlifBorderDrawable.setCornerRadius(mOmniboxSuggestionDropdownRoundCornerRadius);
              updateLayoutAndBackground();
          }
@@ -5386,7 +5439,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
      }
 
      @Override
-@@ -649,6 +703,8 @@
+@@ -649,6 +735,8 @@
              mGlifForegroundTarget.setForeground(null);
              mGlifForegroundTarget = null;
          }
@@ -5395,7 +5448,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
 
          if (mLayoutMode == FuseboxLayoutMode.SUGGESTIONS_POPOVER
                  && (mUrlCoordinator == null || !mUrlCoordinator.hasFocus())) {
-@@ -676,7 +732,7 @@
+@@ -676,7 +764,7 @@
                  mGlifBorderDrawable.reset();
              }
 
@@ -5404,7 +5457,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
                      && (mLayoutMode != FuseboxLayoutMode.SUGGESTIONS_POPOVER
                              || !mUrlCoordinator.hasFocus())) {
                  setForeground(mHoverDrawable);
-@@ -709,12 +765,35 @@
+@@ -709,12 +797,35 @@
                              + (mHolder == null ? null : mHolder.getLayoutParams());
              return;
          }
@@ -5442,7 +5495,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
          boolean isPopoverMode = mLayoutMode == FuseboxLayoutMode.SUGGESTIONS_POPOVER;
          boolean isFuseboxActive =
                  (mFuseboxState == FuseboxState.COMPACT || mFuseboxState == FuseboxState.EXPANDED);
-@@ -727,9 +806,13 @@
+@@ -727,9 +838,13 @@
              int additionalWidth =
                      isPopoverMode ? mPopoverAdditionalWidth : mLocationBarTabletFuseboxPopupInset;
              // Determine available headroom above toolbar (stored in mPositionArray[1]).
@@ -5459,7 +5512,16 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
                  availableTopHeadroomPx = Math.max(0, mPositionArray[1]);
              }
              int topMarginExpansion = Math.min(expansionPx, availableTopHeadroomPx);
-@@ -845,18 +928,44 @@
+@@ -766,7 +881,7 @@
+             ViewUtils.setAncestorsShouldClipChildren(this, true, View.NO_ID);
+             // Reset our background to reflect non-zero suggestion count, which is the typical
+             // state. Not setting this risks visual glitches when returning to the fusebox.
+-            setBackground(mLocationBarBackground);
++            setBackground(mArcGlassLayers == null ? mLocationBarBackground : mArcGlassLayers);
+         }
+
+         // Put the focused foreground back into its starting state before swapping it out;
+@@ -845,18 +960,44 @@
          }
      }
 
@@ -5509,7 +5571,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
          int unexpandedWidth =
                  mHolder.getMeasuredWidth() + layoutParams.leftMargin + layoutParams.rightMargin;
          int unexpandedLeft = mPositionArray[0] - layoutParams.leftMargin;
-@@ -996,9 +1105,8 @@
+@@ -996,9 +1137,8 @@
       * falling back to the window width before the container has been laid out.
       */
      private @Px int getAvailableContainerWidth() {
@@ -9560,7 +9622,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCommandB
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCommandBar.java
-@@ -0,0 +1,375 @@
+@@ -0,0 +1,391 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -9621,6 +9683,20 @@ new file mode 100644
 +    private final View mDivider;
 +    private final TextView mHint;
 +    private final GradientDrawable mSurface = new GradientDrawable();
++    private ArcPhoneGlass mGlass;
++    private ArcPhoneGlass.Backdrop mGlassSurface;
++    public void setGlassSampler(ArcPhoneGlass glass) {
++        if (mGlass == glass) return;
++        if (mGlass != null && mGlassSurface != null) mGlass.remove(mGlassSurface);
++        mGlass = glass; mGlassSurface = null;
++        if (glass != null) {
++            mGlassSurface = glass.add(mPanel, mPanel::getDrawingRect);
++            mGlassSurface.setDesktopMaterial(); mGlassSurface.setCornerRadius(dp(12));
++            mGlassSurface.setEdgeEnabled(true, mActivity.getResources().getDisplayMetrics().density);
++            if (mSurface.getColor() != null) mGlassSurface.setSurface(mSurface.getColor().getDefaultColor());
++        }
++        mPanel.setBackground(mGlassSurface == null ? mSurface : mGlassSurface);
++    }
 +    private final TextWatcher mTextWatcher = new TextWatcher() {
 +        @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
 +        @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
@@ -9693,6 +9769,7 @@ new file mode 100644
 +
 +    public void setAppearance(int surface, int foreground, int selection) {
 +        mSurface.setColor(surface); mSurface.setStroke(dp(1), (foreground & 0xffffff) | 0x33000000);
++        if (mGlassSurface != null) mGlassSurface.setSurface(surface);
 +        mForeground = foreground; mSelection = selection;
 +        mHint.setTextColor(foreground); mDivider.setBackgroundColor((foreground & 0xffffff) | 0x22000000);
 +        if (isShowing()) rebuildResults();
@@ -9930,6 +10007,7 @@ new file mode 100644
 +    public void destroy() {
 +        if (mDestroyed) return;
 +        cancelAnimator(); if (isShowing()) {mState = State.OPEN; close(false, null);}
++        setGlassSampler(null);
 +        mDestroyed = true;
 +    }
 +    LinearLayout panelForTesting() { return mPanel; }
@@ -10154,7 +10232,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopC
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
-@@ -0,0 +1,1488 @@
+@@ -0,0 +1,1578 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -10167,7 +10245,6 @@ new file mode 100644
 +import android.graphics.Outline;
 +import android.graphics.Rect;
 +import android.graphics.drawable.Drawable;
-+import android.graphics.drawable.ColorDrawable;
 +import android.text.TextUtils;
 +import android.graphics.drawable.GradientDrawable;
 +import android.graphics.drawable.StateListDrawable;
@@ -10213,6 +10290,7 @@ new file mode 100644
 +import org.chromium.chrome.browser.history.HistoryManagerUtils;
 +import org.chromium.content_public.browser.WebContents;
 +import org.chromium.chrome.browser.omnibox.LocationBarLayout;
++import org.chromium.chrome.browser.omnibox.suggestions.OmniboxSuggestionsContainer;
 +
 +/** Composes profile-owned Arc collections around Chromium's real vertical tab rail. */
 +public final class ArcDesktopCoordinator {
@@ -10305,6 +10383,83 @@ new file mode 100644
 +    private Rect mClippedSurfaceOriginalClipBounds;
 +    private AlertDialog mColorDialog;
 +    private AlertDialog mAboutDialog;
++    private ArcPhoneGlass mDesktopGlass;
++    private ArcPhoneGlass.Backdrop mDesktopOmniboxGlass;
++    private OmniboxSuggestionsContainer mDesktopSuggestions;
++    private ArcPhoneGlass.Backdrop mDesktopSuggestionGlass;
++    private void updateDesktopSuggestions(boolean enabled) {
++        View node = mActivity.findViewById(R.id.omnibox_suggestions_dropdown);
++        while (node != null && !(node instanceof OmniboxSuggestionsContainer)) {
++            node = node.getParent() instanceof View ? (View) node.getParent() : null;
++        }
++        if (mDesktopSuggestions != node) {
++            if (mDesktopSuggestions != null) mDesktopSuggestions.setArcPhoneGlassBackground(null);
++            if (mDesktopSuggestionGlass != null && mDesktopGlass != null) mDesktopGlass.remove(mDesktopSuggestionGlass);
++            mDesktopSuggestions = node instanceof OmniboxSuggestionsContainer ? (OmniboxSuggestionsContainer) node : null;
++            mDesktopSuggestionGlass = null;
++        }
++        if (mDesktopSuggestions == null || mDesktopGlass == null) return;
++        if (mDesktopSuggestionGlass == null && enabled) {
++            mDesktopSuggestionGlass = mDesktopGlass.add(mDesktopSuggestions, mDesktopSuggestions::getDrawingRect);
++            mDesktopSuggestionGlass.setDesktopMaterial(); mDesktopSuggestionGlass.setCornerRadius(dp(12));
++        }
++        if (mDesktopSuggestionGlass != null) mDesktopSuggestionGlass.setSurface(frameSurface(mIncognitoStateProvider.isIncognitoSelected()));
++        mDesktopSuggestions.setArcPhoneGlassBackground(enabled ? mDesktopSuggestionGlass : null);
++    }
++    private final ArcPhoneGlass.Backdrop mDesktopFrameMaterial = desktopMaterial();
++    private final ArcPhoneGlass.Backdrop mDesktopRailMaterial = desktopMaterial();
++    private final ArcPhoneGlass.Backdrop mDesktopColumnMaterial = desktopMaterial();
++    private final ArcPhoneGlass.Backdrop mDesktopTabsMaterial = desktopMaterial();
++    private final Drawable mOriginalNativeTabsBackground;
++    private static ArcPhoneGlass.Backdrop desktopMaterial() {
++        var material = new ArcPhoneGlass.Backdrop();
++        material.setDesktopMaterial(); material.setCornerRadius(0);
++        return material;
++    }
++
++    private void updateDesktopGlass(boolean desktop, int surface) {
++        if (mDesktopGlass == null && desktop) {
++            mDesktopGlass = new ArcPhoneGlass(mRail, ArcPhoneGlass.contentSource(() -> {
++                Tab tab = mCurrentTab.get();
++                return tab == null || tab.isNativePage() || tab.isHidden() ? null : tab.getContentView();
++            }, (region, width, height, result) -> {
++                Tab tab = mCurrentTab.get();
++                if (tab == null || tab.isNativePage() || tab.isHidden()) { result.accept(null); return; }
++                WebContents contents = tab.getWebContents();
++                mCompositorViewHolder.getCompositorView().copyArcPhoneBackdrop(
++                        contents, region, width, height, bitmap -> result.accept(
++                                mCurrentTab.get() == tab && !tab.isDestroyed() && tab.getWebContents() == contents
++                                        ? bitmap : null));
++            }));
++            mDesktopGlass.setDesktopMaterial();
++            mDesktopGlass.setSurfaceLayersTag(org.chromium.ui.R.id.arc_phone_surface_layers);
++            View locationBar = mLocationBarHost.findViewById(R.id.location_bar);
++            if (locationBar instanceof LocationBarLayout layout) {
++                mDesktopOmniboxGlass = mDesktopGlass.add(locationBar, layout::getArcGlassBounds);
++                mDesktopOmniboxGlass.setDesktopMaterial();
++                mDesktopOmniboxGlass.setCornerRadius(layout.getArcGlassCornerRadius());
++                mDesktopOmniboxGlass.setEdgeEnabled(true, mActivity.getResources().getDisplayMetrics().density);
++            }
++        }
++        if (mDesktopGlass == null) return;
++        // Invalidate on active-tab identity changes; never show pixels from a previous site.
++        Tab current = mCurrentTab.get();
++        if (current != mDesktopGlassTab) { mDesktopGlass.invalidateSource(); mDesktopGlassTab = current; }
++        mDesktopGlass.setSurface(surface); mDesktopGlass.setEnabled(desktop);
++        View decor = mActivity.getWindow().getDecorView();
++        Object decorator = decor.getTag(org.chromium.ui.R.id.arc_phone_surface_decorator);
++        if (desktop) decor.setTag(org.chromium.ui.R.id.arc_phone_surface_decorator, mDesktopGlass.getSurfaceDecorator());
++        else if (decorator == mDesktopGlass.getSurfaceDecorator()) decor.setTag(org.chromium.ui.R.id.arc_phone_surface_decorator, null);
++        View locationBar = mLocationBarHost.findViewById(R.id.location_bar);
++        if (mDesktopOmniboxGlass != null) {
++            mDesktopOmniboxGlass.setSurface(surface);
++            if (locationBar instanceof LocationBarLayout tablet) tablet.setArcGlassBackground(desktop ? mDesktopOmniboxGlass : null);
++        }
++        if (mCommandBar != null) mCommandBar.setGlassSampler(desktop ? mDesktopGlass : null);
++        updateDesktopSuggestions(desktop && mCommandBar != null && mCommandBar.isShowing());
++        mDesktopFrameMaterial.setSurface(surface); mDesktopRailMaterial.setSurface(surface); mDesktopColumnMaterial.setSurface(surface); mDesktopTabsMaterial.setSurface(surface);
++    }
++    private Tab mDesktopGlassTab;
 +    private boolean mPaletteInitialized;
 +    private int mPaletteSurface;
 +    private boolean mPaletteDesktop;
@@ -10414,6 +10569,7 @@ new file mode 100644
 +            mOriginalContentMarginBottom = 0;
 +        }
 +        mNativeTabs = nativeTabs;
++        mOriginalNativeTabsBackground = nativeTabs.getBackground();
 +        mNativeNewTabButton = nativeTabs.findViewById(R.id.new_tab_button);
 +        if (mNativeNewTabButton == null) {
 +            throw new IllegalStateException("Arc requires the native new-tab action");
@@ -10774,6 +10930,7 @@ new file mode 100644
 +        // a fresh descendant lookup on close would leave its command bridge and input alive.
 +        View location = mLocationBarHost.findViewById(R.id.location_bar);
 +        mCommandBar.setBoundsChangedListener(() -> {
++            updateDesktopSuggestions(!mDestroyed && ArcDesktopAppearance.isDesktopWindow(mActivity) && mCommandBar.isShowing());
 +            if (location instanceof LocationBarLayout bar) {
 +                bar.setArcCommandBar(mCommandBar.isShowing() ? mCommandBar.resultsBoundsInWindow() : null,
 +                        mCommandBar.isActions(), mCommandBar::commitNativeNavigation,
@@ -11189,6 +11346,7 @@ new file mode 100644
 +        }
 +        applyAddressBarPosition();
 +        int surface = frameSurface(incognito);
++        updateDesktopGlass(desktop, surface);
 +        if (mSplitView != null) mSplitView.setAppearance(surface);
 +        boolean paletteChanged = !mPaletteInitialized || mPaletteDesktop != desktop
 +                || mPaletteIncognito != incognito || mPaletteSurface != surface;
@@ -11208,6 +11366,7 @@ new file mode 100644
 +            VerticalTabListViewBinder.refreshArcAppearance(
 +                    (VerticalTabRailLayout) mNativeTabs, incognito);
 +        }
++        if (desktop) mNativeTabs.setBackground(mDesktopTabsMaterial);
 +        if (!desktop) {
 +            mCompactOmnibox.restore();
 +            mNewTabRow.setVisibility(View.GONE);
@@ -11286,7 +11445,7 @@ new file mode 100644
 +        int foreground = ArcDesktopPolicy.foreground(surface);
 +        if (mCommandBar != null) mCommandBar.setAppearance(surface, foreground, ArcDesktopPolicy.selection(surface));
 +        mNewTabIcon.setTint(foreground);
-+        mColumn.setBackgroundColor(surface);
++        mColumn.setBackground(mDesktopColumnMaterial);
 +        mColumn.setForeground(new android.graphics.drawable.Drawable() {
 +            private final android.graphics.Paint mPaint = new android.graphics.Paint();
 +            @Override public void draw(android.graphics.Canvas canvas) {
@@ -11453,12 +11612,10 @@ new file mode 100644
 +        // The rail's top/bottom padding is drawn by the rail itself, outside mColumn.
 +        // Tinting only mColumn left the old white background visible as two strips.
 +        mRail.setBackgroundTintList(null);
-+        if (!(mRail.getBackground() instanceof ColorDrawable railColor)
-+                || railColor.getColor() != surface) mRail.setBackground(new ColorDrawable(surface));
-+        if (mFrameRoot != null
-+                && (!(mFrameRoot.getBackground() instanceof ColorDrawable frameColor)
-+                        || frameColor.getColor() != surface)) {
-+            mFrameRoot.setBackground(new ColorDrawable(surface));
++        mDesktopRailMaterial.setSurface(surface); mDesktopFrameMaterial.setSurface(surface);
++        if (mRail.getBackground() != mDesktopRailMaterial) mRail.setBackground(mDesktopRailMaterial);
++        if (mFrameRoot != null && mFrameRoot.getBackground() != mDesktopFrameMaterial) {
++            mFrameRoot.setBackground(mDesktopFrameMaterial);
 +        }
 +    }
 +
@@ -11616,6 +11773,17 @@ new file mode 100644
 +            mAddressPopupLocation = null;
 +        }
 +        if (mCommandBar != null) mCommandBar.destroy();
++        mNativeTabs.setBackground(mOriginalNativeTabsBackground);
++        if (mDesktopSuggestions != null) { mDesktopSuggestions.setArcPhoneGlassBackground(null); mDesktopSuggestions = null; }
++        if (mDesktopGlass != null) {
++            View decor = mActivity.getWindow().getDecorView();
++            if (decor.getTag(org.chromium.ui.R.id.arc_phone_surface_decorator) == mDesktopGlass.getSurfaceDecorator()) {
++                decor.setTag(org.chromium.ui.R.id.arc_phone_surface_decorator, null);
++            }
++            View locationBar = mLocationBarHost.findViewById(R.id.location_bar);
++            if (locationBar instanceof LocationBarLayout tablet) tablet.setArcGlassBackground(null);
++            mDesktopGlass.destroy(); mDesktopGlass = null; mDesktopGlassTab = null;
++        }
 +        mFrameDispatch.destroy();
 +        mCompactOmnibox.destroy();
 +        ArcDesktopAppearance.setPreviewColor(mActivity, null);
@@ -12340,7 +12508,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneGla
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneGlass.java
-@@ -0,0 +1,253 @@
+@@ -0,0 +1,304 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -12352,6 +12520,8 @@ new file mode 100644
 +import android.graphics.ColorFilter;
 +import android.graphics.Outline;
 +import android.graphics.Paint;
++import android.graphics.LinearGradient;
++import android.graphics.Shader;
 +import android.graphics.Path;
 +import android.graphics.PixelFormat;
 +import android.graphics.Rect;
@@ -12371,6 +12541,7 @@ new file mode 100644
 +public final class ArcPhoneGlass {
 +    public interface Capture {
 +        boolean available();
++        default Rect clip(Rect screenBounds){return new Rect(screenBounds);}
 +        void copy(Rect windowBounds, Bitmap output, Consumer<Boolean> result);
 +        void close();
 +    }
@@ -12379,6 +12550,8 @@ new file mode 100644
 +        private final Path mClip=new Path();
 +        private final RectF mRect=new RectF();
 +        private final RectF mEdgeRect=new RectF();
++        private final RectF mFrameFraction=new RectF(0,0,1,1);
++        private final RectF mFrameRect=new RectF();
 +        private final Paint mEdgePaint=new Paint(Paint.ANTI_ALIAS_FLAG);
 +        private boolean mEdgeEnabled;
 +        private float mCornerRadius=-1;
@@ -12388,14 +12561,39 @@ new file mode 100644
 +        private float mEdgeWidth=0.5f;
 +        private Bitmap mFrame;
 +        private int mTint=0xb3ffffff;
++        private int mSurface=Color.WHITE;
++        private boolean mMilky;
++        private boolean mDesktop;
++        private Paint mSheen;
 +        private int mAlpha=255;
 +        private boolean mPaintReported;
-+        public void setSurface(int color){mTint=Color.luminance(color)>.45?0xb3ffffff:0xc4202124;invalidateSelf();}
++        public void setSurface(int color){
++            if(mSurface==color&&mSurfaceInitialized)return;
++            mSurface=color;mSurfaceInitialized=true;
++            double luminance=Color.luminance(color);
++            // Mid-tone custom Spaces need an opaque fill to preserve Chromium's chosen foreground.
++            int alpha=mDesktop&&luminance>=.10&&luminance<=.32?255:230;
++            mTint=mMilky?(color&0xffffff)|(alpha<<24):luminance>.45?0xb3ffffff:0xc4202124;
++            updateSheen();invalidateSelf();
++        }
++        private boolean mSurfaceInitialized;
++        public void setMilky(boolean milky){mMilky=milky;mSurfaceInitialized=false;setSurface(mSurface);}
++        /** Dense desktop material; no full-window readback or wallpaper capture. */
++        public void setDesktopMaterial(){mDesktop=true;setMilky(true);mSheen=new Paint(Paint.ANTI_ALIAS_FLAG);updateSheen();}
++        int sheenColor(){double l=Color.luminance(mSurface);return (l+.05)/.05>=1.05/(l+.05)?0x12ffffff:0x12000000;}
++        private void updateSheen(){if(mSheen!=null)mSheen.setShader(new LinearGradient(0,getBounds().top,0,
++                Math.max(getBounds().top+1,getBounds().bottom),sheenColor(),sheenColor()&0xffffff,Shader.TileMode.CLAMP));}
++        @Override protected void onBoundsChange(Rect bounds){updateSheen();}
 +        public void setCornerRadius(float radius){mCornerRadius=radius;mTopCornersOnly=false;mCustomCorners=false;invalidateSelf();}
 +        public void setTopCorners(float radius){mCornerRadius=radius;mTopCornersOnly=true;mCustomCorners=false;invalidateSelf();}
 +        public void setCornerRadii(float[] radii){System.arraycopy(radii,0,mCornerRadii,0,8);mCustomCorners=true;invalidateSelf();}
 +        public void setEdgeEnabled(boolean enabled,float density){mEdgeEnabled=enabled;mEdgeWidth=Math.max(.5f,.5f*density);invalidateSelf();}
-+        public void setFrame(Bitmap image){mFrame=image;invalidateSelf();}
++        public void setFrame(Bitmap image){mFrame=image;mFrameFraction.set(0,0,1,1);invalidateSelf();}
++        void setFrame(Bitmap image,Rect requested,Rect crop){
++            mFrame=image;mFrameFraction.set((float)(crop.left-requested.left)/requested.width(),
++                    (float)(crop.top-requested.top)/requested.height(),(float)(crop.right-requested.left)/requested.width(),
++                    (float)(crop.bottom-requested.top)/requested.height());invalidateSelf();
++        }
 +        public void clear(){mFrame=null;mPaintReported=false;invalidateSelf();}
 +        boolean hasFrame(){return mFrame!=null;}
 +        int tintColor(){return mTint;}
@@ -12409,20 +12607,23 @@ new file mode 100644
 +            int save=canvas.save();canvas.clipPath(mClip);
 +            mPaint.setAlpha(mAlpha);
 +            if(mFrame!=null){
-+                canvas.drawBitmap(mFrame,null,mRect,mPaint);
++                mFrameRect.set(mRect.left+mFrameFraction.left*mRect.width(),mRect.top+mFrameFraction.top*mRect.height(),
++                        mRect.left+mFrameFraction.right*mRect.width(),mRect.top+mFrameFraction.bottom*mRect.height());
++                canvas.drawBitmap(mFrame,null,mFrameRect,mPaint);
 +                if(!mPaintReported){android.util.Log.i("ArchiumGlass","painted frame bounds="+getBounds().toShortString());mPaintReported=true;}
 +            }
-+            mPaint.setColor(mTint);mPaint.setAlpha(Color.alpha(mTint)*mAlpha/255);canvas.drawRect(mRect,mPaint);
++            mPaint.setColor(mTint);mPaint.setAlpha((mMilky&&mFrame==null?255:Color.alpha(mTint))*mAlpha/255);canvas.drawRect(mRect,mPaint);
++            if(mSheen!=null){mSheen.setAlpha(mAlpha);canvas.drawPath(mClip,mSheen);}
 +            if(mEdgeEnabled){
 +                mEdgeRect.set(mRect);mEdgeRect.inset(mEdgeWidth/2,mEdgeWidth/2);
 +                mEdgePaint.setStyle(Paint.Style.STROKE);mEdgePaint.setStrokeWidth(mEdgeWidth);
 +                int edge=Color.luminance(mTint)>.45?0x241d2733:0x2cffffff;
 +                mEdgePaint.setColor(edge);mEdgePaint.setAlpha(Color.alpha(edge)*mAlpha/255);
-+                canvas.drawRoundRect(mEdgeRect,mEdgeRect.height()/2,mEdgeRect.height()/2,mEdgePaint);
++                canvas.drawRoundRect(mEdgeRect,Math.max(0,radius-mEdgeWidth/2),Math.max(0,radius-mEdgeWidth/2),mEdgePaint);
 +            }
 +            canvas.restoreToCount(save);
 +        }
-+        @Override public void getOutline(Outline outline){outline.setRoundRect(getBounds(),getBounds().height()/2f);outline.setAlpha(.12f);}
++        @Override public void getOutline(Outline outline){outline.setRoundRect(getBounds(),mCornerRadius<0?getBounds().height()/2f:Math.min(mCornerRadius,getBounds().height()/2f));outline.setAlpha(.12f);}
 +        @Override public void setAlpha(int alpha){mAlpha=alpha;invalidateSelf();}
 +        @Override public void setColorFilter(ColorFilter filter){mPaint.setColorFilter(filter);invalidateSelf();}
 +        @Override public int getOpacity(){return PixelFormat.TRANSLUCENT;}
@@ -12435,6 +12636,8 @@ new file mode 100644
 +    private final IdentityHashMap<View, DecoratedSurface> mDecoratedSurfaces=new IdentityHashMap<>();
 +    private int mSurface=Color.WHITE;
 +    private int mSurfaceLayersTag;
++    private boolean mDesktopMaterial;
++    public void setDesktopMaterial(){mDesktopMaterial=true;for(DecoratedSurface surface:mDecoratedSurfaces.values())surface.backdrop.setDesktopMaterial();}
 +    public void setSurfaceLayersTag(int key){mSurfaceLayersTag=key;}
 +    private static final class SurfaceLayer {
 +        final View view;final Drawable original;final int left,top,right,bottom;
@@ -12457,7 +12660,7 @@ new file mode 100644
 +            if(original!=null){Outline outline=new Outline();original.getOutline(outline);if(outline.getRadius()>=0)radius=outline.getRadius();}
 +            backdrop.setCornerRadius(radius);
 +            if(original instanceof GradientDrawable shape){float[] radii=shape.getCornerRadii();if(radii!=null)backdrop.setCornerRadii(radii);}
-+            backdrop.setSurface(mSurface);
++            if(mDesktopMaterial)backdrop.setDesktopMaterial();else backdrop.setMilky(true);backdrop.setSurface(mSurface);
 +        }
 +        void apply(){view.setBackground(mEnabled?backdrop:original);view.setPadding(left,top,right,bottom);for(SurfaceLayer layer:layers)layer.apply(mEnabled);}
 +        void restore(){view.setBackground(original);view.setPadding(left,top,right,bottom);for(SurfaceLayer layer:layers)layer.apply(false);}
@@ -12504,27 +12707,38 @@ new file mode 100644
 +        }
 +        return null;
 +    }
++    private static final class SampleRegion {
++        final Rect requested,local,screen;
++        SampleRegion(Rect requested,Rect local,Rect screen){this.requested=requested;this.local=local;this.screen=screen;}
++        boolean same(SampleRegion other){return other!=null&&requested.equals(other.requested)&&local.equals(other.local)&&screen.equals(other.screen);}
++    }
++    private SampleRegion sampleRegion(Target target){
++        Rect requested=new Rect();target.bounds.accept(requested);if(requested.isEmpty())return null;
++        Rect visible=new Rect();if(!target.view.getLocalVisibleRect(visible)||!visible.intersect(requested))return null;
++        int[] location=new int[2];target.view.getLocationOnScreen(location);
++        Rect screen=new Rect(visible);screen.offset(location[0],location[1]);screen=mCapture.clip(screen);
++        if(screen==null||screen.isEmpty())return null;
++        Rect local=new Rect(screen);local.offset(-location[0],-location[1]);
++        return new SampleRegion(requested,local,screen);
++    }
 +    /** Package visible for deterministic state tests; GPU capture remains an explicit boundary. */
 +    void sampleNow(){
 +        if(!mEnabled||mDestroyed||mInFlight||mTargets.isEmpty())return;
-+        if(!mCapture.available()){invalidateSource();return;}
++        if(!mCapture.available()){invalidateSource();mCapture.close();return;}
 +        Target target=nextVisibleTarget();if(target==null)return;
-+        Rect bounds=new Rect();target.bounds.accept(bounds);if(bounds.isEmpty())return;
-+        int[] location=new int[2];target.view.getLocationOnScreen(location);bounds.offset(location[0],location[1]);
-+        int[] size=copySize(bounds.width(),bounds.height());
++        SampleRegion region=sampleRegion(target);if(region==null){target.backdrop.clear();return;}
++        int[] size=copySize(region.screen.width(),region.screen.height());
 +        Bitmap output=target.spare;target.spare=null;
 +        if(output==null||output.getWidth()!=size[0]||output.getHeight()!=size[1])output=Bitmap.createBitmap(size[0],size[1],Bitmap.Config.ARGB_8888);
 +        final Bitmap pending=output;final int generation=mGeneration;mInFlight=true;
-+        mCapture.copy(bounds,pending,success->{
++        mCapture.copy(region.screen,pending,success->{
 +            mInFlight=false;
 +            if(mDestroyed||!mEnabled||generation!=mGeneration||!mTargets.contains(target))return;
 +            if(!target.copyReported){
 +                android.util.Log.i("ArchiumGlass","copy success="+success+" sample="+pending.getWidth()+"x"+pending.getHeight());target.copyReported=true;
 +            }
-+            Rect current=new Rect();target.bounds.accept(current);
-+            int[] now=new int[2];target.view.getLocationOnScreen(now);current.offset(now[0],now[1]);
-+            if(!success||!bounds.equals(current)){target.backdrop.clear();target.spare=pending;return;}
-+            Bitmap old=target.backdrop.mFrame;target.backdrop.setFrame(pending);target.spare=old;target.view.invalidate();
++            if(!success||!region.same(sampleRegion(target))){target.backdrop.clear();target.spare=pending;return;}
++            Bitmap old=target.backdrop.mFrame;target.backdrop.setFrame(pending,region.requested,region.local);target.spare=old;target.view.invalidate();
 +        });
 +    }
 +    public void destroy(){if(mDestroyed)return;mEnabled=false;mDestroyed=true;mClock.removeCallbacks(mTick);invalidateSource();mCapture.close();
@@ -12573,20 +12787,25 @@ new file mode 100644
 +        return new Capture(){
 +            final Handler main=new Handler(Looper.getMainLooper());
 +            HandlerThread thread;Handler worker;int epoch;int[] pixels=new int[0],pass=new int[0];
-+            public boolean available(){View v=supplier.get();return v!=null&&v.isShown();}
++            public boolean available(){View v=supplier.get();return v!=null&&v.isShown()&&v.getWindowVisibility()==View.VISIBLE;}
++            public Rect clip(Rect screenBounds){
++                View view=supplier.get();if(view==null||view.getWidth()<=0||view.getHeight()<=0)return null;
++                int[] origin=new int[2];view.getLocationOnScreen(origin);
++                Rect result=new Rect(screenBounds);return result.intersect(origin[0],origin[1],origin[0]+view.getWidth(),origin[1]+view.getHeight())?result:null;
++            }
 +            public void copy(Rect windowBounds,Bitmap output,Consumer<Boolean> result){
 +                View view=supplier.get();Rect region=contentRegion(view,windowBounds);
 +                if(region==null||!available()){result.accept(false);return;}
 +                final int generation=epoch;
 +                readback.copy(region,output.getWidth(),output.getHeight(),bitmap->{
-+                    if(bitmap==null||generation!=epoch){result.accept(false);return;}
++                    if(bitmap==null||generation!=epoch||supplier.get()!=view||!available()){result.accept(false);return;}
 +                    if(worker==null){thread=new HandlerThread("ArchiumGlass");thread.start();worker=new Handler(thread.getLooper());}
 +                    worker.post(()->{
 +                        new Canvas(output).drawBitmap(bitmap,null,new Rect(0,0,output.getWidth(),output.getHeight()),null);
 +                        int count=output.getWidth()*output.getHeight();
 +                        if(pixels.length<count){pixels=new int[count];pass=new int[count];}
 +                        blur(output,pixels,pass);
-+                        main.post(()->result.accept(generation==epoch));
++                        main.post(()->result.accept(generation==epoch&&supplier.get()==view&&available()));
 +                    });
 +                });
 +            }
@@ -12598,7 +12817,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneNav
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneNavigation.java
-@@ -0,0 +1,343 @@
+@@ -0,0 +1,344 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -12720,7 +12939,7 @@ new file mode 100644
 +    public BottomBar getBottomBar() {
 +        return new BottomBar() {
 +            public View getView(){return mBar;}
-+            public int getBackgroundColor(){return usesGlass()?Color.TRANSPARENT:mSurface;}
++            public int getBackgroundColor(){return isFloatingSurface()?Color.TRANSPARENT:mSurface;}
 +            public void setParent(int host){mTabbedHost=host==BottomBarHostManager.Host.TABBED;dismissMenu();refresh();}
 +            public boolean maybeShowPromoDialog(Profile profile){return false;}
 +            public void onStartupPromoFlowFinished(boolean promoShown){}
@@ -12748,6 +12967,7 @@ new file mode 100644
 +    public View getGlassTarget(){return mBar;}
 +    public void setGlassSampler(ArcPhoneGlass sampler){mGlassSampler=sampler;}
 +    public void setGlassBackdrop(ArcPhoneGlass.Backdrop glass,boolean enabled){mGlass=glass;mGlassEnabled=enabled;refresh();}
++    private boolean isFloatingSurface(){return mPhoneModeActive;}
 +    private boolean usesGlass(){return mGlassEnabled && mPhoneModeActive && mTabbedHost && mGlass!=null;}
 +    public void bind(Host host){if(mDestroyed)return;mHost=host;refresh();}
 +    public void refresh() {
@@ -12757,7 +12977,7 @@ new file mode 100644
 +        mSurface=Color.luminance(nativeSurface)>.45?Color.WHITE:nativeSurface;
 +        mForeground=Color.luminance(mSurface)>.45?0xff202124:0xfff1f3f4;
 +        if(mGlass!=null)mGlass.setSurface(mSurface);
-+        mSlot.setBackgroundColor(usesGlass()?Color.TRANSPARENT:mSurface);
++        mSlot.setBackgroundColor(isFloatingSurface()?Color.TRANSPARENT:mSurface);
 +        mBar.setBackground(usesGlass()?mGlass:shape((mSurface&0xffffff)|0xf9000000,100));
 +        int active=mSheet!=null?MENU:!mTabbedHost?TABS:mHost!=null&&mHost.homePage()?HOME:-1;
 +        String count=mHost==null?"0":Integer.toString(Math.max(0,mHost.tabCount()));
@@ -12779,7 +12999,7 @@ new file mode 100644
 +    }
 +    @Override public void initializeWithNative(BottomControlsVisibilityController visibility,Callback<Object> capture){mVisibility=visibility;mCapture=capture;refresh();}
 +    @Override public int getScrollBehavior(){return LayerScrollBehavior.DEFAULT_SCROLL_OFF;}
-+    @Override public Integer getBackgroundColor(){return usesGlass()?Color.TRANSPARENT:mSurface;}
++    @Override public Integer getBackgroundColor(){return isFloatingSurface()?Color.TRANSPARENT:mSurface;}
 +    private void showMenu() {
 +        if(mDestroyed||mHost==null||!mPhoneModeActive||mSheet!=null)return;
 +        MenuSheet sheet=new MenuSheet(mHost);mSheet=sheet;
@@ -12820,7 +13040,7 @@ new file mode 100644
 +            mBody=new LinearLayout(mContext);mBody.setOrientation(LinearLayout.VERTICAL);mBody.setPadding(dp(16),dp(10),dp(16),dp(12));
 +            mOpaqueBackground=shape(mSurface,28);mOpaqueBackground.setCornerRadii(new float[]{dp(28),dp(28),dp(28),dp(28),0,0,0,0});mBody.setBackground(mOpaqueBackground);
 +            mBackdrop=mGlassSampler==null?null:mGlassSampler.add(mScroll,r->r.set(0,0,mScroll.getWidth(),mScroll.getHeight()));
-+            if(mBackdrop!=null)mBackdrop.setTopCorners(dp(28));
++            if(mBackdrop!=null){mBackdrop.setTopCorners(dp(28));mBackdrop.setMilky(true);}
 +            mScroll.addView(mBody,new ScrollView.LayoutParams(-1,-2));
 +            // A non-null, zero-height toolbar prevents the native sheet's omnibox fallback.
 +            mEmptyToolbar=new View(mContext);mEmptyToolbar.setLayoutParams(new FrameLayout.LayoutParams(-1,0));
@@ -15551,7 +15771,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCommand
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCommandBarTest.java
-@@ -0,0 +1,155 @@
+@@ -0,0 +1,172 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -15600,6 +15820,23 @@ new file mode 100644
 +            bar.setAppearance(0xffeeeeee, 0xff111111, 0xffbbccdd);
 +        }
 +        void finish() {bar.destroy(); activity.finish();}
++    }
++    @Test public void milkyCommandPanelRetainsGeometryAndUniqueNativeEditor() {
++        Fixture f = new Fixture();
++        var panel=f.bar.panelForTesting();int padding=panel.getPaddingLeft();float elevation=panel.getElevation();
++        var glass=new ArcPhoneGlass(f.root,new ArcPhoneGlass.Capture(){
++            public boolean available(){return false;}
++            public void copy(Rect r,android.graphics.Bitmap b,java.util.function.Consumer<Boolean> result){result.accept(false);}
++            public void close(){}
++        });
++        f.bar.setGlassSampler(glass);var background=panel.getBackground();assertTrue(background instanceof ArcPhoneGlass.Backdrop);
++        f.bar.setAppearance(0xff202124,0xffffffff,0xff404148);assertSame(background,panel.getBackground());
++        f.bar.open(false);f.bar.finishAnimationForTesting();assertSame(f.holder,f.editor.getParent());assertEquals(1,f.sessions.get());
++        assertEquals(padding,panel.getPaddingLeft());assertEquals(elevation,panel.getElevation(),0f);
++        f.bar.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN,KeyEvent.KEYCODE_ESCAPE));f.bar.finishAnimationForTesting();
++        assertSame(f.original,f.holder.getParent());assertEquals(0,f.sessions.get());
++        f.bar.setGlassSampler(null);assertTrue(panel.getBackground() instanceof android.graphics.drawable.GradientDrawable);
++        f.finish();glass.destroy();
 +    }
 +    @Test public void openingAndEscapeCreateNoTabAndRestoreUniqueEditor() {
 +        Fixture f = new Fixture();
@@ -16348,7 +16585,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneGl
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneGlassTest.java
-@@ -0,0 +1,180 @@
+@@ -0,0 +1,239 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -16410,6 +16647,65 @@ new file mode 100644
 +        decorator.onViewDetachedFromWindow(target);assertSame(original,target.getBackground());
 +        glass.destroy();activity.pause().stop().destroy();
 +    }
++    @Test public void translatedSheetCapturesOnlyVisibleWebIntersectionWithoutStretching() {
++        var activity=Robolectric.buildActivity(Activity.class).setup();
++        for(boolean localClip:new boolean[]{false,true}){
++            View sheet=new View(activity.get()){
++                @Override public boolean isShown(){return true;}
++                @Override public int getWindowVisibility(){return View.VISIBLE;}
++                @Override public void getLocationOnScreen(int[] xy){xy[0]=0;xy[1]=640;}
++                @Override public boolean getGlobalVisibleRect(Rect rect,android.graphics.Point offset){rect.set(0,640,904,640+(localClip?1326:1880));if(offset!=null)offset.set(0,640);return true;}
++            };sheet.layout(0,0,904,1880);
++            FakeCopy copy=new FakeCopy(){
++                @Override public Rect clip(Rect screen){Rect out=new Rect(screen);return out.intersect(0,0,904,1966)?out:null;}
++                @Override public void copy(Rect screen,Bitmap output,Consumer<Boolean> done){assertEquals(new Rect(0,640,904,1966),screen);super.copy(screen,output,done);}
++            };
++            var sampler=new ArcPhoneGlass(sheet,copy);var backdrop=sampler.add(sheet,sheet::getDrawingRect);
++            sampler.setEnabled(true);sampler.sampleNow();assertEquals(1,copy.calls);copy.pending.accept(true);assertTrue(backdrop.hasFrame());
++            backdrop.setBounds(0,0,904,1880);var canvas=new RecordingCanvas();backdrop.draw(canvas);
++            assertEquals("crop must occupy only the visible part, not stretch down the hidden sheet",new RectF(0,0,904,1326),canvas.imageRect);
++            sampler.destroy();
++        }
++        activity.pause().stop().destroy();
++    }
++    @Test public void milkyPanelsKeepNativeTintAndContrastEvenWithoutWebReadback() {
++        var d=new ArcPhoneGlass.Backdrop();d.setMilky(true);d.setBounds(0,0,100,50);
++        for(int surface:new int[]{Color.WHITE,0xff202124,0xffc4d9e4}){
++            d.setSurface(surface);assertEquals(surface&0xffffff,d.tintColor()&0xffffff);
++            assertTrue(Color.alpha(d.tintColor())>=230);assertTrue(Color.alpha(d.tintColor())<255);
++            var canvas=new RecordingCanvas();d.draw(canvas);assertEquals("failed/protected capture must not expose sharp page text",255,Color.alpha(canvas.tint));
++            d.setFrame(Bitmap.createBitmap(25,13,Bitmap.Config.ARGB_8888));canvas=new RecordingCanvas();d.draw(canvas);assertEquals(230,Color.alpha(canvas.tint));d.clear();
++        }
++    }
++    @Test public void desktopMaterialKeepsPanelCornersPaletteAndNativeContrast() {
++        var d=new ArcPhoneGlass.Backdrop();d.setDesktopMaterial();d.setCornerRadius(12);d.setBounds(0,0,500,300);
++        var outline=new android.graphics.Outline();d.getOutline(outline);assertEquals(12f,outline.getRadius(),0f);
++        for(int color:new int[]{0xffeee7dc,0xff202124,0xffc4d9e4}){
++            d.setSurface(color);assertEquals(color&0xffffff,d.tintColor()&0xffffff);
++            var canvas=new RecordingCanvas();d.draw(canvas);assertEquals(255,Color.alpha(canvas.tint));
++            d.setFrame(Bitmap.createBitmap(64,32,Bitmap.Config.ARGB_8888));
++            canvas=new RecordingCanvas();d.draw(canvas);assertEquals(230,Color.alpha(canvas.tint));d.clear();
++        }
++    }
++    private static int composite(int top,int bottom){
++        double a=Color.alpha(top)/255.0;return Color.rgb((int)Math.round(Color.red(top)*a+Color.red(bottom)*(1-a)),
++                (int)Math.round(Color.green(top)*a+Color.green(bottom)*(1-a)),(int)Math.round(Color.blue(top)*a+Color.blue(bottom)*(1-a)));
++    }
++    @Test public void desktopCustomPalettesKeepAaContrastOverOppositePages() {
++        var d=new ArcPhoneGlass.Backdrop();d.setDesktopMaterial();
++        for(int red=0;red<256;red+=17)for(int green=0;green<256;green+=17)for(int blue=0;blue<256;blue+=17){
++            int color=Color.rgb(red,green,blue);double source=Color.luminance(color);
++            int foreground=(source+.05)/.05>=1.05/(source+.05)?Color.BLACK:Color.WHITE;
++            d.setSurface(color);
++            for(int page:new int[]{Color.BLACK,Color.WHITE}){
++                int result=composite(d.tintColor(),page);
++                // The sheen must improve the existing native foreground contrast in both themes.
++                result=composite((d.sheenColor()&0xffffff)|0x12000000,result);
++                double l=Color.luminance(result),f=Color.luminance(foreground);
++                assertTrue("AA palette="+Integer.toHexString(color), (Math.max(l,f)+.05)/(Math.min(l,f)+.05)>=4.5);
++            }
++        }
++    }
 +    @Test public void copiesAreSmallAndPreserveAspectRatio() {
 +        int[] size=ArcPhoneGlass.copySize(1440,240);assertEquals(256,size[0]);assertTrue(size[1]<=43);
 +        size=ArcPhoneGlass.copySize(100,2000);assertTrue(size[0]<=7);assertEquals(128,size[1]);
@@ -16434,7 +16730,7 @@ new file mode 100644
 +    }
 +    @Test public void closingContentSourceRejectsPendingNativeReadbackBeforeBlur() {
 +        var activity=Robolectric.buildActivity(Activity.class).setup();
-+        View content=new View(activity.get()){@Override public boolean isShown(){return true;}};
++        View content=new View(activity.get()){@Override public boolean isShown(){return true;} @Override public int getWindowVisibility(){return View.VISIBLE;}};
 +        activity.get().setContentView(content);activity.visible();content.layout(0,0,400,800);
 +        java.util.List<Consumer<Bitmap>> pending=new java.util.ArrayList<>();
 +        var capture=ArcPhoneGlass.contentSource(()->content,(rect,width,height,callback)->{
@@ -16474,7 +16770,7 @@ new file mode 100644
 +        Bitmap frame;boolean clipped;RectF imageRect;int tint;float edgeWidth;int edgeColor;
 +        @Override public boolean clipPath(Path path){clipped=true;return true;}
 +        @Override public void drawBitmap(Bitmap bitmap,Rect src,RectF dst,Paint paint){assertTrue(clipped);frame=bitmap;imageRect=new RectF(dst);}
-+        @Override public void drawRect(RectF rect,Paint paint){assertTrue(clipped);tint=paint.getColor();}
++        @Override public void drawRect(RectF rect,Paint paint){assertTrue(clipped);tint=(paint.getColor()&0xffffff)|(paint.getAlpha()<<24);}
 +        @Override public void drawRoundRect(RectF rect,float rx,float ry,Paint paint){assertEquals(Paint.Style.STROKE,paint.getStyle());edgeWidth=paint.getStrokeWidth();edgeColor=paint.getColor();}
 +    }
 +    @Test public void backdropUsesClippedPagePixelsAndTranslucentTint() {
@@ -16533,7 +16829,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneNa
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneNavigationTest.java
-@@ -0,0 +1,385 @@
+@@ -0,0 +1,393 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -16623,7 +16919,7 @@ new file mode 100644
 +        assertSame(bar,mSlot.getChildAt(0));assertEquals(1,mSlot.getChildCount());assertSame(layout,bar.getLayoutParams());
 +        assertSame(glass,bar.getBackground());assertEquals(Integer.valueOf(Color.TRANSPARENT),mNavigation.getBackgroundColor());
 +        assertEquals(Color.TRANSPARENT,mNavigation.getBottomBar().getBackgroundColor());
-+        mNavigation.setGlassBackdrop(glass,false);assertNotSame(glass,bar.getBackground());assertNotEquals(Integer.valueOf(Color.TRANSPARENT),mNavigation.getBackgroundColor());
++        mNavigation.setGlassBackdrop(glass,false);assertNotSame(glass,bar.getBackground());assertEquals(Integer.valueOf(Color.TRANSPARENT),mNavigation.getBackgroundColor());
 +        mNavigation.setGlassBackdrop(glass,true);mNavigation.setPhoneModeActive(false);
 +        assertNotSame(glass,bar.getBackground());assertNotEquals(Integer.valueOf(Color.TRANSPARENT),mNavigation.getBackgroundColor());
 +    }
@@ -16644,6 +16940,14 @@ new file mode 100644
 +                assertTrue("Glass text AA",(Math.max(a,b)+.05)/(Math.min(a,b)+.05)>=4.5);
 +            }
 +        }
++    }
++    @Test public void nativeNewTabKeepsFloatingPillWithoutSamplingWebContents(){
++        mHost.web=false;mHost.home=true;mNavigation.refresh();
++        View bar=mNavigation.getGlassTarget();assertTrue(bar.getBackground() instanceof GradientDrawable);
++        var params=(FrameLayout.LayoutParams)bar.getLayoutParams();assertTrue(params.leftMargin>=16);assertTrue(params.rightMargin>=16);
++        assertEquals(Color.TRANSPARENT,((android.graphics.drawable.ColorDrawable)mSlot.getBackground()).getColor());
++        assertEquals(Integer.valueOf(Color.TRANSPARENT),mNavigation.getBackgroundColor());
++        assertEquals(Color.TRANSPARENT,mNavigation.getBottomBar().getBackgroundColor());
 +    }
 +    @Test public void navigationCallsActualHostActions(){
 +        find("arc-phone-home").performClick();assertEquals(ArcPhoneNavigation.HOME,mHost.action);
@@ -16723,15 +17027,15 @@ new file mode 100644
 +        var sheet=menu();assertTrue(find("arc-phone-menu").isSelected());
 +        sheet.destroy();assertFalse(find("arc-phone-menu").isSelected());
 +    }
-+    @Test public void lightPaletteUsesCleanWhiteOutsideCapsule(){
++    @Test public void lightPaletteKeepsTransparentBackingOutsideCapsule(){
 +        mHost.color=0xfff0f0f6;mNavigation.refresh();
-+        assertEquals(Color.WHITE,mNavigation.getBackgroundColor().intValue());
++        assertEquals(Color.TRANSPARENT,mNavigation.getBackgroundColor().intValue());
 +    }
 +    @Test public void liveCounterReflectsCurrentModelCount(){
 +        mHost.count=12;mNavigation.refresh();assertTrue(find("arc-phone-tabs").getContentDescription().toString().contains("12"));
 +    }
 +    @Test public void darkSurfaceAndSheetUseHostPaletteWithoutForcingWebTheme(){
-+        mHost.color=0xff202124;mNavigation.refresh();assertEquals(0xff202124,mNavigation.getBackgroundColor().intValue());
++        mHost.color=0xff202124;mNavigation.refresh();assertEquals(Color.TRANSPARENT,mNavigation.getBackgroundColor().intValue());
 +        assertEquals(0xff202124,menu().getSheetBackgroundColorOverride());
 +    }
 +    @Test public void leavingPhoneModeReleasesControlsAndClosesSheetWithoutDuplicatingViews(){

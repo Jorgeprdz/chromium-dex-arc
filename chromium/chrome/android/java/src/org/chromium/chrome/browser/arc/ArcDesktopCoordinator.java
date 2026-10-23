@@ -10,7 +10,6 @@ import android.graphics.Color;
 import android.graphics.Outline;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
-import android.graphics.drawable.ColorDrawable;
 import android.text.TextUtils;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.StateListDrawable;
@@ -56,6 +55,7 @@ import org.chromium.chrome.browser.toolbar.top.NavigationPopup;
 import org.chromium.chrome.browser.history.HistoryManagerUtils;
 import org.chromium.content_public.browser.WebContents;
 import org.chromium.chrome.browser.omnibox.LocationBarLayout;
+import org.chromium.chrome.browser.omnibox.suggestions.OmniboxSuggestionsContainer;
 
 /** Composes profile-owned Arc collections around Chromium's real vertical tab rail. */
 public final class ArcDesktopCoordinator {
@@ -148,6 +148,83 @@ public final class ArcDesktopCoordinator {
     private Rect mClippedSurfaceOriginalClipBounds;
     private AlertDialog mColorDialog;
     private AlertDialog mAboutDialog;
+    private ArcPhoneGlass mDesktopGlass;
+    private ArcPhoneGlass.Backdrop mDesktopOmniboxGlass;
+    private OmniboxSuggestionsContainer mDesktopSuggestions;
+    private ArcPhoneGlass.Backdrop mDesktopSuggestionGlass;
+    private void updateDesktopSuggestions(boolean enabled) {
+        View node = mActivity.findViewById(R.id.omnibox_suggestions_dropdown);
+        while (node != null && !(node instanceof OmniboxSuggestionsContainer)) {
+            node = node.getParent() instanceof View ? (View) node.getParent() : null;
+        }
+        if (mDesktopSuggestions != node) {
+            if (mDesktopSuggestions != null) mDesktopSuggestions.setArcPhoneGlassBackground(null);
+            if (mDesktopSuggestionGlass != null && mDesktopGlass != null) mDesktopGlass.remove(mDesktopSuggestionGlass);
+            mDesktopSuggestions = node instanceof OmniboxSuggestionsContainer ? (OmniboxSuggestionsContainer) node : null;
+            mDesktopSuggestionGlass = null;
+        }
+        if (mDesktopSuggestions == null || mDesktopGlass == null) return;
+        if (mDesktopSuggestionGlass == null && enabled) {
+            mDesktopSuggestionGlass = mDesktopGlass.add(mDesktopSuggestions, mDesktopSuggestions::getDrawingRect);
+            mDesktopSuggestionGlass.setDesktopMaterial(); mDesktopSuggestionGlass.setCornerRadius(dp(12));
+        }
+        if (mDesktopSuggestionGlass != null) mDesktopSuggestionGlass.setSurface(frameSurface(mIncognitoStateProvider.isIncognitoSelected()));
+        mDesktopSuggestions.setArcPhoneGlassBackground(enabled ? mDesktopSuggestionGlass : null);
+    }
+    private final ArcPhoneGlass.Backdrop mDesktopFrameMaterial = desktopMaterial();
+    private final ArcPhoneGlass.Backdrop mDesktopRailMaterial = desktopMaterial();
+    private final ArcPhoneGlass.Backdrop mDesktopColumnMaterial = desktopMaterial();
+    private final ArcPhoneGlass.Backdrop mDesktopTabsMaterial = desktopMaterial();
+    private final Drawable mOriginalNativeTabsBackground;
+    private static ArcPhoneGlass.Backdrop desktopMaterial() {
+        var material = new ArcPhoneGlass.Backdrop();
+        material.setDesktopMaterial(); material.setCornerRadius(0);
+        return material;
+    }
+
+    private void updateDesktopGlass(boolean desktop, int surface) {
+        if (mDesktopGlass == null && desktop) {
+            mDesktopGlass = new ArcPhoneGlass(mRail, ArcPhoneGlass.contentSource(() -> {
+                Tab tab = mCurrentTab.get();
+                return tab == null || tab.isNativePage() || tab.isHidden() ? null : tab.getContentView();
+            }, (region, width, height, result) -> {
+                Tab tab = mCurrentTab.get();
+                if (tab == null || tab.isNativePage() || tab.isHidden()) { result.accept(null); return; }
+                WebContents contents = tab.getWebContents();
+                mCompositorViewHolder.getCompositorView().copyArcPhoneBackdrop(
+                        contents, region, width, height, bitmap -> result.accept(
+                                mCurrentTab.get() == tab && !tab.isDestroyed() && tab.getWebContents() == contents
+                                        ? bitmap : null));
+            }));
+            mDesktopGlass.setDesktopMaterial();
+            mDesktopGlass.setSurfaceLayersTag(org.chromium.ui.R.id.arc_phone_surface_layers);
+            View locationBar = mLocationBarHost.findViewById(R.id.location_bar);
+            if (locationBar instanceof LocationBarLayout layout) {
+                mDesktopOmniboxGlass = mDesktopGlass.add(locationBar, layout::getArcGlassBounds);
+                mDesktopOmniboxGlass.setDesktopMaterial();
+                mDesktopOmniboxGlass.setCornerRadius(layout.getArcGlassCornerRadius());
+                mDesktopOmniboxGlass.setEdgeEnabled(true, mActivity.getResources().getDisplayMetrics().density);
+            }
+        }
+        if (mDesktopGlass == null) return;
+        // Invalidate on active-tab identity changes; never show pixels from a previous site.
+        Tab current = mCurrentTab.get();
+        if (current != mDesktopGlassTab) { mDesktopGlass.invalidateSource(); mDesktopGlassTab = current; }
+        mDesktopGlass.setSurface(surface); mDesktopGlass.setEnabled(desktop);
+        View decor = mActivity.getWindow().getDecorView();
+        Object decorator = decor.getTag(org.chromium.ui.R.id.arc_phone_surface_decorator);
+        if (desktop) decor.setTag(org.chromium.ui.R.id.arc_phone_surface_decorator, mDesktopGlass.getSurfaceDecorator());
+        else if (decorator == mDesktopGlass.getSurfaceDecorator()) decor.setTag(org.chromium.ui.R.id.arc_phone_surface_decorator, null);
+        View locationBar = mLocationBarHost.findViewById(R.id.location_bar);
+        if (mDesktopOmniboxGlass != null) {
+            mDesktopOmniboxGlass.setSurface(surface);
+            if (locationBar instanceof LocationBarLayout tablet) tablet.setArcGlassBackground(desktop ? mDesktopOmniboxGlass : null);
+        }
+        if (mCommandBar != null) mCommandBar.setGlassSampler(desktop ? mDesktopGlass : null);
+        updateDesktopSuggestions(desktop && mCommandBar != null && mCommandBar.isShowing());
+        mDesktopFrameMaterial.setSurface(surface); mDesktopRailMaterial.setSurface(surface); mDesktopColumnMaterial.setSurface(surface); mDesktopTabsMaterial.setSurface(surface);
+    }
+    private Tab mDesktopGlassTab;
     private boolean mPaletteInitialized;
     private int mPaletteSurface;
     private boolean mPaletteDesktop;
@@ -257,6 +334,7 @@ public final class ArcDesktopCoordinator {
             mOriginalContentMarginBottom = 0;
         }
         mNativeTabs = nativeTabs;
+        mOriginalNativeTabsBackground = nativeTabs.getBackground();
         mNativeNewTabButton = nativeTabs.findViewById(R.id.new_tab_button);
         if (mNativeNewTabButton == null) {
             throw new IllegalStateException("Arc requires the native new-tab action");
@@ -617,6 +695,7 @@ public final class ArcDesktopCoordinator {
         // a fresh descendant lookup on close would leave its command bridge and input alive.
         View location = mLocationBarHost.findViewById(R.id.location_bar);
         mCommandBar.setBoundsChangedListener(() -> {
+            updateDesktopSuggestions(!mDestroyed && ArcDesktopAppearance.isDesktopWindow(mActivity) && mCommandBar.isShowing());
             if (location instanceof LocationBarLayout bar) {
                 bar.setArcCommandBar(mCommandBar.isShowing() ? mCommandBar.resultsBoundsInWindow() : null,
                         mCommandBar.isActions(), mCommandBar::commitNativeNavigation,
@@ -1032,6 +1111,7 @@ public final class ArcDesktopCoordinator {
         }
         applyAddressBarPosition();
         int surface = frameSurface(incognito);
+        updateDesktopGlass(desktop, surface);
         if (mSplitView != null) mSplitView.setAppearance(surface);
         boolean paletteChanged = !mPaletteInitialized || mPaletteDesktop != desktop
                 || mPaletteIncognito != incognito || mPaletteSurface != surface;
@@ -1051,6 +1131,7 @@ public final class ArcDesktopCoordinator {
             VerticalTabListViewBinder.refreshArcAppearance(
                     (VerticalTabRailLayout) mNativeTabs, incognito);
         }
+        if (desktop) mNativeTabs.setBackground(mDesktopTabsMaterial);
         if (!desktop) {
             mCompactOmnibox.restore();
             mNewTabRow.setVisibility(View.GONE);
@@ -1129,7 +1210,7 @@ public final class ArcDesktopCoordinator {
         int foreground = ArcDesktopPolicy.foreground(surface);
         if (mCommandBar != null) mCommandBar.setAppearance(surface, foreground, ArcDesktopPolicy.selection(surface));
         mNewTabIcon.setTint(foreground);
-        mColumn.setBackgroundColor(surface);
+        mColumn.setBackground(mDesktopColumnMaterial);
         mColumn.setForeground(new android.graphics.drawable.Drawable() {
             private final android.graphics.Paint mPaint = new android.graphics.Paint();
             @Override public void draw(android.graphics.Canvas canvas) {
@@ -1296,12 +1377,10 @@ public final class ArcDesktopCoordinator {
         // The rail's top/bottom padding is drawn by the rail itself, outside mColumn.
         // Tinting only mColumn left the old white background visible as two strips.
         mRail.setBackgroundTintList(null);
-        if (!(mRail.getBackground() instanceof ColorDrawable railColor)
-                || railColor.getColor() != surface) mRail.setBackground(new ColorDrawable(surface));
-        if (mFrameRoot != null
-                && (!(mFrameRoot.getBackground() instanceof ColorDrawable frameColor)
-                        || frameColor.getColor() != surface)) {
-            mFrameRoot.setBackground(new ColorDrawable(surface));
+        mDesktopRailMaterial.setSurface(surface); mDesktopFrameMaterial.setSurface(surface);
+        if (mRail.getBackground() != mDesktopRailMaterial) mRail.setBackground(mDesktopRailMaterial);
+        if (mFrameRoot != null && mFrameRoot.getBackground() != mDesktopFrameMaterial) {
+            mFrameRoot.setBackground(mDesktopFrameMaterial);
         }
     }
 
@@ -1459,6 +1538,17 @@ public final class ArcDesktopCoordinator {
             mAddressPopupLocation = null;
         }
         if (mCommandBar != null) mCommandBar.destroy();
+        mNativeTabs.setBackground(mOriginalNativeTabsBackground);
+        if (mDesktopSuggestions != null) { mDesktopSuggestions.setArcPhoneGlassBackground(null); mDesktopSuggestions = null; }
+        if (mDesktopGlass != null) {
+            View decor = mActivity.getWindow().getDecorView();
+            if (decor.getTag(org.chromium.ui.R.id.arc_phone_surface_decorator) == mDesktopGlass.getSurfaceDecorator()) {
+                decor.setTag(org.chromium.ui.R.id.arc_phone_surface_decorator, null);
+            }
+            View locationBar = mLocationBarHost.findViewById(R.id.location_bar);
+            if (locationBar instanceof LocationBarLayout tablet) tablet.setArcGlassBackground(null);
+            mDesktopGlass.destroy(); mDesktopGlass = null; mDesktopGlassTab = null;
+        }
         mFrameDispatch.destroy();
         mCompactOmnibox.destroy();
         ArcDesktopAppearance.setPreviewColor(mActivity, null);

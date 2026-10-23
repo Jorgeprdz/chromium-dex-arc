@@ -119,7 +119,7 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
     public BottomBar getBottomBar() {
         return new BottomBar() {
             public View getView(){return mBar;}
-            public int getBackgroundColor(){return usesGlass()?Color.TRANSPARENT:mSurface;}
+            public int getBackgroundColor(){return isFloatingSurface()?Color.TRANSPARENT:mSurface;}
             public void setParent(int host){mTabbedHost=host==BottomBarHostManager.Host.TABBED;dismissMenu();refresh();}
             public boolean maybeShowPromoDialog(Profile profile){return false;}
             public void onStartupPromoFlowFinished(boolean promoShown){}
@@ -147,6 +147,7 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
     public View getGlassTarget(){return mBar;}
     public void setGlassSampler(ArcPhoneGlass sampler){mGlassSampler=sampler;}
     public void setGlassBackdrop(ArcPhoneGlass.Backdrop glass,boolean enabled){mGlass=glass;mGlassEnabled=enabled;refresh();}
+    private boolean isFloatingSurface(){return mPhoneModeActive;}
     private boolean usesGlass(){return mGlassEnabled && mPhoneModeActive && mTabbedHost && mGlass!=null;}
     public void bind(Host host){if(mDestroyed)return;mHost=host;refresh();}
     public void refresh() {
@@ -156,7 +157,7 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
         mSurface=Color.luminance(nativeSurface)>.45?Color.WHITE:nativeSurface;
         mForeground=Color.luminance(mSurface)>.45?0xff202124:0xfff1f3f4;
         if(mGlass!=null)mGlass.setSurface(mSurface);
-        mSlot.setBackgroundColor(usesGlass()?Color.TRANSPARENT:mSurface);
+        mSlot.setBackgroundColor(isFloatingSurface()?Color.TRANSPARENT:mSurface);
         mBar.setBackground(usesGlass()?mGlass:shape((mSurface&0xffffff)|0xf9000000,100));
         int active=mSheet!=null?MENU:!mTabbedHost?TABS:mHost!=null&&mHost.homePage()?HOME:-1;
         String count=mHost==null?"0":Integer.toString(Math.max(0,mHost.tabCount()));
@@ -178,7 +179,7 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
     }
     @Override public void initializeWithNative(BottomControlsVisibilityController visibility,Callback<Object> capture){mVisibility=visibility;mCapture=capture;refresh();}
     @Override public int getScrollBehavior(){return LayerScrollBehavior.DEFAULT_SCROLL_OFF;}
-    @Override public Integer getBackgroundColor(){return usesGlass()?Color.TRANSPARENT:mSurface;}
+    @Override public Integer getBackgroundColor(){return isFloatingSurface()?Color.TRANSPARENT:mSurface;}
     private void showMenu() {
         if(mDestroyed||mHost==null||!mPhoneModeActive||mSheet!=null)return;
         MenuSheet sheet=new MenuSheet(mHost);mSheet=sheet;
@@ -219,7 +220,7 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
             mBody=new LinearLayout(mContext);mBody.setOrientation(LinearLayout.VERTICAL);mBody.setPadding(dp(16),dp(10),dp(16),dp(12));
             mOpaqueBackground=shape(mSurface,28);mOpaqueBackground.setCornerRadii(new float[]{dp(28),dp(28),dp(28),dp(28),0,0,0,0});mBody.setBackground(mOpaqueBackground);
             mBackdrop=mGlassSampler==null?null:mGlassSampler.add(mScroll,r->r.set(0,0,mScroll.getWidth(),mScroll.getHeight()));
-            if(mBackdrop!=null)mBackdrop.setTopCorners(dp(28));
+            if(mBackdrop!=null){mBackdrop.setTopCorners(dp(28));mBackdrop.setMilky(true);}
             mScroll.addView(mBody,new ScrollView.LayoutParams(-1,-2));
             // A non-null, zero-height toolbar prevents the native sheet's omnibox fallback.
             mEmptyToolbar=new View(mContext);mEmptyToolbar.setLayoutParams(new FrameLayout.LayoutParams(-1,0));

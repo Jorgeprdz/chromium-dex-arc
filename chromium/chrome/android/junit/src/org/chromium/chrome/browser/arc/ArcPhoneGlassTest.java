@@ -59,6 +59,65 @@ public class ArcPhoneGlassTest {
         decorator.onViewDetachedFromWindow(target);assertSame(original,target.getBackground());
         glass.destroy();activity.pause().stop().destroy();
     }
+    @Test public void translatedSheetCapturesOnlyVisibleWebIntersectionWithoutStretching() {
+        var activity=Robolectric.buildActivity(Activity.class).setup();
+        for(boolean localClip:new boolean[]{false,true}){
+            View sheet=new View(activity.get()){
+                @Override public boolean isShown(){return true;}
+                @Override public int getWindowVisibility(){return View.VISIBLE;}
+                @Override public void getLocationOnScreen(int[] xy){xy[0]=0;xy[1]=640;}
+                @Override public boolean getGlobalVisibleRect(Rect rect,android.graphics.Point offset){rect.set(0,640,904,640+(localClip?1326:1880));if(offset!=null)offset.set(0,640);return true;}
+            };sheet.layout(0,0,904,1880);
+            FakeCopy copy=new FakeCopy(){
+                @Override public Rect clip(Rect screen){Rect out=new Rect(screen);return out.intersect(0,0,904,1966)?out:null;}
+                @Override public void copy(Rect screen,Bitmap output,Consumer<Boolean> done){assertEquals(new Rect(0,640,904,1966),screen);super.copy(screen,output,done);}
+            };
+            var sampler=new ArcPhoneGlass(sheet,copy);var backdrop=sampler.add(sheet,sheet::getDrawingRect);
+            sampler.setEnabled(true);sampler.sampleNow();assertEquals(1,copy.calls);copy.pending.accept(true);assertTrue(backdrop.hasFrame());
+            backdrop.setBounds(0,0,904,1880);var canvas=new RecordingCanvas();backdrop.draw(canvas);
+            assertEquals("crop must occupy only the visible part, not stretch down the hidden sheet",new RectF(0,0,904,1326),canvas.imageRect);
+            sampler.destroy();
+        }
+        activity.pause().stop().destroy();
+    }
+    @Test public void milkyPanelsKeepNativeTintAndContrastEvenWithoutWebReadback() {
+        var d=new ArcPhoneGlass.Backdrop();d.setMilky(true);d.setBounds(0,0,100,50);
+        for(int surface:new int[]{Color.WHITE,0xff202124,0xffc4d9e4}){
+            d.setSurface(surface);assertEquals(surface&0xffffff,d.tintColor()&0xffffff);
+            assertTrue(Color.alpha(d.tintColor())>=230);assertTrue(Color.alpha(d.tintColor())<255);
+            var canvas=new RecordingCanvas();d.draw(canvas);assertEquals("failed/protected capture must not expose sharp page text",255,Color.alpha(canvas.tint));
+            d.setFrame(Bitmap.createBitmap(25,13,Bitmap.Config.ARGB_8888));canvas=new RecordingCanvas();d.draw(canvas);assertEquals(230,Color.alpha(canvas.tint));d.clear();
+        }
+    }
+    @Test public void desktopMaterialKeepsPanelCornersPaletteAndNativeContrast() {
+        var d=new ArcPhoneGlass.Backdrop();d.setDesktopMaterial();d.setCornerRadius(12);d.setBounds(0,0,500,300);
+        var outline=new android.graphics.Outline();d.getOutline(outline);assertEquals(12f,outline.getRadius(),0f);
+        for(int color:new int[]{0xffeee7dc,0xff202124,0xffc4d9e4}){
+            d.setSurface(color);assertEquals(color&0xffffff,d.tintColor()&0xffffff);
+            var canvas=new RecordingCanvas();d.draw(canvas);assertEquals(255,Color.alpha(canvas.tint));
+            d.setFrame(Bitmap.createBitmap(64,32,Bitmap.Config.ARGB_8888));
+            canvas=new RecordingCanvas();d.draw(canvas);assertEquals(230,Color.alpha(canvas.tint));d.clear();
+        }
+    }
+    private static int composite(int top,int bottom){
+        double a=Color.alpha(top)/255.0;return Color.rgb((int)Math.round(Color.red(top)*a+Color.red(bottom)*(1-a)),
+                (int)Math.round(Color.green(top)*a+Color.green(bottom)*(1-a)),(int)Math.round(Color.blue(top)*a+Color.blue(bottom)*(1-a)));
+    }
+    @Test public void desktopCustomPalettesKeepAaContrastOverOppositePages() {
+        var d=new ArcPhoneGlass.Backdrop();d.setDesktopMaterial();
+        for(int red=0;red<256;red+=17)for(int green=0;green<256;green+=17)for(int blue=0;blue<256;blue+=17){
+            int color=Color.rgb(red,green,blue);double source=Color.luminance(color);
+            int foreground=(source+.05)/.05>=1.05/(source+.05)?Color.BLACK:Color.WHITE;
+            d.setSurface(color);
+            for(int page:new int[]{Color.BLACK,Color.WHITE}){
+                int result=composite(d.tintColor(),page);
+                // The sheen must improve the existing native foreground contrast in both themes.
+                result=composite((d.sheenColor()&0xffffff)|0x12000000,result);
+                double l=Color.luminance(result),f=Color.luminance(foreground);
+                assertTrue("AA palette="+Integer.toHexString(color), (Math.max(l,f)+.05)/(Math.min(l,f)+.05)>=4.5);
+            }
+        }
+    }
     @Test public void copiesAreSmallAndPreserveAspectRatio() {
         int[] size=ArcPhoneGlass.copySize(1440,240);assertEquals(256,size[0]);assertTrue(size[1]<=43);
         size=ArcPhoneGlass.copySize(100,2000);assertTrue(size[0]<=7);assertEquals(128,size[1]);
@@ -83,7 +142,7 @@ public class ArcPhoneGlassTest {
     }
     @Test public void closingContentSourceRejectsPendingNativeReadbackBeforeBlur() {
         var activity=Robolectric.buildActivity(Activity.class).setup();
-        View content=new View(activity.get()){@Override public boolean isShown(){return true;}};
+        View content=new View(activity.get()){@Override public boolean isShown(){return true;} @Override public int getWindowVisibility(){return View.VISIBLE;}};
         activity.get().setContentView(content);activity.visible();content.layout(0,0,400,800);
         java.util.List<Consumer<Bitmap>> pending=new java.util.ArrayList<>();
         var capture=ArcPhoneGlass.contentSource(()->content,(rect,width,height,callback)->{
@@ -123,7 +182,7 @@ public class ArcPhoneGlassTest {
         Bitmap frame;boolean clipped;RectF imageRect;int tint;float edgeWidth;int edgeColor;
         @Override public boolean clipPath(Path path){clipped=true;return true;}
         @Override public void drawBitmap(Bitmap bitmap,Rect src,RectF dst,Paint paint){assertTrue(clipped);frame=bitmap;imageRect=new RectF(dst);}
-        @Override public void drawRect(RectF rect,Paint paint){assertTrue(clipped);tint=paint.getColor();}
+        @Override public void drawRect(RectF rect,Paint paint){assertTrue(clipped);tint=(paint.getColor()&0xffffff)|(paint.getAlpha()<<24);}
         @Override public void drawRoundRect(RectF rect,float rx,float ry,Paint paint){assertEquals(Paint.Style.STROKE,paint.getStyle());edgeWidth=paint.getStrokeWidth();edgeColor=paint.getColor();}
     }
     @Test public void backdropUsesClippedPagePixelsAndTranslucentTint() {

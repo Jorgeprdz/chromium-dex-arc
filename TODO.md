@@ -690,3 +690,17 @@ Matriz y límites: [auditoría en R5_FLOATING_V2.md](docs/validation/R5_FLOATING
 - [ ] APK nueva e instalación: PENDING_BUILD; sólo actualizar si todos los gates de identidad/firma/hash/version/ABI pasan.
 - [x] Limpieza posterior al monitor: 73 entradas, cuatro worktrees y dos clones obsoletos; espacio libre observado +26.053.664.768 bytes (76.052.656.128 libres). Historial/local changes recuperados, JARs compartidos preservados y respaldo APK verificado. Fuente activa/Git común, datos Android, credenciales y referencias visuales conservados.
 - [ ] Aceptación visual real del candidato y todos sus menús, ambos temas, teclado, insets, carga y Desktop↔Phone: PENDIENTE; no declarar DONE.
+
+
+## Desktop liquid lechoso + corrección móvil — 23-oct-2026 CDMX
+
+- [x] Extensión Desktop autorizada: marco interior/rail/pestañas, omnibox nativa, Command Bar y sugerencias, decorador de AppMenu/PageInfo/ContextMenu; paleta del Space conservada, sin cambiar geometría ni Split View. Barra exterior DeX nativa.
+- [x] Captura de paneles recortada al contenido realmente visible, destino proporcional y fallback lechoso legible. Pill exterior transparente en NTP sin activar captura web.
+- [x] Android local:122 pruebas sampler/navegación/Command Bar,8 drawables nativos,18 foco Tablet y12 transiciones PASS. Contraste probado en4.096 colores y páginas opuestas. No equivale a aceptación de APK.
+- [ ] Flecha/título anterior junto a status bar: pendiente de reproducción/evidencia; no se afirma corregido.
+- [ ] Validación física del nuevo candidato en Claro/Oscuro, menús, NTP, teclado, fullscreen y Desktop↔Phone; PopupMenu del framework/diálogos de Ajustes conservan presentación nativa.
+- [ ] Nuevo build/instalación: NO LANZADOS. Requiere nueva autorización de compilación.
+
+Detalle: `docs/validation/R5_DESKTOP_MILKY.md`. Se conserva el trabajo móvil en curso y no se volvió a controlar el teléfono después de liberarlo.
+
+Verificación del checkpoint Desktop: suite host424 PASS; política Chromium61 métodos PASS; preparación SDK37.2/JDK21 PASS con fronteras declaradas; parche/manifest187 archivos reproducibles y transición sparse desde198fe8a PASS (153 timestamps conservados). Evidencia y límites en `docs/validation/R5_DESKTOP_MILKY.md`.

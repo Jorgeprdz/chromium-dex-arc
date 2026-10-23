@@ -181,3 +181,12 @@ Limpieza autorizada del teléfono realizada DESPUÉS de abrir el monitor:73 entr
 Espacio Android observado:49.998.991.360 →76.052.656.128 bytes libres, diferencia26.053.664.768 bytes; suma estimada de entradas eliminadas25.236.964.457 bytes (medidas distintas: espacio libre del volumen y tamaños de archivos/directorios). Recibo por ruta: `storage-cleanup-receipt.json`; validación posterior de Git activo, classpath, respaldo y monitor PASS. Documentos personales, perfiles/datos de apps, credenciales, renders aprobados y evidencia del defecto actual fuera del alcance de eliminación. Checkpoints GitHub:0 eliminados, fuente/fallback conservados como se documentó arriba.
 
 APK anterior aún disponible en `/sdcard/Download/Archium_R5_76e7934_arm64.apk`, SHA256 `70e23546ecd290f26d3c89fa20ebde2b36e1a36e02a548c1e589162af60b10b1`. Respaldo previo protegido en `/workspace/.local/state/archium-r5-floating-readback-76e7934/adb-update-39961783403/installed-before.apk`, SHA256 `6c5958430be813bf3284d59c5dda6b9f1ab09b83987dd76b64f6420b92720168`. El instalador guardará también la APK instalada antes de cualquier reemplazo nuevo. Aceptación visual del candidato052c55a: PENDIENTE.
+
+
+### Instalación052c55a revisada y ampliación Desktop — 23-oct-2026 CDMX
+
+Run39982605276: **completed/success**, APK instalada y verificada por el instalador. SHA256 `50232a05882bdb5ac813fc15e7beeacca71e79f1f8657bf9ce9a7e42872026d8`, package `app.archium.android`, certificado conocido coincidente, versionCode808600074. Archivo del teléfono `/sdcard/Download/Archium_R5_052c55a_arm64.apk`. Respaldo anterior `/workspace/.local/state/archium-r5-optics-052c55a/adb-update-39982605276/installed-before.apk`, SHA256 `70e23546ecd290f26d3c89fa20ebde2b36e1a36e02a548c1e589162af60b10b1`.
+
+La revisión de capturas propias demostró defectos de paneles; no equivale a aprobación visual del diseño completo. Diagnóstico, fixes incrementales y la extensión Desktop lechosa posteriormente autorizada se documentan en [R5_DESKTOP_MILKY.md](R5_DESKTOP_MILKY.md). La autorización Desktop sustituye la restricción anterior de no alterar su material visual, conservando geometría, paleta y funcionalidades.
+
+Este candidato no tiene APK: aceptación gráfica Claro/Oscuro PENDIENTE, título/flecha anterior pendiente de reproducción. Sin nuevo dispatch, instalación, limpieza de checkpoints o acciones sobre el teléfono en esta fase.

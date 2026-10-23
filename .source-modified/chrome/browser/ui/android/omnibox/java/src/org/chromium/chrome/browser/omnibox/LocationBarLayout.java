@@ -238,6 +238,11 @@ public class LocationBarLayout extends ConstraintLayout {
     /** Optional window palette; phone layouts retain their native appearance. */
     public void setArcSurfaceColor(@Nullable Integer color) {}
 
+    /** Optional desktop fill; phone and upstream implementations retain native backgrounds. */
+    public void setArcGlassBackground(@Nullable Drawable surface) {}
+    public void getArcGlassBounds(Rect bounds) { getDrawingRect(bounds); }
+    public float getArcGlassCornerRadius() { return 0; }
+
     /** Rectangular address row when the Arc shell places it above the page. */
     public void setArcTopBar(boolean active) {}
 
