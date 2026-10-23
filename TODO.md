@@ -704,3 +704,12 @@ Matriz y límites: [auditoría en R5_FLOATING_V2.md](docs/validation/R5_FLOATING
 Detalle: `docs/validation/R5_DESKTOP_MILKY.md`. Se conserva el trabajo móvil en curso y no se volvió a controlar el teléfono después de liberarlo.
 
 Verificación del checkpoint Desktop: suite host424 PASS; política Chromium61 métodos PASS; preparación SDK37.2/JDK21 PASS con fronteras declaradas; parche/manifest187 archivos reproducibles y transición sparse desde198fe8a PASS (153 timestamps conservados). Evidencia y límites en `docs/validation/R5_DESKTOP_MILKY.md`.
+
+
+## Revisión instalada1298b31 — 23-oct-2026 CDMX
+
+- [x] Run40004797899/APK1298b31 instalados; hash de bytes instalado confirmado por ADB.
+- [x] Blur móvil observado sobre prueba de colores. El usuario decide conservarlo como está: no modificar su material.
+- [x] Desktop Command Bar/sugerencias: capturas y dibujo observados; no confundir con aceptación de toda la interfaz.
+- [ ] Marco/sidebar Desktop: efecto liquid esperado no conseguido. Relleno opaco sin fuente de captura y brillo casi imperceptible; causa y muestras documentadas en `docs/validation/R5_DESKTOP_MILKY.md`.
+- [x] Diagnóstico temporal retirado, pestañas originales preservadas; teléfono y DeX liberados. Sin cambios de producción ni nueva compilación en esta revisión.

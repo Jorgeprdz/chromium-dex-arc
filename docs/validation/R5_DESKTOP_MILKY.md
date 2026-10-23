@@ -36,3 +36,14 @@ La pill conserva fondo exterior transparente en páginas nativas/NTP aunque el m
 - No hay publicación/instalación nueva ni limpieza adicional de checkpoints. Candidato de código local comprobado, aceptación gráfica PENDIENTE.
 
 La matriz gráfica **Claro/Oscuro de todas las superficies es PENDIENTE**. Falta APK del candidato, comparación instalada, menús, teclado, NTP/pill, fullscreen, rotación y transición DeX↔Phone. Se liberó el teléfono para uso del usuario; no se enviaron nuevas acciones después de avisarle. No se lanzó Actions ni se instaló un candidato nuevo en esta revisión.
+
+
+## Revisión física posterior — 23-oct-2026 CDMX
+
+Run40004797899 terminó con éxito y se instaló la APK1298b31. Hash instalado comprobado nuevamente por ADB: `705b11028f55969af5a486427582145ea57cdf964d4d5cedeea66cd8854de363`. No era una APK anterior.
+
+Evidencia propia: `/workspace/archium-evidence/installed-1298b31-review/`. Se capturaron la pantalla integrada y la ventana Desktop real. Una página diagnóstica local de tres colores confirmó que las barras y el menú móvil sí dibujan contenido desenfocado. La transición rojo/azul, abrupta en la página entre x300 y302, se distribuye gradualmente bajo la pill; `probe-edge-pixels.json` conserva la medición. El usuario reconoció el efecto y pidió **dejar el móvil como está**. Esta decisión congela su material; no equivale a validar temas, NTP e interacciones que no se probaron.
+
+Desktop: `desktop-command.png` y log muestran copias exitosas y dibujo en Command Bar/sugerencias (760×360 y760×299). En cambio, marco/rail/columna/pestañas proceden de `desktopMaterial()` sin targets de captura: `Backdrop.draw()` usa relleno opaco cuando no hay frame. El brillo máximo es0x12 y la sidebar medida cambia apenas de RGB(231,233,236) a(230,232,235) entre zonas vacías. La apariencia prácticamente plana coincide con el reporte. **El material visible del marco/sidebar Desktop NO cumple la expectativa liquid; pendiente de corregir.** No se presenta el fallback opaco como blur del escritorio ni se propone muestrear otras aplicaciones.
+
+Se cerraron únicamente las dos pestañas temporales creadas para diagnóstico y se restauraron las dos pestañas originales del teléfono. Se retiró la redirección ADB tcp18767 y se detuvo el servidor local. Command Bar Desktop cerrada sin navegar ni cambiar proporciones. El usuario fue avisado de que puede desconectar DeX y usar el teléfono. No hubo cambios de producción ni nuevo dispatch durante esta revisión.
