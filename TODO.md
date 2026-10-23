@@ -675,3 +675,16 @@ Matriz y límites: [auditoría en R5_FLOATING_V2.md](docs/validation/R5_FLOATING
 - [x] Suite host416:410 PASS y6 fallos de ruta SDK local, los seis repetidos sin cambios de tests y PASS con SDK37.0 existente; primera invocación no PASS. Logs y límites registrados.
 - [ ] Único build incremental autorizado, monitor Termux CDMX600s e instalación verificada; no relanzamientos.
 - [ ] Aceptación gráfica de la nueva APK frente a renders y regresiones reales: PENDIENTE.
+
+
+## Cristal y menús posteriores a 76e7934 — 23-oct-2026 CDMX
+
+- [x] Evidencia propia: readback funciona; sombra legacy fuera de cápsula, blur insuficiente y fondos nativos opacos demostrados/documentados.
+- [x] Candidato local: blur/tinte, borde discreto claro/oscuro inferior, sombra ajustada, edición con pill flotante, cristal compartido en menú inferior, Más opciones/submenús, Configuración del sitio y menú de enlaces/imágenes; restauración de capas nativas y lifecycle.
+- [x] Progreso nativo presentado en el perímetro con color temático; área segura superior propagada sin tocar sitios/engine ni tamaño de omnibar.
+- [x] Robolectric92/política46, host phone23, ownership5, preparación SDK y parche25 PASS; marcador de ausencia de newline corregido con RED/GREEN. Alcance sintético/nativo parcial documentado.
+- [x] Checkpoints inventariados: sólo fuente39829306775-1 y fallback39817793524-1, conservados completos; no redundantes seguros,0 bytes eliminados. Hashes de partes/capacidad pendientes del gate CI.
+- [x] Suite host completa final424 PASS.
+- [ ] Lanzar el único build autorizado, monitor nativo CDMX600s e instalación verificada cuando proceda.
+- [ ] Después de abrir monitor: limpieza autorizada de archivos/clones obsoletos del teléfono y recibo de bytes liberados, preservando soporte activo y respaldo de actualización.
+- [ ] Aceptación visual real del candidato y todos sus menús, ambos temas, teclado, insets, carga y Desktop↔Phone: PENDIENTE; no declarar DONE.

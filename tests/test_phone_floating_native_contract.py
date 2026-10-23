@@ -17,6 +17,22 @@ class PhoneFloatingNativeContractTests(unittest.TestCase):
         for forbidden in ['setLayoutParams','setPadding','setMinimumHeight','setTextSize','setOnTouchListener','setOnClickListener','new EditText']:
             self.assertNotIn(forbidden,text[start:end])
         self.assertIn('if (mArcPhoneFloatingSurface) return false;',text)
+    def test_legacy_omnibar_shadow_matches_background_bounds_and_stays_subtle(self):
+        from test_phone_overlay_insets import method,run_probe
+        text=TOP.read_text();start=text.index('public void setArcPhoneFloatingSurfaceEnabled(')
+        body=method(text[start:],'public void getOutline(')
+        code='''public class ShadowProbe {
+static class Rect {int l,t,r,b;Rect(int a,int c,int d,int e){l=a;t=c;r=d;b=e;}void offset(int x,int y){l+=x;r+=x;t+=y;b+=y;}int height(){return b-t;}}
+static class View {int getLeft(){return 21;}int getTop(){return 0;}int getWidth(){return 862;}int getHeight(){return 147;}}
+interface ViewOutlineProvider {void getOutline(View v,Outline o);}
+Object mArcPhoneGlassBackground=new Object();ViewOutlineProvider mArcOriginalLocationBarOutline;
+static class Outline {void setEmpty(){bounds=null;}Rect bounds;float radius,alpha=1;void setRoundRect(int l,int t,int r,int b,float rad){bounds=new Rect(l,t,r,b);radius=rad;}void setRoundRect(Rect r,float rad){bounds=r;radius=rad;}void setAlpha(float a){alpha=a;}}
+Rect getLocationBarBackgroundRect(){return new Rect(21,21,883,126);}boolean urlHasFocus(){return false;}boolean isLocationBarShownInNtp(){return false;}
+'''+body+'''
+public static void main(String[] args){Outline o=new Outline();ShadowProbe p=new ShadowProbe();p.getOutline(new View(),o);if(o.bounds.l!=0||o.bounds.t!=21||o.bounds.r!=862||o.bounds.b!=126||Math.abs(o.radius-52.5f)>.01||o.alpha>.12f)throw new AssertionError("shadow must match pill, not whole editor, with low opacity");p.mArcPhoneGlassBackground=null;p.mArcOriginalLocationBarOutline=(v,nativeOutline)->nativeOutline.setRoundRect(1,2,30,40,0);p.getOutline(new View(),o);if(o.bounds.l!=1||o.bounds.t!=2||o.bounds.b!=40)throw new AssertionError("native focus/NTP outline restored");}}
+'''
+        run_probe(self,{'ShadowProbe.java':code},'ShadowProbe')
+
     def test_activation_stays_under_existing_phone_guard(self):
         activity=(ROOT/'.source-modified/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java').read_text()
         start=activity.index('private void configureArcPhoneNavigation(')

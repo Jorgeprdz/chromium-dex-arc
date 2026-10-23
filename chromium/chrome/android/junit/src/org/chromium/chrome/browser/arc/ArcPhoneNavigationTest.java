@@ -289,6 +289,23 @@ public class ArcPhoneNavigationTest {
         }
         assertEquals(4,colors.size());provider.destroy();
     }
+    @Test public void menuUsesSharedFrostedSourceAndRestoresNativeBackdrop() {
+        var sampler=new ArcPhoneGlass(mNavigation.getGlassTarget(),new ArcPhoneGlass.Capture(){
+            public boolean available(){return false;}
+            public void copy(android.graphics.Rect r,android.graphics.Bitmap b,java.util.function.Consumer<Boolean> c){c.accept(false);}
+            public void close(){}
+        });
+        mNavigation.setGlassSampler(sampler);
+        var glass=new ArcPhoneGlass.Backdrop();mNavigation.setGlassBackdrop(glass,true);
+        var sheet=menu();assertFalse(sheet.hasSolidBackgroundColor());
+        assertEquals(android.graphics.Color.TRANSPARENT,sheet.getSheetBackgroundColorOverride());
+        assertTrue(sheet.getContentView().getBackground() instanceof ArcPhoneGlass.Backdrop);
+        Object token=mHost.token;mHost.color=0xff202124;mNavigation.refresh();
+        assertSame(token,mHost.token);assertFalse(sheet.hasSolidBackgroundColor());
+        mNavigation.setGlassBackdrop(glass,false);assertTrue(sheet.hasSolidBackgroundColor());
+        assertEquals(0xff202124,sheet.getSheetBackgroundColorOverride());
+        mNavigation.dismissMenu();sampler.destroy();
+    }
     @Test public void glassMenuAndPressedControlsKeepContrastAcrossRepeatedThemeChanges(){
         var glass=new ArcPhoneGlass.Backdrop();mNavigation.setGlassBackdrop(glass,true);
         var sheet=menu();View content=sheet.getContentView();View bar=mNavigation.getGlassTarget();Object geometry=bar.getLayoutParams();

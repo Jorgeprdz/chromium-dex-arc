@@ -146,6 +146,7 @@ import org.chromium.chrome.browser.omnibox.UrlFocusChangeListener;
 import org.chromium.chrome.browser.omnibox.fusebox.FuseboxControls;
 import org.chromium.chrome.browser.omnibox.status.SiteControlsIphController;
 import org.chromium.chrome.browser.omnibox.suggestions.OmniboxSuggestionsDropdownScrollListener;
+import org.chromium.chrome.browser.omnibox.suggestions.OmniboxSuggestionsContainer;
 import org.chromium.chrome.browser.omnibox.suggestions.action.OmniboxActionDelegateImpl;
 import org.chromium.chrome.browser.omnibox.voice.VoiceRecognitionHandler;
 import org.chromium.chrome.browser.page_info.ChromePageInfo;
@@ -420,6 +421,10 @@ public class ToolbarManager
     private @Nullable Drawable mArcPhoneBottomBackground;
     private boolean mArcPhoneBottomTransparent;
     private boolean mArcPhoneOverlayActive;
+    private boolean mArcPhoneProgressOwned;
+    private float mArcPhoneOriginalProgressAlpha;
+    private @Nullable OmniboxSuggestionsContainer mArcPhoneSuggestions;
+    private ArcPhoneGlass.@Nullable Backdrop mArcPhoneSuggestionsGlass;
     private boolean mArcPhoneMarginOwned;
     private int mArcPhoneOriginalTopMargin;
     private int mArcPhoneOriginalProgressMargin;
@@ -2596,7 +2601,7 @@ public class ToolbarManager
                 && !org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.isDesktopWindow(mActivity);
         Tab glassTab = mActivityTabProvider.get();
         boolean glass = enabled && mArcPhoneResumed && !mArcPhoneFullscreen
-                && glassTab != null && !glassTab.isNativePage() && !isUrlBarFocused();
+                && glassTab != null && !glassTab.isNativePage();
         if (mToolbarLayout instanceof ToolbarPhone phone) {
             if (enabled && mArcPhoneGlass == null) {
                 mArcPhoneGlass = new ArcPhoneGlass(phone, ArcPhoneGlass.contentSource(
@@ -2614,11 +2619,40 @@ public class ToolbarManager
                         .addSyncObserverAndPostIfNonNull(mArcPhoneMotionObserver);
             }
             if (mArcPhoneGlass != null && mArcPhoneNavigation != null && mArcPhoneBottomGlass == null) {
+                mArcPhoneNavigation.setGlassSampler(mArcPhoneGlass);
                 View target=mArcPhoneNavigation.getGlassTarget();
                 mArcPhoneBottomGlass=mArcPhoneGlass.add(target, target::getDrawingRect);
+                mArcPhoneBottomGlass.setEdgeEnabled(true,mActivity.getResources().getDisplayMetrics().density);
+            }
+            View suggestions = mActivity.findViewById(R.id.omnibox_suggestions_container);
+            if (suggestions instanceof OmniboxSuggestionsContainer container
+                    && mArcPhoneGlass != null) {
+                if (mArcPhoneSuggestions != container) {
+                    if (mArcPhoneSuggestions != null) mArcPhoneSuggestions.setArcPhoneGlassBackground(null);
+                    if (mArcPhoneSuggestionsGlass != null) mArcPhoneGlass.remove(mArcPhoneSuggestionsGlass);
+                    mArcPhoneSuggestions = container;
+                    mArcPhoneSuggestionsGlass = mArcPhoneGlass.add(container,
+                            r -> r.set(0, 0, container.getWidth(), container.getHeight()));
+                    mArcPhoneSuggestionsGlass.setCornerRadius(0);
+                }
+                ArcPhoneGlass.@Nullable Backdrop suggestionsGlass = mArcPhoneSuggestionsGlass;
+                if (suggestionsGlass != null) {
+                    suggestionsGlass.setSurface(mToolbarThemeColorProvider.getThemeColor());
+                    container.setArcPhoneGlassBackground(glass && isUrlBarFocused() ? suggestionsGlass : null);
+                }
             }
             if (mArcPhoneTopGlass != null) mArcPhoneTopGlass.setSurface(mToolbarThemeColorProvider.getThemeColor());
             phone.setArcPhoneGlassBackground(glass ? mArcPhoneTopGlass : null);
+            ToolbarProgressBar nativeProgress = mProgressBarContainer.findViewById(R.id.toolbar_progress_bar);
+            if (nativeProgress != null) nativeProgress.setArcPhonePerimeterTarget(glass ? phone : null);
+            phone.setArcPhoneProgressPerimeterEnabled(glass);
+            if (mArcPhoneProgressOwned != glass) {
+                if (glass) {
+                    mArcPhoneOriginalProgressAlpha = mProgressBarContainer.getAlpha();
+                    mProgressBarContainer.setAlpha(0f);
+                } else mProgressBarContainer.setAlpha(mArcPhoneOriginalProgressAlpha);
+                mArcPhoneProgressOwned = glass;
+            }
             if (mArcPhoneOverlayActive != glass) {
                 if (glass) {
                     mArcPhoneOriginalStatusContrast = mActivity.getWindow().isStatusBarContrastEnforced();
@@ -2663,9 +2697,14 @@ public class ToolbarManager
                 }
                 mArcPhoneBottomTransparent = glass;
             }
+            mActivity.getWindow().getDecorView().setTag(
+                    org.chromium.ui.R.id.arc_phone_surface_decorator,
+                    glass && mArcPhoneGlass != null ? mArcPhoneGlass.getSurfaceDecorator() : null);
             mCompositorViewHolder.setArcPhoneControlsOverlay(glass);
             if (mArcPhoneGlass != null) {
                 mArcPhoneGlass.setInMotion(Boolean.TRUE.equals(mCompositorViewHolder.getInMotionSupplier().get()));
+                mArcPhoneGlass.setSurfaceLayersTag(org.chromium.ui.R.id.arc_phone_surface_layers);
+                mArcPhoneGlass.setSurface(mToolbarThemeColorProvider.getThemeColor());
                 mArcPhoneGlass.setEnabled(glass);
             }
             if (mArcPhoneNavigation != null && mArcPhoneBottomGlass != null) {
@@ -3216,6 +3255,12 @@ public class ToolbarManager
             mCompositorViewHolder.getInMotionSupplier().removeObserver(mArcPhoneMotionObserver);
             mArcPhoneMotionObserver = null;
         }
+        ToolbarProgressBar phoneProgress = mProgressBarContainer.findViewById(R.id.toolbar_progress_bar);
+        if (phoneProgress != null) phoneProgress.setArcPhonePerimeterTarget(null);
+        if (mArcPhoneProgressOwned) {mProgressBarContainer.setAlpha(mArcPhoneOriginalProgressAlpha);mArcPhoneProgressOwned=false;}
+        if (mArcPhoneSuggestions != null) {mArcPhoneSuggestions.setArcPhoneGlassBackground(null);mArcPhoneSuggestions=null;}
+        mArcPhoneSuggestionsGlass=null;
+        mActivity.getWindow().getDecorView().setTag(org.chromium.ui.R.id.arc_phone_surface_decorator, null);
         if (mArcPhoneGlass != null) {mArcPhoneGlass.destroy();mArcPhoneGlass=null;}
 
         if (mAppInstalledDelegate != null) {
@@ -3556,6 +3601,7 @@ public class ToolbarManager
     @Override
     public void onThemeColorChanged(int color, boolean shouldAnimate) {
         if (mArcPhoneTopGlass != null) mArcPhoneTopGlass.setSurface(color);
+        if (mArcPhoneGlass != null) mArcPhoneGlass.setSurface(color);
         if (mArcPhoneNavigation != null) {
             mArcPhoneNavigation.refresh();
             mBottomControlsStacker.requestLayerUpdate(false);

@@ -31,7 +31,7 @@ def definitions():
         'org.chromium.components.browser_ui.bottomsheet.BottomSheetContent': '''public interface BottomSheetContent {
         interface ContentPriority {int HIGH=0;} interface HeightMode {int DISABLED=-3,WRAP_CONTENT=-1;}
         android.view.View getContentView();android.view.View getToolbarView();int getVerticalScrollOffset();void destroy();int getPriority();boolean swipeToDismissEnabled();
-        default boolean coversBottomControls(){return false;}default float getHalfHeightRatio(){return 0;}default float getFullHeightRatio(){return 0;}
+        default boolean hasSolidBackgroundColor(){return true;}default boolean coversBottomControls(){return false;}default float getHalfHeightRatio(){return 0;}default float getFullHeightRatio(){return 0;}
         default BottomSheetType getSheetType(){return new BottomSheetType();}default int getSheetBackgroundColorOverride(){return 0;}
         int getSheetHalfHeightAccessibilityStringId();int getSheetFullHeightAccessibilityStringId();int getSheetClosedAccessibilityStringId();}''',
     }

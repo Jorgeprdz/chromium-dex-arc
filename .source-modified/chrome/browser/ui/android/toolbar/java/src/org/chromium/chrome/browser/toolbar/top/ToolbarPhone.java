@@ -213,6 +213,42 @@ public class ToolbarPhone extends ToolbarLayout
     protected ColorDrawable mToolbarBackground;
     private boolean mArcPhoneFloatingSurface;
     private @Nullable Drawable mArcPhoneGlassBackground;
+    private boolean mArcPhoneProgressPerimeter;
+    private final android.graphics.Paint mArcProgressPaint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+    private final android.graphics.Path mArcProgressOutline = new android.graphics.Path();
+    private final android.graphics.Path mArcProgressSegment = new android.graphics.Path();
+    private final android.graphics.PathMeasure mArcProgressMeasure = new android.graphics.PathMeasure();
+    private final android.graphics.RectF mArcProgressBounds = new android.graphics.RectF();
+
+    public void setArcPhoneProgressPerimeterEnabled(boolean enabled) {
+        if (mArcPhoneProgressPerimeter == enabled) return;
+        mArcPhoneProgressPerimeter = enabled;
+        invalidate();
+    }
+
+    private void drawArcPhoneLoadProgress(Canvas canvas) {
+        ToolbarProgressBar progress = getProgressBar();
+        if (!mArcPhoneProgressPerimeter || progress == null || progress.getAlpha() <= 0) return;
+        float value = Math.max(0f, Math.min(1f, progress.getProgress()));
+        float width = getResources().getDisplayMetrics().density;
+        mArcProgressBounds.set(getLocationBarBackgroundRect());
+        mArcProgressBounds.inset(width / 2, width / 2);
+        if (mArcProgressBounds.isEmpty()) return;
+        mArcProgressOutline.reset();
+        float radius = mArcProgressBounds.height() / 2;
+        mArcProgressOutline.addRoundRect(mArcProgressBounds, radius, radius, android.graphics.Path.Direction.CW);
+        mArcProgressMeasure.setPath(mArcProgressOutline, true);
+        mArcProgressSegment.reset();
+        mArcProgressMeasure.getSegment(0, mArcProgressMeasure.getLength() * value, mArcProgressSegment, true);
+        mArcProgressPaint.setStyle(android.graphics.Paint.Style.STROKE);
+        mArcProgressPaint.setStrokeCap(android.graphics.Paint.Cap.ROUND);
+        mArcProgressPaint.setStrokeWidth(width);
+        mArcProgressPaint.setColor(getArcPhoneSurfaceColor() == Color.WHITE ? 0xff444b55 : 0xffeceff3);
+        mArcProgressPaint.setAlpha(Math.round(210 * progress.getAlpha()));
+        canvas.drawPath(mArcProgressSegment, mArcProgressPaint);
+        if (android.animation.ValueAnimator.areAnimatorsEnabled()) postInvalidateOnAnimation();
+    }
+
     private @Nullable ViewOutlineProvider mArcOriginalLocationBarOutline;
     private float mArcOriginalLocationBarElevation;
 
@@ -955,8 +991,16 @@ public class ToolbarPhone extends ToolbarLayout
                 surface.setOutlineProvider(new ViewOutlineProvider() {
                     @Override
                     public void getOutline(View view, Outline outline) {
-                        outline.setRoundRect(0, 0, view.getWidth(), view.getHeight(),
-                                view.getHeight() / 2f);
+                        if (mArcPhoneGlassBackground == null || urlHasFocus() || isLocationBarShownInNtp()) {
+                            ViewOutlineProvider original = mArcOriginalLocationBarOutline;
+                            if (original != null) original.getOutline(view, outline);
+                            else outline.setEmpty();
+                            return;
+                        }
+                        Rect bounds = getLocationBarBackgroundRect();
+                        bounds.offset(-view.getLeft(), -view.getTop());
+                        outline.setRoundRect(bounds, bounds.height() / 2f);
+                        outline.setAlpha(.12f);
                     }
                 });
             }
@@ -995,8 +1039,9 @@ public class ToolbarPhone extends ToolbarLayout
     }
 
     private void updateToolbarBackground(@ColorInt int color) {
-        if (mArcPhoneFloatingSurface && !urlHasFocus() && !isLocationBarShownInNtp()) {
-            color = mArcPhoneGlassBackground != null ? Color.TRANSPARENT : getArcPhoneSurfaceColor();
+        if (mArcPhoneGlassBackground != null) color = Color.TRANSPARENT;
+        else if (mArcPhoneFloatingSurface && !urlHasFocus() && !isLocationBarShownInNtp()) {
+            color = getArcPhoneSurfaceColor();
         }
         if (mToolbarBackground.getColor() == color) return;
         mToolbarBackground.setColor(color);
@@ -1925,7 +1970,7 @@ public class ToolbarPhone extends ToolbarLayout
                         mLocationBarBackgroundBounds.right + mLocationBarBackgroundNtpOffset.right,
                         mLocationBarBackgroundBounds.bottom
                                 + mLocationBarBackgroundNtpOffset.bottom);
-                if (mArcPhoneGlassBackground != null && !urlHasFocus() && !isLocationBarShownInNtp()) {
+                if (mArcPhoneGlassBackground != null) {
                     mArcPhoneGlassBackground.setBounds(mLocationBarBackground.getBounds());
                     mArcPhoneGlassBackground.draw(canvas);
                 } else {
@@ -2042,6 +2087,7 @@ public class ToolbarPhone extends ToolbarLayout
         // after this point was having no affect.
         assert !mTextureCaptureMode || getAlpha() == 1f;
         super.draw(canvas);
+        drawArcPhoneLoadProgress(canvas);
     }
 
     @Override

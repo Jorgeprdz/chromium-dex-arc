@@ -1052,9 +1052,12 @@ public class EdgeToEdgeControllerImpl
         int bottomInsetOnSafeArea = hasBottomSafeArea ? safeAreaInsets : 0;
         mInsetObserver.updateBottomInsetForEdgeToEdge(bottomInsetOnSafeArea);
 
-        // TODO(crbug.com/498302496): When top edge-to-edge expands to web pages, push top safe area
-        // insets to InsetObserver (e.g. updateTopInsetForEdgeToEdge) for Blink CSS
-        // env(safe-area-inset-top).
+        // Keep the page behind transparent system bars, but expose the occupied top area
+        // through the existing native safe-area observers. No CSS/JS injection or page rewrite.
+        mInsetObserver.updateTopInsetForEdgeToEdge(
+                mArcPhoneControlsOverlay && isDrawingToTopEdge()
+                                && !mFullscreenManager.getPersistentFullscreenMode()
+                        ? mSystemInsets.top : 0);
     }
 
     @SuppressWarnings("NullAway")

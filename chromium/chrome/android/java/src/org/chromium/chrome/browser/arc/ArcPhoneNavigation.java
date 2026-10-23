@@ -78,6 +78,7 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
     private boolean mDestroyed;
     private int mSurface, mForeground;
     private ArcPhoneGlass.Backdrop mGlass;
+    private ArcPhoneGlass mGlassSampler;
     private boolean mGlassEnabled;
     private String mCount="";
 
@@ -144,13 +145,13 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
         refresh();
     }
     public View getGlassTarget(){return mBar;}
+    public void setGlassSampler(ArcPhoneGlass sampler){mGlassSampler=sampler;}
     public void setGlassBackdrop(ArcPhoneGlass.Backdrop glass,boolean enabled){mGlass=glass;mGlassEnabled=enabled;refresh();}
     private boolean usesGlass(){return mGlassEnabled && mPhoneModeActive && mTabbedHost && mGlass!=null;}
     public void bind(Host host){if(mDestroyed)return;mHost=host;refresh();}
     public void refresh() {
         if(mDestroyed)return;
         if(mSheet!=null && (mHost==null || mSheet.mToken!=mHost.pageToken()))dismissMenu();
-        int oldSurface=mSurface;
         int nativeSurface=mHost==null?themeSurface():mHost.surface();
         mSurface=Color.luminance(nativeSurface)>.45?Color.WHITE:nativeSurface;
         mForeground=Color.luminance(mSurface)>.45?0xff202124:0xfff1f3f4;
@@ -172,10 +173,7 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
         mButtons[TABS].setContentDescription(mContext.getString(R.string.arc_phone_tabs)+", "+count);
         boolean countChanged=!mCount.equals(count);mCount=count;
         if(mVisibility!=null)mVisibility.setBottomControlsVisible(mHost!=null && mTabbedHost && mPhoneModeActive);
-        if(mSheet!=null && oldSurface!=mSurface){
-            mSheet.applyPalette();
-            mController.onSheetBackgroundColorOverrideChanged();
-        }
+        if(mSheet!=null && mSheet.applyPalette())mController.onSheetBackgroundColorOverrideChanged();
         if(mCapture!=null)mCapture.onResult(countChanged?count:new Object());
     }
     @Override public void initializeWithNative(BottomControlsVisibilityController visibility,Callback<Object> capture){mVisibility=visibility;mCapture=capture;refresh();}
@@ -212,10 +210,16 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
         final LinearLayout mBody;
         final View mEmptyToolbar;
         boolean mClosed;
+        final GradientDrawable mOpaqueBackground;
+        final ArcPhoneGlass.Backdrop mBackdrop;
+        int mPaintedSurface;
+        boolean mPaintedGlass;
         MenuSheet(Host host) {
             mToken=host.pageToken();mScroll=new ScrollView(mContext);mScroll.setFillViewport(false);
             mBody=new LinearLayout(mContext);mBody.setOrientation(LinearLayout.VERTICAL);mBody.setPadding(dp(16),dp(10),dp(16),dp(12));
-            GradientDrawable background=shape(mSurface,28);background.setCornerRadii(new float[]{dp(28),dp(28),dp(28),dp(28),0,0,0,0});mBody.setBackground(background);
+            mOpaqueBackground=shape(mSurface,28);mOpaqueBackground.setCornerRadii(new float[]{dp(28),dp(28),dp(28),dp(28),0,0,0,0});mBody.setBackground(mOpaqueBackground);
+            mBackdrop=mGlassSampler==null?null:mGlassSampler.add(mScroll,r->r.set(0,0,mScroll.getWidth(),mScroll.getHeight()));
+            if(mBackdrop!=null)mBackdrop.setTopCorners(dp(28));
             mScroll.addView(mBody,new ScrollView.LayoutParams(-1,-2));
             // A non-null, zero-height toolbar prevents the native sheet's omnibox fallback.
             mEmptyToolbar=new View(mContext);mEmptyToolbar.setLayoutParams(new FrameLayout.LayoutParams(-1,0));
@@ -254,6 +258,7 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
             row(SITE_INFO,R.string.arc_phone_site_settings,"site-settings",host.webPage(),"›");
             row(DOWNLOADS,R.string.arc_phone_downloads,"downloads",true,"›");
             row(MORE,R.string.arc_phone_more,"more",true,"›");
+            applyPalette();
         }
         private void row(int action,int label,String tag,boolean enabled,String end) {
             LinearLayout row=new LinearLayout(mContext);row.setGravity(Gravity.CENTER_VERTICAL);row.setPadding(dp(12),0,dp(12),0);
@@ -268,9 +273,16 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
             row.setOnClickListener(v->{haptic(v);act(this,action);});mBody.addView(row,new LinearLayout.LayoutParams(-1,-2));
         }
         private void separator(){View line=new View(mContext);line.setTag("arc-phone-menu-divider");line.setBackgroundColor((mForeground&0xffffff)|0x0d000000);mBody.addView(line,new LinearLayout.LayoutParams(-1,dp(1)));}
-        private void applyPalette() {
-            ((GradientDrawable)mBody.getBackground()).setColor(mSurface);
+        private boolean applyPalette() {
+            boolean glass=mBackdrop!=null&&usesGlass();
+            if(mPaintedSurface==mSurface&&mPaintedGlass==glass)return false;
+            mPaintedSurface=mSurface;mPaintedGlass=glass;
+            mOpaqueBackground.setColor(mSurface);
+            if(mBackdrop!=null)mBackdrop.setSurface(mSurface);
+            mScroll.setBackground(glass?mBackdrop:null);
+            mBody.setBackground(glass?null:mOpaqueBackground);
             recolor(mBody);
+            return true;
         }
         private void recolor(View view) {
             if(view instanceof TextView label)label.setTextColor(mForeground);
@@ -296,11 +308,12 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
         @Override public float getHalfHeightRatio(){return HeightMode.DISABLED;}
         @Override public float getFullHeightRatio(){return HeightMode.WRAP_CONTENT;}
         @Override public BottomSheetType getSheetType(){return new BottomSheetType.Builder().setUserInitiated(true).setModal(true).build();}
-        @Override public int getSheetBackgroundColorOverride(){return mSurface;}
+        @Override public boolean hasSolidBackgroundColor(){return mBackdrop==null||!usesGlass();}
+        @Override public int getSheetBackgroundColorOverride(){return hasSolidBackgroundColor()?mSurface:Color.TRANSPARENT;}
         @Override public int getSheetHalfHeightAccessibilityStringId(){return R.string.arc_phone_menu;}
         @Override public int getSheetFullHeightAccessibilityStringId(){return R.string.arc_phone_menu;}
         @Override public int getSheetClosedAccessibilityStringId(){return R.string.arc_phone_menu_closed;}
-        @Override public void destroy(){mClosed=true;if(mSheet==this)mSheet=null;refresh();}
+        @Override public void destroy(){if(mClosed)return;mClosed=true;if(mGlassSampler!=null&&mBackdrop!=null)mGlassSampler.remove(mBackdrop);if(mSheet==this)mSheet=null;refresh();}
     }
     /** Small vectors drawn without bitmap allocation; no website content or snapshots are touched. */
     private static final class Icon extends Drawable {
