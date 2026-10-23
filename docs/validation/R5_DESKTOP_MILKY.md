@@ -47,3 +47,26 @@ Evidencia propia: `/workspace/archium-evidence/installed-1298b31-review/`. Se ca
 Desktop: `desktop-command.png` y log muestran copias exitosas y dibujo en Command Bar/sugerencias (760×360 y760×299). En cambio, marco/rail/columna/pestañas proceden de `desktopMaterial()` sin targets de captura: `Backdrop.draw()` usa relleno opaco cuando no hay frame. El brillo máximo es0x12 y la sidebar medida cambia apenas de RGB(231,233,236) a(230,232,235) entre zonas vacías. La apariencia prácticamente plana coincide con el reporte. **El material visible del marco/sidebar Desktop NO cumple la expectativa liquid; pendiente de corregir.** No se presenta el fallback opaco como blur del escritorio ni se propone muestrear otras aplicaciones.
 
 Se cerraron únicamente las dos pestañas temporales creadas para diagnóstico y se restauraron las dos pestañas originales del teléfono. Se retiró la redirección ADB tcp18767 y se detuvo el servidor local. Command Bar Desktop cerrada sin navegar ni cambiar proporciones. El usuario fue avisado de que puede desconectar DeX y usar el teléfono. No hubo cambios de producción ni nuevo dispatch durante esta revisión.
+
+
+## Fix y control de intensidad autorizados — 23-oct-2026 CDMX
+
+El usuario autorizó corregir Desktop, añadir intensidad con vista previa/guardado y realizar un único build incremental. El móvil conserva exactamente su código de producción aprobado.
+
+Diagnóstico adicional de sólo lectura: `adb shell wm disable-blur` informó `Blur supported on device: false` y `Blur enabled: false`. No se cambió ningún flag de blur, GPU o ventana. El marco no puede prometer blur entre ventanas en este dispositivo. Los paneles sobre contenido web mantienen el sampler existente.
+
+Corrección localizada: `ArcDesktopMaterial` sustituye el fallback casi plano únicamente en los cuatro fondos Desktop. Genera una rampa lechosa de tres tonos basada en el color actual del Space, con iluminación y sombra visibles sin bitmap; adapta los extremos para mantener AA frente al foreground nativo, incluidos4.096 colores de prueba y tres intensidades. Las superficies comparten coordenadas verticales de ventana para evitar saltos entre rail, columna y pestañas. Se conservan el clip rectangular y alpha de sombra original. No cambia layout, tamaños, anchos, proporciones ni WebContents.
+
+Apariencia (rueda de color) conserva acceso al selector de color y añade «Intensidad del acabado Desktop». `ArcDesktopMaterialDialog` usa SeekBar nativo de0–100 y muestra el porcentaje, muestra del material y vista previa de la ventana. Predeterminado60; Aceptar guarda en preferencias existentes; Cancelar/Back/dismiss restaura el guardado; Restablecer modifica sólo el borrador hasta aceptar. Borrador por coordinator/ventana y limpieza al destruir. Pulsación prolongada de la rueda mantiene su acceso anterior a posición de dirección.
+
+Pruebas locales reales:
+- `candidate-ui.log`:134 ejecuciones Android/Robolectric PASS (SDK30/36), política Chromium67 métodos PASS. Nuevas pruebas: relieve perceptible por los tonos, intensidad, AA, clip/sombra y borrador/cancelación/aplicación/restablecimiento. No son aceptación gráfica de APK.
+- `flat-regression/red.log`: mutación del material a relleno plano rechazada por cuatro ejecuciones de los tests de relieve/intensidad. El defecto visual original está capturado en el checkpoint anterior. La primera ejecución del nuevo diálogo falló por callbacks pendientes del looper del fixture; corregido ejecutando el looper real, sin shadows nuevos ni relajar gates.
+- `desktop-native.log`:8 PASS; `desktop-transitions.log`:12 PASS. Foco nativo, restauración y métodos de transición preservados en sus fronteras declaradas.
+- `patch-tests.log`:25 PASS; `resource-tests.log`:8 PASS; `host-coverage-verified.log`:2 PASS. La expectativa de cobertura host se amplió para incluir la nueva suite, conservando todas las anteriores.
+- `preparation-candidate.log`: preparación aislada SDK37.2/JDK21 PASS con fronteras Chromium sintéticas. Nuevas clases y test registrados en GN y gates JVM reales.
+- Parche/manifest190 archivos reproducibles; transición sparse desde198fe8a/checkpoint39829306775-1 comprobada en los recibos finales. No se restauró el checkpoint completo localmente.
+
+Evidencia: `/workspace/archium-evidence/desktop-material-control/`. La comparación de hashes confirma que no se modificaron ArcPhoneGlass, navegación móvil, ToolbarManager ni los owners móviles nativos. Sólo hay código Desktop nuevo/coordinator, registros GN y recursos nuevos. No hay nuevas dependencias ni actualización de Chromium.
+
+Aceptación instalada del nuevo acabado y del control en Claro/Oscuro/DeX: PENDIENTE hasta APK de este candidato. La suite host completa se ejecutará en el preflight remoto; no se declara repetida localmente. Fuente incremental conservada y único dispatch con SHA final exacto, sin reintentos automáticos. Estado del run en el directorio nuevo `/workspace/.local/state/archium-r5-material-control/`.

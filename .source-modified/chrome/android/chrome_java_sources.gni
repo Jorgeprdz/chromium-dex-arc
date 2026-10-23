@@ -18,6 +18,8 @@ chrome_java_sources = [
   "java/src/org/chromium/chrome/browser/arc/ArcColorPicker.java",
   "java/src/org/chromium/chrome/browser/arc/ArcCompactOmnibox.java",
   "java/src/org/chromium/chrome/browser/arc/ArcCommandBar.java",
+  "java/src/org/chromium/chrome/browser/arc/ArcDesktopMaterial.java",
+  "java/src/org/chromium/chrome/browser/arc/ArcDesktopMaterialDialog.java",
   "java/src/org/chromium/chrome/browser/arc/ArcSplitState.java",
   "java/src/org/chromium/chrome/browser/arc/ArcSplitPairStore.java",
   "java/src/org/chromium/chrome/browser/arc/ArcSplitViewportPolicy.java",

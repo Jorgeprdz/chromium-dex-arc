@@ -238,6 +238,7 @@ for suite in \
     'org.chromium.chrome.browser.arc.ArcFrameDispatchTest.*' \
     'org.chromium.chrome.browser.arc.ArcNavigationControlsTest.*' \
     'org.chromium.chrome.browser.arc.ArcCommandBarTest.*' \
+    'org.chromium.chrome.browser.arc.ArcDesktopMaterialTest.*' \
     'org.chromium.chrome.browser.arc.ArcOmniboxPlacementTest.*' \
     'org.chromium.chrome.browser.omnibox.LocationBarMediatorUnitTest.testArcCommand*' \
     'org.chromium.chrome.browser.arc.ArcCollectionsFocusTest.*' \

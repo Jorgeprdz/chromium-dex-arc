@@ -713,3 +713,13 @@ Verificación del checkpoint Desktop: suite host424 PASS; política Chromium61 m
 - [x] Desktop Command Bar/sugerencias: capturas y dibujo observados; no confundir con aceptación de toda la interfaz.
 - [ ] Marco/sidebar Desktop: efecto liquid esperado no conseguido. Relleno opaco sin fuente de captura y brillo casi imperceptible; causa y muestras documentadas en `docs/validation/R5_DESKTOP_MILKY.md`.
 - [x] Diagnóstico temporal retirado, pestañas originales preservadas; teléfono y DeX liberados. Sin cambios de producción ni nueva compilación en esta revisión.
+
+
+## Desktop: relieve visible y ajuste guardado — 23-oct-2026 CDMX
+
+- [x] Fix de fondos Desktop casi planos: material de tres tonos, paleta del Space, coordenadas alineadas, contraste AA y clip original. No se presenta como blur del escritorio (el dispositivo informa soporte entre ventanas desactivado/no soportado).
+- [x] Apariencia → intensidad Desktop0–100, vista previa local, Aceptar/Cancelar/Restablecer y persistencia. Selector de color y atajo de posición preservados.
+- [x]134 ejecuciones Android PASS; política Chromium67 métodos;8 drawables/foco nativos y12 transiciones PASS. Host específico25 parche+8 recursos+2 cobertura PASS; SDK aislado y reproducibilidad/transición comprobados. Fronteras y límites en `docs/validation/R5_DESKTOP_MILKY.md`.
+- [x] Producción móvil preservada como aprobó el usuario; sin cambios de motor, GPU, dependencias, layout ni Split View.
+- [ ] Único build incremental autorizado: registrar SHA y run en estado `archium-r5-material-control`.
+- [ ] Validación física Claro/Oscuro y del nuevo control tras instalar: PENDIENTE.

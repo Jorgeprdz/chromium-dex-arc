@@ -148,6 +148,9 @@ public final class ArcDesktopCoordinator {
     private Rect mClippedSurfaceOriginalClipBounds;
     private AlertDialog mColorDialog;
     private AlertDialog mAboutDialog;
+    private AlertDialog mMaterialDialog;
+    private int mMaterialPreview = -1;
+    private final int[] mMaterialPosition = new int[2];
     private ArcPhoneGlass mDesktopGlass;
     private ArcPhoneGlass.Backdrop mDesktopOmniboxGlass;
     private OmniboxSuggestionsContainer mDesktopSuggestions;
@@ -171,15 +174,19 @@ public final class ArcDesktopCoordinator {
         if (mDesktopSuggestionGlass != null) mDesktopSuggestionGlass.setSurface(frameSurface(mIncognitoStateProvider.isIncognitoSelected()));
         mDesktopSuggestions.setArcPhoneGlassBackground(enabled ? mDesktopSuggestionGlass : null);
     }
-    private final ArcPhoneGlass.Backdrop mDesktopFrameMaterial = desktopMaterial();
-    private final ArcPhoneGlass.Backdrop mDesktopRailMaterial = desktopMaterial();
-    private final ArcPhoneGlass.Backdrop mDesktopColumnMaterial = desktopMaterial();
-    private final ArcPhoneGlass.Backdrop mDesktopTabsMaterial = desktopMaterial();
+    private final ArcDesktopMaterial mDesktopFrameMaterial = new ArcDesktopMaterial();
+    private final ArcDesktopMaterial mDesktopRailMaterial = new ArcDesktopMaterial();
+    private final ArcDesktopMaterial mDesktopColumnMaterial = new ArcDesktopMaterial();
+    private final ArcDesktopMaterial mDesktopTabsMaterial = new ArcDesktopMaterial();
     private final Drawable mOriginalNativeTabsBackground;
-    private static ArcPhoneGlass.Backdrop desktopMaterial() {
-        var material = new ArcPhoneGlass.Backdrop();
-        material.setDesktopMaterial(); material.setCornerRadius(0);
-        return material;
+    private void updateMaterial(View target, ArcDesktopMaterial material, int surface) {
+        int intensity = mMaterialPreview >= 0 ? mMaterialPreview : ArcDesktopMaterial.savedIntensity(mPreferences);
+        material.setAppearance(surface, intensity);
+        if (target != null && mFrameRoot != null) {
+            mFrameRoot.getLocationInWindow(mMaterialPosition); int rootTop = mMaterialPosition[1];
+            target.getLocationInWindow(mMaterialPosition);
+            material.setViewport(mFrameRoot.getHeight(), mMaterialPosition[1] - rootTop);
+        }
     }
 
     private void updateDesktopGlass(boolean desktop, int surface) {
@@ -222,7 +229,10 @@ public final class ArcDesktopCoordinator {
         }
         if (mCommandBar != null) mCommandBar.setGlassSampler(desktop ? mDesktopGlass : null);
         updateDesktopSuggestions(desktop && mCommandBar != null && mCommandBar.isShowing());
-        mDesktopFrameMaterial.setSurface(surface); mDesktopRailMaterial.setSurface(surface); mDesktopColumnMaterial.setSurface(surface); mDesktopTabsMaterial.setSurface(surface);
+        updateMaterial(mFrameRoot, mDesktopFrameMaterial, surface);
+        updateMaterial(mRail, mDesktopRailMaterial, surface);
+        updateMaterial(mColumn, mDesktopColumnMaterial, surface);
+        updateMaterial(mNativeTabs, mDesktopTabsMaterial, surface);
     }
     private Tab mDesktopGlassTab;
     private boolean mPaletteInitialized;
@@ -460,19 +470,19 @@ public final class ArcDesktopCoordinator {
         appearanceButton.setImageDrawable(wheel);
         appearanceButton.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
         appearanceButton.setPadding(dp(10), dp(10), dp(10), dp(10));
-        appearanceButton.setOnClickListener(v -> showColorPicker());
+        appearanceButton.setOnClickListener(this::showAppearanceMenu);
         appearanceButton.setOnLongClickListener(v -> {
             ArcAppearanceDialog.createAddressBarPosition(mActivity, this::applyAppearance).show();
             return true;
         });
-        appearanceButton.setTooltipText(activity.getString(R.string.arc_frame_color));
+        appearanceButton.setTooltipText(activity.getString(R.string.arc_interface));
         bookmarksButton.setText("☆\n" + activity.getString(R.string.arc_bookmarks));
         bookmarksButton.setTextSize(10);
         bookmarksButton.setGravity(Gravity.CENTER);
         googleButton.setText("G\nGoogle");
         googleButton.setTextSize(10);
         googleButton.setGravity(Gravity.CENTER);
-        appearanceButton.setContentDescription(activity.getString(R.string.arc_frame_color));
+        appearanceButton.setContentDescription(activity.getString(R.string.arc_interface));
         for (View action : new View[] {bookmarksButton, googleButton}) {
             action.setTag("arc-header-tile");
             LinearLayout.LayoutParams tile = new LinearLayout.LayoutParams(0, dp(52), 1);
@@ -612,7 +622,9 @@ public final class ArcDesktopCoordinator {
         mArcToolbarCompositionActive = true;
         mPreferenceListener = (prefs, key) -> {
             if (mDestroyed) return;
-            if (ArcDesktopAppearance.COLOR_KEY.equals(key)) {
+            if (ArcDesktopMaterial.INTENSITY_KEY.equals(key)) {
+                applyAppearance();
+            } else if (ArcDesktopAppearance.COLOR_KEY.equals(key)) {
                 // Rebind tab titles/buttons through the native RecyclerView after a palette change.
                 refreshNativeRows(mNativeTabs);
                 applyAppearance();
@@ -1000,6 +1012,29 @@ public final class ArcDesktopCoordinator {
         menu.show();
     }
 
+    private void showAppearanceMenu(View anchor) {
+        PopupMenu menu = new PopupMenu(mActivity, anchor);
+        menu.getMenu().add(0, 0, 0, R.string.arc_frame_color);
+        menu.getMenu().add(0, 1, 1, R.string.arc_desktop_material);
+        menu.getMenu().add(0, 2, 2, R.string.arc_address_bar_position);
+        menu.setOnMenuItemClickListener(item -> {
+            if (item.getItemId() == 0) showColorPicker();
+            else if (item.getItemId() == 1) showMaterialDialog();
+            else ArcAppearanceDialog.createAddressBarPosition(mActivity, this::applyAppearance).show();
+            return true;
+        });
+        menu.show();
+    }
+
+    private void showMaterialDialog() {
+        if (mDestroyed || (mMaterialDialog != null && mMaterialDialog.isShowing())) return;
+        mMaterialDialog = new ArcDesktopMaterialDialog(mActivity, mPreferences,
+                frameSurface(mIncognitoStateProvider.isIncognitoSelected()), value -> {
+                    mMaterialPreview = value;
+                    if (!mDestroyed) applyAppearance();
+                }).show();
+    }
+
     private void showColorPicker() {
         if (mDestroyed || (mColorDialog != null && mColorDialog.isShowing())) return;
         mColorDialog = new ArcColorPicker(mActivity, mPreferences,
@@ -1377,7 +1412,7 @@ public final class ArcDesktopCoordinator {
         // The rail's top/bottom padding is drawn by the rail itself, outside mColumn.
         // Tinting only mColumn left the old white background visible as two strips.
         mRail.setBackgroundTintList(null);
-        mDesktopRailMaterial.setSurface(surface); mDesktopFrameMaterial.setSurface(surface);
+        updateMaterial(mRail, mDesktopRailMaterial, surface); updateMaterial(mFrameRoot, mDesktopFrameMaterial, surface);
         if (mRail.getBackground() != mDesktopRailMaterial) mRail.setBackground(mDesktopRailMaterial);
         if (mFrameRoot != null && mFrameRoot.getBackground() != mDesktopFrameMaterial) {
             mFrameRoot.setBackground(mDesktopFrameMaterial);
@@ -1561,6 +1596,7 @@ public final class ArcDesktopCoordinator {
         mRail.removeOnLayoutChangeListener(mLayoutListener);
         mMenuButtonWrapper.removeOnLayoutChangeListener(mLayoutListener);
         mNewTabRow.removeOnLayoutChangeListener(mLayoutListener);
+        if (mMaterialDialog != null) mMaterialDialog.dismiss();
         if (mColorDialog != null) mColorDialog.dismiss();
         if (mAboutDialog != null) mAboutDialog.dismiss();
         View locationBar = mLocationBarHost.findViewById(R.id.location_bar);

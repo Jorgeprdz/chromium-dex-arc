@@ -17,7 +17,7 @@ public class PhoneNativeShadowPolicyProbe {
                 "computeConfig", Description.class, java.util.Set.class, java.util.Set.class);
         compute.setAccessible(true);
         int count = 0;
-        for (String name : new String[] {"ArcPhoneNavigationTest", "ArcPhoneGlassTest", "ArcCommandBarTest"}) {
+        for (String name : new String[] {"ArcPhoneNavigationTest", "ArcPhoneGlassTest", "ArcCommandBarTest", "ArcDesktopMaterialTest"}) {
         var clazz = Class.forName("org.chromium.chrome.browser.arc." + name);
         for (var method : clazz.getDeclaredMethods()) {
             if (!method.isAnnotationPresent(Test.class)) continue;

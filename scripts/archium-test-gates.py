@@ -129,6 +129,7 @@ def host_gate(android_jar: Path, out_dir: Path, *, phase: str = 'all') -> None:
             "org.chromium.chrome.browser.arc.ArcPhoneNavigationTest.*",
             "org.chromium.chrome.browser.arc.ArcPhoneGlassTest.*",
             "org.chromium.chrome.browser.arc.ArcCommandBarTest.*",
+            "org.chromium.chrome.browser.arc.ArcDesktopMaterialTest.*",
             "org.chromium.chrome.browser.arc.ArcSplitStateTest.*",
             "org.chromium.chrome.browser.arc.ArcSplitViewportPolicyTest.*",
             "org.chromium.chrome.browser.arc.ArcSplitContentHostTest.*",

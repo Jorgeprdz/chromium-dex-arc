@@ -22,7 +22,7 @@ diff --git a/chrome/android/chrome_java_resources.gni b/chrome/android/chrome_ja
 diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java_sources.gni
 --- a/chrome/android/chrome_java_sources.gni
 +++ b/chrome/android/chrome_java_sources.gni
-@@ -5,6 +5,37 @@
+@@ -5,6 +5,39 @@
  import("//content/public/common/features.gni")
 
  chrome_java_sources = [
@@ -39,6 +39,8 @@ diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java
 +  "java/src/org/chromium/chrome/browser/arc/ArcColorPicker.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcCompactOmnibox.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcCommandBar.java",
++  "java/src/org/chromium/chrome/browser/arc/ArcDesktopMaterial.java",
++  "java/src/org/chromium/chrome/browser/arc/ArcDesktopMaterialDialog.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcSplitState.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcSplitPairStore.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcSplitViewportPolicy.java",
@@ -3729,7 +3731,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ui/system/Statu
 diff --git a/chrome/android/junit/BUILD.gn b/chrome/android/junit/BUILD.gn
 --- a/chrome/android/junit/BUILD.gn
 +++ b/chrome/android/junit/BUILD.gn
-@@ -431,6 +431,24 @@
+@@ -431,6 +431,25 @@
    # down.
    robolectric_library("chrome_junit_tests_org.chromium.chrome.browser") {
      sources = [
@@ -3741,6 +3743,7 @@ diff --git a/chrome/android/junit/BUILD.gn b/chrome/android/junit/BUILD.gn
 +      "src/org/chromium/chrome/browser/arc/ArcPhoneNavigationTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcPhoneGlassTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcCommandBarTest.java",
++      "src/org/chromium/chrome/browser/arc/ArcDesktopMaterialTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcSplitStateTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcSplitViewportPolicyTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcSplitContentHostTest.java",
@@ -3754,7 +3757,7 @@ diff --git a/chrome/android/junit/BUILD.gn b/chrome/android/junit/BUILD.gn
        "//chrome/android/java/src/org/chromium/chrome/browser/bottombar/BottomBarAppMenuUpdateBadgeControllerUnitTest.java",
        "//chrome/android/java/src/org/chromium/chrome/browser/bottombar/BottomBarContainerCoordinatorUnitTest.java",
        "src/org/chromium/chrome/browser/BrowserExitReasonTrackerUnitTest.java",
-@@ -463,6 +481,7 @@
+@@ -463,6 +482,7 @@
      ]
 
      deps = [
@@ -8398,7 +8401,7 @@ diff --git a/chrome/android/java/res/values/arc_strings.xml b/chrome/android/jav
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/res/values/arc_strings.xml
-@@ -0,0 +1,108 @@
+@@ -0,0 +1,110 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<resources>
 +    <string name="arc_about">Acerca de Archium</string>
@@ -8506,6 +8509,8 @@ new file mode 100644
 +    <string name="arc_phone_more">Más opciones</string>
 +    <string name="arc_phone_on">Activado</string>
 +    <string name="arc_phone_off">Desactivado</string>
++    <string name="arc_desktop_material">Intensidad del acabado Desktop</string>
++    <string name="arc_desktop_material_description">Ajusta la iluminación y el relieve del marco y la barra lateral.</string>
 +</resources>
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAboutDialog.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAboutDialog.java
 new file mode 100644
@@ -10232,7 +10237,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopC
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
-@@ -0,0 +1,1578 @@
+@@ -0,0 +1,1614 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -10383,6 +10388,9 @@ new file mode 100644
 +    private Rect mClippedSurfaceOriginalClipBounds;
 +    private AlertDialog mColorDialog;
 +    private AlertDialog mAboutDialog;
++    private AlertDialog mMaterialDialog;
++    private int mMaterialPreview = -1;
++    private final int[] mMaterialPosition = new int[2];
 +    private ArcPhoneGlass mDesktopGlass;
 +    private ArcPhoneGlass.Backdrop mDesktopOmniboxGlass;
 +    private OmniboxSuggestionsContainer mDesktopSuggestions;
@@ -10406,15 +10414,19 @@ new file mode 100644
 +        if (mDesktopSuggestionGlass != null) mDesktopSuggestionGlass.setSurface(frameSurface(mIncognitoStateProvider.isIncognitoSelected()));
 +        mDesktopSuggestions.setArcPhoneGlassBackground(enabled ? mDesktopSuggestionGlass : null);
 +    }
-+    private final ArcPhoneGlass.Backdrop mDesktopFrameMaterial = desktopMaterial();
-+    private final ArcPhoneGlass.Backdrop mDesktopRailMaterial = desktopMaterial();
-+    private final ArcPhoneGlass.Backdrop mDesktopColumnMaterial = desktopMaterial();
-+    private final ArcPhoneGlass.Backdrop mDesktopTabsMaterial = desktopMaterial();
++    private final ArcDesktopMaterial mDesktopFrameMaterial = new ArcDesktopMaterial();
++    private final ArcDesktopMaterial mDesktopRailMaterial = new ArcDesktopMaterial();
++    private final ArcDesktopMaterial mDesktopColumnMaterial = new ArcDesktopMaterial();
++    private final ArcDesktopMaterial mDesktopTabsMaterial = new ArcDesktopMaterial();
 +    private final Drawable mOriginalNativeTabsBackground;
-+    private static ArcPhoneGlass.Backdrop desktopMaterial() {
-+        var material = new ArcPhoneGlass.Backdrop();
-+        material.setDesktopMaterial(); material.setCornerRadius(0);
-+        return material;
++    private void updateMaterial(View target, ArcDesktopMaterial material, int surface) {
++        int intensity = mMaterialPreview >= 0 ? mMaterialPreview : ArcDesktopMaterial.savedIntensity(mPreferences);
++        material.setAppearance(surface, intensity);
++        if (target != null && mFrameRoot != null) {
++            mFrameRoot.getLocationInWindow(mMaterialPosition); int rootTop = mMaterialPosition[1];
++            target.getLocationInWindow(mMaterialPosition);
++            material.setViewport(mFrameRoot.getHeight(), mMaterialPosition[1] - rootTop);
++        }
 +    }
 +
 +    private void updateDesktopGlass(boolean desktop, int surface) {
@@ -10457,7 +10469,10 @@ new file mode 100644
 +        }
 +        if (mCommandBar != null) mCommandBar.setGlassSampler(desktop ? mDesktopGlass : null);
 +        updateDesktopSuggestions(desktop && mCommandBar != null && mCommandBar.isShowing());
-+        mDesktopFrameMaterial.setSurface(surface); mDesktopRailMaterial.setSurface(surface); mDesktopColumnMaterial.setSurface(surface); mDesktopTabsMaterial.setSurface(surface);
++        updateMaterial(mFrameRoot, mDesktopFrameMaterial, surface);
++        updateMaterial(mRail, mDesktopRailMaterial, surface);
++        updateMaterial(mColumn, mDesktopColumnMaterial, surface);
++        updateMaterial(mNativeTabs, mDesktopTabsMaterial, surface);
 +    }
 +    private Tab mDesktopGlassTab;
 +    private boolean mPaletteInitialized;
@@ -10695,19 +10710,19 @@ new file mode 100644
 +        appearanceButton.setImageDrawable(wheel);
 +        appearanceButton.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
 +        appearanceButton.setPadding(dp(10), dp(10), dp(10), dp(10));
-+        appearanceButton.setOnClickListener(v -> showColorPicker());
++        appearanceButton.setOnClickListener(this::showAppearanceMenu);
 +        appearanceButton.setOnLongClickListener(v -> {
 +            ArcAppearanceDialog.createAddressBarPosition(mActivity, this::applyAppearance).show();
 +            return true;
 +        });
-+        appearanceButton.setTooltipText(activity.getString(R.string.arc_frame_color));
++        appearanceButton.setTooltipText(activity.getString(R.string.arc_interface));
 +        bookmarksButton.setText("☆\n" + activity.getString(R.string.arc_bookmarks));
 +        bookmarksButton.setTextSize(10);
 +        bookmarksButton.setGravity(Gravity.CENTER);
 +        googleButton.setText("G\nGoogle");
 +        googleButton.setTextSize(10);
 +        googleButton.setGravity(Gravity.CENTER);
-+        appearanceButton.setContentDescription(activity.getString(R.string.arc_frame_color));
++        appearanceButton.setContentDescription(activity.getString(R.string.arc_interface));
 +        for (View action : new View[] {bookmarksButton, googleButton}) {
 +            action.setTag("arc-header-tile");
 +            LinearLayout.LayoutParams tile = new LinearLayout.LayoutParams(0, dp(52), 1);
@@ -10847,7 +10862,9 @@ new file mode 100644
 +        mArcToolbarCompositionActive = true;
 +        mPreferenceListener = (prefs, key) -> {
 +            if (mDestroyed) return;
-+            if (ArcDesktopAppearance.COLOR_KEY.equals(key)) {
++            if (ArcDesktopMaterial.INTENSITY_KEY.equals(key)) {
++                applyAppearance();
++            } else if (ArcDesktopAppearance.COLOR_KEY.equals(key)) {
 +                // Rebind tab titles/buttons through the native RecyclerView after a palette change.
 +                refreshNativeRows(mNativeTabs);
 +                applyAppearance();
@@ -11235,6 +11252,29 @@ new file mode 100644
 +        menu.show();
 +    }
 +
++    private void showAppearanceMenu(View anchor) {
++        PopupMenu menu = new PopupMenu(mActivity, anchor);
++        menu.getMenu().add(0, 0, 0, R.string.arc_frame_color);
++        menu.getMenu().add(0, 1, 1, R.string.arc_desktop_material);
++        menu.getMenu().add(0, 2, 2, R.string.arc_address_bar_position);
++        menu.setOnMenuItemClickListener(item -> {
++            if (item.getItemId() == 0) showColorPicker();
++            else if (item.getItemId() == 1) showMaterialDialog();
++            else ArcAppearanceDialog.createAddressBarPosition(mActivity, this::applyAppearance).show();
++            return true;
++        });
++        menu.show();
++    }
++
++    private void showMaterialDialog() {
++        if (mDestroyed || (mMaterialDialog != null && mMaterialDialog.isShowing())) return;
++        mMaterialDialog = new ArcDesktopMaterialDialog(mActivity, mPreferences,
++                frameSurface(mIncognitoStateProvider.isIncognitoSelected()), value -> {
++                    mMaterialPreview = value;
++                    if (!mDestroyed) applyAppearance();
++                }).show();
++    }
++
 +    private void showColorPicker() {
 +        if (mDestroyed || (mColorDialog != null && mColorDialog.isShowing())) return;
 +        mColorDialog = new ArcColorPicker(mActivity, mPreferences,
@@ -11612,7 +11652,7 @@ new file mode 100644
 +        // The rail's top/bottom padding is drawn by the rail itself, outside mColumn.
 +        // Tinting only mColumn left the old white background visible as two strips.
 +        mRail.setBackgroundTintList(null);
-+        mDesktopRailMaterial.setSurface(surface); mDesktopFrameMaterial.setSurface(surface);
++        updateMaterial(mRail, mDesktopRailMaterial, surface); updateMaterial(mFrameRoot, mDesktopFrameMaterial, surface);
 +        if (mRail.getBackground() != mDesktopRailMaterial) mRail.setBackground(mDesktopRailMaterial);
 +        if (mFrameRoot != null && mFrameRoot.getBackground() != mDesktopFrameMaterial) {
 +            mFrameRoot.setBackground(mDesktopFrameMaterial);
@@ -11796,6 +11836,7 @@ new file mode 100644
 +        mRail.removeOnLayoutChangeListener(mLayoutListener);
 +        mMenuButtonWrapper.removeOnLayoutChangeListener(mLayoutListener);
 +        mNewTabRow.removeOnLayoutChangeListener(mLayoutListener);
++        if (mMaterialDialog != null) mMaterialDialog.dismiss();
 +        if (mColorDialog != null) mColorDialog.dismiss();
 +        if (mAboutDialog != null) mAboutDialog.dismiss();
 +        View locationBar = mLocationBarHost.findViewById(R.id.location_bar);
@@ -11810,6 +11851,157 @@ new file mode 100644
 +        mRail.removeView(mColumn);
 +        mRail.addView(mNativeTabs, new ViewGroup.LayoutParams(-1, -1));
 +    }
++}
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopMaterial.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopMaterial.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopMaterial.java
+@@ -0,0 +1,85 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++import android.content.SharedPreferences;
++import android.graphics.Canvas;
++import android.graphics.Color;
++import android.graphics.ColorFilter;
++import android.graphics.LinearGradient;
++import android.graphics.Paint;
++import android.graphics.Outline;
++import android.graphics.PixelFormat;
++import android.graphics.Rect;
++import android.graphics.Shader;
++import android.graphics.drawable.Drawable;
++
++/** Desktop-only frosted finish for regions without web pixels behind them. Not window blur. */
++public final class ArcDesktopMaterial extends Drawable {
++    public static final String INTENSITY_KEY = "desktop_material_intensity";
++    public static final int DEFAULT_INTENSITY = 60;
++    private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private int mSurface, mIntensity = -1, mAlpha = 255;
++    private int[] mColors;
++    private int mViewportHeight, mOffsetY;
++    public void setViewport(int height, int offsetY) {
++        if (mViewportHeight == height && mOffsetY == offsetY) return;
++        mViewportHeight = height; mOffsetY = offsetY; updateShader(); invalidateSelf();
++    }
++
++    public static int clamp(int value) { return Math.max(0, Math.min(100, value)); }
++    public static int savedIntensity(SharedPreferences prefs) {
++        return clamp(prefs.getInt(INTENSITY_KEY, DEFAULT_INTENSITY));
++    }
++    static int foreground(int color) {
++        return contrast(color, Color.BLACK) >= contrast(color, Color.WHITE) ? Color.BLACK : Color.WHITE;
++    }
++    static double contrast(int a, int b) {
++        double x = Color.luminance(a), y = Color.luminance(b);
++        return (Math.max(x, y) + .05) / (Math.min(x, y) + .05);
++    }
++    private static int mix(int a, int b, double amount) {
++        return Color.rgb((int)Math.round(Color.red(a) * (1 - amount) + Color.red(b) * amount),
++                (int)Math.round(Color.green(a) * (1 - amount) + Color.green(b) * amount),
++                (int)Math.round(Color.blue(a) * (1 - amount) + Color.blue(b) * amount));
++    }
++    private static int safeTone(int surface, int light, double amount) {
++        int fg = foreground(surface);
++        if (contrast(mix(surface, light, amount), fg) >= 4.5) return mix(surface, light, amount);
++        double low = 0, high = amount;
++        for (int i = 0; i < 16; i++) {
++            double mid = (low + high) / 2;
++            if (contrast(mix(surface, light, mid), fg) >= 4.5) low = mid; else high = mid;
++        }
++        return mix(surface, light, low);
++    }
++    static int[] ramp(int surface, int intensity) {
++        double strength = clamp(intensity) / 100.0;
++        return new int[] {safeTone(surface, Color.WHITE, .40 * strength), surface,
++                safeTone(surface, Color.BLACK, .16 * strength)};
++    }
++    public void setAppearance(int surface, int intensity) {
++        intensity = clamp(intensity);
++        if (mColors != null && mSurface == surface && mIntensity == intensity) return;
++        mSurface = surface; mIntensity = intensity; mColors = ramp(surface, intensity);
++        updateShader(); invalidateSelf();
++    }
++    private void updateShader() {
++        if (mColors == null) return;
++        Rect b = getBounds();
++        int top = mViewportHeight > 0 ? b.top - mOffsetY : b.top;
++        int bottom = mViewportHeight > 0 ? top + mViewportHeight : b.bottom;
++        mPaint.setShader(new LinearGradient(b.left, top, b.left, Math.max(top + 1, bottom),
++                mColors, new float[] {0, .48f, 1}, Shader.TileMode.CLAMP));
++    }
++    @Override protected void onBoundsChange(Rect bounds) { updateShader(); }
++    @Override public void draw(Canvas canvas) {
++        if (mColors == null) return;
++        mPaint.setAlpha(mAlpha); canvas.drawRect(getBounds(), mPaint);
++    }
++    @Override public void getOutline(Outline outline) { outline.setRect(getBounds()); outline.setAlpha(.12f); }
++    @Override public void setAlpha(int alpha) { mAlpha = alpha; invalidateSelf(); }
++    @Override public void setColorFilter(ColorFilter filter) { mPaint.setColorFilter(filter); invalidateSelf(); }
++    @Override public int getOpacity() { return mAlpha == 255 ? PixelFormat.OPAQUE : PixelFormat.TRANSLUCENT; }
++}
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopMaterialDialog.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopMaterialDialog.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopMaterialDialog.java
+@@ -0,0 +1,56 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++import android.app.Activity;
++import android.app.AlertDialog;
++import android.content.SharedPreferences;
++import android.view.Gravity;
++import android.widget.LinearLayout;
++import android.widget.SeekBar;
++import android.widget.TextView;
++import java.util.function.IntConsumer;
++import org.chromium.chrome.R;
++
++/** Window-local draft. Apply saves; Cancel, Back and destruction restore the saved finish. */
++public final class ArcDesktopMaterialDialog {
++    private final AlertDialog mDialog;
++    private final SeekBar mSlider;
++    private int mDraft;
++    public ArcDesktopMaterialDialog(Activity activity, SharedPreferences prefs, int surface,
++            IntConsumer preview) {
++        mDraft = ArcDesktopMaterial.savedIntensity(prefs);
++        int inset = Math.round(20 * activity.getResources().getDisplayMetrics().density);
++        LinearLayout content = new LinearLayout(activity); content.setOrientation(LinearLayout.VERTICAL);
++        content.setPadding(inset, inset / 2, inset, inset);
++        ArcDesktopMaterial sample = new ArcDesktopMaterial(); sample.setAppearance(surface, mDraft);
++        TextView sampleLabel = new TextView(activity); sampleLabel.setText(R.string.arc_frame_color_preview);
++        sampleLabel.setGravity(Gravity.CENTER); sampleLabel.setTextColor(ArcDesktopMaterial.foreground(surface));
++        sampleLabel.setBackground(sample); content.addView(sampleLabel, new LinearLayout.LayoutParams(-1, inset * 4));
++        TextView value = new TextView(activity); value.setGravity(Gravity.CENTER); value.setText(mDraft + "%");
++        content.addView(value);
++        TextView help = new TextView(activity); help.setText(R.string.arc_desktop_material_description);
++        content.addView(help);
++        mSlider = new SeekBar(activity); mSlider.setId(android.R.id.progress); mSlider.setMax(100);
++        mSlider.setContentDescription(activity.getString(R.string.arc_desktop_material));
++        mSlider.setProgress(mDraft); content.addView(mSlider, new LinearLayout.LayoutParams(-1, inset * 3));
++        mSlider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener() {
++            @Override public void onProgressChanged(SeekBar bar, int progress, boolean fromUser) {
++                mDraft = progress; value.setText(progress + "%"); sample.setAppearance(surface, progress);
++                preview.accept(progress);
++            }
++            @Override public void onStartTrackingTouch(SeekBar bar) {}
++            @Override public void onStopTrackingTouch(SeekBar bar) {}
++        });
++        mDialog = new AlertDialog.Builder(activity).setTitle(R.string.arc_desktop_material)
++                .setView(content).setPositiveButton(android.R.string.ok, (dialog, which) ->
++                        prefs.edit().putInt(ArcDesktopMaterial.INTENSITY_KEY, mDraft).apply())
++                .setNegativeButton(android.R.string.cancel, null)
++                .setNeutralButton(R.string.arc_reset_color, null).create();
++        mDialog.setOnShowListener(dialog -> mDialog.getButton(AlertDialog.BUTTON_NEUTRAL)
++                .setOnClickListener(view -> mSlider.setProgress(ArcDesktopMaterial.DEFAULT_INTENSITY)));
++        mDialog.setOnDismissListener(dialog -> preview.accept(-1));
++    }
++    public AlertDialog show() { mDialog.show(); return mDialog; }
 +}
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopWindowObserver.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopWindowObserver.java
 new file mode 100644
@@ -16273,6 +16465,83 @@ new file mode 100644
 +        private static float distanceToRange(float min, float max, float value) {
 +            return value < min ? (min - value) : value > max ? (max - value) : 0;
 +        }
++    }
++}
+diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcDesktopMaterialTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcDesktopMaterialTest.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcDesktopMaterialTest.java
+@@ -0,0 +1,72 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++import static org.junit.Assert.*;
++import android.app.Activity;
++import android.app.AlertDialog;
++import android.graphics.Color;
++import android.widget.SeekBar;
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.robolectric.Robolectric;
++import org.robolectric.RobolectricTestRunner;
++import org.robolectric.annotation.Config;
++import org.robolectric.annotation.GraphicsMode;
++import org.robolectric.annotation.SQLiteMode;
++@RunWith(RobolectricTestRunner.class)
++@Config(manifest=Config.NONE,sdk={30,36})
++@GraphicsMode(GraphicsMode.Mode.LEGACY)
++@SQLiteMode(SQLiteMode.Mode.LEGACY)
++public class ArcDesktopMaterialTest {
++    private static void idle(){org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();}
++    private static int depth(int[] ramp){int max=0;for(int c:ramp)for(int d:ramp)for(int shift:new int[]{0,8,16})max=Math.max(max,Math.abs(((c>>shift)&255)-((d>>shift)&255)));return max;}
++    @Test public void framePreservesRectangularClipAndSubtleNativeShadow(){
++        var material=new ArcDesktopMaterial();material.setAppearance(0xffe6e8eb,60);material.setBounds(0,0,202,1294);
++        var outline=new android.graphics.Outline();material.getOutline(outline);var rect=new android.graphics.Rect();
++        assertTrue(outline.getRect(rect));assertEquals(new android.graphics.Rect(0,0,202,1294),rect);assertEquals(.12f,outline.getAlpha(),.001f);
++    }
++    @Test public void frameDepthIsVisibleWithoutAnyCapturedBitmap(){
++        for(int c:new int[]{0xffe6e8eb,0xff202124}){
++            int[] ramp=ArcDesktopMaterial.ramp(c,ArcDesktopMaterial.DEFAULT_INTENSITY);
++            assertTrue("frame must not remain visually flat",depth(ramp)>=18);
++            assertEquals(c,ramp[1]);for(int stop:ramp)assertEquals(255,Color.alpha(stop));
++        }
++    }
++    @Test public void intensityControlsDepthAndZeroRemovesTheFinish(){
++        for(int c:new int[]{0xffe6e8eb,0xff202124}){
++            assertEquals(0,depth(ArcDesktopMaterial.ramp(c,0)));
++            assertTrue(depth(ArcDesktopMaterial.ramp(c,100))>depth(ArcDesktopMaterial.ramp(c,30)));
++        }
++        assertEquals(0,ArcDesktopMaterial.clamp(-9));assertEquals(100,ArcDesktopMaterial.clamp(200));
++    }
++    @Test public void allPaletteStopsPreserveAaAgainstNativeForeground(){
++        for(int r=0;r<256;r+=17)for(int g=0;g<256;g+=17)for(int b=0;b<256;b+=17){
++            int c=Color.rgb(r,g,b);int foreground=ArcDesktopMaterial.foreground(c);
++            for(int intensity:new int[]{0,60,100})for(int stop:ArcDesktopMaterial.ramp(c,intensity))
++                assertTrue(Integer.toHexString(c),ArcDesktopMaterial.contrast(stop,foreground)>=4.5);
++        }
++    }
++    @Test public void previewCancelAndApplyHaveSeparatePersistence(){
++        var controller=Robolectric.buildActivity(Activity.class).setup();Activity a=controller.get();
++        var prefs=a.getSharedPreferences("material-test",0);prefs.edit().clear().commit();
++        final int[] preview={-1};
++        var dialog=new ArcDesktopMaterialDialog(a,prefs,0xffe6e8eb,p->preview[0]=p).show();idle();
++        SeekBar slider=dialog.findViewById(android.R.id.progress);slider.setProgress(83);
++        assertEquals(83,preview[0]);assertFalse(prefs.contains(ArcDesktopMaterial.INTENSITY_KEY));
++        dialog.getButton(AlertDialog.BUTTON_NEGATIVE).performClick();idle();assertEquals(-1,preview[0]);
++        assertEquals(ArcDesktopMaterial.DEFAULT_INTENSITY,ArcDesktopMaterial.savedIntensity(prefs));
++        dialog=new ArcDesktopMaterialDialog(a,prefs,0xffe6e8eb,p->preview[0]=p).show();idle();
++        ((SeekBar)dialog.findViewById(android.R.id.progress)).setProgress(78);
++        dialog.getButton(AlertDialog.BUTTON_POSITIVE).performClick();idle();assertEquals(78,ArcDesktopMaterial.savedIntensity(prefs));assertEquals(-1,preview[0]);
++        controller.pause().stop().destroy();
++    }
++    @Test public void resetIsAReversibleDraftAndExternalDismissRestores(){
++        var controller=Robolectric.buildActivity(Activity.class).setup();Activity a=controller.get();
++        var prefs=a.getSharedPreferences("material-test-reset",0);prefs.edit().putInt(ArcDesktopMaterial.INTENSITY_KEY,89).commit();
++        final int[] preview={-1};var dialog=new ArcDesktopMaterialDialog(a,prefs,0xff202124,p->preview[0]=p).show();idle();
++        dialog.getButton(AlertDialog.BUTTON_NEUTRAL).performClick();idle();assertTrue(dialog.isShowing());
++        assertEquals(ArcDesktopMaterial.DEFAULT_INTENSITY,preview[0]);assertEquals(89,ArcDesktopMaterial.savedIntensity(prefs));
++        dialog.dismiss();idle();assertEquals(-1,preview[0]);assertEquals(89,ArcDesktopMaterial.savedIntensity(prefs));controller.pause().stop().destroy();
 +    }
 +}
 diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcFrameDispatchTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcFrameDispatchTest.java
