@@ -640,3 +640,12 @@ Evidencia y límites: [run39829306775](docs/validation/R5_FLOATING_MOBILE_LIGHT_
 - [ ] Aceptación con los renders en dispositivo: PENDIENTE, ambos temas, scroll/blur, insets, teclado, menús, fullscreen y transición Desktop↔Phone. No declarar coincidencia visual por estas pruebas locales.
 
 Checkpoint vigente: [R5_FLOATING_V2.md](docs/validation/R5_FLOATING_V2.md). Sustituye la referencia anterior de barras con bandejas opacas. Muestreo limitado y fallback sin blur documentados; falta medir rendimiento real.
+
+
+## Auditoría Floating V2 Light/Dark automática — 22-oct-2026 CDMX
+
+- [x] Revisado seguimiento del tema nativo: actualización de configuración aun sin rotación y observers color/tint. Sin cambiar preferencias de tema, diseño ni producción.
+- [x] 76 ejecuciones Robolectric y política Chromium38 métodos PASS; contraste de pill presionada/seleccionada, cristal y menú abierto durante claro↔oscuro. Host phone9 y status owner1 PASS; parche reproducible, aplicación7 y transición17 PASS.
+- [ ] Prueba física de seguir sistema, legibilidad status/omnibar sobre páginas opuestas, sugerencias, Hub, teclado, cambios dinámicos y persistencia al reiniciar: PENDIENTE. No se compiló una APK nueva.
+
+Matriz y límites: [auditoría en R5_FLOATING_V2.md](docs/validation/R5_FLOATING_V2.md#auditoría-automática-lightdark--22-oct-2026-cdmx).

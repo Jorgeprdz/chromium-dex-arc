@@ -52,6 +52,16 @@ public class ArcPhoneGlassTest {
         android.graphics.Outline outline=new android.graphics.Outline();d.getOutline(outline);assertEquals(25f,outline.getRadius(),0);
         d.clear();assertFalse(d.hasFrame());d.setSurface(0xff202124);assertTrue(Color.alpha(d.tintColor())<255);
     }
+    @Test public void themeChangesRetintExistingFrameWithoutWhiteResetOrGeometryChange(){
+        var d=new ArcPhoneGlass.Backdrop();d.setBounds(0,0,100,50);
+        Bitmap page=Bitmap.createBitmap(25,13,Bitmap.Config.ARGB_8888);page.eraseColor(Color.WHITE);d.setFrame(page);
+        for(int color:new int[]{0xff202124,Color.WHITE,0xff202124,Color.WHITE}){
+            d.setSurface(color);var canvas=new RecordingCanvas();d.draw(canvas);
+            assertSame(page,canvas.frame);assertTrue(d.hasFrame());assertEquals(new RectF(0,0,100,50),canvas.imageRect);
+            assertEquals(color&0xffffff,canvas.tint&0xffffff);assertTrue(Color.alpha(canvas.tint)<255);
+            if(color!=Color.WHITE)assertTrue(Color.luminance(canvas.tint)<.05);
+        }
+    }
     private static class FakeCopy implements ArcPhoneGlass.Capture {
         int calls,closed;Consumer<Boolean> pending;
         public boolean available(){return true;}

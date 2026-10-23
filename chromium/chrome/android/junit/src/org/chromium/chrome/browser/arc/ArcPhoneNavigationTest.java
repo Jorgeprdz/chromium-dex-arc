@@ -261,6 +261,62 @@ public class ArcPhoneNavigationTest {
     }
     @Test public void phonePaletteKeepsNativeDefaultsUntilExplicitOptIn(){ verifyNativePalette(false); }
     @Test public void phonePalettePreservesDarkAndIncognitoContrast(){ verifyNativePalette(true); }
+    @Test public void nativeThemeEventsAutomaticallyNotifyLightDarkLightSurfaceAndIconObservers(){
+        var top=mock(org.chromium.chrome.browser.theme.TopUiThemeColorProvider.class);
+        var bottom=mock(org.chromium.chrome.browser.theme.BottomUiThemeColorProvider.class);
+        var controls=mock(org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider.class);
+        when(controls.getControlsPosition()).thenReturn(org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider.ControlsPosition.TOP);
+        int scheme=org.chromium.chrome.browser.ui.theme.BrandedColorScheme.APP_DEFAULT;
+        when(top.getThemeColor()).thenReturn(Color.RED);when(top.getBrandedColorScheme()).thenReturn(scheme);
+        var provider=new org.chromium.chrome.browser.theme.ToolbarThemeColorProvider(
+            mActivity.get(),top,bottom,controls,false,
+            (context,incognito)->mDarkPalette||incognito?0xff202124:Color.WHITE,
+            (context,colorScheme)->android.content.res.ColorStateList.valueOf(mDarkPalette?Color.WHITE:Color.BLACK));
+        provider.setArcPhoneFloatingSurfaceEnabled(true);
+        var colors=new java.util.ArrayList<Integer>();var icons=new java.util.ArrayList<Integer>();
+        provider.addThemeColorObserver((color,animate)->colors.add(color));
+        provider.addTintObserver((tint,focus,brand)->icons.add(tint.getDefaultColor()));
+        var siteTint=android.content.res.ColorStateList.valueOf(Color.MAGENTA);
+        for(boolean night:new boolean[]{true,false,true,false}){
+            mDarkPalette=night;
+            // Native theme notifications can arrive in either order. No re-opt-in or view rebuild.
+            if(night){provider.onTintChanged(siteTint,siteTint,scheme);provider.onThemeColorChanged(Color.BLUE,false);}
+            else {provider.onThemeColorChanged(Color.BLUE,false);provider.onTintChanged(siteTint,siteTint,scheme);}
+            assertEquals(night?0xff202124:Color.WHITE,provider.getThemeColor());
+            assertEquals(night?Color.WHITE:Color.BLACK,provider.getTint().getDefaultColor());
+            assertEquals(provider.getThemeColor(),colors.get(colors.size()-1).intValue());
+            assertEquals(provider.getTint().getDefaultColor(),icons.get(icons.size()-1).intValue());
+        }
+        assertEquals(4,colors.size());provider.destroy();
+    }
+    @Test public void glassMenuAndPressedControlsKeepContrastAcrossRepeatedThemeChanges(){
+        var glass=new ArcPhoneGlass.Backdrop();mNavigation.setGlassBackdrop(glass,true);
+        var sheet=menu();View content=sheet.getContentView();View bar=mNavigation.getGlassTarget();Object geometry=bar.getLayoutParams();
+        for(int surface:new int[]{0xff202124,Color.WHITE,0xff202124,Color.WHITE}){
+            mHost.color=surface;mNavigation.refresh();
+            assertSame(bar,mNavigation.getGlassTarget());assertSame(geometry,bar.getLayoutParams());
+            assertSame(glass,bar.getBackground());assertEquals(surface,sheet.getSheetBackgroundColorOverride());
+            assertSame(content,sheet.getContentView());
+            int behind=surface==Color.WHITE?Color.BLACK:Color.WHITE;
+            int backing=composite(glass.tintColor(),behind);
+            for(String tag:new String[]{"home","new","tabs","menu"}){
+                LinearLayout button=(LinearLayout)find("arc-phone-"+tag);
+                var label=(TextView)button.getChildAt(1);
+                var ripple=(RippleDrawable)button.getBackground();
+                android.content.res.ColorStateList pressed=org.robolectric.util.ReflectionHelpers.getField(ripple.getConstantState(),"mColor");
+                assertTrue(contrast(label.getCurrentTextColor(),backing)>=4.5);
+                assertTrue(contrast(label.getCurrentTextColor(),composite(pressed.getDefaultColor(),backing))>=4.5);
+                var iconHost=(FrameLayout)button.getChildAt(0);
+                int icon=org.robolectric.util.ReflectionHelpers.getField(((android.widget.ImageView)iconHost.getChildAt(0)).getDrawable(),"mColor");
+                int iconBacking=iconHost.getBackground() instanceof GradientDrawable selected?selected.getColor().getDefaultColor():backing;
+                assertTrue(contrast(icon,iconBacking)>=3.0);
+            }
+            TextView domain=sheet.getContentView().findViewWithTag("arc-phone-domain");
+            assertTrue(contrast(domain.getCurrentTextColor(),surface)>=4.5);
+        }
+        verify(mController,times(1)).requestShowContent(eq(sheet),anyBoolean());
+        verify(mController,never()).hideContent(any(),anyBoolean());
+    }
     private void verifyNativePalette(boolean dark) {
         mDarkPalette=dark;
         {

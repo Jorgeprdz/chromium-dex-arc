@@ -302,8 +302,8 @@
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcFrameDispatchTest.java": "7c5ed7e3c17bad07f79cd203a4dfd01db9a4de6426af309f4e36e9355ab1285d",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcNavigationControlsTest.java": "7a5e682dcf3a867d54df11e8cde32db02e2e3c1a328712b94c3d9874696d6af1",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcOmniboxPlacementTest.java": "8f648fd7a93b27b8d21a9f503717d3697ce4515c7b1095a29ee28d3201b81eff",
-    "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneGlassTest.java": "4d891022c187544f2417291ab773e82ba23ba067b76802ca3d5e9a86cfc47de5",
-    "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneNavigationTest.java": "6c5a2f0d4fe849d17b480f75c662e6137235433ff3c2fe9c5c5429d307df39af",
+    "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneGlassTest.java": "1563fc1c75497fb5a7ea46228033b9d987e2ffa0190c624e968a24db2a42e723",
+    "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneNavigationTest.java": "37e75dbe5be794261cac8e805da99bf5b0cadd8acdd6fda3fa1e4186702de6b0",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitContentHostTest.java": "1936e7181ffd28b3483fc41aa1288baa284c9605e29f1e717b77ba57663c673d",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitControlsTest.java": "f88843322e9076240012915ccc1dd0ab467640d8b48e2986e78ac62ae105d216",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitStateTest.java": "d482407a305d2ca8bafd2922c6c95f4784079faf0dbf1fe4815b61ee4f36b84c",
@@ -342,5 +342,5 @@
     "components/password_manager/core/browser/password_store/password_store_backend.cc": "45764d4ad0e05acc5a216944a5a6763212f6c17e71bf689e9c973f12fb5c87d8",
     "components/password_manager/core/browser/password_store/password_store_interface.cc": "7e9dd5813ce8ece459ec66abdd3306028b7b3d6bbae048664872a34d8d097268"
   },
-  "patch_sha256": "2b9ab93d7f7aa7968f4ae88f1ba65c330732e8ab4e0aac6438b90cb98587881c"
+  "patch_sha256": "4783d46f57736d86c9dd6a6319a689f32f8bb0d07f25cb8144e1e8a753f13907"
 }

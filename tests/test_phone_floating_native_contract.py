@@ -27,6 +27,17 @@ class PhoneFloatingNativeContractTests(unittest.TestCase):
         self.assertIn('if (mArcPhoneHost != null) updateArcPhoneFloatingSurfaces();',toolbar)
         self.assertIn('mArcPhoneNavigation.setPhoneModeActive(enabled)',toolbar)
         self.assertEqual(2,toolbar.count('ArcPhoneNavigation.getReservedHeight(mActivity)'))
+    def test_night_configuration_refresh_does_not_depend_on_orientation_change(self):
+        toolbar=(ROOT/'.source-modified/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java').read_text()
+        start=toolbar.index('public void onConfigurationChanged(Configuration configuration)')
+        end=toolbar.index('public void onLowMemory()',start)
+        callback=toolbar[start:end]
+        self.assertLess(callback.index('updateArcPhoneFloatingSurfaces()'),callback.index('newOrientation == mCurrentOrientation'))
+        start=toolbar.index('public void onThemeColorChanged(int color, boolean shouldAnimate)')
+        end=toolbar.index('if (!mShouldUpdateToolbarPrimaryColor)',start)
+        self.assertIn('mArcPhoneTopGlass.setSurface(color)',toolbar[start:end])
+        self.assertIn('mArcPhoneNavigation.refresh()',toolbar[start:end])
+
     def test_transparent_status_bar_keeps_native_overlays_and_icon_contrast(self):
         self.assertTrue(STATUS.is_file(),'Native status surface hook missing')
         text=STATUS.read_text()
