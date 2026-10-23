@@ -39,6 +39,34 @@ public class ArcPhoneGlassTest {
         for(int x=10;x<20;x++)for(int y=0;y<20;y++)b.setPixel(x,y,Color.BLUE);
         ArcPhoneGlass.blur(b);int mixed=b.getPixel(9,10);assertTrue(Color.red(mixed)>0);assertTrue(Color.blue(mixed)>0);assertEquals(255,Color.alpha(mixed));
     }
+    @Test public void regionReadbackUsesWebPixelsWithoutSurfaceViewBuffers() {
+        var activity=Robolectric.buildActivity(Activity.class).setup();
+        View content=new View(activity.get());activity.get().setContentView(content);activity.visible();
+        content.layout(0,0,400,800);
+        int[] location=new int[2];content.getLocationInWindow(location);
+        Rect window=new Rect(location[0]+16,location[1]+600,location[0]+384,location[1]+656);
+        assertEquals(new Rect(16,600,384,656),ArcPhoneGlass.contentRegion(content,window));
+        assertNull(ArcPhoneGlass.contentRegion(content,new Rect(-10,-10,20,20)));
+        assertNull(ArcPhoneGlass.contentRegion(content,new Rect(0,0,0,0)));
+        activity.pause().stop().destroy();
+    }
+    @Test public void closingContentSourceRejectsPendingNativeReadbackBeforeBlur() {
+        var activity=Robolectric.buildActivity(Activity.class).setup();
+        View content=new View(activity.get()){@Override public boolean isShown(){return true;}};
+        activity.get().setContentView(content);activity.visible();content.layout(0,0,400,800);
+        java.util.List<Consumer<Bitmap>> pending=new java.util.ArrayList<>();
+        var capture=ArcPhoneGlass.contentSource(()->content,(rect,width,height,callback)->{
+            assertEquals(new Rect(16,600,384,656),rect);assertEquals(92,width);assertEquals(14,height);pending.add(callback);
+        });
+        int[] position=new int[2];content.getLocationInWindow(position);
+        Rect bounds=new Rect(16,600,384,656);bounds.offset(position[0],position[1]);
+        java.util.List<Boolean> results=new java.util.ArrayList<>();
+        capture.copy(bounds,Bitmap.createBitmap(92,14,Bitmap.Config.ARGB_8888),results::add);
+        assertEquals(1,pending.size());assertTrue(results.isEmpty());capture.close();
+        pending.get(0).accept(Bitmap.createBitmap(92,14,Bitmap.Config.ARGB_8888));
+        assertEquals(java.util.List.of(false),results);
+        activity.pause().stop().destroy();
+    }
     private static class RecordingCanvas extends Canvas {
         Bitmap frame;boolean clipped;RectF imageRect;int tint;
         @Override public boolean clipPath(Path path){clipped=true;return true;}

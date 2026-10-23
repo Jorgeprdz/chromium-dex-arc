@@ -2599,10 +2599,13 @@ public class ToolbarManager
                 && glassTab != null && !glassTab.isNativePage() && !isUrlBarFocused();
         if (mToolbarLayout instanceof ToolbarPhone phone) {
             if (enabled && mArcPhoneGlass == null) {
-                mArcPhoneGlass = new ArcPhoneGlass(phone, ArcPhoneGlass.pixelSource(() -> {
-                    View source = mCompositorViewHolder.getActiveSurfaceView();
-                    return source instanceof android.view.SurfaceView surface ? surface : null;
-                }));
+                mArcPhoneGlass = new ArcPhoneGlass(phone, ArcPhoneGlass.contentSource(
+                        () -> {Tab tab=mActivityTabProvider.get();return tab==null?null:tab.getContentView();},
+                        (region,width,height,callback) -> {
+                            Tab tab=mActivityTabProvider.get();
+                            mCompositorViewHolder.getCompositorView().copyArcPhoneBackdrop(
+                                    tab==null?null:tab.getWebContents(),region,width,height,callback::accept);
+                        }));
                 mArcPhoneTopGlass = mArcPhoneGlass.add(phone, phone::getArcPhoneGlassBounds);
                 mArcPhoneMotionObserver = moving -> {
                     if (mArcPhoneGlass != null) mArcPhoneGlass.setInMotion(Boolean.TRUE.equals(moving));
@@ -2626,6 +2629,14 @@ public class ToolbarManager
                 mArcPhoneOverlayActive = glass;
                 android.util.Log.i("ArchiumGlass", "phone overlay=" + glass);
                 updateToolbarSceneLayerSuppression();
+            }
+            android.view.ViewParent parent = mControlContainer.getView().getParent();
+            while (parent != null) {
+                if (parent instanceof org.chromium.ui.edge_to_edge.layout.EdgeToEdgeBaseLayout root) {
+                    root.setArcPhoneControlsOverlay(glass);
+                    break;
+                }
+                parent = parent.getParent();
             }
             var edgeController = mEdgeToEdgeControllerSupplier.get();
             if (edgeController != null) edgeController.setArcPhoneControlsOverlay(glass);

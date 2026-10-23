@@ -666,3 +666,12 @@ Matriz y límites: [auditoría en R5_FLOATING_V2.md](docs/validation/R5_FLOATING
 - [x] Actualizado sólo el test: cuatro flags y16 combinaciones; stderr de javac visible. RED/GREEN y mutante sin condición móvil rechazado PASS; producción intacta.
 - [ ] Validación integrada y APK del fix: PENDIENTE; requiere autorización nueva. No se relanzó Actions. Ver R5_FLOATING_V2.md.
 - [x] Revisión host completa tras el fix: 411 PASS;2 pruebas de recursos fallaron con AAPT2 Debian/SDK37.2 y ambas pasaron al repetir con AAPT2 SDK37.0, sin cambiar tests. No declarar PASS de la primera invocación completa. Patch de producción idéntico; detalles y logs en el checkpoint.
+
+## Floating: fuente de blur e insets reales — 23-oct-2026 CDMX
+
+- [x] Run39926747580 instalado, diseño físico FAIL documentado con patrón propio claro/oscuro: transparencia funciona, blur falla; fuente SurfaceView sin buffers según HWUI.
+- [x] Candidato: readback acotado por API Chromium existente, sin PixelCopy ni cambiar GPU; owner raíz móvil de insets corregido, Desktop y tamaño de omnibar conservados.
+- [x] Regresión RED/GREEN del owner real y ciclo de captura;80 ejecuciones Robolectric/política original40 métodos, preparación SDK y aplicación/transición24 PASS; patch178 archivos reproducible. Alcances en R5_FLOATING_V2.md.
+- [x] Suite host416:410 PASS y6 fallos de ruta SDK local, los seis repetidos sin cambios de tests y PASS con SDK37.0 existente; primera invocación no PASS. Logs y límites registrados.
+- [ ] Único build incremental autorizado, monitor Termux CDMX600s e instalación verificada; no relanzamientos.
+- [ ] Aceptación gráfica de la nueva APK frente a renders y regresiones reales: PENDIENTE.

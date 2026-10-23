@@ -17,8 +17,6 @@ import android.graphics.drawable.Drawable;
 import android.os.Handler;
 import android.os.HandlerThread;
 import android.os.Looper;
-import android.view.PixelCopy;
-import android.view.SurfaceView;
 import android.view.View;
 import java.util.ArrayList;
 import java.util.function.Consumer;
@@ -125,27 +123,39 @@ public final class ArcPhoneGlass {
         }
         bitmap.setPixels(pixels,0,w,0,0,w,h);
     }
-    /** Captures only SurfaceView pixels. UI overlays never enter a recursive window capture. */
-    public static Capture pixelSource(Supplier<SurfaceView> supplier){
+    @FunctionalInterface
+    public interface RegionCopy {
+        void copy(Rect region, int width, int height, Consumer<Bitmap> callback);
+    }
+    static Rect contentRegion(View content, Rect windowBounds) {
+        if(content==null||windowBounds.isEmpty())return null;
+        int[] origin=new int[2];content.getLocationInWindow(origin);
+        Rect region=new Rect(windowBounds);region.offset(-origin[0],-origin[1]);
+        return new Rect(0,0,content.getWidth(),content.getHeight()).contains(region)?region:null;
+    }
+    /** Read the web compositor region, never the window or the empty SurfaceView proxy. */
+    public static Capture contentSource(Supplier<View> supplier, RegionCopy readback){
         return new Capture(){
             final Handler main=new Handler(Looper.getMainLooper());
-            HandlerThread thread;Handler worker;int[] pixels=new int[0],pass=new int[0];
-            public boolean available(){SurfaceView v=supplier.get();return v!=null&&v.isShown()&&v.getHolder().getSurface().isValid();}
+            HandlerThread thread;Handler worker;int epoch;int[] pixels=new int[0],pass=new int[0];
+            public boolean available(){View v=supplier.get();return v!=null&&v.isShown();}
             public void copy(Rect windowBounds,Bitmap output,Consumer<Boolean> result){
-                SurfaceView view=supplier.get();
-                if(view==null||!available()){result.accept(false);return;}
-                int[] position=new int[2];view.getLocationInWindow(position);Rect source=new Rect(windowBounds);source.offset(-position[0],-position[1]);
-                if(!new Rect(0,0,view.getWidth(),view.getHeight()).contains(source)){result.accept(false);return;}
-                if(worker==null){thread=new HandlerThread("ArchiumGlass");thread.start();worker=new Handler(thread.getLooper());}
-                try{
-                    PixelCopy.request(view,source,output,status->{
-                        boolean success=status==PixelCopy.SUCCESS;
-                        if(success){int count=output.getWidth()*output.getHeight();if(pixels.length<count){pixels=new int[count];pass=new int[count];}blur(output,pixels,pass);}
-                        main.post(()->result.accept(success));
-                    },worker);
-                }catch(IllegalArgumentException error){result.accept(false);}
+                View view=supplier.get();Rect region=contentRegion(view,windowBounds);
+                if(region==null||!available()){result.accept(false);return;}
+                final int generation=epoch;
+                readback.copy(region,output.getWidth(),output.getHeight(),bitmap->{
+                    if(bitmap==null||generation!=epoch){result.accept(false);return;}
+                    if(worker==null){thread=new HandlerThread("ArchiumGlass");thread.start();worker=new Handler(thread.getLooper());}
+                    worker.post(()->{
+                        new Canvas(output).drawBitmap(bitmap,null,new Rect(0,0,output.getWidth(),output.getHeight()),null);
+                        int count=output.getWidth()*output.getHeight();
+                        if(pixels.length<count){pixels=new int[count];pass=new int[count];}
+                        blur(output,pixels,pass);
+                        main.post(()->result.accept(generation==epoch));
+                    });
+                });
             }
-            public void close(){if(thread!=null)thread.quitSafely();thread=null;worker=null;}
+            public void close(){epoch++;if(thread!=null)thread.quitSafely();thread=null;worker=null;}
         };
     }
 }

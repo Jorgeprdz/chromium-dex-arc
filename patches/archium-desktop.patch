@@ -1847,6 +1847,48 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedAct
          Boolean result =
                  KeyboardShortcuts.dispatchKeyEvent(
                          event,
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/CompositorView.java b/chrome/android/java/src/org/chromium/chrome/browser/compositor/CompositorView.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/compositor/CompositorView.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/compositor/CompositorView.java
+@@ -12,6 +12,7 @@
+ import android.app.Activity;
+ import android.content.Context;
+ import android.content.Intent;
++import android.graphics.Bitmap;
+ import android.graphics.PixelFormat;
+ import android.graphics.Rect;
+ import android.graphics.drawable.Drawable;
+@@ -31,6 +32,7 @@
+ import org.jni_zero.JniType;
+ import org.jni_zero.NativeMethods;
+
++import org.chromium.base.Callback;
+ import org.chromium.base.ScreenStateReceiver;
+ import org.chromium.base.ScreenStateReceiver.ScreenStateObserver;
+ import org.chromium.base.ThreadUtils;
+@@ -995,8 +997,22 @@
+                 && DeviceFormFactor.isNonMultiDisplayContextOnTablet(getContext());
+     }
+
++    /** Small web-only readback for phone backdrops, independent of Android SurfaceControl. */
++    public void copyArcPhoneBackdrop(@Nullable WebContents contents, Rect region, int width,
++            int height, Callback<@Nullable Bitmap> callback) {
++        if (mNativeCompositorView == 0 || contents == null || contents.isDestroyed()) {
++            callback.onResult(null);
++            return;
++        }
++        CompositorViewJni.get().copyArcPhoneBackdrop(mNativeCompositorView, contents,
++                region.left, region.top, region.width(), region.height(), width, height, callback);
++    }
++
+     @NativeMethods
+     interface Natives {
++        void copyArcPhoneBackdrop(long nativeCompositorView, WebContents contents, int x, int y,
++                int sourceWidth, int sourceHeight, int width, int height,
++                Callback<@Nullable Bitmap> callback);
+         long init(
+                 CompositorView self,
+                 WindowAndroid windowAndroid,
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/CompositorViewHolder.java b/chrome/android/java/src/org/chromium/chrome/browser/compositor/CompositorViewHolder.java
 --- a/chrome/android/java/src/org/chromium/chrome/browser/compositor/CompositorViewHolder.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/compositor/CompositorViewHolder.java
@@ -3228,7 +3270,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          mFullscreenHairlineToken =
                                  setToolbarShadowVisibilityAndClearOldToken(
                                          true, mFullscreenHairlineToken);
-@@ -2524,8 +2560,156 @@
+@@ -2524,8 +2560,167 @@
          return ((LocationBarCoordinator) mLocationBar).getUrlBarViewRectProvider();
      }
 
@@ -3271,10 +3313,13 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 +                && glassTab != null && !glassTab.isNativePage() && !isUrlBarFocused();
 +        if (mToolbarLayout instanceof ToolbarPhone phone) {
 +            if (enabled && mArcPhoneGlass == null) {
-+                mArcPhoneGlass = new ArcPhoneGlass(phone, ArcPhoneGlass.pixelSource(() -> {
-+                    View source = mCompositorViewHolder.getActiveSurfaceView();
-+                    return source instanceof android.view.SurfaceView surface ? surface : null;
-+                }));
++                mArcPhoneGlass = new ArcPhoneGlass(phone, ArcPhoneGlass.contentSource(
++                        () -> {Tab tab=mActivityTabProvider.get();return tab==null?null:tab.getContentView();},
++                        (region,width,height,callback) -> {
++                            Tab tab=mActivityTabProvider.get();
++                            mCompositorViewHolder.getCompositorView().copyArcPhoneBackdrop(
++                                    tab==null?null:tab.getWebContents(),region,width,height,callback::accept);
++                        }));
 +                mArcPhoneTopGlass = mArcPhoneGlass.add(phone, phone::getArcPhoneGlassBounds);
 +                mArcPhoneMotionObserver = moving -> {
 +                    if (mArcPhoneGlass != null) mArcPhoneGlass.setInMotion(Boolean.TRUE.equals(moving));
@@ -3298,6 +3343,14 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 +                mArcPhoneOverlayActive = glass;
 +                android.util.Log.i("ArchiumGlass", "phone overlay=" + glass);
 +                updateToolbarSceneLayerSuppression();
++            }
++            android.view.ViewParent parent = mControlContainer.getView().getParent();
++            while (parent != null) {
++                if (parent instanceof org.chromium.ui.edge_to_edge.layout.EdgeToEdgeBaseLayout root) {
++                    root.setArcPhoneControlsOverlay(glass);
++                    break;
++                }
++                parent = parent.getParent();
 +            }
 +            var edgeController = mEdgeToEdgeControllerSupplier.get();
 +            if (edgeController != null) edgeController.setArcPhoneControlsOverlay(glass);
@@ -3385,7 +3438,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          enableTabGroupUiControls();
          if (BottomBarConfigUtils.isBottomBarEnabled(mActivity)) {
              enableBottomBar();
-@@ -2605,26 +2789,44 @@
+@@ -2605,26 +2800,44 @@
          OneshotSupplier<String> countrySupplier =
                  mCountrySupplier != null ? mCountrySupplier : new OneshotSupplierImpl<>();
 
@@ -3450,7 +3503,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          }
 
          var bottomAppBarCoordinator =
-@@ -2639,7 +2841,8 @@
+@@ -2639,7 +2852,8 @@
                          mActivityTabProvider.asObservable(),
                          (ScrollingBottomViewResourceFrameLayout) bottomAppBarContainer,
                          LayerType.BOTTOM_APP_BAR,
@@ -3460,7 +3513,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          bottomBarContainerOneshotSupplier,
                          mTabObscuringHandler,
                          mLayoutManager.getOverlayPanelManager().getPanelStateSupplier(),
-@@ -2652,6 +2855,7 @@
+@@ -2652,6 +2866,7 @@
              bottomAppBarCoordinator.initializeWithNative();
          }
          mBottomAppBarCoordinatorSupplier.set(bottomAppBarCoordinator);
@@ -3468,7 +3521,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
      }
 
      /**
-@@ -2992,6 +3196,16 @@
+@@ -2992,6 +3207,16 @@
      public void destroy() {
          if (mIsDestroyed) return;
          mIsDestroyed = true;
@@ -3485,7 +3538,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 
          if (mAppInstalledDelegate != null) {
              mAppInstalledDelegate.destroy();
-@@ -3052,9 +3266,20 @@
+@@ -3052,9 +3277,20 @@
              mTabGroupUiBottomControlsCoordinatorSupplier = null;
          }
 
@@ -3506,7 +3559,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
              mBottomAppBarCoordinatorSupplier = null;
          }
 
-@@ -3268,6 +3493,7 @@
+@@ -3268,6 +3504,7 @@
          }
 
          mToolbar.onUrlFocusChange(hasFocus);
@@ -3514,7 +3567,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 
          if (mFindToolbarManager != null && hasFocus) mFindToolbarManager.hideToolbar();
 
-@@ -3318,6 +3544,11 @@
+@@ -3318,6 +3555,11 @@
       */
      @Override
      public void onThemeColorChanged(int color, boolean shouldAnimate) {
@@ -3526,7 +3579,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          if (!mShouldUpdateToolbarPrimaryColor) return;
 
          boolean colorChanged = mCurrentThemeColor != color;
-@@ -3658,6 +3889,8 @@
+@@ -3658,6 +3900,8 @@
 
          updateButtonStatus();
          mCurrentTabSupplier.set(tab);
@@ -3535,7 +3588,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          mFormFieldFocusedSupplier.onWebContentsChanged(tab == null ? null : tab.getWebContents());
      }
 
-@@ -3945,8 +4178,17 @@
+@@ -3945,8 +4189,17 @@
          updateToolbarSceneLayerSuppression();
      }
 
@@ -3828,6 +3881,82 @@ diff --git a/chrome/browser/BUILD.gn b/chrome/browser/BUILD.gn
      ":active_use_util",
      ":after_startup_task_utils",
      ":bad_message",
+diff --git a/chrome/browser/android/compositor/compositor_view.cc b/chrome/browser/android/compositor/compositor_view.cc
+--- a/chrome/browser/android/compositor/compositor_view.cc
++++ b/chrome/browser/android/compositor/compositor_view.cc
+@@ -10,11 +10,13 @@
+ #include <vector>
+
+ #include "base/android/android_info.h"
++#include "base/android/callback_android.h"
+ #include "base/android/jni_android.h"
+ #include "base/command_line.h"
+ #include "base/containers/id_map.h"
+ #include "base/feature_list.h"
+ #include "base/functional/bind.h"
++#include "base/task/bind_post_task.h"
+ #include "base/metrics/histogram_functions.h"
+ #include "base/process/process.h"
+ #include "base/rand_util.h"
+@@ -31,6 +33,9 @@
+ #include "content/public/browser/child_process_data.h"
+ #include "content/public/browser/peak_gpu_memory_tracker_factory.h"
+ #include "content/public/browser/web_contents.h"
++#include "content/public/browser/render_widget_host_view.h"
++#include "components/viz/common/frame_sinks/copy_output_result.h"
++#include "ui/android/view_android.h"
+ #include "content/public/common/process_type.h"
+ #include "gpu/config/gpu_finch_features.h"
+ #include "third_party/skia/include/core/SkBitmap.h"
+@@ -381,6 +386,33 @@
+ #endif
+ }
+
++void CompositorView::CopyArcPhoneBackdrop(
++    JNIEnv* env, const JavaRef<jobject>& jweb_contents,
++    int32_t x, int32_t y, int32_t source_width, int32_t source_height,
++    int32_t width, int32_t height, const JavaRef<jobject>& callback) {
++  auto* contents = content::WebContents::FromJavaWebContents(jweb_contents);
++  auto* view = contents ? contents->GetRenderWidgetHostView() : nullptr;
++  gfx::Rect region(x, y, source_width, source_height);
++  if (!view || !view->GetNativeView() || !view->IsSurfaceAvailableForCopy() || region.IsEmpty() ||
++      width <= 0 || height <= 0 || width > 256 || height > 128 ||
++      !gfx::Rect(view->GetNativeView()->GetSizeDevicePx()).Contains(region)) {
++    base::android::RunObjectCallbackAndroid(callback, base::android::ScopedJavaLocalRef<jobject>());
++    return;
++  }
++  // Uses the existing web-content readback path, including its protected-content policy.
++  // No capturer count, surface switch, whole-page bitmap or native toolbar texture.
++  view->CopyFromSurface(region, gfx::Size(width, height), base::Milliseconds(250),
++      base::BindPostTaskToCurrentDefault(base::BindOnce(
++          [](base::android::ScopedJavaGlobalRef<jobject> cb,
++                        const content::CopyFromSurfaceResult& result) {
++        base::android::ScopedJavaLocalRef<jobject> bitmap;
++        if (result.has_value() && !result->bitmap.drawsNothing()) {
++          bitmap = gfx::ConvertToJavaBitmap(result->bitmap, gfx::OomBehavior::kReturnNullOnOom);
++        }
++        base::android::RunObjectCallbackAndroid(cb, bitmap);
++      }, base::android::ScopedJavaGlobalRef<jobject>(env, callback))));
++}
++
+ void CompositorView::SetNeedsComposite(JNIEnv* env) {
+   compositor_->SetNeedsComposite();
+ }
+diff --git a/chrome/browser/android/compositor/compositor_view.h b/chrome/browser/android/compositor/compositor_view.h
+--- a/chrome/browser/android/compositor/compositor_view.h
++++ b/chrome/browser/android/compositor/compositor_view.h
+@@ -52,6 +52,11 @@
+
+   ui::ResourceManager* GetResourceManager();
+   base::android::ScopedJavaLocalRef<jobject> GetResourceManager(JNIEnv* env);
++  void CopyArcPhoneBackdrop(JNIEnv* env,
++      const base::android::JavaRef<jobject>& web_contents,
++      int32_t x, int32_t y, int32_t source_width, int32_t source_height,
++      int32_t width, int32_t height,
++      const base::android::JavaRef<jobject>& callback);
+   void SetNeedsComposite(JNIEnv* env);
+   void SetDrawPaused(JNIEnv* env, bool paused);
+   void FinalizeLayers(JNIEnv* env);
 diff --git a/chrome/browser/android/compositor/scene_layer/static_tab_scene_layer.cc b/chrome/browser/android/compositor/scene_layer/static_tab_scene_layer.cc
 --- a/chrome/browser/android/compositor/scene_layer/static_tab_scene_layer.cc
 +++ b/chrome/browser/android/compositor/scene_layer/static_tab_scene_layer.cc
@@ -7752,6 +7881,48 @@ diff --git a/ui/edge_to_edge/android/java/src/org/chromium/ui/edge_to_edge/EdgeT
          }
      }
 
+diff --git a/ui/edge_to_edge/android/java/src/org/chromium/ui/edge_to_edge/layout/EdgeToEdgeBaseLayout.java b/ui/edge_to_edge/android/java/src/org/chromium/ui/edge_to_edge/layout/EdgeToEdgeBaseLayout.java
+--- a/ui/edge_to_edge/android/java/src/org/chromium/ui/edge_to_edge/layout/EdgeToEdgeBaseLayout.java
++++ b/ui/edge_to_edge/android/java/src/org/chromium/ui/edge_to_edge/layout/EdgeToEdgeBaseLayout.java
+@@ -36,6 +36,17 @@
+  */
+ @NullMarked
+ public class EdgeToEdgeBaseLayout extends FrameLayout {
++    private boolean mArcPhoneControlsOverlay;
++
++    /** Only live phone web content opts in; native pages and Desktop retain native insets. */
++    public void setArcPhoneControlsOverlay(boolean enabled) {
++        if (mArcPhoneControlsOverlay == enabled) return;
++        mArcPhoneControlsOverlay = enabled;
++        requestApplyInsets();
++    }
++
++    public boolean isArcPhoneControlsOverlay() { return mArcPhoneControlsOverlay; }
++
+     private static final String TAG = "EdgeToEdgeBaseLayout";
+     private static final int DEFAULT_NAV_BAR_DIVIDER_SIZE = 1;
+     private static final int DISPLAY_CUTOUT_PAINT_COLOR = Color.BLACK;
+diff --git a/ui/edge_to_edge/android/java/src/org/chromium/ui/edge_to_edge/layout/EdgeToEdgeLayoutCoordinator.java b/ui/edge_to_edge/android/java/src/org/chromium/ui/edge_to_edge/layout/EdgeToEdgeLayoutCoordinator.java
+--- a/ui/edge_to_edge/android/java/src/org/chromium/ui/edge_to_edge/layout/EdgeToEdgeLayoutCoordinator.java
++++ b/ui/edge_to_edge/android/java/src/org/chromium/ui/edge_to_edge/layout/EdgeToEdgeLayoutCoordinator.java
+@@ -179,8 +179,17 @@
+         Insets overallInsets = windowInsets.getInsets(paddingInsetTypes);
+         // Ensure backup navigation insets are also included.
+         overallInsets = Insets.max(overallInsets, navBarInsets);
++        if (mView.isArcPhoneControlsOverlay()) {
++            // This owner runs before the Chrome inset consumer; consume the top here as well.
++            overallInsets = Insets.of(overallInsets.left, captionBarInsets.top, overallInsets.right, overallInsets.bottom);
++            mView.setStatusBarInsets(Insets.NONE);
++            mView.setDisplayCutoutTop(Insets.NONE);
++        }
+         mView.setPadding(
+                 overallInsets.left, overallInsets.top, overallInsets.right, overallInsets.bottom);
++
++        mView.updateCachedRects();
++        mView.invalidate();
+
+         // Consume the insets since the root view already adjusted their paddings.
+         return new WindowInsetsCompat.Builder(windowInsets)
 diff --git a/chrome/android/java/res/values/arc_strings.xml b/chrome/android/java/res/values/arc_strings.xml
 new file mode 100644
 --- /dev/null
@@ -11760,7 +11931,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneGla
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneGlass.java
-@@ -0,0 +1,151 @@
+@@ -0,0 +1,161 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -11780,8 +11951,6 @@ new file mode 100644
 +import android.os.Handler;
 +import android.os.HandlerThread;
 +import android.os.Looper;
-+import android.view.PixelCopy;
-+import android.view.SurfaceView;
 +import android.view.View;
 +import java.util.ArrayList;
 +import java.util.function.Consumer;
@@ -11888,27 +12057,39 @@ new file mode 100644
 +        }
 +        bitmap.setPixels(pixels,0,w,0,0,w,h);
 +    }
-+    /** Captures only SurfaceView pixels. UI overlays never enter a recursive window capture. */
-+    public static Capture pixelSource(Supplier<SurfaceView> supplier){
++    @FunctionalInterface
++    public interface RegionCopy {
++        void copy(Rect region, int width, int height, Consumer<Bitmap> callback);
++    }
++    static Rect contentRegion(View content, Rect windowBounds) {
++        if(content==null||windowBounds.isEmpty())return null;
++        int[] origin=new int[2];content.getLocationInWindow(origin);
++        Rect region=new Rect(windowBounds);region.offset(-origin[0],-origin[1]);
++        return new Rect(0,0,content.getWidth(),content.getHeight()).contains(region)?region:null;
++    }
++    /** Read the web compositor region, never the window or the empty SurfaceView proxy. */
++    public static Capture contentSource(Supplier<View> supplier, RegionCopy readback){
 +        return new Capture(){
 +            final Handler main=new Handler(Looper.getMainLooper());
-+            HandlerThread thread;Handler worker;int[] pixels=new int[0],pass=new int[0];
-+            public boolean available(){SurfaceView v=supplier.get();return v!=null&&v.isShown()&&v.getHolder().getSurface().isValid();}
++            HandlerThread thread;Handler worker;int epoch;int[] pixels=new int[0],pass=new int[0];
++            public boolean available(){View v=supplier.get();return v!=null&&v.isShown();}
 +            public void copy(Rect windowBounds,Bitmap output,Consumer<Boolean> result){
-+                SurfaceView view=supplier.get();
-+                if(view==null||!available()){result.accept(false);return;}
-+                int[] position=new int[2];view.getLocationInWindow(position);Rect source=new Rect(windowBounds);source.offset(-position[0],-position[1]);
-+                if(!new Rect(0,0,view.getWidth(),view.getHeight()).contains(source)){result.accept(false);return;}
-+                if(worker==null){thread=new HandlerThread("ArchiumGlass");thread.start();worker=new Handler(thread.getLooper());}
-+                try{
-+                    PixelCopy.request(view,source,output,status->{
-+                        boolean success=status==PixelCopy.SUCCESS;
-+                        if(success){int count=output.getWidth()*output.getHeight();if(pixels.length<count){pixels=new int[count];pass=new int[count];}blur(output,pixels,pass);}
-+                        main.post(()->result.accept(success));
-+                    },worker);
-+                }catch(IllegalArgumentException error){result.accept(false);}
++                View view=supplier.get();Rect region=contentRegion(view,windowBounds);
++                if(region==null||!available()){result.accept(false);return;}
++                final int generation=epoch;
++                readback.copy(region,output.getWidth(),output.getHeight(),bitmap->{
++                    if(bitmap==null||generation!=epoch){result.accept(false);return;}
++                    if(worker==null){thread=new HandlerThread("ArchiumGlass");thread.start();worker=new Handler(thread.getLooper());}
++                    worker.post(()->{
++                        new Canvas(output).drawBitmap(bitmap,null,new Rect(0,0,output.getWidth(),output.getHeight()),null);
++                        int count=output.getWidth()*output.getHeight();
++                        if(pixels.length<count){pixels=new int[count];pass=new int[count];}
++                        blur(output,pixels,pass);
++                        main.post(()->result.accept(generation==epoch));
++                    });
++                });
 +            }
-+            public void close(){if(thread!=null)thread.quitSafely();thread=null;worker=null;}
++            public void close(){epoch++;if(thread!=null)thread.quitSafely();thread=null;worker=null;}
 +        };
 +    }
 +}
@@ -15653,7 +15834,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneGl
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneGlassTest.java
-@@ -0,0 +1,86 @@
+@@ -0,0 +1,114 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -15694,6 +15875,34 @@ new file mode 100644
 +        ArcPhoneGlass.blur(b);assertEquals(Color.RED,b.getPixel(10,10));
 +        for(int x=10;x<20;x++)for(int y=0;y<20;y++)b.setPixel(x,y,Color.BLUE);
 +        ArcPhoneGlass.blur(b);int mixed=b.getPixel(9,10);assertTrue(Color.red(mixed)>0);assertTrue(Color.blue(mixed)>0);assertEquals(255,Color.alpha(mixed));
++    }
++    @Test public void regionReadbackUsesWebPixelsWithoutSurfaceViewBuffers() {
++        var activity=Robolectric.buildActivity(Activity.class).setup();
++        View content=new View(activity.get());activity.get().setContentView(content);activity.visible();
++        content.layout(0,0,400,800);
++        int[] location=new int[2];content.getLocationInWindow(location);
++        Rect window=new Rect(location[0]+16,location[1]+600,location[0]+384,location[1]+656);
++        assertEquals(new Rect(16,600,384,656),ArcPhoneGlass.contentRegion(content,window));
++        assertNull(ArcPhoneGlass.contentRegion(content,new Rect(-10,-10,20,20)));
++        assertNull(ArcPhoneGlass.contentRegion(content,new Rect(0,0,0,0)));
++        activity.pause().stop().destroy();
++    }
++    @Test public void closingContentSourceRejectsPendingNativeReadbackBeforeBlur() {
++        var activity=Robolectric.buildActivity(Activity.class).setup();
++        View content=new View(activity.get()){@Override public boolean isShown(){return true;}};
++        activity.get().setContentView(content);activity.visible();content.layout(0,0,400,800);
++        java.util.List<Consumer<Bitmap>> pending=new java.util.ArrayList<>();
++        var capture=ArcPhoneGlass.contentSource(()->content,(rect,width,height,callback)->{
++            assertEquals(new Rect(16,600,384,656),rect);assertEquals(92,width);assertEquals(14,height);pending.add(callback);
++        });
++        int[] position=new int[2];content.getLocationInWindow(position);
++        Rect bounds=new Rect(16,600,384,656);bounds.offset(position[0],position[1]);
++        java.util.List<Boolean> results=new java.util.ArrayList<>();
++        capture.copy(bounds,Bitmap.createBitmap(92,14,Bitmap.Config.ARGB_8888),results::add);
++        assertEquals(1,pending.size());assertTrue(results.isEmpty());capture.close();
++        pending.get(0).accept(Bitmap.createBitmap(92,14,Bitmap.Config.ARGB_8888));
++        assertEquals(java.util.List.of(false),results);
++        activity.pause().stop().destroy();
 +    }
 +    private static class RecordingCanvas extends Canvas {
 +        Bitmap frame;boolean clipped;RectF imageRect;int tint;
