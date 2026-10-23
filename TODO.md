@@ -685,6 +685,8 @@ Matriz y límites: [auditoría en R5_FLOATING_V2.md](docs/validation/R5_FLOATING
 - [x] Robolectric92/política46, host phone23, ownership5, preparación SDK y parche25 PASS; marcador de ausencia de newline corregido con RED/GREEN. Alcance sintético/nativo parcial documentado.
 - [x] Checkpoints inventariados: sólo fuente39829306775-1 y fallback39817793524-1, conservados completos; no redundantes seguros,0 bytes eliminados. Hashes de partes/capacidad pendientes del gate CI.
 - [x] Suite host completa final424 PASS.
-- [ ] Lanzar el único build autorizado, monitor nativo CDMX600s e instalación verificada cuando proceda.
-- [ ] Después de abrir monitor: limpieza autorizada de archivos/clones obsoletos del teléfono y recibo de bytes liberados, preservando soporte activo y respaldo de actualización.
+- [x] Único build autorizado lanzado: run39982605276, código052c55ab39e97ea267d0eb0f5a3eecc77484e70a; authorize/preflight PASS, restauración incremental en curso al registrar.
+- [x] Monitor nativo Termux /dev/pts/2, PID18267/worker18481, CDMX600s, sin reintentos.
+- [ ] APK nueva e instalación: PENDING_BUILD; sólo actualizar si todos los gates de identidad/firma/hash/version/ABI pasan.
+- [x] Limpieza posterior al monitor: 73 entradas, cuatro worktrees y dos clones obsoletos; espacio libre observado +26.053.664.768 bytes (76.052.656.128 libres). Historial/local changes recuperados, JARs compartidos preservados y respaldo APK verificado. Fuente activa/Git común, datos Android, credenciales y referencias visuales conservados.
 - [ ] Aceptación visual real del candidato y todos sus menús, ambos temas, teclado, insets, carga y Desktop↔Phone: PENDIENTE; no declarar DONE.
