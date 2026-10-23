@@ -78,6 +78,8 @@ import org.chromium.chrome.browser.bookmarks.BookmarkModelObserver;
 import org.chromium.chrome.browser.bookmarks.TabBookmarker;
 import org.chromium.chrome.browser.bottombar.BottomBarContainerCoordinator;
 import org.chromium.chrome.browser.arc.ArcPhoneNavigation;
+import org.chromium.chrome.browser.arc.ArcPhoneGlass;
+import org.chromium.chrome.browser.lifecycle.PauseResumeWithNativeObserver;
 import org.chromium.chrome.browser.browser_controls.BottomControlsStacker;
 import org.chromium.chrome.browser.browser_controls.BottomControlsStacker.LayerType;
 import org.chromium.chrome.browser.browser_controls.BrowserControlsSizer;
@@ -409,6 +411,19 @@ public class ToolbarManager
     private final CompositorViewHolder mCompositorViewHolder;
     private final BottomControlsStacker mBottomControlsStacker;
     private @Nullable ArcPhoneNavigation mArcPhoneNavigation;
+    private @Nullable ArcPhoneGlass mArcPhoneGlass;
+    private ArcPhoneGlass.@Nullable Backdrop mArcPhoneTopGlass;
+    private ArcPhoneGlass.@Nullable Backdrop mArcPhoneBottomGlass;
+    private @Nullable PauseResumeWithNativeObserver mArcPhoneLifecycle;
+    private @Nullable Callback<Boolean> mArcPhoneMotionObserver;
+    private @Nullable View mArcPhoneBottomContainer;
+    private @Nullable Drawable mArcPhoneBottomBackground;
+    private boolean mArcPhoneBottomTransparent;
+    private boolean mArcPhoneResumed = true;
+    private boolean mArcPhoneFullscreen;
+    private boolean mArcPhoneTransparentContainer;
+    private @Nullable Drawable mArcPhoneContainerBackground;
+
     private ArcPhoneNavigation.@Nullable Host mArcPhoneHost;
     private @Nullable Callback<Integer> mArcPhoneCountObserver;
     private SharedPreferences.@Nullable OnSharedPreferenceChangeListener mArcPhoneModeObserver;
@@ -1431,6 +1446,8 @@ public class ToolbarManager
 
                     @Override
                     public void onObservingDifferentTab(@Nullable Tab tab) {
+                        if (mArcPhoneGlass != null) {mArcPhoneGlass.invalidateSource();mArcPhoneGlass.setEnabled(false);}
+                        if (mArcPhoneHost != null) mToolbarLayout.post(ToolbarManager.this::updateArcPhoneFloatingSurfaces);
                         // ActivityTabProvider will null out the tab passed to
                         // onObservingDifferentTab when the tab is non-interactive (e.g. when
                         // entering the TabSwitcher).
@@ -1487,6 +1504,8 @@ public class ToolbarManager
 
                     @Override
                     public void onUrlUpdated(Tab tab) {
+                        if (mArcPhoneGlass != null) mArcPhoneGlass.invalidateSource();
+                        if (mArcPhoneHost != null) updateArcPhoneFloatingSurfaces();
                         if (mArcPhoneNavigation != null) mArcPhoneNavigation.refresh();
                         // Update the SSL security state as a result of this notification as it will
                         // sometimes be the only update we receive.
@@ -1758,6 +1777,8 @@ public class ToolbarManager
                 new FullscreenManager.Observer() {
                     @Override
                     public void onEnterFullscreen(Tab tab, FullscreenOptions options) {
+                        mArcPhoneFullscreen=true;
+                        if (mArcPhoneHost != null) updateArcPhoneFloatingSurfaces();
                         if (mFindToolbarManager != null) mFindToolbarManager.hideToolbar();
                         mFullscreenHairlineToken =
                                 setToolbarShadowVisibilityAndClearOldToken(
@@ -1766,6 +1787,8 @@ public class ToolbarManager
 
                     @Override
                     public void onExitFullscreen(Tab tab) {
+                        mArcPhoneFullscreen=false;
+                        if (mArcPhoneHost != null) updateArcPhoneFloatingSurfaces();
                         mFullscreenHairlineToken =
                                 setToolbarShadowVisibilityAndClearOldToken(
                                         true, mFullscreenHairlineToken);
@@ -2544,14 +2567,71 @@ public class ToolbarManager
             org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.preferences(mActivity)
                     .registerOnSharedPreferenceChangeListener(mArcPhoneModeObserver);
         }
+        if (mArcPhoneLifecycle == null) {
+            mArcPhoneLifecycle = new PauseResumeWithNativeObserver() {
+                @Override public void onResumeWithNative() {mArcPhoneResumed=true;updateArcPhoneFloatingSurfaces();}
+                @Override public void onPauseWithNative() {mArcPhoneResumed=false;updateArcPhoneFloatingSurfaces();}
+            };
+            mActivityLifecycleDispatcher.register(mArcPhoneLifecycle);
+        }
         updateArcPhoneFloatingSurfaces();
         if (mArcPhoneNavigation != null) mArcPhoneNavigation.bind(host);
     }
 
     private void updateArcPhoneFloatingSurfaces() {
+        if (mIsDestroyed) return;
         boolean enabled = mArcPhoneHost != null
                 && !org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.isDesktopWindow(mActivity);
+        Tab glassTab = mActivityTabProvider.get();
+        boolean glass = enabled && mArcPhoneResumed && !mArcPhoneFullscreen
+                && glassTab != null && !glassTab.isNativePage() && !isUrlBarFocused();
         if (mToolbarLayout instanceof ToolbarPhone phone) {
+            if (enabled && mArcPhoneGlass == null) {
+                mArcPhoneGlass = new ArcPhoneGlass(phone, ArcPhoneGlass.pixelSource(() -> {
+                    View source = mCompositorViewHolder.getActiveSurfaceView();
+                    return source instanceof android.view.SurfaceView surface ? surface : null;
+                }));
+                mArcPhoneTopGlass = mArcPhoneGlass.add(phone, phone::getArcPhoneGlassBounds);
+                mArcPhoneMotionObserver = moving -> {
+                    if (mArcPhoneGlass != null) mArcPhoneGlass.setInMotion(Boolean.TRUE.equals(moving));
+                };
+                mCompositorViewHolder.getInMotionSupplier()
+                        .addSyncObserverAndPostIfNonNull(mArcPhoneMotionObserver);
+            }
+            if (mArcPhoneGlass != null && mArcPhoneNavigation != null && mArcPhoneBottomGlass == null) {
+                View target=mArcPhoneNavigation.getGlassTarget();
+                mArcPhoneBottomGlass=mArcPhoneGlass.add(target, target::getDrawingRect);
+            }
+            if (mArcPhoneTopGlass != null) mArcPhoneTopGlass.setSurface(mToolbarThemeColorProvider.getThemeColor());
+            phone.setArcPhoneGlassBackground(glass ? mArcPhoneTopGlass : null);
+            if (mArcPhoneTransparentContainer != glass) {
+                if (glass) {
+                    mArcPhoneContainerBackground=mControlContainer.getView().getBackground();
+                    mControlContainer.getView().setBackground(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+                } else {
+                    mControlContainer.getView().setBackground(mArcPhoneContainerBackground);
+                    mArcPhoneContainerBackground=null;
+                }
+                mArcPhoneTransparentContainer=glass;
+            }
+            if (mArcPhoneBottomContainer != null && mArcPhoneBottomTransparent != glass) {
+                if (glass) {
+                    mArcPhoneBottomBackground = mArcPhoneBottomContainer.getBackground();
+                    mArcPhoneBottomContainer.setBackground(new android.graphics.drawable.ColorDrawable(android.graphics.Color.TRANSPARENT));
+                } else {
+                    mArcPhoneBottomContainer.setBackground(mArcPhoneBottomBackground);
+                    mArcPhoneBottomBackground = null;
+                }
+                mArcPhoneBottomTransparent = glass;
+            }
+            mCompositorViewHolder.setArcPhoneControlsOverlay(glass);
+            if (mArcPhoneGlass != null) {
+                mArcPhoneGlass.setInMotion(Boolean.TRUE.equals(mCompositorViewHolder.getInMotionSupplier().get()));
+                mArcPhoneGlass.setEnabled(glass);
+            }
+            if (mArcPhoneNavigation != null && mArcPhoneBottomGlass != null) {
+                mArcPhoneNavigation.setGlassBackdrop(mArcPhoneBottomGlass, glass);
+            }
             mToolbarThemeColorProvider.setArcPhoneFloatingSurfaceEnabled(enabled);
             if (mAdjustedToolbarThemeColorProvider != null) {
                 mAdjustedToolbarThemeColorProvider.setArcPhoneFloatingSurfaceEnabled(enabled);
@@ -2653,6 +2733,7 @@ public class ToolbarManager
 
         boolean arcPhone = !org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.isDesktopWindow(mActivity);
         if (arcPhone) {
+            mArcPhoneBottomContainer = bottomAppBarContainer;
             mArcPhoneNavigation = new ArcPhoneNavigation(
                     bottomAppBarContainer.findViewById(R.id.bottom_container_slot), mBottomSheetController,
                     ArcPhoneNavigation.getReservedHeight(mActivity));
@@ -2716,6 +2797,7 @@ public class ToolbarManager
             bottomAppBarCoordinator.initializeWithNative();
         }
         mBottomAppBarCoordinatorSupplier.set(bottomAppBarCoordinator);
+        if (mArcPhoneHost != null) updateArcPhoneFloatingSurfaces();
     }
 
     /**
@@ -3056,6 +3138,12 @@ public class ToolbarManager
     public void destroy() {
         if (mIsDestroyed) return;
         mIsDestroyed = true;
+        if (mArcPhoneLifecycle != null) {mActivityLifecycleDispatcher.unregister(mArcPhoneLifecycle);mArcPhoneLifecycle=null;}
+        if (mArcPhoneMotionObserver != null) {
+            mCompositorViewHolder.getInMotionSupplier().removeObserver(mArcPhoneMotionObserver);
+            mArcPhoneMotionObserver = null;
+        }
+        if (mArcPhoneGlass != null) {mArcPhoneGlass.destroy();mArcPhoneGlass=null;}
 
         if (mAppInstalledDelegate != null) {
             mAppInstalledDelegate.destroy();
@@ -3343,6 +3431,7 @@ public class ToolbarManager
         }
 
         mToolbar.onUrlFocusChange(hasFocus);
+        if (mArcPhoneHost != null) updateArcPhoneFloatingSurfaces();
 
         if (mFindToolbarManager != null && hasFocus) mFindToolbarManager.hideToolbar();
 
@@ -3393,6 +3482,7 @@ public class ToolbarManager
      */
     @Override
     public void onThemeColorChanged(int color, boolean shouldAnimate) {
+        if (mArcPhoneTopGlass != null) mArcPhoneTopGlass.setSurface(color);
         if (mArcPhoneNavigation != null) {
             mArcPhoneNavigation.refresh();
             mBottomControlsStacker.requestLayerUpdate(false);
@@ -3737,6 +3827,7 @@ public class ToolbarManager
 
         updateButtonStatus();
         mCurrentTabSupplier.set(tab);
+        if (mArcPhoneHost != null) updateArcPhoneFloatingSurfaces();
         if (mArcPhoneNavigation != null) mArcPhoneNavigation.refresh();
         mFormFieldFocusedSupplier.onWebContentsChanged(tab == null ? null : tab.getWebContents());
     }

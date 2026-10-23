@@ -212,6 +212,7 @@ public class ToolbarPhone extends ToolbarLayout
     private float mNtpSearchBoxScrollFraction = UNINITIALIZED_FRACTION;
     protected ColorDrawable mToolbarBackground;
     private boolean mArcPhoneFloatingSurface;
+    private @Nullable Drawable mArcPhoneGlassBackground;
     private @Nullable ViewOutlineProvider mArcOriginalLocationBarOutline;
     private float mArcOriginalLocationBarElevation;
 
@@ -970,6 +971,23 @@ public class ToolbarPhone extends ToolbarLayout
         invalidate();
     }
 
+    /** Background only; the native omnibox/editor and its geometry remain unchanged. */
+    public void setArcPhoneGlassBackground(@Nullable Drawable background) {
+        mArcPhoneGlassBackground = background;
+        if (ChromeFeatureList.sToolbarPhoneAnimationRefactor.isEnabled()) {
+            mActiveLocationBarBackgroundView.setBackground(
+                    background != null ? background : mLocationBarBackground);
+        } else if (background != null) {
+            background.setCallback(this);
+        }
+        updateToolbarAndLocationBarColorForFocusChange();
+        invalidate();
+    }
+
+    public void getArcPhoneGlassBounds(Rect out) {
+        out.set(getLocationBarBackgroundRect());
+    }
+
     private @ColorInt int getArcPhoneSurfaceColor() {
         return ColorUtils.shouldUseLightForegroundOnBackground(
                 getToolbarDefaultColor(/* shouldUseFocusColor= */ false))
@@ -978,7 +996,7 @@ public class ToolbarPhone extends ToolbarLayout
 
     private void updateToolbarBackground(@ColorInt int color) {
         if (mArcPhoneFloatingSurface && !urlHasFocus() && !isLocationBarShownInNtp()) {
-            color = getArcPhoneSurfaceColor();
+            color = mArcPhoneGlassBackground != null ? Color.TRANSPARENT : getArcPhoneSurfaceColor();
         }
         if (mToolbarBackground.getColor() == color) return;
         mToolbarBackground.setColor(color);
@@ -1078,7 +1096,7 @@ public class ToolbarPhone extends ToolbarLayout
 
     @Override
     protected boolean verifyDrawable(Drawable who) {
-        return super.verifyDrawable(who) || who == mLocationBarBackground;
+        return super.verifyDrawable(who) || who == mLocationBarBackground || who == mArcPhoneGlassBackground;
     }
 
     private void onNtpScrollChanged(float scrollFraction) {
@@ -1907,7 +1925,12 @@ public class ToolbarPhone extends ToolbarLayout
                         mLocationBarBackgroundBounds.right + mLocationBarBackgroundNtpOffset.right,
                         mLocationBarBackgroundBounds.bottom
                                 + mLocationBarBackgroundNtpOffset.bottom);
-                mLocationBarBackground.draw(canvas);
+                if (mArcPhoneGlassBackground != null && !urlHasFocus() && !isLocationBarShownInNtp()) {
+                    mArcPhoneGlassBackground.setBounds(mLocationBarBackground.getBounds());
+                    mArcPhoneGlassBackground.draw(canvas);
+                } else {
+                    mLocationBarBackground.draw(canvas);
+                }
             }
 
             float locationBarClipLeft =

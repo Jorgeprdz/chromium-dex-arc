@@ -81,6 +81,34 @@ public class ArcPhoneNavigationTest {
         ViewGroup bar=(ViewGroup)mSlot.getChildAt(0);assertEquals(4,bar.getChildCount());
         for(String tag:new String[]{"home","new","tabs","menu"})assertNotNull(find("arc-phone-"+tag));
     }
+    @Test public void glassReusesOneBarWithTransparentNativeBackingAndRestoresFallback(){
+        View bar=mNavigation.getGlassTarget();Object layout=bar.getLayoutParams();
+        var glass=new ArcPhoneGlass.Backdrop();mNavigation.setGlassBackdrop(glass,true);
+        assertSame(bar,mSlot.getChildAt(0));assertEquals(1,mSlot.getChildCount());assertSame(layout,bar.getLayoutParams());
+        assertSame(glass,bar.getBackground());assertEquals(Integer.valueOf(Color.TRANSPARENT),mNavigation.getBackgroundColor());
+        assertEquals(Color.TRANSPARENT,mNavigation.getBottomBar().getBackgroundColor());
+        mNavigation.setGlassBackdrop(glass,false);assertNotSame(glass,bar.getBackground());assertNotEquals(Integer.valueOf(Color.TRANSPARENT),mNavigation.getBackgroundColor());
+        mNavigation.setGlassBackdrop(glass,true);mNavigation.setPhoneModeActive(false);
+        assertNotSame(glass,bar.getBackground());assertNotEquals(Integer.valueOf(Color.TRANSPARENT),mNavigation.getBackgroundColor());
+    }
+    @Test public void glassUsesDayNightTintAndLegibleLabelsAgainstWorstPageBackground(){
+        var glass=new ArcPhoneGlass.Backdrop();mNavigation.setGlassBackdrop(glass,true);
+        for(int surface:new int[]{Color.WHITE,0xff202124}){
+            mHost.color=surface;mNavigation.refresh();
+            int tint=glass.tintColor();assertTrue(Color.alpha(tint)<255);
+            int page=Color.luminance(surface)>.45?Color.BLACK:Color.WHITE;
+            int alpha=Color.alpha(tint);
+            int composed=Color.rgb((Color.red(tint)*alpha+Color.red(page)*(255-alpha))/255,
+                (Color.green(tint)*alpha+Color.green(page)*(255-alpha))/255,
+                (Color.blue(tint)*alpha+Color.blue(page)*(255-alpha))/255);
+            ViewGroup bar=(ViewGroup)mNavigation.getGlassTarget();
+            for(int i=0;i<bar.getChildCount();i++){
+                int text=((TextView)((ViewGroup)bar.getChildAt(i)).getChildAt(1)).getCurrentTextColor();
+                double a=Color.luminance(text),b=Color.luminance(composed);
+                assertTrue("Glass text AA",(Math.max(a,b)+.05)/(Math.min(a,b)+.05)>=4.5);
+            }
+        }
+    }
     @Test public void navigationCallsActualHostActions(){
         find("arc-phone-home").performClick();assertEquals(ArcPhoneNavigation.HOME,mHost.action);
         find("arc-phone-new").performClick();assertEquals(ArcPhoneNavigation.NEW_TAB,mHost.action);

@@ -10,7 +10,11 @@ class PhoneNativeShadowPolicyTests(unittest.TestCase):
         # a separate relaxed allowlist. The JVM runner also runs Chromium's actual checker.
         self.assertNotIn('@Implements(', source)
         self.assertNotIn('shadows=', source.replace(' ', ''))
-        self.assertEqual(28, source.count('@Test public void '), 'Existing phone coverage must remain')
+        self.assertGreaterEqual(source.count('@Test public void '), 28, 'Existing phone coverage must remain')
+        glass = (ROOT/'chromium/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneGlassTest.java').read_text()
+        self.assertNotIn('@Implements(', glass)
+        self.assertNotIn('shadows=', glass.replace(' ', ''))
+        self.assertGreaterEqual(glass.count('@Test public void '), 5)
     def test_pinned_discovery_checker_is_not_relaxed(self):
         fixture = ROOT/'tests/fixtures/chromium-junit'
         import json

@@ -1087,6 +1087,16 @@ public class CompositorViewHolder extends FrameLayout
         return mLayoutManager;
     }
 
+    /** Keep phone controls as overlays; native Desktop and IME logic remain with their owners. */
+    public void setArcPhoneControlsOverlay(boolean enabled) {
+        if (mBrowserControlsManager == null) return;
+        mBrowserControlsManager.setArcPhoneOverlay(enabled);
+        updateWebContentsSize(getCurrentTab());
+        updateContentViewChildrenDimension();
+        onViewportChanged();
+        requestRender();
+    }
+
     /**
      * @return The SurfaceView proxy used by the Compositor.
      */

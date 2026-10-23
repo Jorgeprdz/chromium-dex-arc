@@ -629,3 +629,14 @@ Preferencia de horas: Ciudad de México (`America/Mexico_City`, UTC−6). Detall
 - [ ] Verificar todos los bytes del checkpoint39829306775-1 antes de usarlo en un próximo build incremental.
 
 Evidencia y límites: [run39829306775](docs/validation/R5_FLOATING_MOBILE_LIGHT_DARK.md#run39829306775--rechazo-de-shadows-y-corrección-de-la-validación). Horas CDMX.
+
+
+## Floating V2 aprobado — 22-oct-2026 CDMX
+
+- [x] Implementación candidata: contenido bajo controles mediante opt-in móvil; fondos nativos transparentes y cristal con muestreo limitado de SurfaceView, conservando el tamaño actual de omnibar y el único slot inferior existente.
+- [x] Cuatro acciones y menú reales conservados; Desktop/Spaces/Split específicos sin cambios. Pestañas/URL/foco/modo/lifecycle gestionan buffers y restauración.
+- [x] Gates locales: 70 ejecuciones Robolectric, política Chromium35 métodos, host phone8, ownership5, coverage2, status1, patch7+17, preparación SDK y regeneración reproducible PASS. Alcances y evidencia en el checkpoint V2.
+- [ ] Compilación nativa integrada y APK V2: NOT RUN. Sin nuevo Actions ni checkpoints pesados.
+- [ ] Aceptación con los renders en dispositivo: PENDIENTE, ambos temas, scroll/blur, insets, teclado, menús, fullscreen y transición Desktop↔Phone. No declarar coincidencia visual por estas pruebas locales.
+
+Checkpoint vigente: [R5_FLOATING_V2.md](docs/validation/R5_FLOATING_V2.md). Sustituye la referencia anterior de barras con bandejas opacas. Muestreo limitado y fallback sin blur documentados; falta medir rendimiento real.
