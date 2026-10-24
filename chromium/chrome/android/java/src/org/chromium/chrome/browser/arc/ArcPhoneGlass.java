@@ -94,6 +94,10 @@ public final class ArcPhoneGlass {
             else if(mTopCornersOnly){for(int i=0;i<8;i++)mCornerRadii[i]=i<4?radius:0;mClip.addRoundRect(mRect,mCornerRadii,Path.Direction.CW);}
             else mClip.addRoundRect(mRect,radius,radius,Path.Direction.CW);
             int save=canvas.save();canvas.clipPath(mClip);
+            // A popup may straddle sidebar/native UI and the web capture. Paint the uncovered
+            // region too: a partial frame must not let unblurred underlying labels bleed through.
+            // The floating navigation/omnibar do not use the milky popup treatment.
+            if(mMilky){mPaint.setColor(mSurface|0xff000000);mPaint.setAlpha(mAlpha);canvas.drawRect(mRect,mPaint);}
             mPaint.setAlpha(mAlpha);
             if(mFrame!=null){
                 mFrameRect.set(mRect.left+mFrameFraction.left*mRect.width(),mRect.top+mFrameFraction.top*mRect.height(),

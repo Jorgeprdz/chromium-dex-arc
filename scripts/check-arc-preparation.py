@@ -235,6 +235,7 @@ def main():
                 public CompositorViewHolder(android.content.Context c, android.util.AttributeSet attrs){super(c, attrs);}
                 public android.view.View getActiveSurfaceView(){return null;}
                 public CompositorView getCompositorView(){return null;}
+                public void setArcPhoneContentInsets(int top, int bottom){}
                 public void setArcContentOffsetForRail(int width){}
                 public void beginArcRailViewportResize(int width){}
                 public void addTouchEventObserver(org.chromium.components.browser_ui.widget.TouchEventObserver o){}

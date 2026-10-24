@@ -168,6 +168,7 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
     }
     private FrameLayout.LayoutParams floatingLayout() {
         FrameLayout.LayoutParams params=new FrameLayout.LayoutParams(-1,mBarHeight,Gravity.CENTER);
+        if(mCompact)params.width=dp(96);
         int vertical=(mHeight-mBarHeight)/2;
         params.setMargins(dp(18),vertical,dp(18),vertical);
         return params;

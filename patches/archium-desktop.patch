@@ -2082,10 +2082,36 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
          assert e != null : "The motion event dispatched shouldn't be null!";
          if (mNativeInitialized) {
              InputHintChecker.onCompositorViewHolderTouchEvent();
-@@ -1058,6 +1085,16 @@
+@@ -1058,6 +1085,42 @@
       */
      public LayoutManagerImpl getLayoutManager() {
          return mLayoutManager;
++    }
++
++    private boolean mArcPhoneContentMarginsOwned;
++    private int mArcPhoneContentOriginalTop, mArcPhoneContentOriginalBottom;
++
++    /** Phone-only safe interaction area. Move the actual renderer AND input host together. */
++    public void setArcPhoneContentInsets(int top, int bottom) {
++        if (!(getLayoutParams() instanceof ViewGroup.MarginLayoutParams margins)) return;
++        top = Math.max(0, top);
++        bottom = Math.max(0, bottom);
++        if (!mArcPhoneContentMarginsOwned) {
++            if (top == 0 && bottom == 0) return;
++            mArcPhoneContentOriginalTop = margins.topMargin;
++            mArcPhoneContentOriginalBottom = margins.bottomMargin;
++            mArcPhoneContentMarginsOwned = true;
++        }
++        boolean release = top == 0 && bottom == 0;
++        int desiredTop = release ? mArcPhoneContentOriginalTop
++                : Math.max(mArcPhoneContentOriginalTop, top);
++        int desiredBottom = release ? mArcPhoneContentOriginalBottom
++                : Math.max(mArcPhoneContentOriginalBottom, bottom);
++        if (release) mArcPhoneContentMarginsOwned = false;
++        if (margins.topMargin == desiredTop && margins.bottomMargin == desiredBottom) return;
++        margins.topMargin = desiredTop;
++        margins.bottomMargin = desiredBottom;
++        setLayoutParams(margins);
 +    }
 +
 +    /** Keep phone controls as overlays; native Desktop and IME logic remain with their owners. */
@@ -2099,7 +2125,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
      }
 
      /**
-@@ -1178,8 +1215,8 @@
+@@ -1178,8 +1241,8 @@
              horizontalViewportInsets =
                      sideUiLeftMargin + sideUiSpecs.getReservedWidth(AnchorSide.RIGHT);
          }
@@ -2110,7 +2136,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
 
          // The view size takes into account of the browser controls whose height should be
          // subtracted from the view if they are visible, therefore shrink Blink-side view size.
-@@ -1201,8 +1238,10 @@
+@@ -1201,8 +1264,10 @@
          int webContentsHeightInset = getEffectiveWebContentsHeightInset();
          int verticalViewportInsets = controlsInsets + webContentsHeightInset;
 
@@ -2123,7 +2149,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
 
          if (ChromeFeatureList.sVirtualKeyboardTransientInnerHeightFix.isEnabled()
                  && virtualKeyboardModeOutsetsWebContentsHeight()
-@@ -1688,11 +1727,142 @@
+@@ -1688,11 +1753,142 @@
       * Shifts the composited web contents and its touch coordinate space to sit next to the Side UI
       * on the left, without resizing the web contents.
       */
@@ -2267,7 +2293,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
      }
 
      // View.OnHierarchyChangeListener implementation
-@@ -1877,6 +2047,11 @@
+@@ -1877,6 +2073,11 @@
      protected void onLayout(boolean changed, int l, int t, int r, int b) {
          if (changed) onViewportChanged();
          super.onLayout(changed, l, t, r, b);
@@ -2279,7 +2305,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
 
          invalidateAccessibilityProvider();
      }
-@@ -2043,6 +2218,11 @@
+@@ -2043,6 +2244,11 @@
      }
 
      private void updateContentOverlayVisibility(boolean show) {
@@ -2291,7 +2317,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
          if (mView == null) return;
          WebContents webContents = getWebContents();
          if (show) {
-@@ -2133,7 +2313,8 @@
+@@ -2133,7 +2339,8 @@
 
          // TODO(dtrainor): Look into changing this only if the views differ, but still parse the
          // WebContents list even if they're the same.
@@ -2301,7 +2327,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
 
          if (mTabVisible != tab) {
              // Reset the geometrychange event flag so it can fire on the current active tab.
-@@ -2153,7 +2334,7 @@
+@@ -2153,7 +2360,7 @@
          mTabVisible = tab;
          mView = newView;
 
@@ -2310,7 +2336,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
 
          if (mTabVisible != null) initializeTab(mTabVisible);
 
-@@ -2165,6 +2346,11 @@
+@@ -2165,6 +2372,11 @@
              mOnscreenContentProvider.onWebContentsChanged(assumeNonNull(getWebContents()));
          }
 
@@ -2322,7 +2348,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/Comp
          // Clear drop permissions when tab changes unless this is a new tab loading from the drop.
          if (mDropUri == null
                  || tab == null
-@@ -2221,8 +2407,10 @@
+@@ -2221,8 +2433,10 @@
                      webContents, mCompositorView.getWidth(), mCompositorView.getHeight());
              onControlsResizeViewChanged(webContents, mControlsResizeView);
 
@@ -3338,7 +3364,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
      private final SettableMonotonicObservableSupplier<Long> mCaptureResourceIdSupplier =
              ObservableSuppliers.createMonotonic();
      private @MonotonicNonNull TabModelSelector mTabModelSelector;
-@@ -407,6 +418,53 @@
+@@ -407,6 +418,54 @@
      private final AppMenuDelegate mAppMenuDelegate;
      private final CompositorViewHolder mCompositorViewHolder;
      private final BottomControlsStacker mBottomControlsStacker;
@@ -3381,6 +3407,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 +    private int mArcPhoneOriginalProgressMargin;
 +    private boolean mArcPhoneOriginalStatusContrast;
 +    private View.@Nullable OnLayoutChangeListener mArcPhoneInsetLayoutListener;
++    private android.view.ViewTreeObserver.@Nullable OnGlobalLayoutListener mArcPhoneContentLayoutListener;
 +    private boolean mArcPhoneResumed = true;
 +    private boolean mArcPhoneFullscreen;
 +    private boolean mArcPhoneTransparentContainer;
@@ -3392,7 +3419,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
      private final TopControlsStacker mTopControlsStacker;
      private final BrowserControlsSizer mBrowserControlsSizer;
      private final FullscreenManager mFullscreenManager;
-@@ -857,6 +915,7 @@
+@@ -857,6 +916,7 @@
              boolean suppressTabStripAtStart,
              @Nullable OneshotSupplier<HubManager> hubManagerSupplier) {
          TraceEvent.begin("ToolbarManager.ToolbarManager");
@@ -3400,7 +3427,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          mActionRegistry = actionRegistry;
          mCountrySupplier = countrySupplier;
          mToggleGlicCallback = toggleGlicCallback;
-@@ -946,6 +1005,7 @@
+@@ -946,6 +1006,7 @@
                  new ComponentCallbacks() {
                      @Override
                      public void onConfigurationChanged(Configuration configuration) {
@@ -3408,7 +3435,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          int newOrientation = configuration.orientation;
                          if (newOrientation == mCurrentOrientation) {
                              return;
-@@ -1425,6 +1485,8 @@
+@@ -1425,6 +1486,8 @@
 
                      @Override
                      public void onObservingDifferentTab(@Nullable Tab tab) {
@@ -3417,7 +3444,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          // ActivityTabProvider will null out the tab passed to
                          // onObservingDifferentTab when the tab is non-interactive (e.g. when
                          // entering the TabSwitcher).
-@@ -1481,6 +1543,10 @@
+@@ -1481,6 +1544,10 @@
 
                      @Override
                      public void onUrlUpdated(Tab tab) {
@@ -3428,7 +3455,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          // Update the SSL security state as a result of this notification as it will
                          // sometimes be the only update we receive.
                          updateTabLoadingState(true);
-@@ -1751,6 +1817,8 @@
+@@ -1751,6 +1818,8 @@
                  new FullscreenManager.Observer() {
                      @Override
                      public void onEnterFullscreen(Tab tab, FullscreenOptions options) {
@@ -3437,7 +3464,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          if (mFindToolbarManager != null) mFindToolbarManager.hideToolbar();
                          mFullscreenHairlineToken =
                                  setToolbarShadowVisibilityAndClearOldToken(
-@@ -1759,6 +1827,8 @@
+@@ -1759,6 +1828,8 @@
 
                      @Override
                      public void onExitFullscreen(Tab tab) {
@@ -3446,7 +3473,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          mFullscreenHairlineToken =
                                  setToolbarShadowVisibilityAndClearOldToken(
                                          true, mFullscreenHairlineToken);
-@@ -2524,8 +2594,276 @@
+@@ -2524,8 +2595,305 @@
          return ((LocationBarCoordinator) mLocationBar).getUrlBarViewRectProvider();
      }
 
@@ -3477,6 +3504,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 +        if (mArcPhoneInsetLayoutListener == null) {
 +            mArcPhoneInsetLayoutListener = (view, l, t, r, b, ol, ot, or, ob) -> {
 +                if (mArcPhoneOverlayActive) updateArcPhoneTopInset();
++                updateArcPhoneContentInsets();
 +                if (mArcPhoneCompact && (r-l != or-ol || b-t != ob-ot)) {
 +                    if (mArcPhoneCompactAnimation != null) {
 +                        android.animation.ValueAnimator animation = mArcPhoneCompactAnimation;
@@ -3489,6 +3517,11 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 +            };
 +            mControlContainer.getView().addOnLayoutChangeListener(mArcPhoneInsetLayoutListener);
 +        }
++        if (mArcPhoneContentLayoutListener == null) {
++            mArcPhoneContentLayoutListener = this::updateArcPhoneContentInsets;
++            mActivity.getWindow().getDecorView().getViewTreeObserver()
++                    .addOnGlobalLayoutListener(mArcPhoneContentLayoutListener);
++        }
 +        updateArcPhoneFloatingSurfaces();
 +        if (mArcPhoneNavigation != null) mArcPhoneNavigation.bind(host);
 +    }
@@ -3500,6 +3533,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 +        Tab glassTab = mActivityTabProvider.get();
 +        boolean floating = enabled && mArcPhoneResumed && !mArcPhoneFullscreen;
 +        boolean glass = floating && glassTab != null && !glassTab.isNativePage();
++        if (!glass) mCompositorViewHolder.setArcPhoneContentInsets(0, 0);
 +        bindArcPhoneGestures(glass && glassTab != null ? glassTab.getWebContents() : null);
 +        if (!glass || isUrlBarFocused()) setArcPhoneCompact(false);
 +        if (mToolbarLayout instanceof ToolbarPhone phone) {
@@ -3577,7 +3611,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 +            if (edgeController != null) edgeController.setArcPhoneControlsOverlay(glass);
 +            updateArcPhoneTopInset();
 +            BottomControlsCoordinator phoneBottom = mBottomAppBarCoordinatorSupplier.get();
-+            if (phoneBottom != null) phoneBottom.setArcPhoneControlsOverlay(glass);
++            if (phoneBottom != null) phoneBottom.setArcPhoneControlsOverlay(floating);
 +            if (mArcPhoneTransparentContainer != glass) {
 +                if (glass) {
 +                    mArcPhoneContainerBackground=mControlContainer.getView().getBackground();
@@ -3602,6 +3636,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 +                    org.chromium.ui.R.id.arc_phone_surface_decorator,
 +                    glass && mArcPhoneGlass != null ? mArcPhoneGlass.getSurfaceDecorator() : null);
 +            mCompositorViewHolder.setArcPhoneControlsOverlay(glass);
++            updateArcPhoneContentInsets();
 +            if (mArcPhoneGlass != null) {
 +                mArcPhoneGlass.setInMotion(Boolean.TRUE.equals(mCompositorViewHolder.getInMotionSupplier().get()));
 +                mArcPhoneGlass.setSurfaceLayersTag(org.chromium.ui.R.id.arc_phone_surface_layers);
@@ -3655,6 +3690,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 +        }
 +        mArcPhoneCompact = compact;
 +        if (mArcPhoneNavigation != null) mArcPhoneNavigation.setCompact(compact);
++        updateArcPhoneContentInsets();
 +        if (mArcPhoneCompactAnimation != null) {
 +            mArcPhoneCompactAnimation.cancel();
 +            mArcPhoneCompactAnimation = null;
@@ -3684,6 +3720,26 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 +            }
 +        });
 +        animation.start();
++    }
++
++    private void updateArcPhoneContentInsets() {
++        if (!mArcPhoneOverlayActive || mIsDestroyed
++                || org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.isDesktopWindow(mActivity)) {
++            mCompositorViewHolder.setArcPhoneContentInsets(0, 0);
++            return;
++        }
++        android.view.WindowInsets raw = mActivity.getWindow().getDecorView().getRootWindowInsets();
++        if (raw == null) return;
++        int consumedTop = 0;
++        if (mCompositorViewHolder.getParent() instanceof View parent) {
++            int[] position = new int[2];
++            parent.getLocationInWindow(position);
++            consumedTop = Math.max(0, position[1] + parent.getPaddingTop());
++        }
++        mCompositorViewHolder.setArcPhoneContentInsets(
++                org.chromium.chrome.browser.arc.ArcPhoneStatusFade.contentTopInset(raw, consumedTop),
++                org.chromium.chrome.browser.arc.ArcPhoneStatusFade.contentBottomInset(
++                        raw, mArcPhoneCompact, ArcPhoneNavigation.getReservedHeight(mActivity)));
 +    }
 +
 +    /** Legacy top-inset owner does not position web-page controls beneath a consumed status bar. */
@@ -3723,7 +3779,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          enableTabGroupUiControls();
          if (BottomBarConfigUtils.isBottomBarEnabled(mActivity)) {
              enableBottomBar();
-@@ -2605,26 +2943,47 @@
+@@ -2605,26 +2973,47 @@
          OneshotSupplier<String> countrySupplier =
                  mCountrySupplier != null ? mCountrySupplier : new OneshotSupplierImpl<>();
 
@@ -3791,7 +3847,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          }
 
          var bottomAppBarCoordinator =
-@@ -2639,7 +2998,8 @@
+@@ -2639,7 +3028,8 @@
                          mActivityTabProvider.asObservable(),
                          (ScrollingBottomViewResourceFrameLayout) bottomAppBarContainer,
                          LayerType.BOTTOM_APP_BAR,
@@ -3801,7 +3857,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          bottomBarContainerOneshotSupplier,
                          mTabObscuringHandler,
                          mLayoutManager.getOverlayPanelManager().getPanelStateSupplier(),
-@@ -2652,6 +3012,7 @@
+@@ -2652,6 +3042,7 @@
              bottomAppBarCoordinator.initializeWithNative();
          }
          mBottomAppBarCoordinatorSupplier.set(bottomAppBarCoordinator);
@@ -3809,7 +3865,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
      }
 
      /**
-@@ -2840,7 +3201,7 @@
+@@ -2840,7 +3231,7 @@
                  mBrowserControlsSizer,
                  mToolbarThemeColorProvider,
                  mBottomToolbarControlsOffsetSupplier,
@@ -3818,7 +3874,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                  mToolbarProgressBarLayer::onProgressBarInfoUpdate,
                  mCaptureResourceIdSupplier,
                  mTabStripTopControlLayer,
-@@ -2992,6 +3353,31 @@
+@@ -2992,6 +3383,37 @@
      public void destroy() {
          if (mIsDestroyed) return;
          mIsDestroyed = true;
@@ -3831,6 +3887,12 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 +        mArcPhoneGestures = null;
 +        mArcPhoneGestureContents = null;
 +        setArcPhoneCompact(false);
++        mCompositorViewHolder.setArcPhoneContentInsets(0, 0);
++        if (mArcPhoneContentLayoutListener != null) {
++            mActivity.getWindow().getDecorView().getViewTreeObserver()
++                    .removeOnGlobalLayoutListener(mArcPhoneContentLayoutListener);
++            mArcPhoneContentLayoutListener = null;
++        }
 +        if (mArcPhoneInsetLayoutListener != null) {
 +            mControlContainer.getView().removeOnLayoutChangeListener(mArcPhoneInsetLayoutListener);
 +            mArcPhoneInsetLayoutListener = null;
@@ -3850,7 +3912,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 
          if (mAppInstalledDelegate != null) {
              mAppInstalledDelegate.destroy();
-@@ -3052,9 +3438,20 @@
+@@ -3052,9 +3474,20 @@
              mTabGroupUiBottomControlsCoordinatorSupplier = null;
          }
 
@@ -3871,7 +3933,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
              mBottomAppBarCoordinatorSupplier = null;
          }
 
-@@ -3268,6 +3665,7 @@
+@@ -3268,6 +3701,7 @@
          }
 
          mToolbar.onUrlFocusChange(hasFocus);
@@ -3879,7 +3941,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 
          if (mFindToolbarManager != null && hasFocus) mFindToolbarManager.hideToolbar();
 
-@@ -3318,6 +3716,12 @@
+@@ -3318,6 +3752,12 @@
       */
      @Override
      public void onThemeColorChanged(int color, boolean shouldAnimate) {
@@ -3892,7 +3954,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          if (!mShouldUpdateToolbarPrimaryColor) return;
 
          boolean colorChanged = mCurrentThemeColor != color;
-@@ -3658,6 +4062,8 @@
+@@ -3658,6 +4098,8 @@
 
          updateButtonStatus();
          mCurrentTabSupplier.set(tab);
@@ -3901,7 +3963,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          mFormFieldFocusedSupplier.onWebContentsChanged(tab == null ? null : tab.getWebContents());
      }
 
-@@ -3945,8 +4351,24 @@
+@@ -3945,8 +4387,24 @@
          updateToolbarSceneLayerSuppression();
      }
 
@@ -10611,7 +10673,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopC
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
-@@ -0,0 +1,1614 @@
+@@ -0,0 +1,1639 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -10944,6 +11006,7 @@ new file mode 100644
 +        mOriginalContentOutlineProvider = compositorViewHolder.getOutlineProvider();
 +        mOriginalContentClipToOutline = compositorViewHolder.getClipToOutline();
 +        mOriginalContentClipBounds = compositorViewHolder.getClipBounds();
++        compositorViewHolder.setArcPhoneContentInsets(0, 0);
 +        ViewGroup.LayoutParams rawContentLayoutParams = compositorViewHolder.getLayoutParams();
 +        if (rawContentLayoutParams instanceof ViewGroup.MarginLayoutParams) {
 +            ViewGroup.MarginLayoutParams margins = (ViewGroup.MarginLayoutParams) rawContentLayoutParams;
@@ -11983,6 +12046,18 @@ new file mode 100644
 +        mCompositorViewHolder.setClipToOutline(true);
 +        int outer = dp(ArcDesktopPolicy.ARC_OUTER_PADDING_DP);
 +        int gap = dp(ArcDesktopPolicy.ARC_FRAME_GAP_DP);
++        int caption = Math.max(mCaptionSpacer.getHeight(), Math.max(0, mCaptionSpacer.getLayoutParams().height));
++        android.view.WindowInsets insets = mActivity.getWindow().getDecorView().getRootWindowInsets();
++        if (insets != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
++            int consumed = 0;
++            if (mCompositorViewHolder.getParent() instanceof View parent) {
++                int[] position = new int[2];
++                parent.getLocationInWindow(position);
++                consumed = Math.max(0, position[1] + parent.getPaddingTop());
++            }
++            caption = Math.max(caption, Math.max(0,
++                    insets.getInsets(android.view.WindowInsets.Type.captionBar()).top - consumed));
++        }
 +        // Preserve the complete Side UI width, especially the 52dp collapsed contract. The frame
 +        // gap belongs between Side UI and content, not inside the rail where it would shrink
 +        // native tab hit targets. Top/bottom padding remains part of the Arc frame.
@@ -11993,7 +12068,7 @@ new file mode 100644
 +        if (raw instanceof ViewGroup.MarginLayoutParams) {
 +            ViewGroup.MarginLayoutParams margins = (ViewGroup.MarginLayoutParams) raw;
 +            int contentLeftMargin = mOriginalContentMarginLeft + gap;
-+            int contentTopMargin = mOriginalContentMarginTop + outer;
++            int contentTopMargin = ArcDesktopPolicy.contentTopMargin(mOriginalContentMarginTop, outer, caption);
 +            int contentRightMargin = mOriginalContentMarginRight + outer;
 +            int contentBottomMargin = mOriginalContentMarginBottom + outer;
 +            if (margins.leftMargin != contentLeftMargin
@@ -12159,7 +12234,19 @@ new file mode 100644
 +        idle.setCornerRadius(dp(8));
 +        states.addState(new int[] {}, idle);
 +        view.setBackground(states);
-+        if (view instanceof TextView) ((TextView) view).setTextColor(foreground);
++        if (view instanceof TextView text) {
++            if ("arc-header-tile".equals(view.getTag())) {
++                int idleForeground = ArcDesktopPolicy.foreground(
++                        ArcDesktopPolicy.activeTabSurface(mPaletteSurface));
++                text.setTextColor(new ColorStateList(new int[][] {
++                        {android.R.attr.state_enabled, android.R.attr.state_pressed},
++                        {android.R.attr.state_enabled, android.R.attr.state_focused},
++                        {android.R.attr.state_enabled, android.R.attr.state_hovered}, {}},
++                        new int[] {foreground, foreground, foreground, idleForeground}));
++            } else {
++                text.setTextColor(foreground);
++            }
++        }
 +    }
 +
 +    private void refreshNativeRows(View view) {
@@ -13074,7 +13161,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneGla
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneGlass.java
-@@ -0,0 +1,304 @@
+@@ -0,0 +1,308 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -13171,6 +13258,10 @@ new file mode 100644
 +            else if(mTopCornersOnly){for(int i=0;i<8;i++)mCornerRadii[i]=i<4?radius:0;mClip.addRoundRect(mRect,mCornerRadii,Path.Direction.CW);}
 +            else mClip.addRoundRect(mRect,radius,radius,Path.Direction.CW);
 +            int save=canvas.save();canvas.clipPath(mClip);
++            // A popup may straddle sidebar/native UI and the web capture. Paint the uncovered
++            // region too: a partial frame must not let unblurred underlying labels bleed through.
++            // The floating navigation/omnibar do not use the milky popup treatment.
++            if(mMilky){mPaint.setColor(mSurface|0xff000000);mPaint.setAlpha(mAlpha);canvas.drawRect(mRect,mPaint);}
 +            mPaint.setAlpha(mAlpha);
 +            if(mFrame!=null){
 +                mFrameRect.set(mRect.left+mFrameFraction.left*mRect.width(),mRect.top+mFrameFraction.top*mRect.height(),
@@ -13383,7 +13474,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneNav
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneNavigation.java
-@@ -0,0 +1,406 @@
+@@ -0,0 +1,407 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -13554,6 +13645,7 @@ new file mode 100644
 +    }
 +    private FrameLayout.LayoutParams floatingLayout() {
 +        FrameLayout.LayoutParams params=new FrameLayout.LayoutParams(-1,mBarHeight,Gravity.CENTER);
++        if(mCompact)params.width=dp(96);
 +        int vertical=(mHeight-mBarHeight)/2;
 +        params.setMargins(dp(18),vertical,dp(18),vertical);
 +        return params;
@@ -13794,7 +13886,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneSta
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneStatusFade.java
-@@ -0,0 +1,108 @@
+@@ -0,0 +1,121 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -13856,6 +13948,19 @@ new file mode 100644
 +                : raw.getSystemWindowInsetTop();
 +        android.view.DisplayCutout cutout = raw.getDisplayCutout();
 +        return cutout == null ? top : Math.max(top, cutout.getSafeInsetTop());
++    }
++
++    /** Safe-area CSS is optional for sites; the native input host must clear system indicators. */
++    public static int contentTopInset(WindowInsets raw, int consumedTop) {
++        return Math.max(0, toolbarTopInset(raw) - Math.max(0, consumedTop));
++    }
++
++    /** In compact mode the retained Archium control gets its own area below the web composer. */
++    public static int contentBottomInset(WindowInsets raw, boolean compact, int controlsHeight) {
++        boolean ime = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
++                ? raw.isVisible(WindowInsets.Type.ime())
++                : raw.getSystemWindowInsetBottom() > raw.getStableInsetBottom();
++        return compact && !ime ? Math.max(0, controlsHeight) : 0;
 +    }
 +
 +    private void updateBounds() {
@@ -17430,7 +17535,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneGl
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneGlassTest.java
-@@ -0,0 +1,239 @@
+@@ -0,0 +1,255 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -17461,6 +17566,22 @@ new file mode 100644
 +@GraphicsMode(GraphicsMode.Mode.LEGACY)
 +@SQLiteMode(SQLiteMode.Mode.LEGACY)
 +public class ArcPhoneGlassTest {
++    @Test public void milkyPopupWithPartialWebFramePaintsAnOpaqueBase() {
++        var backdrop=new ArcPhoneGlass.Backdrop();
++        backdrop.setMilky(true);backdrop.setSurface(0xff303238);backdrop.setBounds(0,0,200,100);
++        Bitmap frame=Bitmap.createBitmap(2,2,Bitmap.Config.ARGB_8888);
++        backdrop.setFrame(frame,new Rect(0,0,200,100),new Rect(100,0,200,100));
++        class RecordingCanvas extends Canvas {
++            int rectangles,firstAlpha;
++            @Override public void drawRect(RectF rect,Paint paint){
++                if(rectangles++==0)firstAlpha=paint.getAlpha();
++            }
++        }
++        var canvas=new RecordingCanvas();backdrop.draw(canvas);
++        assertTrue("A popup outside the web capture needs a base before its tinted layer",canvas.rectangles>=2);
++        assertEquals(255,canvas.firstAlpha);
++    }
++
 +    @Test public void popupRegionUsesScreenCoordinatesAcrossSeparateWindows() {
 +        View content=new View(Robolectric.buildActivity(Activity.class).setup().get()) {
 +            @Override public void getLocationOnScreen(int[] out){out[0]=100;out[1]=200;}
@@ -17674,7 +17795,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneNa
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneNavigationTest.java
-@@ -0,0 +1,430 @@
+@@ -0,0 +1,441 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -17872,6 +17993,17 @@ new file mode 100644
 +        assertEquals("Archium",((TextView)((LinearLayout)find("arc-phone-menu")).getChildAt(1)).getText().toString());
 +        assertTrue(find("arc-phone-menu").performClick());assertEquals(1,restored[0]);
 +        for(String tag:new String[]{"home","new","tabs","menu"})assertEquals(View.VISIBLE,find("arc-phone-"+tag).getVisibility());
++    }
++
++    @Test public void compactWidthSurvivesNativeSlotReattachment() {
++        mNavigation.setCompact(true);
++        View bar=mNavigation.getGlassTarget();
++        int compactWidth=bar.getLayoutParams().width;
++        assertTrue(compactWidth>0);
++        mSlot.removeView(bar);
++        mNavigation.attachBottomBarView(bar);
++        assertTrue(mNavigation.isCompact());
++        assertEquals(compactWidth,bar.getLayoutParams().width);
 +    }
 +
 +    @Test public void draggingCompactControlClearsPressAndDoesNotOpenMenu() {
@@ -18109,7 +18241,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneSt
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneStatusFadeTest.java
-@@ -0,0 +1,147 @@
+@@ -0,0 +1,162 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -18140,6 +18272,21 @@ new file mode 100644
 +@GraphicsMode(GraphicsMode.Mode.LEGACY)
 +@SQLiteMode(SQLiteMode.Mode.LEGACY)
 +public class ArcPhoneStatusFadeTest {
++    @Test public void contentClearsUnconsumedSystemAreaAndCompactControlsButNotIme() {
++        WindowInsets raw=new WindowInsets.Builder()
++                .setInsets(WindowInsets.Type.statusBars(),Insets.of(0,30,0,0))
++                .setInsetsIgnoringVisibility(WindowInsets.Type.statusBars(),Insets.of(0,30,0,0))
++                .setVisible(WindowInsets.Type.ime(),false).build();
++        assertEquals(30,ArcPhoneStatusFade.contentTopInset(raw,0));
++        assertEquals(0,ArcPhoneStatusFade.contentTopInset(raw,30));
++        assertEquals(20,ArcPhoneStatusFade.contentTopInset(raw,10));
++        assertEquals(76,ArcPhoneStatusFade.contentBottomInset(raw,true,76));
++        assertEquals(0,ArcPhoneStatusFade.contentBottomInset(raw,false,76));
++        WindowInsets keyboard=new WindowInsets.Builder(raw)
++                .setInsets(WindowInsets.Type.ime(),Insets.of(0,0,0,300))
++                .setVisible(WindowInsets.Type.ime(),true).build();
++        assertEquals(0,ArcPhoneStatusFade.contentBottomInset(keyboard,true,76));
++    }
 +    @Test public void toolbarUsesStableStatusInsetWhileLeavingFullscreen() throws Exception {
 +        WindowInsets raw = new WindowInsets.Builder()
 +                .setInsets(WindowInsets.Type.statusBars(), Insets.NONE)
@@ -23885,7 +24032,7 @@ diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrom
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java
-@@ -0,0 +1,139 @@
+@@ -0,0 +1,144 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -23952,6 +24099,11 @@ new file mode 100644
 +        if (!(density > 0f)) return false;
 +        return railWidthPx >= Math.round(ARC_FULL_CONTROLS_MIN_WIDTH_DP * density)
 +                && railHeightPx >= Math.round(ARC_FULL_CONTROLS_MIN_HEIGHT_DP * density);
++    }
++
++    /** A native caption already present in the original margin must not be counted twice. */
++    public static int contentTopMargin(int original, int outer, int caption) {
++        return Math.max(original, Math.max(0, caption)) + outer;
 +    }
 +
 +    /** Reserve caption, five control rows, collection chrome and native tab space. */

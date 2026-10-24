@@ -9,6 +9,7 @@ class AdaptiveControlsTests(unittest.TestCase):
   code='''public class AdaptiveProbe {
 Object mArcPhoneGestureContents=new Object();boolean mArcPhoneFullscreen,mArcPhoneResumed=true,mArcPhoneCompact,mIsDestroyed,focus;
 boolean isUrlBarFocused(){return focus;}
+int insetUpdates;void updateArcPhoneContentInsets(){insetUpdates++;}
 static class View {static final int VISIBLE=0,INVISIBLE=4;int visibility;float translation,alpha=1;void setAlpha(float a){alpha=a;}float getAlpha(){return alpha;}void setVisibility(int v){visibility=v;}int getHeight(){return 56;}void setTranslationY(float y){translation=y;}float getTranslationY(){return translation;}}
 static class Navigation {boolean compact;void setCompact(boolean c){compact=c;}}Navigation mArcPhoneNavigation=new Navigation();
 View mToolbarLayout=new View();android.animation.ValueAnimator mArcPhoneCompactAnimation;

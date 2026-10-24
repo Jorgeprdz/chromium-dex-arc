@@ -197,6 +197,17 @@ public class ArcPhoneNavigationTest {
         for(String tag:new String[]{"home","new","tabs","menu"})assertEquals(View.VISIBLE,find("arc-phone-"+tag).getVisibility());
     }
 
+    @Test public void compactWidthSurvivesNativeSlotReattachment() {
+        mNavigation.setCompact(true);
+        View bar=mNavigation.getGlassTarget();
+        int compactWidth=bar.getLayoutParams().width;
+        assertTrue(compactWidth>0);
+        mSlot.removeView(bar);
+        mNavigation.attachBottomBarView(bar);
+        assertTrue(mNavigation.isCompact());
+        assertEquals(compactWidth,bar.getLayoutParams().width);
+    }
+
     @Test public void draggingCompactControlClearsPressAndDoesNotOpenMenu() {
         mNavigation.setCompact(true);
         mSlot.measure(View.MeasureSpec.makeMeasureSpec(320,View.MeasureSpec.EXACTLY),

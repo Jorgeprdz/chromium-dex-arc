@@ -28,6 +28,21 @@ import org.robolectric.annotation.SQLiteMode;
 @GraphicsMode(GraphicsMode.Mode.LEGACY)
 @SQLiteMode(SQLiteMode.Mode.LEGACY)
 public class ArcPhoneStatusFadeTest {
+    @Test public void contentClearsUnconsumedSystemAreaAndCompactControlsButNotIme() {
+        WindowInsets raw=new WindowInsets.Builder()
+                .setInsets(WindowInsets.Type.statusBars(),Insets.of(0,30,0,0))
+                .setInsetsIgnoringVisibility(WindowInsets.Type.statusBars(),Insets.of(0,30,0,0))
+                .setVisible(WindowInsets.Type.ime(),false).build();
+        assertEquals(30,ArcPhoneStatusFade.contentTopInset(raw,0));
+        assertEquals(0,ArcPhoneStatusFade.contentTopInset(raw,30));
+        assertEquals(20,ArcPhoneStatusFade.contentTopInset(raw,10));
+        assertEquals(76,ArcPhoneStatusFade.contentBottomInset(raw,true,76));
+        assertEquals(0,ArcPhoneStatusFade.contentBottomInset(raw,false,76));
+        WindowInsets keyboard=new WindowInsets.Builder(raw)
+                .setInsets(WindowInsets.Type.ime(),Insets.of(0,0,0,300))
+                .setVisible(WindowInsets.Type.ime(),true).build();
+        assertEquals(0,ArcPhoneStatusFade.contentBottomInset(keyboard,true,76));
+    }
     @Test public void toolbarUsesStableStatusInsetWhileLeavingFullscreen() throws Exception {
         WindowInsets raw = new WindowInsets.Builder()
                 .setInsets(WindowInsets.Type.statusBars(), Insets.NONE)

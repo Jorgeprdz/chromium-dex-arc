@@ -330,6 +330,7 @@ public final class ArcDesktopCoordinator {
         mOriginalContentOutlineProvider = compositorViewHolder.getOutlineProvider();
         mOriginalContentClipToOutline = compositorViewHolder.getClipToOutline();
         mOriginalContentClipBounds = compositorViewHolder.getClipBounds();
+        compositorViewHolder.setArcPhoneContentInsets(0, 0);
         ViewGroup.LayoutParams rawContentLayoutParams = compositorViewHolder.getLayoutParams();
         if (rawContentLayoutParams instanceof ViewGroup.MarginLayoutParams) {
             ViewGroup.MarginLayoutParams margins = (ViewGroup.MarginLayoutParams) rawContentLayoutParams;
@@ -1369,6 +1370,18 @@ public final class ArcDesktopCoordinator {
         mCompositorViewHolder.setClipToOutline(true);
         int outer = dp(ArcDesktopPolicy.ARC_OUTER_PADDING_DP);
         int gap = dp(ArcDesktopPolicy.ARC_FRAME_GAP_DP);
+        int caption = Math.max(mCaptionSpacer.getHeight(), Math.max(0, mCaptionSpacer.getLayoutParams().height));
+        android.view.WindowInsets insets = mActivity.getWindow().getDecorView().getRootWindowInsets();
+        if (insets != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            int consumed = 0;
+            if (mCompositorViewHolder.getParent() instanceof View parent) {
+                int[] position = new int[2];
+                parent.getLocationInWindow(position);
+                consumed = Math.max(0, position[1] + parent.getPaddingTop());
+            }
+            caption = Math.max(caption, Math.max(0,
+                    insets.getInsets(android.view.WindowInsets.Type.captionBar()).top - consumed));
+        }
         // Preserve the complete Side UI width, especially the 52dp collapsed contract. The frame
         // gap belongs between Side UI and content, not inside the rail where it would shrink
         // native tab hit targets. Top/bottom padding remains part of the Arc frame.
@@ -1379,7 +1392,7 @@ public final class ArcDesktopCoordinator {
         if (raw instanceof ViewGroup.MarginLayoutParams) {
             ViewGroup.MarginLayoutParams margins = (ViewGroup.MarginLayoutParams) raw;
             int contentLeftMargin = mOriginalContentMarginLeft + gap;
-            int contentTopMargin = mOriginalContentMarginTop + outer;
+            int contentTopMargin = ArcDesktopPolicy.contentTopMargin(mOriginalContentMarginTop, outer, caption);
             int contentRightMargin = mOriginalContentMarginRight + outer;
             int contentBottomMargin = mOriginalContentMarginBottom + outer;
             if (margins.leftMargin != contentLeftMargin
@@ -1545,7 +1558,19 @@ public final class ArcDesktopCoordinator {
         idle.setCornerRadius(dp(8));
         states.addState(new int[] {}, idle);
         view.setBackground(states);
-        if (view instanceof TextView) ((TextView) view).setTextColor(foreground);
+        if (view instanceof TextView text) {
+            if ("arc-header-tile".equals(view.getTag())) {
+                int idleForeground = ArcDesktopPolicy.foreground(
+                        ArcDesktopPolicy.activeTabSurface(mPaletteSurface));
+                text.setTextColor(new ColorStateList(new int[][] {
+                        {android.R.attr.state_enabled, android.R.attr.state_pressed},
+                        {android.R.attr.state_enabled, android.R.attr.state_focused},
+                        {android.R.attr.state_enabled, android.R.attr.state_hovered}, {}},
+                        new int[] {foreground, foreground, foreground, idleForeground}));
+            } else {
+                text.setTextColor(foreground);
+            }
+        }
     }
 
     private void refreshNativeRows(View view) {

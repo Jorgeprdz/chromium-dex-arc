@@ -29,6 +29,16 @@ p.mIsVisible=false;check(!p.isSceneOverlayTreeShowing());p.mIsVisible=true;p.mCu
         end=toolbar.index('@VisibleForTesting',start)
         for reason in ('mIsXrFsm','mIsVerticalTabsHiddenDueToNarrow','mIsArcToolbarSuppressed','mArcPhoneOverlayActive'):
             self.assertIn(reason,toolbar[start:end])
-        self.assertIn('phoneBottom.setArcPhoneControlsOverlay(glass)',toolbar)
+        self.assertIn('phoneBottom.setArcPhoneControlsOverlay(floating)',toolbar)
         self.assertIn('edgeController.setArcPhoneControlsOverlay(glass)',toolbar)
         self.assertIn('mBottomControlsStacker.requestLayerUpdate(false)',toolbar)
+
+    def test_native_pages_keep_one_floating_bottom_scene_without_web_inset_override(self):
+        from test_phone_overlay_insets import run_probe
+        toolbar=(ROOT/'.source-modified/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java').read_text()
+        floating=re.search(r'boolean floating = [^;]+;',toolbar).group(0)
+        glass=re.search(r'boolean glass = [^;]+;',toolbar).group(0)
+        bottom=re.search(r'phoneBottom.setArcPhoneControlsOverlay\((\w+)\)',toolbar).group(1)
+        web=re.search(r'mCompositorViewHolder.setArcPhoneControlsOverlay\((\w+)\)',toolbar).group(1)
+        code='public class NativeSceneProbe {static class Tab {boolean nativePage;boolean isNativePage(){return nativePage;}} static int actual(boolean enabled,boolean mArcPhoneResumed,boolean mArcPhoneFullscreen,Tab glassTab){'+floating+glass+'return ('+bottom+'?1:0)|('+web+'?2:0);}' + '\npublic static void main(String[] a){\nfor(boolean enabled:new boolean[]{false,true})for(boolean resumed:new boolean[]{false,true})for(boolean fullscreen:new boolean[]{false,true}){\nboolean live=enabled&&resumed&&!fullscreen;\nTab nativeTab=new Tab();nativeTab.nativePage=true;Tab webTab=new Tab();\nif(actual(enabled,resumed,fullscreen,nativeTab)!=(live?1:0)||actual(enabled,resumed,fullscreen,null)!=(live?1:0)||actual(enabled,resumed,fullscreen,webTab)!=(live?3:0))throw new AssertionError("NTP/native bottom scene or web viewport ownership");}}}\n'
+        run_probe(self,{'NativeSceneProbe.java':code},'NativeSceneProbe')

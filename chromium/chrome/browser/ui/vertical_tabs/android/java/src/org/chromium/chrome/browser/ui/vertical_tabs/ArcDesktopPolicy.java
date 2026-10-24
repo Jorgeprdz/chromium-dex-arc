@@ -66,6 +66,11 @@ public final class ArcDesktopPolicy {
                 && railHeightPx >= Math.round(ARC_FULL_CONTROLS_MIN_HEIGHT_DP * density);
     }
 
+    /** A native caption already present in the original margin must not be counted twice. */
+    public static int contentTopMargin(int original, int outer, int caption) {
+        return Math.max(original, Math.max(0, caption)) + outer;
+    }
+
     /** Reserve caption, five control rows, collection chrome and native tab space. */
     public static int collectionScrollBudgetPx(int height, float density, int captionHeight) {
         if (!(density > 0f) || height <= 0) return 0;

@@ -61,6 +61,19 @@ public final class ArcPhoneStatusFade {
         return cutout == null ? top : Math.max(top, cutout.getSafeInsetTop());
     }
 
+    /** Safe-area CSS is optional for sites; the native input host must clear system indicators. */
+    public static int contentTopInset(WindowInsets raw, int consumedTop) {
+        return Math.max(0, toolbarTopInset(raw) - Math.max(0, consumedTop));
+    }
+
+    /** In compact mode the retained Archium control gets its own area below the web composer. */
+    public static int contentBottomInset(WindowInsets raw, boolean compact, int controlsHeight) {
+        boolean ime = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                ? raw.isVisible(WindowInsets.Type.ime())
+                : raw.getSystemWindowInsetBottom() > raw.getStableInsetBottom();
+        return compact && !ime ? Math.max(0, controlsHeight) : 0;
+    }
+
     private void updateBounds() {
         WindowInsets raw = mDecor.getRootWindowInsets();
         int top = raw == null ? 0 : Build.VERSION.SDK_INT >= Build.VERSION_CODES.R

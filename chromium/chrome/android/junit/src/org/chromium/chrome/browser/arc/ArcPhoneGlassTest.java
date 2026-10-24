@@ -28,6 +28,22 @@ import org.robolectric.annotation.SQLiteMode;
 @GraphicsMode(GraphicsMode.Mode.LEGACY)
 @SQLiteMode(SQLiteMode.Mode.LEGACY)
 public class ArcPhoneGlassTest {
+    @Test public void milkyPopupWithPartialWebFramePaintsAnOpaqueBase() {
+        var backdrop=new ArcPhoneGlass.Backdrop();
+        backdrop.setMilky(true);backdrop.setSurface(0xff303238);backdrop.setBounds(0,0,200,100);
+        Bitmap frame=Bitmap.createBitmap(2,2,Bitmap.Config.ARGB_8888);
+        backdrop.setFrame(frame,new Rect(0,0,200,100),new Rect(100,0,200,100));
+        class RecordingCanvas extends Canvas {
+            int rectangles,firstAlpha;
+            @Override public void drawRect(RectF rect,Paint paint){
+                if(rectangles++==0)firstAlpha=paint.getAlpha();
+            }
+        }
+        var canvas=new RecordingCanvas();backdrop.draw(canvas);
+        assertTrue("A popup outside the web capture needs a base before its tinted layer",canvas.rectangles>=2);
+        assertEquals(255,canvas.firstAlpha);
+    }
+
     @Test public void popupRegionUsesScreenCoordinatesAcrossSeparateWindows() {
         View content=new View(Robolectric.buildActivity(Activity.class).setup().get()) {
             @Override public void getLocationOnScreen(int[] out){out[0]=100;out[1]=200;}

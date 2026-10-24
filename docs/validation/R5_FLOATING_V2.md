@@ -190,3 +190,7 @@ Run39982605276: **completed/success**, APK instalada y verificada por el instala
 La revisión de capturas propias demostró defectos de paneles; no equivale a aprobación visual del diseño completo. Diagnóstico, fixes incrementales y la extensión Desktop lechosa posteriormente autorizada se documentan en [R5_DESKTOP_MILKY.md](R5_DESKTOP_MILKY.md). La autorización Desktop sustituye la restricción anterior de no alterar su material visual, conservando geometría, paleta y funcionalidades.
 
 Este candidato no tiene APK: aceptación gráfica Claro/Oscuro PENDIENTE, título/flecha anterior pendiente de reproducción. Sin nuevo dispatch, instalación, limpieza de checkpoints o acciones sobre el teléfono en esta fase.
+
+### Input access follow-up — 24-oct-2026 UTC
+
+Installed baseline b62ece7 was inspected in phone and DeX. Approved floating pill geometry/material is retained; new candidate addresses native reattachment width, compact-mode content safety, NTP duplicate scene and readable popup backing. See [R5_INPUT_ACCESS_FIXES.md](R5_INPUT_ACCESS_FIXES.md) for implementation, recovery evidence and pending device acceptance. Candidate not yet built; no graphical PASS inferred from local tests.

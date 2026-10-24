@@ -756,3 +756,13 @@ Verificación del checkpoint Desktop: suite host424 PASS; política Chromium61 m
 - [x] Remote preflight PASS and checkpoint restoration VERIFIED_BY_CI; native Java compilation FAIL at ToolbarManager438, invalid placement of @Nullable on a fully qualified ValueAnimator type. NO_APK / no installation.
 - [x] Localized declaration fix with SDK-based RED/GREEN; adaptive2 and scene/suppression1 PASS. Patch regenerated and reproducibility checked. Previous candidate's full local434-test suite finished PASS; not claimed as a full rerun after this fix.
 - [ ] New integrated native build requires fresh user authorization; no automatic retry. Published checkpoint40049206996-1 remains unverified locally. Device/UI acceptance pending.
+
+## R5 input access / menu readability — 24-oct-2026 UTC
+
+- [x] Recovered deleted repository/pinned sources with matching manifest hashes; preserved installed baseline b62ece7 and hidden evidence/backups. Current branch unchanged.
+- [x] Candidate code: phone content safe regions with owned/restored margins, compact-width reattachment, NTP duplicate-bottom scene suppression, popup partial-frame backing, Desktop caption top clearance and readable idle tile labels. Expanded pills/material, sidebar widths, Split ratios and Spaces model preserved.
+- [x] Local RED/GREEN:165 Android executions (82 original shadow-policy methods),3 host geometry/contrast and2 adaptive probes; isolated SDK37.2 compilation PASS;197-file patch application/delta and identical regeneration PASS,187 unchanged timestamps preserved. Not graphical/device acceptance.
+- [x] Complete local suite438:437 PASS/1 obsolete NTP static contract FAIL; corrected assertion plus native-page matrix and final affected suites17 PASS. Full-suite run is not presented as green.
+- [ ] One incremental build/verified install authorized but not dispatched yet; preflight remains enabled. Details and honest pending device cases: [R5_INPUT_ACCESS_FIXES.md](docs/validation/R5_INPUT_ACCESS_FIXES.md).
+- [ ] Small-window Spaces access, narrow Split top-search root cause and broad physical regressions remain pending. Old inspection screenshots were accidentally deleted; do not claim retained visual evidence.
+- [ ] After run/monitor launch: finish MacDesk repair using hidden directories; Nautilus must be the default file manager, as requested.

@@ -42,7 +42,9 @@ public static void main(String[] args){Outline o=new Outline();ShadowProbe p=new
         self.assertTrue('phone.setArcPhoneFloatingSurfaceEnabled(enabled);' in toolbar, 'Phone activation missing')
         self.assertIn('if (mArcPhoneHost != null) updateArcPhoneFloatingSurfaces();',toolbar)
         self.assertIn('mArcPhoneNavigation.setPhoneModeActive(enabled)',toolbar)
-        self.assertEqual(2,toolbar.count('ArcPhoneNavigation.getReservedHeight(mActivity)'))
+        self.assertEqual(3,toolbar.count('ArcPhoneNavigation.getReservedHeight(mActivity)'))
+        self.assertIn('raw, mArcPhoneCompact, ArcPhoneNavigation.getReservedHeight(mActivity)',toolbar)
+        self.assertIn('phoneBottom.setArcPhoneControlsOverlay(floating)',toolbar)
     def test_night_configuration_refresh_does_not_depend_on_orientation_change(self):
         toolbar=(ROOT/'.source-modified/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java').read_text()
         start=toolbar.index('public void onConfigurationChanged(Configuration configuration)')

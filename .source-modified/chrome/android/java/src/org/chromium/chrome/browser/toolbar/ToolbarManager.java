@@ -457,6 +457,7 @@ public class ToolbarManager
     private int mArcPhoneOriginalProgressMargin;
     private boolean mArcPhoneOriginalStatusContrast;
     private View.@Nullable OnLayoutChangeListener mArcPhoneInsetLayoutListener;
+    private android.view.ViewTreeObserver.@Nullable OnGlobalLayoutListener mArcPhoneContentLayoutListener;
     private boolean mArcPhoneResumed = true;
     private boolean mArcPhoneFullscreen;
     private boolean mArcPhoneTransparentContainer;
@@ -2621,6 +2622,7 @@ public class ToolbarManager
         if (mArcPhoneInsetLayoutListener == null) {
             mArcPhoneInsetLayoutListener = (view, l, t, r, b, ol, ot, or, ob) -> {
                 if (mArcPhoneOverlayActive) updateArcPhoneTopInset();
+                updateArcPhoneContentInsets();
                 if (mArcPhoneCompact && (r-l != or-ol || b-t != ob-ot)) {
                     if (mArcPhoneCompactAnimation != null) {
                         android.animation.ValueAnimator animation = mArcPhoneCompactAnimation;
@@ -2633,6 +2635,11 @@ public class ToolbarManager
             };
             mControlContainer.getView().addOnLayoutChangeListener(mArcPhoneInsetLayoutListener);
         }
+        if (mArcPhoneContentLayoutListener == null) {
+            mArcPhoneContentLayoutListener = this::updateArcPhoneContentInsets;
+            mActivity.getWindow().getDecorView().getViewTreeObserver()
+                    .addOnGlobalLayoutListener(mArcPhoneContentLayoutListener);
+        }
         updateArcPhoneFloatingSurfaces();
         if (mArcPhoneNavigation != null) mArcPhoneNavigation.bind(host);
     }
@@ -2644,6 +2651,7 @@ public class ToolbarManager
         Tab glassTab = mActivityTabProvider.get();
         boolean floating = enabled && mArcPhoneResumed && !mArcPhoneFullscreen;
         boolean glass = floating && glassTab != null && !glassTab.isNativePage();
+        if (!glass) mCompositorViewHolder.setArcPhoneContentInsets(0, 0);
         bindArcPhoneGestures(glass && glassTab != null ? glassTab.getWebContents() : null);
         if (!glass || isUrlBarFocused()) setArcPhoneCompact(false);
         if (mToolbarLayout instanceof ToolbarPhone phone) {
@@ -2721,7 +2729,7 @@ public class ToolbarManager
             if (edgeController != null) edgeController.setArcPhoneControlsOverlay(glass);
             updateArcPhoneTopInset();
             BottomControlsCoordinator phoneBottom = mBottomAppBarCoordinatorSupplier.get();
-            if (phoneBottom != null) phoneBottom.setArcPhoneControlsOverlay(glass);
+            if (phoneBottom != null) phoneBottom.setArcPhoneControlsOverlay(floating);
             if (mArcPhoneTransparentContainer != glass) {
                 if (glass) {
                     mArcPhoneContainerBackground=mControlContainer.getView().getBackground();
@@ -2746,6 +2754,7 @@ public class ToolbarManager
                     org.chromium.ui.R.id.arc_phone_surface_decorator,
                     glass && mArcPhoneGlass != null ? mArcPhoneGlass.getSurfaceDecorator() : null);
             mCompositorViewHolder.setArcPhoneControlsOverlay(glass);
+            updateArcPhoneContentInsets();
             if (mArcPhoneGlass != null) {
                 mArcPhoneGlass.setInMotion(Boolean.TRUE.equals(mCompositorViewHolder.getInMotionSupplier().get()));
                 mArcPhoneGlass.setSurfaceLayersTag(org.chromium.ui.R.id.arc_phone_surface_layers);
@@ -2799,6 +2808,7 @@ public class ToolbarManager
         }
         mArcPhoneCompact = compact;
         if (mArcPhoneNavigation != null) mArcPhoneNavigation.setCompact(compact);
+        updateArcPhoneContentInsets();
         if (mArcPhoneCompactAnimation != null) {
             mArcPhoneCompactAnimation.cancel();
             mArcPhoneCompactAnimation = null;
@@ -2828,6 +2838,26 @@ public class ToolbarManager
             }
         });
         animation.start();
+    }
+
+    private void updateArcPhoneContentInsets() {
+        if (!mArcPhoneOverlayActive || mIsDestroyed
+                || org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.isDesktopWindow(mActivity)) {
+            mCompositorViewHolder.setArcPhoneContentInsets(0, 0);
+            return;
+        }
+        android.view.WindowInsets raw = mActivity.getWindow().getDecorView().getRootWindowInsets();
+        if (raw == null) return;
+        int consumedTop = 0;
+        if (mCompositorViewHolder.getParent() instanceof View parent) {
+            int[] position = new int[2];
+            parent.getLocationInWindow(position);
+            consumedTop = Math.max(0, position[1] + parent.getPaddingTop());
+        }
+        mCompositorViewHolder.setArcPhoneContentInsets(
+                org.chromium.chrome.browser.arc.ArcPhoneStatusFade.contentTopInset(raw, consumedTop),
+                org.chromium.chrome.browser.arc.ArcPhoneStatusFade.contentBottomInset(
+                        raw, mArcPhoneCompact, ArcPhoneNavigation.getReservedHeight(mActivity)));
     }
 
     /** Legacy top-inset owner does not position web-page controls beneath a consumed status bar. */
@@ -3362,6 +3392,12 @@ public class ToolbarManager
         mArcPhoneGestures = null;
         mArcPhoneGestureContents = null;
         setArcPhoneCompact(false);
+        mCompositorViewHolder.setArcPhoneContentInsets(0, 0);
+        if (mArcPhoneContentLayoutListener != null) {
+            mActivity.getWindow().getDecorView().getViewTreeObserver()
+                    .removeOnGlobalLayoutListener(mArcPhoneContentLayoutListener);
+            mArcPhoneContentLayoutListener = null;
+        }
         if (mArcPhoneInsetLayoutListener != null) {
             mControlContainer.getView().removeOnLayoutChangeListener(mArcPhoneInsetLayoutListener);
             mArcPhoneInsetLayoutListener = null;
