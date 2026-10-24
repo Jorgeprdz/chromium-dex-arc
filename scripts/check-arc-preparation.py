@@ -53,7 +53,7 @@ def synthetic_chromium_r(values_xml: Path) -> str:
     # View IDs below are deliberately restricted to the pinned Chromium/Arc
     # Android views compiled by the isolated adapter gate.
     id_names = (
-        'toolbar', 'desktop_window_spacer', 'location_bar',
+        'toolbar', 'desktop_window_spacer', 'location_bar', 'tab_switcher_button',
         'control_container', 'location_bar_holder', 'collapse_button', 'menu_button_wrapper',
         'extensions_toolbar_container', 'coordinator', 'new_tab_button', 'omnibox_suggestions_dropdown',
         'location_bar_status', 'location_bar_status_icon', 'url_bar', 'focus_thief',

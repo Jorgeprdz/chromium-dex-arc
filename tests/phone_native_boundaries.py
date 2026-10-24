@@ -20,6 +20,7 @@ def definitions():
         'org.chromium.ui.util.ColorUtils': 'public class ColorUtils {public static boolean shouldUseLightForegroundOnBackground(int c){return android.graphics.Color.luminance(c)<.45;}}',
         'org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider': 'public interface BrowserControlsStateProvider {interface Observer{default void onControlsPositionChanged(int p){}}@interface ControlsPosition{int TOP=0,BOTTOM=1;}int getControlsPosition();void addObserver(Observer o);void removeObserver(Observer o);}',
         'org.chromium.chrome.browser.profiles.Profile': 'public class Profile {}',
+        'org.chromium.chrome.browser.ui.bottombar.R': 'public class R {public static class id {public static final int bottom_bar_container=0x7f0101f7;}}',
         'org.chromium.chrome.browser.ui.bottombar.BottomBar': 'public interface BottomBar {android.view.View getView();int getBackgroundColor();void setParent(int host);boolean maybeShowPromoDialog(org.chromium.chrome.browser.profiles.Profile profile);void onStartupPromoFlowFinished(boolean shown);}',
         'org.chromium.chrome.browser.ui.bottombar.BottomBarHostManager': 'public class BottomBarHostManager {public @interface Host {int TABBED=0,HUB=1;}}',
 

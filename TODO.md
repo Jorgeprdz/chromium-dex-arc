@@ -790,3 +790,9 @@ Verificación del checkpoint Desktop: suite host424 PASS; política Chromium61 m
 - [x] Corrección local: margen original +8dp, sin alterar material, sidebar, Split ni Mobile; parche regenerado/reproducible.13 pruebas host PASS + preparación SDK/sparse PASS.
 - [ ] APK y comprobación física del marco/controles nativos/transiciones. El runner Robolectric histórico de frame tiene fixture desactualizada (FAIL de compilación, documentado); no se declara PASS Android.
 - [ ] Este cambio NO está incluido en el run40116057788, que continúa sin modificaciones. No se lanzó otro build. Véase docs/validation/R5_DESKTOP_THIN_FRAME.md.
+
+## 24-oct-2026 — Mobile: cierre al abrir enlaces desde menú contextual
+
+- [x] Causa localizada en crash real y desensamblado del APK instalado0f6c610: animación nativa busca bottom_bar_container inexistente y después invoca findViewById sobre null.
+- [x] IDs nativos restaurados en la única floating pill y su botón real Pestañas; sin cambio visual. RED en SDK30/36;194 Android/Robolectric GREEN,10 host PASS, preparación SDK y parche incremental reproducible PASS.
+- [ ] Build/APK y aceptación física de nueva pestaña, grupo, ventana e incógnito; sin relanzamientos automáticos. Véase docs/validation/R5_MOBILE_BACKGROUND_TAB_CRASH.md.

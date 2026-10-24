@@ -13661,7 +13661,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneNav
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneNavigation.java
-@@ -0,0 +1,407 @@
+@@ -0,0 +1,410 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -13764,6 +13764,8 @@ new file mode 100644
 +        mBarHeight=Math.min(mHeight,Math.max(dp(48),mHeight-dp(20)));
 +        mBar=new LinearLayout(mContext);mBar.setGravity(Gravity.CENTER);
 +        mBar.setTag("arc-phone-navigation");
++        // Native background-tab animations locate the replacement bar and its actual target.
++        mBar.setId(org.chromium.chrome.browser.ui.bottombar.R.id.bottom_bar_container);
 +        mBar.setElevation(dp(6));
 +        mBar.setOutlineAmbientShadowColor(0x240d244b);
 +        mBar.setOutlineSpotShadowColor(0x240d244b);
@@ -13773,6 +13775,7 @@ new file mode 100644
 +            final int action=i;
 +            LinearLayout button=new LinearLayout(mContext);button.setOrientation(LinearLayout.VERTICAL);
 +            button.setGravity(Gravity.CENTER);button.setPadding(0,dp(3),0,dp(3));
++            if(i==TABS)button.setId(R.id.tab_switcher_button);
 +            ImageView icon=new ImageView(mContext);icon.setImageDrawable(new Icon(i,mForeground,""));
 +            FrameLayout pill=new FrameLayout(mContext);pill.addView(icon,new FrameLayout.LayoutParams(Math.min(dp(26),mBarHeight-dp(26)),Math.min(dp(26),mBarHeight-dp(26)),Gravity.CENTER));
 +            button.addView(pill,new LinearLayout.LayoutParams(dp(i==NEW_TAB?60:44),Math.max(dp(24),mBarHeight-dp(24))));
@@ -18245,7 +18248,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneNa
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneNavigationTest.java
-@@ -0,0 +1,441 @@
+@@ -0,0 +1,461 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -18328,6 +18331,26 @@ new file mode 100644
 +        assertEquals(1,mSlot.getChildCount());
 +        ViewGroup bar=(ViewGroup)mSlot.getChildAt(0);assertEquals(4,bar.getChildCount());
 +        for(String tag:new String[]{"home","new","tabs","menu"})assertNotNull(find("arc-phone-"+tag));
++    }
++    @Test public void backgroundTabAnimationFindsNativeBarAndRealTabTarget() {
++        // Exact lookup contract from pinned NewBackgroundTabAnimationData. Missing first
++        // target caused the installed APK's findViewById NPE when opening a link in a tab.
++        View bar=mSlot.findViewById(org.chromium.chrome.browser.ui.bottombar.R.id.bottom_bar_container);
++        assertSame(mNavigation.getBottomBar().getView(),bar);
++        View tabs=bar.findViewById(org.chromium.chrome.R.id.tab_switcher_button);
++        assertSame(find("arc-phone-tabs"),tabs);
++        tabs.performClick();assertEquals(ArcPhoneNavigation.TABS,mHost.action);
++        // Chromium borrows this same bar in the Hub; IDs must survive native reattachment.
++        FrameLayout hub=new FrameLayout(mActivity.get());
++        mSlot.removeView(bar);hub.addView(bar);
++        assertSame(tabs,hub.findViewById(org.chromium.chrome.browser.ui.bottombar.R.id.bottom_bar_container)
++                .findViewById(org.chromium.chrome.R.id.tab_switcher_button));
++        hub.removeView(bar);mNavigation.attachBottomBarView(bar);
++        mNavigation.setCompact(true);
++        assertSame(tabs,mSlot.findViewById(org.chromium.chrome.browser.ui.bottombar.R.id.bottom_bar_container)
++                .findViewById(org.chromium.chrome.R.id.tab_switcher_button));
++        mNavigation.setCompact(false);
++        assertEquals(1,mSlot.getChildCount());
 +    }
 +    @Test public void glassReusesOneBarWithTransparentNativeBackingAndRestoresFallback(){
 +        View bar=mNavigation.getGlassTarget();Object layout=bar.getLayoutParams();

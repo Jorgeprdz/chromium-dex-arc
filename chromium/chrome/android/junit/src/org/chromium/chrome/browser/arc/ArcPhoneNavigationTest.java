@@ -81,6 +81,26 @@ public class ArcPhoneNavigationTest {
         ViewGroup bar=(ViewGroup)mSlot.getChildAt(0);assertEquals(4,bar.getChildCount());
         for(String tag:new String[]{"home","new","tabs","menu"})assertNotNull(find("arc-phone-"+tag));
     }
+    @Test public void backgroundTabAnimationFindsNativeBarAndRealTabTarget() {
+        // Exact lookup contract from pinned NewBackgroundTabAnimationData. Missing first
+        // target caused the installed APK's findViewById NPE when opening a link in a tab.
+        View bar=mSlot.findViewById(org.chromium.chrome.browser.ui.bottombar.R.id.bottom_bar_container);
+        assertSame(mNavigation.getBottomBar().getView(),bar);
+        View tabs=bar.findViewById(org.chromium.chrome.R.id.tab_switcher_button);
+        assertSame(find("arc-phone-tabs"),tabs);
+        tabs.performClick();assertEquals(ArcPhoneNavigation.TABS,mHost.action);
+        // Chromium borrows this same bar in the Hub; IDs must survive native reattachment.
+        FrameLayout hub=new FrameLayout(mActivity.get());
+        mSlot.removeView(bar);hub.addView(bar);
+        assertSame(tabs,hub.findViewById(org.chromium.chrome.browser.ui.bottombar.R.id.bottom_bar_container)
+                .findViewById(org.chromium.chrome.R.id.tab_switcher_button));
+        hub.removeView(bar);mNavigation.attachBottomBarView(bar);
+        mNavigation.setCompact(true);
+        assertSame(tabs,mSlot.findViewById(org.chromium.chrome.browser.ui.bottombar.R.id.bottom_bar_container)
+                .findViewById(org.chromium.chrome.R.id.tab_switcher_button));
+        mNavigation.setCompact(false);
+        assertEquals(1,mSlot.getChildCount());
+    }
     @Test public void glassReusesOneBarWithTransparentNativeBackingAndRestoresFallback(){
         View bar=mNavigation.getGlassTarget();Object layout=bar.getLayoutParams();
         var glass=new ArcPhoneGlass.Backdrop();mNavigation.setGlassBackdrop(glass,true);

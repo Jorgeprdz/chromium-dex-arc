@@ -100,6 +100,8 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
         mBarHeight=Math.min(mHeight,Math.max(dp(48),mHeight-dp(20)));
         mBar=new LinearLayout(mContext);mBar.setGravity(Gravity.CENTER);
         mBar.setTag("arc-phone-navigation");
+        // Native background-tab animations locate the replacement bar and its actual target.
+        mBar.setId(org.chromium.chrome.browser.ui.bottombar.R.id.bottom_bar_container);
         mBar.setElevation(dp(6));
         mBar.setOutlineAmbientShadowColor(0x240d244b);
         mBar.setOutlineSpotShadowColor(0x240d244b);
@@ -109,6 +111,7 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
             final int action=i;
             LinearLayout button=new LinearLayout(mContext);button.setOrientation(LinearLayout.VERTICAL);
             button.setGravity(Gravity.CENTER);button.setPadding(0,dp(3),0,dp(3));
+            if(i==TABS)button.setId(R.id.tab_switcher_button);
             ImageView icon=new ImageView(mContext);icon.setImageDrawable(new Icon(i,mForeground,""));
             FrameLayout pill=new FrameLayout(mContext);pill.addView(icon,new FrameLayout.LayoutParams(Math.min(dp(26),mBarHeight-dp(26)),Math.min(dp(26),mBarHeight-dp(26)),Gravity.CENTER));
             button.addView(pill,new LinearLayout.LayoutParams(dp(i==NEW_TAB?60:44),Math.max(dp(24),mBarHeight-dp(24))));
