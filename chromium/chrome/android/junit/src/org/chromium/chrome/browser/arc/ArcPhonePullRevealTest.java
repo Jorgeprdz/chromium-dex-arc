@@ -46,14 +46,51 @@ public class ArcPhonePullRevealTest {
         @Override public void close(){reveal.destroy();activity.pause().stop().destroy();}
     }
 
+    @Test public void approvedShortAndLongPullUseActualPinnedNativeRefreshWidget() {
+        for(int dragDp:new int[]{64,119,121}) {
+            try(var f=new Fixture()) {
+                var refresh=new org.chromium.third_party.android.swiperefresh.SwipeRefreshLayout(f.activity.get());
+                final int[] refreshRequests={0};refresh.setOnRefreshListener(()->refreshRequests[0]++);
+                assertTrue(refresh.start());assertTrue(f.reveal.start());
+                // Real incremental touchscreen delivery; Chromium also rejects single-event flings.
+                for(int i=0;i<dragDp;i++) {
+                    float excess=f.reveal.pull(f.dp(1));
+                    if(excess!=0)refresh.pull(excess);
+                }
+                refresh.release(f.reveal.release(true));
+                assertEquals("refresh at finger drag dp="+dragDp,dragDp>120,refresh.isRefreshing());
+                if(refresh.isRefreshing()) {
+                    // Deliver the platform animation-end event to the real native callback.
+                    android.view.animation.Animation.AnimationListener listener=
+                            org.robolectric.util.ReflectionHelpers.getField(refresh,"mRefreshListener");
+                    listener.onAnimationEnd(null);
+                }
+                assertEquals(dragDp>120?1:0,refreshRequests[0]);
+                if(dragDp==64) {
+                    org.robolectric.shadows.ShadowLooper.idleMainLooper(300,java.util.concurrent.TimeUnit.MILLISECONDS);
+                    assertEquals(f.dp(64),f.page.getTranslationY(),.01);
+                    assertTrue(f.reveal.isRevealed());
+                    // Another short gesture must not become a refresh just because the gap exists.
+                    assertTrue(refresh.start());assertTrue(f.reveal.start());
+                    for(int i=0;i<64;i++) {float excess=f.reveal.pull(f.dp(1));if(excess!=0)refresh.pull(excess);}
+                    refresh.release(f.reveal.release(true));assertFalse(refresh.isRefreshing());
+                    f.reveal.onPageScroll();
+                    org.robolectric.shadows.ShadowLooper.idleMainLooper(300,java.util.concurrent.TimeUnit.MILLISECONDS);
+                    assertEquals(0,f.page.getTranslationY(),0);
+                }
+                refresh.reset();
+            }
+        }
+    }
+
     @Test public void shortPullStaysRevealedWithoutForwardingRefreshOrResizingPage() {
         try(var f=new Fixture()) {
             assertTrue(f.reveal.start());assertEquals(1,f.reveals);
-            assertEquals(0,f.reveal.pull(f.dp(80)),0);
-            assertEquals(f.dp(40),f.page.getTranslationY(),.01);
+            assertEquals(0,f.reveal.pull(f.dp(64)),0);
+            assertEquals(f.dp(64),f.page.getTranslationY(),.01);
             assertFalse(f.reveal.release(true));
             org.robolectric.shadows.ShadowLooper.idleMainLooper(300,java.util.concurrent.TimeUnit.MILLISECONDS);
-            assertEquals(f.dp(56),f.page.getTranslationY(),.01);
+            assertEquals(f.dp(64),f.page.getTranslationY(),.01);
             assertEquals(400,f.page.getWidth());assertEquals(800,f.page.getHeight());
             assertEquals(0,f.page.getTop());assertEquals(0,f.page.getPaddingTop());
             assertTrue(f.reveal.isRevealed());
@@ -63,12 +100,12 @@ public class ArcPhonePullRevealTest {
     @Test public void longPullForwardsOnlyExcessAndRewindRetractsNativeProgress() {
         try(var f=new Fixture()) {
             assertTrue(f.reveal.start());
-            assertEquals(f.dp(28),f.reveal.pull(f.dp(140)),.01);
-            assertEquals(f.dp(56),f.page.getTranslationY(),.01);
-            assertEquals(-f.dp(28),f.reveal.pull(-f.dp(60)),.01);
+            assertEquals(f.dp(36.57143f),f.reveal.pull(f.dp(80)),.01);
+            assertEquals(f.dp(64),f.page.getTranslationY(),.01);
+            assertEquals(-f.dp(36.57143f),f.reveal.pull(-f.dp(32)),.01);
             assertFalse(f.reveal.release(true));
             f.reveal.reset(false);assertTrue(f.reveal.start());
-            assertEquals(f.dp(88),f.reveal.pull(f.dp(200)),.01);
+            assertEquals(f.dp(130.28571f),f.reveal.pull(f.dp(121)),.01);
             assertTrue(f.reveal.release(true)); // Chromium still owns its refresh threshold/reload.
         }
     }
@@ -76,7 +113,7 @@ public class ArcPhonePullRevealTest {
     @Test public void coloredGapFollowsLightDarkAndActualPageOrigin() throws Exception {
         try(var f=new Fixture()) {
             f.page.layout(7,11,407,811);f.reveal.setSurface(0xffe87524);
-            assertTrue(f.reveal.start());f.reveal.pull(f.dp(80));
+            assertTrue(f.reveal.start());f.reveal.pull(f.dp(40));
             assertEquals(0xffe87524,f.fill().getColor());
             assertEquals(new Rect(7,11,407,11+Math.round(f.dp(40))),f.fill().getBounds());
             f.reveal.setSurface(0xff202124);assertEquals(0xff202124,f.fill().getColor());
@@ -119,16 +156,16 @@ public class ArcPhonePullRevealTest {
 
     @Test public void newPullDuringSettleContinuesFromVisibleOffset() {
         try(var f=new Fixture()) {
-            f.reveal.start();f.reveal.pull(f.dp(80));f.reveal.release(true);
+            f.reveal.start();f.reveal.pull(f.dp(40));f.reveal.release(true);
             float visible=f.page.getTranslationY();
             f.reveal.start();f.reveal.pull(f.dp(4));
-            assertEquals(Math.min(f.dp(56),visible+f.dp(2)),f.page.getTranslationY(),.01);
+            assertEquals(Math.min(f.dp(64),visible+f.dp(4)),f.page.getTranslationY(),.01);
         }
     }
 
     @Test public void ordinaryScrollCollapsesLatchedGapButDoesNotCancelActivePull() {
         try(var f=new Fixture()) {
-            f.reveal.start();f.reveal.pull(f.dp(80));f.reveal.onPageScroll();
+            f.reveal.start();f.reveal.pull(f.dp(40));f.reveal.onPageScroll();
             assertEquals(f.dp(40),f.page.getTranslationY(),.01);
             f.reveal.release(true);
             org.robolectric.shadows.ShadowLooper.idleMainLooper(300,java.util.concurrent.TimeUnit.MILLISECONDS);

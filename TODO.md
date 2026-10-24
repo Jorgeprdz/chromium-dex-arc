@@ -781,3 +781,5 @@ Verificación del checkpoint Desktop: suite host424 PASS; política Chromium61 m
 ## Phone pull to reveal — approved follow-up
 
 - [x] Implemented short pull with colored temporary gap, persistent touch access, excess routed to existing native refresh and dismissal on normal scroll/lifecycle.190 Android and37 phone host executions PASS; SDK37.2 preparation and201-file incremental/reproducibility PASS. Broad host443:442 PASS/1 old registry expectation FAIL; corrected registration module2/2 PASS (full suite not rerun after that test-only correction). No new build dispatched; physical/site acceptance PENDING. See [R5_PULL_TO_REVEAL.md](docs/validation/R5_PULL_TO_REVEAL.md).
+
+- [x] Refined64dp/120dp specification: short release retains64dp; repeated short gestures do not refresh;119dp unarmed/121dp refresh proven with real pinned native widget and callback.192 Android executions PASS, SDK37.2 and201-file transition/reproducibility PASS. Current complete host suite443 PASS (760.108s),192 Android executions PASS; single incremental run authorized, dispatch pending exact committed remote SHA. Physical candidate acceptance PENDING.

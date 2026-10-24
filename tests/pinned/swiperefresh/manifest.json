@@ -1,0 +1,8 @@
+{
+  "revision": "cfd94726b7b5fb48aedcc32662f2f3fbdbadec35",
+  "files": {
+    "third_party/android_swipe_refresh/java/src/org/chromium/third_party/android/swiperefresh/SwipeRefreshLayout.java": "1b320ace2e620aa5aa02872c7ca300d12eb15b0adf4fceca848db5c6cf8352b7",
+    "third_party/android_swipe_refresh/java/src/org/chromium/third_party/android/swiperefresh/CircleImageView.java": "29ce5796c9865f970c96543b4768e999e32073b7515f46d2c4c57e57be6e41f2",
+    "third_party/android_swipe_refresh/java/src/org/chromium/third_party/android/swiperefresh/MaterialProgressDrawable.java": "238acb3fc1b8853c51adaf4facfb0da423a01a5cb151b67de88e0f227e04c4e8"
+  }
+}

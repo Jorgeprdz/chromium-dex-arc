@@ -19,6 +19,8 @@ public final class ArcPhonePullReveal {
     private final View mGap;
     private final float mExtent;
     private final float mMinimumPull;
+    private final float mRefreshPull;
+    private final float mNativePullScale;
     private final View.OnLayoutChangeListener mLayout;
     private ValueAnimator mAnimation;
     private boolean mEnabled;
@@ -29,13 +31,18 @@ public final class ArcPhonePullReveal {
     private float mOriginalTranslation;
     private float mOffset;
     private float mPull;
+    private float mInitialOffset;
 
     public ArcPhonePullReveal(View content, Runnable onReveal) {
         mContent = content;
         mOnReveal = onReveal;
         float density = content.getResources().getDisplayMetrics().density;
-        mExtent = 56 * density;
+        mExtent = 64 * density;
         mMinimumPull = 24 * density;
+        mRefreshPull = 120 * density;
+        // Pinned SwipeRefreshLayout uses a 64dp trigger and .5 drag rate. Map only the
+        // second stage into that unchanged native range; never scale the web content.
+        mNativePullScale = (2 * 64 * density) / (mRefreshPull - mExtent);
         mGap = new View(content.getContext()) {
             @Override protected void onDraw(Canvas canvas) { mFill.draw(canvas); }
         };
@@ -71,7 +78,8 @@ public final class ArcPhonePullReveal {
             mOwnsTranslation = true;
         }
         mPulling = true;
-        mPull = 2 * mOffset;
+        mInitialOffset = mOffset;
+        mPull = 0;
         mOnReveal.run();
         return true;
     }
@@ -79,24 +87,24 @@ public final class ArcPhonePullReveal {
     /** Consume the reveal stage; only excess movement reaches Chromium's refresh indicator. */
     public float pull(float delta) {
         if (!mPulling) return 0;
-        float previousExcess = Math.max(0, mPull - 2 * mExtent);
+        float previousExcess = Math.max(0, mPull - mExtent);
         mPull = Math.max(0, mPull + delta);
-        setOffset(Math.min(mExtent, mPull * .5f));
-        return Math.max(0, mPull - 2 * mExtent) - previousExcess;
+        setOffset(Math.min(mExtent, mInitialOffset + mPull));
+        return (Math.max(0, mPull - mExtent) - previousExcess) * mNativePullScale;
     }
 
     /** Chromium retains the refresh threshold, accessibility, haptics and reload implementation. */
     public boolean release(boolean allowRefresh) {
         if (!mPulling) return false;
         mPulling = false;
-        boolean excess = mPull > 2 * mExtent;
+        boolean refreshDistance = mPull >= mRefreshPull;
         if (!allowRefresh || mPull < mMinimumPull) {
             reset(true);
             return false;
         }
         mLatched = true;
         settle(mExtent, true);
-        return excess;
+        return refreshDistance;
     }
 
     public void reset(boolean animate) {

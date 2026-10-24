@@ -14083,7 +14083,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhonePul
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhonePullReveal.java
-@@ -0,0 +1,172 @@
+@@ -0,0 +1,180 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -14105,6 +14105,8 @@ new file mode 100644
 +    private final View mGap;
 +    private final float mExtent;
 +    private final float mMinimumPull;
++    private final float mRefreshPull;
++    private final float mNativePullScale;
 +    private final View.OnLayoutChangeListener mLayout;
 +    private ValueAnimator mAnimation;
 +    private boolean mEnabled;
@@ -14115,13 +14117,18 @@ new file mode 100644
 +    private float mOriginalTranslation;
 +    private float mOffset;
 +    private float mPull;
++    private float mInitialOffset;
 +
 +    public ArcPhonePullReveal(View content, Runnable onReveal) {
 +        mContent = content;
 +        mOnReveal = onReveal;
 +        float density = content.getResources().getDisplayMetrics().density;
-+        mExtent = 56 * density;
++        mExtent = 64 * density;
 +        mMinimumPull = 24 * density;
++        mRefreshPull = 120 * density;
++        // Pinned SwipeRefreshLayout uses a 64dp trigger and .5 drag rate. Map only the
++        // second stage into that unchanged native range; never scale the web content.
++        mNativePullScale = (2 * 64 * density) / (mRefreshPull - mExtent);
 +        mGap = new View(content.getContext()) {
 +            @Override protected void onDraw(Canvas canvas) { mFill.draw(canvas); }
 +        };
@@ -14157,7 +14164,8 @@ new file mode 100644
 +            mOwnsTranslation = true;
 +        }
 +        mPulling = true;
-+        mPull = 2 * mOffset;
++        mInitialOffset = mOffset;
++        mPull = 0;
 +        mOnReveal.run();
 +        return true;
 +    }
@@ -14165,24 +14173,24 @@ new file mode 100644
 +    /** Consume the reveal stage; only excess movement reaches Chromium's refresh indicator. */
 +    public float pull(float delta) {
 +        if (!mPulling) return 0;
-+        float previousExcess = Math.max(0, mPull - 2 * mExtent);
++        float previousExcess = Math.max(0, mPull - mExtent);
 +        mPull = Math.max(0, mPull + delta);
-+        setOffset(Math.min(mExtent, mPull * .5f));
-+        return Math.max(0, mPull - 2 * mExtent) - previousExcess;
++        setOffset(Math.min(mExtent, mInitialOffset + mPull));
++        return (Math.max(0, mPull - mExtent) - previousExcess) * mNativePullScale;
 +    }
 +
 +    /** Chromium retains the refresh threshold, accessibility, haptics and reload implementation. */
 +    public boolean release(boolean allowRefresh) {
 +        if (!mPulling) return false;
 +        mPulling = false;
-+        boolean excess = mPull > 2 * mExtent;
++        boolean refreshDistance = mPull >= mRefreshPull;
 +        if (!allowRefresh || mPull < mMinimumPull) {
 +            reset(true);
 +            return false;
 +        }
 +        mLatched = true;
 +        settle(mExtent, true);
-+        return excess;
++        return refreshDistance;
 +    }
 +
 +    public void reset(boolean animate) {
@@ -18693,7 +18701,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhonePu
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhonePullRevealTest.java
-@@ -0,0 +1,148 @@
+@@ -0,0 +1,185 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -18742,14 +18750,51 @@ new file mode 100644
 +        @Override public void close(){reveal.destroy();activity.pause().stop().destroy();}
 +    }
 +
++    @Test public void approvedShortAndLongPullUseActualPinnedNativeRefreshWidget() {
++        for(int dragDp:new int[]{64,119,121}) {
++            try(var f=new Fixture()) {
++                var refresh=new org.chromium.third_party.android.swiperefresh.SwipeRefreshLayout(f.activity.get());
++                final int[] refreshRequests={0};refresh.setOnRefreshListener(()->refreshRequests[0]++);
++                assertTrue(refresh.start());assertTrue(f.reveal.start());
++                // Real incremental touchscreen delivery; Chromium also rejects single-event flings.
++                for(int i=0;i<dragDp;i++) {
++                    float excess=f.reveal.pull(f.dp(1));
++                    if(excess!=0)refresh.pull(excess);
++                }
++                refresh.release(f.reveal.release(true));
++                assertEquals("refresh at finger drag dp="+dragDp,dragDp>120,refresh.isRefreshing());
++                if(refresh.isRefreshing()) {
++                    // Deliver the platform animation-end event to the real native callback.
++                    android.view.animation.Animation.AnimationListener listener=
++                            org.robolectric.util.ReflectionHelpers.getField(refresh,"mRefreshListener");
++                    listener.onAnimationEnd(null);
++                }
++                assertEquals(dragDp>120?1:0,refreshRequests[0]);
++                if(dragDp==64) {
++                    org.robolectric.shadows.ShadowLooper.idleMainLooper(300,java.util.concurrent.TimeUnit.MILLISECONDS);
++                    assertEquals(f.dp(64),f.page.getTranslationY(),.01);
++                    assertTrue(f.reveal.isRevealed());
++                    // Another short gesture must not become a refresh just because the gap exists.
++                    assertTrue(refresh.start());assertTrue(f.reveal.start());
++                    for(int i=0;i<64;i++) {float excess=f.reveal.pull(f.dp(1));if(excess!=0)refresh.pull(excess);}
++                    refresh.release(f.reveal.release(true));assertFalse(refresh.isRefreshing());
++                    f.reveal.onPageScroll();
++                    org.robolectric.shadows.ShadowLooper.idleMainLooper(300,java.util.concurrent.TimeUnit.MILLISECONDS);
++                    assertEquals(0,f.page.getTranslationY(),0);
++                }
++                refresh.reset();
++            }
++        }
++    }
++
 +    @Test public void shortPullStaysRevealedWithoutForwardingRefreshOrResizingPage() {
 +        try(var f=new Fixture()) {
 +            assertTrue(f.reveal.start());assertEquals(1,f.reveals);
-+            assertEquals(0,f.reveal.pull(f.dp(80)),0);
-+            assertEquals(f.dp(40),f.page.getTranslationY(),.01);
++            assertEquals(0,f.reveal.pull(f.dp(64)),0);
++            assertEquals(f.dp(64),f.page.getTranslationY(),.01);
 +            assertFalse(f.reveal.release(true));
 +            org.robolectric.shadows.ShadowLooper.idleMainLooper(300,java.util.concurrent.TimeUnit.MILLISECONDS);
-+            assertEquals(f.dp(56),f.page.getTranslationY(),.01);
++            assertEquals(f.dp(64),f.page.getTranslationY(),.01);
 +            assertEquals(400,f.page.getWidth());assertEquals(800,f.page.getHeight());
 +            assertEquals(0,f.page.getTop());assertEquals(0,f.page.getPaddingTop());
 +            assertTrue(f.reveal.isRevealed());
@@ -18759,12 +18804,12 @@ new file mode 100644
 +    @Test public void longPullForwardsOnlyExcessAndRewindRetractsNativeProgress() {
 +        try(var f=new Fixture()) {
 +            assertTrue(f.reveal.start());
-+            assertEquals(f.dp(28),f.reveal.pull(f.dp(140)),.01);
-+            assertEquals(f.dp(56),f.page.getTranslationY(),.01);
-+            assertEquals(-f.dp(28),f.reveal.pull(-f.dp(60)),.01);
++            assertEquals(f.dp(36.57143f),f.reveal.pull(f.dp(80)),.01);
++            assertEquals(f.dp(64),f.page.getTranslationY(),.01);
++            assertEquals(-f.dp(36.57143f),f.reveal.pull(-f.dp(32)),.01);
 +            assertFalse(f.reveal.release(true));
 +            f.reveal.reset(false);assertTrue(f.reveal.start());
-+            assertEquals(f.dp(88),f.reveal.pull(f.dp(200)),.01);
++            assertEquals(f.dp(130.28571f),f.reveal.pull(f.dp(121)),.01);
 +            assertTrue(f.reveal.release(true)); // Chromium still owns its refresh threshold/reload.
 +        }
 +    }
@@ -18772,7 +18817,7 @@ new file mode 100644
 +    @Test public void coloredGapFollowsLightDarkAndActualPageOrigin() throws Exception {
 +        try(var f=new Fixture()) {
 +            f.page.layout(7,11,407,811);f.reveal.setSurface(0xffe87524);
-+            assertTrue(f.reveal.start());f.reveal.pull(f.dp(80));
++            assertTrue(f.reveal.start());f.reveal.pull(f.dp(40));
 +            assertEquals(0xffe87524,f.fill().getColor());
 +            assertEquals(new Rect(7,11,407,11+Math.round(f.dp(40))),f.fill().getBounds());
 +            f.reveal.setSurface(0xff202124);assertEquals(0xff202124,f.fill().getColor());
@@ -18815,16 +18860,16 @@ new file mode 100644
 +
 +    @Test public void newPullDuringSettleContinuesFromVisibleOffset() {
 +        try(var f=new Fixture()) {
-+            f.reveal.start();f.reveal.pull(f.dp(80));f.reveal.release(true);
++            f.reveal.start();f.reveal.pull(f.dp(40));f.reveal.release(true);
 +            float visible=f.page.getTranslationY();
 +            f.reveal.start();f.reveal.pull(f.dp(4));
-+            assertEquals(Math.min(f.dp(56),visible+f.dp(2)),f.page.getTranslationY(),.01);
++            assertEquals(Math.min(f.dp(64),visible+f.dp(4)),f.page.getTranslationY(),.01);
 +        }
 +    }
 +
 +    @Test public void ordinaryScrollCollapsesLatchedGapButDoesNotCancelActivePull() {
 +        try(var f=new Fixture()) {
-+            f.reveal.start();f.reveal.pull(f.dp(80));f.reveal.onPageScroll();
++            f.reveal.start();f.reveal.pull(f.dp(40));f.reveal.onPageScroll();
 +            assertEquals(f.dp(40),f.page.getTranslationY(),.01);
 +            f.reveal.release(true);
 +            org.robolectric.shadows.ShadowLooper.idleMainLooper(300,java.util.concurrent.TimeUnit.MILLISECONDS);

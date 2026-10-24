@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Delivered phone views, glass and Desktop Command Bar; native boundaries remain explicit."""
 import argparse
+import hashlib
+import json
 from pathlib import Path
 import re
 import subprocess
@@ -15,10 +17,19 @@ arc=ROOT/'chromium/chrome/android/java/src/org/chromium/chrome/browser/arc'
 sources=[ROOT/'.source-modified/chrome/browser/ui/android/theme/java/src/org/chromium/chrome/browser/theme/ToolbarThemeColorProvider.java',arc/'ArcPhoneNavigation.java',ROOT/'chromium/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneNavigationTest.java']
 sources += [arc/'ArcPhoneGlass.java',ROOT/'chromium/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneGlassTest.java']
 sources += [arc/'ArcCommandBar.java',arc/'ArcOmniboxPlacement.java',ROOT/'chromium/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCommandBarTest.java']
+# Compile the unmodified pinned refresh widget, not a reimplementation of its trigger policy.
+pinned_refresh=ROOT/'tests/pinned/swiperefresh'
+refresh_manifest=json.loads((pinned_refresh/'manifest.json').read_text())
+assert refresh_manifest['revision']==json.loads((ROOT/'patches/upstream-files.json').read_text())['revision']
+for name,digest in refresh_manifest['files'].items():
+    source=pinned_refresh/Path(name).name
+    assert hashlib.sha256(source.read_bytes()).hexdigest()==digest, name
+    sources.append(source)
 sources += [arc/'ArcPhonePullReveal.java',ROOT/'chromium/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhonePullRevealTest.java']
 sources += [arc/'ArcPhoneStatusFade.java',ROOT/'chromium/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneStatusFadeTest.java']
 sources += [arc/'ArcDesktopMaterial.java',arc/'ArcDesktopMaterialDialog.java',ROOT/'chromium/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcDesktopMaterialTest.java']
-contracts=definitions();contracts.pop('org.chromium.chrome.browser.theme.ThemeColorProvider');contracts.update({'org.chromium.chrome.browser.tab.Tab':'public class Tab {}','androidx.annotation.ColorInt':'@java.lang.annotation.Target({java.lang.annotation.ElementType.TYPE_USE,java.lang.annotation.ElementType.METHOD,java.lang.annotation.ElementType.PARAMETER,java.lang.annotation.ElementType.FIELD,java.lang.annotation.ElementType.LOCAL_VARIABLE}) public @interface ColorInt {}','org.chromium.build.annotations.NullMarked':'public @interface NullMarked {}','org.chromium.base.Callback':'public interface Callback<T>{void onResult(T value);}', 'org.chromium.build.annotations.Nullable':'@java.lang.annotation.Target({java.lang.annotation.ElementType.TYPE_USE,java.lang.annotation.ElementType.METHOD}) public @interface Nullable {}'})
+# Only annotation/easing dependencies are local boundaries; native refresh state/threshold is real.
+contracts=definitions();contracts['androidx.annotation.ColorRes']='public @interface ColorRes {}';contracts['androidx.interpolator.view.animation.FastOutSlowInInterpolator']='public final class FastOutSlowInInterpolator implements android.view.animation.Interpolator {private final android.view.animation.PathInterpolator curve=new android.view.animation.PathInterpolator(.4f,0f,.2f,1f);public float getInterpolation(float value){return curve.getInterpolation(value);}}';contracts.pop('org.chromium.chrome.browser.theme.ThemeColorProvider');contracts.update({'org.chromium.chrome.browser.tab.Tab':'public class Tab {}','androidx.annotation.ColorInt':'@java.lang.annotation.Target({java.lang.annotation.ElementType.TYPE_USE,java.lang.annotation.ElementType.METHOD,java.lang.annotation.ElementType.PARAMETER,java.lang.annotation.ElementType.FIELD,java.lang.annotation.ElementType.LOCAL_VARIABLE}) public @interface ColorInt {}','org.chromium.build.annotations.NullMarked':'public @interface NullMarked {}','org.chromium.base.Callback':'public interface Callback<T>{void onResult(T value);}', 'org.chromium.build.annotations.Nullable':'@java.lang.annotation.Target({java.lang.annotation.ElementType.TYPE_USE,java.lang.annotation.ElementType.METHOD}) public @interface Nullable {}'})
 strings=sorted(set(re.findall(r'R.string.(\w+)',((arc/'ArcPhoneNavigation.java').read_text()+(arc/'ArcDesktopMaterialDialog.java').read_text()))))
 contracts['org.chromium.chrome.R']='public class R {public static class string {'+''.join('public static final int '+s+'=android.R.string.ok;' for s in strings)+'}}'
 for name,body in contracts.items():
