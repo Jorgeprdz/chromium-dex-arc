@@ -119,6 +119,11 @@ public class ToolbarThemeColorProvider extends ThemeColorProvider
         return mBottomUiThemeColorProvider.getThemeColor();
     }
 
+    /** Page palette for the revealed web gap, independent of the approved phone pill palette. */
+    public @ColorInt int getArcPhonePageColor(@Nullable Tab tab) {
+        return mTopUiThemeColorProvider.getThemeColorOrFallback(tab, getArcPhoneSurfaceColor());
+    }
+
     /**
      * @param tab The {@link Tab} on which the toolbar background color is used.
      * @return Returns the toolbar background color.

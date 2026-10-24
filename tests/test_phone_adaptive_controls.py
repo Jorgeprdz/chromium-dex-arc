@@ -11,6 +11,7 @@ Object mArcPhoneGestureContents=new Object();boolean mArcPhoneFullscreen,mArcPho
 boolean isUrlBarFocused(){return focus;}
 static class Status {boolean compact,fullscreen;int calls;void setArcPhoneCompactStatus(boolean c,boolean f){calls++;compact=c;fullscreen=f;}}
 Status mStatusBarColorController=new Status();
+static class Reveal {void reset(boolean animate){}}Reveal mArcPhonePullReveal;
 int insetUpdates;void updateArcPhoneContentInsets(){insetUpdates++;}
 static class View {static final int VISIBLE=0,INVISIBLE=4;int visibility;float translation,alpha=1;void setAlpha(float a){alpha=a;}float getAlpha(){return alpha;}void setVisibility(int v){visibility=v;}int getHeight(){return 56;}void setTranslationY(float y){translation=y;}float getTranslationY(){return translation;}}
 static class Navigation {boolean compact;void setCompact(boolean c){compact=c;}}Navigation mArcPhoneNavigation=new Navigation();

@@ -774,6 +774,10 @@ Verificación del checkpoint Desktop: suite host424 PASS; política Chromium61 m
 - [x] Status diffused surface reuses bounded web sampler, sample-only material, noninteractive Drawable fade and native contrast/theme owner; approved pill dimensions/material retained.
 - [x] Local440 host PASS, final5 input/adaptive PASS,167 Android executions PASS, genuine SDK37.2 input API check/preparation PASS,198-file reproducible patch and187 unchanged timestamps verified. Not physical acceptance.
 - [x] User selected option1: compact mode requests native status-bar hiding only; owned restoration on expansion/editor/native page/pause/teardown, yielding to fullscreen. Fade detaches while hidden and updates on asynchronous inset delivery.174 Android executions PASS; actual candidate clock-region touches PENDING installation.
-- [ ] One incremental build authorized, not dispatched yet; physical candidate acceptance pending. See [R5_FULL_WINDOW_INPUT_REGRESSION.md](docs/validation/R5_FULL_WINDOW_INPUT_REGRESSION.md).
+- [x] Single incremental run40099588583/4a622d5 completed successfully and verified installer reports INSTALL_SUCCESS (APK e44b0313e905e48dc5d317ea59ffb8bceae690a6051e291d6734bbd92111514e). Physical visual/touch acceptance still pending. See [R5_FULL_WINDOW_INPUT_REGRESSION.md](docs/validation/R5_FULL_WINDOW_INPUT_REGRESSION.md).
 
 - [x] Option1 follow-up: final441 host PASS,174 Android executions PASS, teardown RED/GREEN2 PASS, SDK37.2 preparation and198-file incremental transition/reproducibility PASS. Native phone status hide/show ownership implemented; graphical and real clock-region touch acceptance PENDING APK.
+
+## Phone pull to reveal — approved follow-up
+
+- [x] Implemented short pull with colored temporary gap, persistent touch access, excess routed to existing native refresh and dismissal on normal scroll/lifecycle.190 Android and37 phone host executions PASS; SDK37.2 preparation and201-file incremental/reproducibility PASS. Broad host443:442 PASS/1 old registry expectation FAIL; corrected registration module2/2 PASS (full suite not rerun after that test-only correction). No new build dispatched; physical/site acceptance PENDING. See [R5_PULL_TO_REVEAL.md](docs/validation/R5_PULL_TO_REVEAL.md).

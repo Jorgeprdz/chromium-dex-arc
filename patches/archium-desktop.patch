@@ -22,7 +22,7 @@ diff --git a/chrome/android/chrome_java_resources.gni b/chrome/android/chrome_ja
 diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java_sources.gni
 --- a/chrome/android/chrome_java_sources.gni
 +++ b/chrome/android/chrome_java_sources.gni
-@@ -5,6 +5,40 @@
+@@ -5,6 +5,41 @@
  import("//content/public/common/features.gni")
 
  chrome_java_sources = [
@@ -41,6 +41,7 @@ diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java
 +  "java/src/org/chromium/chrome/browser/arc/ArcCommandBar.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcDesktopMaterial.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcPhoneStatusFade.java",
++  "java/src/org/chromium/chrome/browser/arc/ArcPhonePullReveal.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcDesktopMaterialDialog.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcSplitState.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcSplitPairStore.java",
@@ -1961,6 +1962,114 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedAct
          Boolean result =
                  KeyboardShortcuts.dispatchKeyEvent(
                          event,
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/SwipeRefreshHandler.java b/chrome/android/java/src/org/chromium/chrome/browser/SwipeRefreshHandler.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/SwipeRefreshHandler.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/SwipeRefreshHandler.java
+@@ -24,6 +24,7 @@
+ import org.chromium.build.annotations.NullMarked;
+ import org.chromium.build.annotations.Nullable;
+ import org.chromium.chrome.R;
++import org.chromium.chrome.browser.arc.ArcPhonePullReveal;
+ import org.chromium.chrome.browser.browser_controls.BottomOverscrollHandler;
+ import org.chromium.chrome.browser.gesturenav.HistoryNavigationCoordinator;
+ import org.chromium.chrome.browser.tab.Tab;
+@@ -76,6 +77,19 @@
+     private static final int MAX_REFRESH_ANIMATION_DURATION_MS = 7500;
+
+     private @OverscrollAction int mSwipeType;
++    private @Nullable ArcPhonePullReveal mArcPhonePullReveal;
++    private boolean mArcPhonePullActive;
++
++    /** Activity-owned phone presentation; native pages/Desktop retain the original refresh path. */
++    public void setArcPhonePullReveal(@Nullable ArcPhonePullReveal reveal) {
++        if (mArcPhonePullReveal == reveal) return;
++        if (mArcPhonePullReveal != null) {
++            mArcPhonePullReveal.reset(false);
++            if (mArcPhonePullActive && mSwipeRefreshLayout != null) mSwipeRefreshLayout.reset();
++        }
++        mArcPhonePullActive = false;
++        mArcPhonePullReveal = reveal;
++    }
+
+     // Creates new values for mSwipeRefreshLayout when mSwipeRefreshLayout needs to be non-null.
+     // We allow this to be customized (instead of mSwipeRefreshLayout = new SwipeRefreshLayout()
+@@ -167,6 +181,7 @@
+                     public void onActivityAttachmentChanged(
+                             Tab tab, @Nullable WindowAndroid window) {
+                         if (window == null) {
++                            setArcPhonePullReveal(null);
+                             removeSideUiStateObserver();
+                             if (mSwipeRefreshLayout != null) {
+                                 cancelStopRefreshingRunnable();
+@@ -227,6 +242,7 @@
+                     if (VERSION.SDK_INT >= VERSION_CODES.R) {
+                         mSwipeRefreshLayout.performHapticFeedback(HapticFeedbackConstants.CONFIRM);
+                     }
++                    if (mArcPhonePullReveal != null) mArcPhonePullReveal.reset(true);
+                     mTab.reload();
+                     RecordUserAction.record("MobilePullGestureReload");
+                 });
+@@ -270,6 +286,7 @@
+
+     @Override
+     public void destroyInternal() {
++        setArcPhonePullReveal(null);
+         removeSideUiStateObserver();
+         // Cancel any pending posted runnables so they do not linger in the UI thread
+         // MessageQueue and retain this handler (and its Activity) after the tab is gone.
+@@ -300,8 +317,15 @@
+         if (type == OverscrollAction.PULL_TO_REFRESH) {
+             if (mSwipeRefreshLayout == null) initSwipeRefreshLayout(mTab.getContext());
+             assumeNonNull(mSwipeRefreshLayout);
+-            attachSwipeRefreshLayoutIfNecessary();
+-            return mSwipeRefreshLayout.start();
++            // A reveal-only gesture never attaches the full-screen refresh child.
++            if (mArcPhonePullReveal == null) attachSwipeRefreshLayoutIfNecessary();
++            boolean started = mSwipeRefreshLayout.start();
++            mArcPhonePullActive = started && mArcPhonePullReveal != null
++                    && mArcPhonePullReveal.start();
++            if (started && mArcPhonePullReveal != null && !mArcPhonePullActive) {
++                attachSwipeRefreshLayoutIfNecessary();
++            }
++            return started;
+         } else if (type == OverscrollAction.HISTORY_NAVIGATION) {
+             if (mNavigationCoordinator != null) {
+                 mNavigationCoordinator.startGesture();
+@@ -371,7 +395,13 @@
+         TraceEvent.begin("SwipeRefreshHandler.pull");
+         assumeNonNull(mSwipeRefreshLayout);
+         if (mSwipeType == OverscrollAction.PULL_TO_REFRESH) {
+-            mSwipeRefreshLayout.pull(yDelta);
++            if (mArcPhonePullActive && mArcPhonePullReveal != null) {
++                float excess = mArcPhonePullReveal.pull(yDelta);
++                if (excess != 0) {
++                    attachSwipeRefreshLayoutIfNecessary();
++                    mSwipeRefreshLayout.pull(excess);
++                }
++            } else mSwipeRefreshLayout.pull(yDelta);
+         } else if (mSwipeType == OverscrollAction.HISTORY_NAVIGATION) {
+             if (mNavigationCoordinator != null) mNavigationCoordinator.pull(xDelta, yDelta);
+         } else if (mSwipeType == OverscrollAction.PULL_FROM_BOTTOM_EDGE) {
+@@ -388,6 +418,10 @@
+                 status == OverscrollActivationStatus.ALLOW_ACTIVATION
+                         || status == OverscrollActivationStatus.FORCE_ACTIVATION;
+         if (mSwipeType == OverscrollAction.PULL_TO_REFRESH) {
++            if (mArcPhonePullActive && mArcPhonePullReveal != null) {
++                allowRefresh &= mArcPhonePullReveal.release(allowRefresh);
++            }
++            mArcPhonePullActive = false;
+             mSwipeRefreshLayout.release(allowRefresh);
+         } else if (mSwipeType == OverscrollAction.HISTORY_NAVIGATION) {
+             if (mNavigationCoordinator != null) {
+@@ -403,6 +437,8 @@
+
+     @Override
+     public void reset() {
++        mArcPhonePullActive = false;
++        if (mArcPhonePullReveal != null) mArcPhonePullReveal.reset(false);
+         cancelStopRefreshingRunnable();
+         if (mSwipeRefreshLayout != null) mSwipeRefreshLayout.reset();
+         if (mNavigationCoordinator != null) mNavigationCoordinator.reset();
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/CompositorView.java b/chrome/android/java/src/org/chromium/chrome/browser/compositor/CompositorView.java
 --- a/chrome/android/java/src/org/chromium/chrome/browser/compositor/CompositorView.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/compositor/CompositorView.java
@@ -3299,17 +3408,19 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java b/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java
 --- a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java
-@@ -77,6 +77,9 @@
+@@ -77,6 +77,11 @@
  import org.chromium.chrome.browser.bookmarks.BookmarkModelObserver;
  import org.chromium.chrome.browser.bookmarks.TabBookmarker;
  import org.chromium.chrome.browser.bottombar.BottomBarContainerCoordinator;
 +import org.chromium.chrome.browser.arc.ArcPhoneNavigation;
 +import org.chromium.chrome.browser.arc.ArcPhoneGlass;
++import org.chromium.chrome.browser.arc.ArcPhonePullReveal;
++import org.chromium.chrome.browser.SwipeRefreshHandler;
 +import org.chromium.chrome.browser.lifecycle.PauseResumeWithNativeObserver;
  import org.chromium.chrome.browser.browser_controls.BottomControlsStacker;
  import org.chromium.chrome.browser.browser_controls.BottomControlsStacker.LayerType;
  import org.chromium.chrome.browser.browser_controls.BrowserControlsSizer;
-@@ -143,6 +146,7 @@
+@@ -143,6 +148,7 @@
  import org.chromium.chrome.browser.omnibox.fusebox.FuseboxControls;
  import org.chromium.chrome.browser.omnibox.status.SiteControlsIphController;
  import org.chromium.chrome.browser.omnibox.suggestions.OmniboxSuggestionsDropdownScrollListener;
@@ -3317,7 +3428,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
  import org.chromium.chrome.browser.omnibox.suggestions.action.OmniboxActionDelegateImpl;
  import org.chromium.chrome.browser.omnibox.voice.VoiceRecognitionHandler;
  import org.chromium.chrome.browser.page_info.ChromePageInfo;
-@@ -270,6 +274,8 @@
+@@ -270,6 +276,8 @@
  import org.chromium.components.search_engines.TemplateUrlService;
  import org.chromium.components.search_engines.TemplateUrlService.TemplateUrlServiceObserver;
  import org.chromium.content_public.browser.LoadUrlParams;
@@ -3326,7 +3437,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
  import org.chromium.content_public.browser.NavigationController;
  import org.chromium.content_public.browser.NavigationEntry;
  import org.chromium.content_public.browser.NavigationHandle;
-@@ -364,6 +370,11 @@
+@@ -364,6 +372,11 @@
              mBottomAppBarCoordinatorSupplier = ObservableSuppliers.createMonotonic();
      private final SettableNonNullObservableSupplier<Boolean> mSuppressToolbarSceneLayerSupplier =
              ObservableSuppliers.createNonNull(false);
@@ -3338,12 +3449,14 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
      private final SettableMonotonicObservableSupplier<Long> mCaptureResourceIdSupplier =
              ObservableSuppliers.createMonotonic();
      private @MonotonicNonNull TabModelSelector mTabModelSelector;
-@@ -407,6 +418,54 @@
+@@ -407,6 +420,58 @@
      private final AppMenuDelegate mAppMenuDelegate;
      private final CompositorViewHolder mCompositorViewHolder;
      private final BottomControlsStacker mBottomControlsStacker;
 +    private @Nullable ArcPhoneNavigation mArcPhoneNavigation;
 +    private @Nullable ArcPhoneGlass mArcPhoneGlass;
++    private @Nullable ArcPhonePullReveal mArcPhonePullReveal;
++    private @Nullable SwipeRefreshHandler mArcPhonePullHandler;
 +    private ArcPhoneGlass.@Nullable Backdrop mArcPhoneTopGlass;
 +    private ArcPhoneGlass.@Nullable Backdrop mArcPhoneStatusGlass;
 +    private ArcPhoneGlass.@Nullable Backdrop mArcPhoneBottomGlass;
@@ -3363,9 +3476,11 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 +    private android.animation.@Nullable ValueAnimator mArcPhoneCompactAnimation;
 +    private final GestureStateListener mArcPhoneGestureListener = new GestureStateListener() {
 +        @Override public void onScrollStarted(int offset, int extent, boolean directionUp) {
++            if (mArcPhonePullReveal != null) mArcPhonePullReveal.onPageScroll();
 +            setArcPhoneCompact(!directionUp || mFormFieldFocusedSupplier.get());
 +        }
 +        @Override public void onVerticalScrollDirectionChanged(boolean directionUp, float ratio) {
++            if (mArcPhonePullReveal != null) mArcPhonePullReveal.onPageScroll();
 +            setArcPhoneCompact(!directionUp || mFormFieldFocusedSupplier.get());
 +        }
 +        @Override public void onDestroyed() {
@@ -3393,7 +3508,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
      private final TopControlsStacker mTopControlsStacker;
      private final BrowserControlsSizer mBrowserControlsSizer;
      private final FullscreenManager mFullscreenManager;
-@@ -857,6 +916,7 @@
+@@ -857,6 +922,7 @@
              boolean suppressTabStripAtStart,
              @Nullable OneshotSupplier<HubManager> hubManagerSupplier) {
          TraceEvent.begin("ToolbarManager.ToolbarManager");
@@ -3401,7 +3516,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          mActionRegistry = actionRegistry;
          mCountrySupplier = countrySupplier;
          mToggleGlicCallback = toggleGlicCallback;
-@@ -946,6 +1006,7 @@
+@@ -946,6 +1012,7 @@
                  new ComponentCallbacks() {
                      @Override
                      public void onConfigurationChanged(Configuration configuration) {
@@ -3409,16 +3524,17 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          int newOrientation = configuration.orientation;
                          if (newOrientation == mCurrentOrientation) {
                              return;
-@@ -1425,6 +1486,8 @@
+@@ -1425,6 +1492,9 @@
 
                      @Override
                      public void onObservingDifferentTab(@Nullable Tab tab) {
++                        if (mArcPhonePullReveal != null) mArcPhonePullReveal.reset(false);
 +                        if (mArcPhoneGlass != null) {mArcPhoneGlass.invalidateSource();mArcPhoneGlass.setEnabled(false);}
 +                        if (mArcPhoneHost != null) mToolbarLayout.post(ToolbarManager.this::updateArcPhoneFloatingSurfaces);
                          // ActivityTabProvider will null out the tab passed to
                          // onObservingDifferentTab when the tab is non-interactive (e.g. when
                          // entering the TabSwitcher).
-@@ -1481,6 +1544,10 @@
+@@ -1481,6 +1551,10 @@
 
                      @Override
                      public void onUrlUpdated(Tab tab) {
@@ -3429,7 +3545,15 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          // Update the SSL security state as a result of this notification as it will
                          // sometimes be the only update we receive.
                          updateTabLoadingState(true);
-@@ -1751,6 +1818,8 @@
+@@ -1507,6 +1581,7 @@
+
+                     @Override
+                     public void onLoadStarted(Tab tab, boolean toDifferentDocument) {
++                        if (mArcPhonePullReveal != null) mArcPhonePullReveal.reset(false);
+                         onBackPressStateChanged();
+                         if (!toDifferentDocument) return;
+                         updateTabLoadingState(true);
+@@ -1751,6 +1826,8 @@
                  new FullscreenManager.Observer() {
                      @Override
                      public void onEnterFullscreen(Tab tab, FullscreenOptions options) {
@@ -3438,7 +3562,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          if (mFindToolbarManager != null) mFindToolbarManager.hideToolbar();
                          mFullscreenHairlineToken =
                                  setToolbarShadowVisibilityAndClearOldToken(
-@@ -1759,6 +1828,8 @@
+@@ -1759,6 +1836,8 @@
 
                      @Override
                      public void onExitFullscreen(Tab tab) {
@@ -3447,7 +3571,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          mFullscreenHairlineToken =
                                  setToolbarShadowVisibilityAndClearOldToken(
                                          true, mFullscreenHairlineToken);
-@@ -2524,8 +2595,306 @@
+@@ -2524,8 +2603,330 @@
          return ((LocationBarCoordinator) mLocationBar).getUrlBarViewRectProvider();
      }
 
@@ -3503,6 +3627,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 +        boolean glass = floating && glassTab != null && !glassTab.isNativePage();
 +        bindArcPhoneGestures(glass && glassTab != null ? glassTab.getWebContents() : null);
 +        if (!glass || isUrlBarFocused()) setArcPhoneCompact(false);
++        bindArcPhonePullReveal(glass && !isUrlBarFocused() ? glassTab : null);
 +        if (mToolbarLayout instanceof ToolbarPhone phone) {
 +            if (enabled && mArcPhoneGlass == null) {
 +                mArcPhoneGlass = new ArcPhoneGlass(phone, ArcPhoneGlass.contentSource(
@@ -3633,6 +3758,28 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 +        }
 +    }
 +
++    private void bindArcPhonePullReveal(@Nullable Tab tab) {
++        if (tab != null && mArcPhonePullReveal == null) {
++            mArcPhonePullReveal = new ArcPhonePullReveal(mCompositorViewHolder, () -> {
++                if (mArcPhonePullReveal != null) {
++                    mArcPhonePullReveal.setSurface(mToolbarThemeColorProvider.getArcPhonePageColor(
++                            mActivityTabProvider.get()));
++                }
++                setArcPhoneCompact(true);
++            });
++        }
++        SwipeRefreshHandler next = tab == null ? null : SwipeRefreshHandler.from(tab);
++        if (mArcPhonePullHandler != next) {
++            if (mArcPhonePullHandler != null) mArcPhonePullHandler.setArcPhonePullReveal(null);
++            mArcPhonePullHandler = next;
++            if (next != null) next.setArcPhonePullReveal(mArcPhonePullReveal);
++        }
++        if (mArcPhonePullReveal != null) {
++            mArcPhonePullReveal.setSurface(mToolbarThemeColorProvider.getArcPhonePageColor(tab));
++            mArcPhonePullReveal.setEnabled(tab != null);
++        }
++    }
++
 +    private void bindArcPhoneGestures(@Nullable WebContents contents) {
 +        if (contents == mArcPhoneGestureContents) return;
 +        if (mArcPhoneGestures != null) mArcPhoneGestures.removeListener(mArcPhoneGestureListener);
@@ -3651,6 +3798,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 +        boolean active = !mIsDestroyed && mArcPhoneGestureContents != null
 +                && !mArcPhoneFullscreen && mArcPhoneResumed && !isUrlBarFocused();
 +        compact &= active;
++        if (!compact && mArcPhonePullReveal != null) mArcPhonePullReveal.reset(active);
 +        // The status owner restores its request in onDestroy; do not revive its fade afterward.
 +        if (!mIsDestroyed) {
 +            mStatusBarColorController.setArcPhoneCompactStatus(compact, mArcPhoneFullscreen);
@@ -3754,7 +3902,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          enableTabGroupUiControls();
          if (BottomBarConfigUtils.isBottomBarEnabled(mActivity)) {
              enableBottomBar();
-@@ -2605,26 +2974,47 @@
+@@ -2605,26 +3006,47 @@
          OneshotSupplier<String> countrySupplier =
                  mCountrySupplier != null ? mCountrySupplier : new OneshotSupplierImpl<>();
 
@@ -3822,7 +3970,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          }
 
          var bottomAppBarCoordinator =
-@@ -2639,7 +3029,8 @@
+@@ -2639,7 +3061,8 @@
                          mActivityTabProvider.asObservable(),
                          (ScrollingBottomViewResourceFrameLayout) bottomAppBarContainer,
                          LayerType.BOTTOM_APP_BAR,
@@ -3832,7 +3980,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          bottomBarContainerOneshotSupplier,
                          mTabObscuringHandler,
                          mLayoutManager.getOverlayPanelManager().getPanelStateSupplier(),
-@@ -2652,6 +3043,7 @@
+@@ -2652,6 +3075,7 @@
              bottomAppBarCoordinator.initializeWithNative();
          }
          mBottomAppBarCoordinatorSupplier.set(bottomAppBarCoordinator);
@@ -3840,7 +3988,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
      }
 
      /**
-@@ -2840,7 +3232,7 @@
+@@ -2840,7 +3264,7 @@
                  mBrowserControlsSizer,
                  mToolbarThemeColorProvider,
                  mBottomToolbarControlsOffsetSupplier,
@@ -3849,7 +3997,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                  mToolbarProgressBarLayer::onProgressBarInfoUpdate,
                  mCaptureResourceIdSupplier,
                  mTabStripTopControlLayer,
-@@ -2992,6 +3384,33 @@
+@@ -2992,6 +3416,36 @@
      public void destroy() {
          if (mIsDestroyed) return;
          mIsDestroyed = true;
@@ -3863,6 +4011,9 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 +        mArcPhoneGestureContents = null;
 +        setArcPhoneCompact(false);
 +        mControlContainer.setArcPhoneFloatingTouchFilter(null);
++        if (mArcPhonePullHandler != null) mArcPhonePullHandler.setArcPhonePullReveal(null);
++        mArcPhonePullHandler = null;
++        if (mArcPhonePullReveal != null) { mArcPhonePullReveal.destroy(); mArcPhonePullReveal = null; }
 +        mStatusBarColorController.setArcPhoneStatusBackdrop(null);
 +        if (mArcPhoneInsetLayoutListener != null) {
 +            mControlContainer.getView().removeOnLayoutChangeListener(mArcPhoneInsetLayoutListener);
@@ -3883,7 +4034,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 
          if (mAppInstalledDelegate != null) {
              mAppInstalledDelegate.destroy();
-@@ -3052,9 +3471,20 @@
+@@ -3052,9 +3506,20 @@
              mTabGroupUiBottomControlsCoordinatorSupplier = null;
          }
 
@@ -3904,7 +4055,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
              mBottomAppBarCoordinatorSupplier = null;
          }
 
-@@ -3268,6 +3698,7 @@
+@@ -3268,6 +3733,7 @@
          }
 
          mToolbar.onUrlFocusChange(hasFocus);
@@ -3912,10 +4063,14 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 
          if (mFindToolbarManager != null && hasFocus) mFindToolbarManager.hideToolbar();
 
-@@ -3318,6 +3749,12 @@
+@@ -3318,6 +3784,16 @@
       */
      @Override
      public void onThemeColorChanged(int color, boolean shouldAnimate) {
++        if (mArcPhonePullReveal != null) {
++            mArcPhonePullReveal.setSurface(mToolbarThemeColorProvider.getArcPhonePageColor(
++                    mActivityTabProvider.get()));
++        }
 +        if (mArcPhoneTopGlass != null) mArcPhoneTopGlass.setSurface(color);
 +        if (mArcPhoneGlass != null) mArcPhoneGlass.setSurface(color);
 +        if (mArcPhoneNavigation != null) {
@@ -3925,7 +4080,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          if (!mShouldUpdateToolbarPrimaryColor) return;
 
          boolean colorChanged = mCurrentThemeColor != color;
-@@ -3658,6 +4095,8 @@
+@@ -3658,6 +4134,8 @@
 
          updateButtonStatus();
          mCurrentTabSupplier.set(tab);
@@ -3934,7 +4089,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          mFormFieldFocusedSupplier.onWebContentsChanged(tab == null ? null : tab.getWebContents());
      }
 
-@@ -3945,8 +4384,24 @@
+@@ -3945,8 +4423,24 @@
          updateToolbarSceneLayerSuppression();
      }
 
@@ -4078,7 +4233,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ui/system/Statu
 diff --git a/chrome/android/junit/BUILD.gn b/chrome/android/junit/BUILD.gn
 --- a/chrome/android/junit/BUILD.gn
 +++ b/chrome/android/junit/BUILD.gn
-@@ -431,6 +431,26 @@
+@@ -431,6 +431,27 @@
    # down.
    robolectric_library("chrome_junit_tests_org.chromium.chrome.browser") {
      sources = [
@@ -4092,6 +4247,7 @@ diff --git a/chrome/android/junit/BUILD.gn b/chrome/android/junit/BUILD.gn
 +      "src/org/chromium/chrome/browser/arc/ArcCommandBarTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcDesktopMaterialTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcPhoneStatusFadeTest.java",
++      "src/org/chromium/chrome/browser/arc/ArcPhonePullRevealTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcSplitStateTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcSplitViewportPolicyTest.java",
 +      "src/org/chromium/chrome/browser/arc/ArcSplitContentHostTest.java",
@@ -4105,7 +4261,7 @@ diff --git a/chrome/android/junit/BUILD.gn b/chrome/android/junit/BUILD.gn
        "//chrome/android/java/src/org/chromium/chrome/browser/bottombar/BottomBarAppMenuUpdateBadgeControllerUnitTest.java",
        "//chrome/android/java/src/org/chromium/chrome/browser/bottombar/BottomBarContainerCoordinatorUnitTest.java",
        "src/org/chromium/chrome/browser/BrowserExitReasonTrackerUnitTest.java",
-@@ -463,6 +483,7 @@
+@@ -463,6 +484,7 @@
      ]
 
      deps = [
@@ -6750,7 +6906,7 @@ diff --git a/chrome/browser/ui/android/theme/java/src/org/chromium/chrome/browse
      }
 
      /**
-@@ -66,6 +112,7 @@
+@@ -66,10 +112,16 @@
       *     current tab.
       */
      public @ColorInt int getThemeColorOrFallback(@Nullable Tab tab, @ColorInt int fallbackColor) {
@@ -6758,7 +6914,16 @@ diff --git a/chrome/browser/ui/android/theme/java/src/org/chromium/chrome/browse
          if (mActiveProvider == mTopUiThemeColorProvider) {
              return mTopUiThemeColorProvider.getThemeColorOrFallback(tab, fallbackColor);
          }
-@@ -77,6 +124,7 @@
+         return mBottomUiThemeColorProvider.getThemeColor();
++    }
++
++    /** Page palette for the revealed web gap, independent of the approved phone pill palette. */
++    public @ColorInt int getArcPhonePageColor(@Nullable Tab tab) {
++        return mTopUiThemeColorProvider.getThemeColorOrFallback(tab, getArcPhoneSurfaceColor());
+     }
+
+     /**
+@@ -77,6 +129,7 @@
       * @return Returns the toolbar background color.
       */
      public @ColorInt int getToolbarBackgroundColor(Tab tab) {
@@ -6766,7 +6931,7 @@ diff --git a/chrome/browser/ui/android/theme/java/src/org/chromium/chrome/browse
          if (mActiveProvider == mTopUiThemeColorProvider) {
              return mTopUiThemeColorProvider.getToolbarBackgroundColor(tab);
          }
-@@ -102,7 +150,7 @@
+@@ -102,7 +155,7 @@
 
      @Override
      public void onThemeColorChanged(int color, boolean shouldAnimate) {
@@ -6775,7 +6940,7 @@ diff --git a/chrome/browser/ui/android/theme/java/src/org/chromium/chrome/browse
      }
 
      @Override
-@@ -110,7 +158,19 @@
+@@ -110,7 +163,19 @@
              @Nullable ColorStateList tint,
              @Nullable ColorStateList activityFocusTint,
              @BrandedColorScheme int brandedColorScheme) {
@@ -6795,7 +6960,7 @@ diff --git a/chrome/browser/ui/android/theme/java/src/org/chromium/chrome/browse
      }
 
      private void updateActiveProvider(boolean animate) {
-@@ -130,11 +190,15 @@
+@@ -130,11 +195,15 @@
              mActiveProvider.addThemeColorObserver(this);
              mActiveProvider.addTintObserver(this);
 
@@ -13914,6 +14079,183 @@ new file mode 100644
 +        @Override public int getOpacity(){return PixelFormat.TRANSLUCENT;}
 +    }
 +}
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhonePullReveal.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhonePullReveal.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhonePullReveal.java
+@@ -0,0 +1,172 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++import android.animation.Animator;
++import android.animation.AnimatorListenerAdapter;
++import android.animation.ValueAnimator;
++import android.graphics.Canvas;
++import android.graphics.drawable.ColorDrawable;
++import android.view.View;
++import android.view.ViewGroup;
++
++/** Phone overscroll presentation. Moves the surface and its input hierarchy without web relayout. */
++public final class ArcPhonePullReveal {
++    private final View mContent;
++    private final Runnable mOnReveal;
++    private final ColorDrawable mFill = new ColorDrawable();
++    private final View mGap;
++    private final float mExtent;
++    private final float mMinimumPull;
++    private final View.OnLayoutChangeListener mLayout;
++    private ValueAnimator mAnimation;
++    private boolean mEnabled;
++    private boolean mDestroyed;
++    private boolean mPulling;
++    private boolean mLatched;
++    private boolean mOwnsTranslation;
++    private float mOriginalTranslation;
++    private float mOffset;
++    private float mPull;
++
++    public ArcPhonePullReveal(View content, Runnable onReveal) {
++        mContent = content;
++        mOnReveal = onReveal;
++        float density = content.getResources().getDisplayMetrics().density;
++        mExtent = 56 * density;
++        mMinimumPull = 24 * density;
++        mGap = new View(content.getContext()) {
++            @Override protected void onDraw(Canvas canvas) { mFill.draw(canvas); }
++        };
++        mGap.setWillNotDraw(false);
++        mGap.setEnabled(false);
++        mGap.setClickable(false);
++        mGap.setFocusable(false);
++        mGap.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
++        mLayout = (v,l,t,r,b,ol,ot,or,ob) -> {
++            if (l != ol || t != ot || r != or || b != ob) reset(false);
++        };
++        content.addOnLayoutChangeListener(mLayout);
++    }
++
++    public void setEnabled(boolean enabled) {
++        mEnabled = enabled && !mDestroyed;
++        if (!mEnabled) reset(false);
++    }
++
++    /** Native page palette, or its native theme fallback; never force white in dark mode. */
++    public void setSurface(int color) { mFill.setColor(color | 0xff000000); mGap.invalidate(); }
++
++    public boolean isRevealed() { return mOffset > 0 || mLatched; }
++
++    /** A subsequent ordinary page scroll dismisses the gap, not an overscroll still in progress. */
++    public void onPageScroll() { if (!mPulling && isRevealed()) reset(true); }
++
++    public boolean start() {
++        if (!mEnabled || !(mContent.getParent() instanceof ViewGroup)) return false;
++        cancelAnimation();
++        if (!mOwnsTranslation) {
++            mOriginalTranslation = mContent.getTranslationY();
++            mOwnsTranslation = true;
++        }
++        mPulling = true;
++        mPull = 2 * mOffset;
++        mOnReveal.run();
++        return true;
++    }
++
++    /** Consume the reveal stage; only excess movement reaches Chromium's refresh indicator. */
++    public float pull(float delta) {
++        if (!mPulling) return 0;
++        float previousExcess = Math.max(0, mPull - 2 * mExtent);
++        mPull = Math.max(0, mPull + delta);
++        setOffset(Math.min(mExtent, mPull * .5f));
++        return Math.max(0, mPull - 2 * mExtent) - previousExcess;
++    }
++
++    /** Chromium retains the refresh threshold, accessibility, haptics and reload implementation. */
++    public boolean release(boolean allowRefresh) {
++        if (!mPulling) return false;
++        mPulling = false;
++        boolean excess = mPull > 2 * mExtent;
++        if (!allowRefresh || mPull < mMinimumPull) {
++            reset(true);
++            return false;
++        }
++        mLatched = true;
++        settle(mExtent, true);
++        return excess;
++    }
++
++    public void reset(boolean animate) {
++        mPulling = false;
++        mLatched = false;
++        mPull = 0;
++        settle(0, animate && !mDestroyed && mEnabled);
++    }
++
++    private void cancelAnimation() {
++        ValueAnimator previous = mAnimation;
++        mAnimation = null;
++        if (previous != null) previous.cancel();
++    }
++
++    private void settle(float target, boolean animate) {
++        cancelAnimation();
++        if (!animate || !ValueAnimator.areAnimatorsEnabled() || mOffset == target) {
++            setOffset(target);
++            return;
++        }
++        ValueAnimator animation = ValueAnimator.ofFloat(mOffset, target);
++        mAnimation = animation;
++        animation.setDuration(180);
++        animation.addUpdateListener(value -> setOffset((float)value.getAnimatedValue()));
++        animation.addListener(new AnimatorListenerAdapter() {
++            @Override public void onAnimationEnd(Animator ended) {
++                if (mAnimation != ended) return;
++                mAnimation = null;
++                setOffset(target);
++            }
++        });
++        animation.start();
++    }
++
++    private void setOffset(float offset) {
++        mOffset = offset;
++        if (!mOwnsTranslation) return;
++        mContent.setTranslationY(mOriginalTranslation + offset);
++        if (offset <= 0) {
++            mOwnsTranslation = false;
++            mFill.setBounds(0,0,0,0);
++            detachGap();
++            return;
++        }
++        if (!(mContent.getParent() instanceof ViewGroup parent)) { reset(false); return; }
++        if (mGap.getParent() == null) {
++            // Behind the surface AND controls: a parent Drawable overlay would cover the pill.
++            parent.addView(mGap, parent.indexOfChild(mContent), new ViewGroup.LayoutParams(
++                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
++            mGap.layout(0,0,parent.getWidth(),parent.getHeight());
++        }
++        int left = Math.round(mContent.getX());
++        int top = Math.round(mContent.getTop() + mOriginalTranslation);
++        mFill.setBounds(left, top, left + mContent.getWidth(), top + Math.round(offset));
++        mGap.invalidate();
++    }
++
++    private void detachGap() {
++        if (!(mGap.getParent() instanceof ViewGroup parent)) return;
++        if (parent.isInLayout()) {
++            // Do not mutate the parent's child list from a child's layout callback.
++            mGap.post(() -> { if (mOffset == 0 && mGap.getParent() == parent) parent.removeView(mGap); });
++        } else parent.removeView(mGap);
++    }
++
++    public void destroy() {
++        mDestroyed = true;
++        mEnabled = false;
++        reset(false);
++        mContent.removeOnLayoutChangeListener(mLayout);
++    }
++}
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneStatusFade.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneStatusFade.java
 new file mode 100644
 --- /dev/null
@@ -18346,6 +18688,159 @@ new file mode 100644
 +        }
 +    }
 +
++}
+diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhonePullRevealTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhonePullRevealTest.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhonePullRevealTest.java
+@@ -0,0 +1,148 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++import static org.junit.Assert.*;
++
++import android.app.Activity;
++import android.graphics.Color;
++import android.graphics.Rect;
++import android.graphics.drawable.ColorDrawable;
++import android.view.MotionEvent;
++import android.view.View;
++import android.widget.FrameLayout;
++
++import org.junit.Test;
++import org.junit.runner.RunWith;
++import org.robolectric.Robolectric;
++import org.robolectric.RobolectricTestRunner;
++import org.robolectric.annotation.Config;
++import org.robolectric.annotation.GraphicsMode;
++import org.robolectric.annotation.SQLiteMode;
++
++@RunWith(RobolectricTestRunner.class)
++@Config(manifest=Config.NONE,sdk={30,36})
++@GraphicsMode(GraphicsMode.Mode.LEGACY)
++@SQLiteMode(SQLiteMode.Mode.LEGACY)
++public class ArcPhonePullRevealTest {
++    private static class Fixture implements AutoCloseable {
++        final org.robolectric.android.controller.ActivityController<Activity> activity =
++                Robolectric.buildActivity(Activity.class).setup();
++        final FrameLayout root = new FrameLayout(activity.get());
++        final FrameLayout page = new FrameLayout(activity.get());
++        int reveals;
++        final ArcPhonePullReveal reveal;
++        Fixture() {
++            root.addView(page,new FrameLayout.LayoutParams(400,800));
++            root.layout(0,0,400,800);page.layout(0,0,400,800);
++            reveal=new ArcPhonePullReveal(page,()->reveals++);reveal.setEnabled(true);
++        }
++        float dp(float value){return value*page.getResources().getDisplayMetrics().density;}
++        ColorDrawable fill() throws Exception {
++            var f=ArcPhonePullReveal.class.getDeclaredField("mFill");f.setAccessible(true);
++            return (ColorDrawable)f.get(reveal);
++        }
++        @Override public void close(){reveal.destroy();activity.pause().stop().destroy();}
++    }
++
++    @Test public void shortPullStaysRevealedWithoutForwardingRefreshOrResizingPage() {
++        try(var f=new Fixture()) {
++            assertTrue(f.reveal.start());assertEquals(1,f.reveals);
++            assertEquals(0,f.reveal.pull(f.dp(80)),0);
++            assertEquals(f.dp(40),f.page.getTranslationY(),.01);
++            assertFalse(f.reveal.release(true));
++            org.robolectric.shadows.ShadowLooper.idleMainLooper(300,java.util.concurrent.TimeUnit.MILLISECONDS);
++            assertEquals(f.dp(56),f.page.getTranslationY(),.01);
++            assertEquals(400,f.page.getWidth());assertEquals(800,f.page.getHeight());
++            assertEquals(0,f.page.getTop());assertEquals(0,f.page.getPaddingTop());
++            assertTrue(f.reveal.isRevealed());
++        }
++    }
++
++    @Test public void longPullForwardsOnlyExcessAndRewindRetractsNativeProgress() {
++        try(var f=new Fixture()) {
++            assertTrue(f.reveal.start());
++            assertEquals(f.dp(28),f.reveal.pull(f.dp(140)),.01);
++            assertEquals(f.dp(56),f.page.getTranslationY(),.01);
++            assertEquals(-f.dp(28),f.reveal.pull(-f.dp(60)),.01);
++            assertFalse(f.reveal.release(true));
++            f.reveal.reset(false);assertTrue(f.reveal.start());
++            assertEquals(f.dp(88),f.reveal.pull(f.dp(200)),.01);
++            assertTrue(f.reveal.release(true)); // Chromium still owns its refresh threshold/reload.
++        }
++    }
++
++    @Test public void coloredGapFollowsLightDarkAndActualPageOrigin() throws Exception {
++        try(var f=new Fixture()) {
++            f.page.layout(7,11,407,811);f.reveal.setSurface(0xffe87524);
++            assertTrue(f.reveal.start());f.reveal.pull(f.dp(80));
++            assertEquals(0xffe87524,f.fill().getColor());
++            assertEquals(new Rect(7,11,407,11+Math.round(f.dp(40))),f.fill().getBounds());
++            f.reveal.setSurface(0xff202124);assertEquals(0xff202124,f.fill().getColor());
++            f.reveal.setSurface(Color.WHITE);assertEquals(Color.WHITE,f.fill().getColor());
++            assertEquals(2,f.root.getChildCount());
++            View gap=f.root.getChildAt(0);assertSame(f.page,f.root.getChildAt(1));
++            assertFalse(gap.isEnabled());assertFalse(gap.isClickable());assertFalse(gap.isFocusable());
++            assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO,gap.getImportantForAccessibility());
++        }
++    }
++
++    @Test public void translatedPageReceivesRealLocalTouchCoordinates() {
++        try(var f=new Fixture()) {
++            final float[] local={-1};
++            f.page.setOnTouchListener((v,e)->{local[0]=e.getY();return true;});
++            f.reveal.start();f.reveal.pull(f.dp(80));f.reveal.release(true);
++            org.robolectric.shadows.ShadowLooper.idleMainLooper(300,java.util.concurrent.TimeUnit.MILLISECONDS);
++            float y=f.page.getTranslationY()+20;
++            for(int action:new int[]{MotionEvent.ACTION_DOWN,MotionEvent.ACTION_UP}) {
++                var e=MotionEvent.obtain(0,1,action,30,y,0);
++                assertTrue(f.root.dispatchTouchEvent(e));e.recycle();
++            }
++            assertEquals(20,local[0],.01);
++        }
++    }
++
++    @Test public void cancellationDisableResizeAndDestroyRestoreOwnedTranslation() throws Exception {
++        try(var f=new Fixture()) {
++            f.page.setTranslationY(9);f.reveal.start();f.reveal.pull(f.dp(80));
++            assertFalse(f.reveal.release(false));f.reveal.reset(false);
++            assertEquals(9,f.page.getTranslationY(),0);assertFalse(f.reveal.isRevealed());
++            f.reveal.start();f.reveal.pull(f.dp(80));f.reveal.setEnabled(false);
++            assertEquals(9,f.page.getTranslationY(),0);assertFalse(f.reveal.start());
++            f.reveal.setEnabled(true);f.reveal.start();f.reveal.pull(f.dp(80));
++            f.page.layout(0,0,800,400);assertEquals(9,f.page.getTranslationY(),0);
++            f.reveal.start();f.reveal.pull(f.dp(80));f.reveal.destroy();
++            assertEquals(9,f.page.getTranslationY(),0);assertTrue(f.fill().getBounds().isEmpty());
++        }
++    }
++
++    @Test public void newPullDuringSettleContinuesFromVisibleOffset() {
++        try(var f=new Fixture()) {
++            f.reveal.start();f.reveal.pull(f.dp(80));f.reveal.release(true);
++            float visible=f.page.getTranslationY();
++            f.reveal.start();f.reveal.pull(f.dp(4));
++            assertEquals(Math.min(f.dp(56),visible+f.dp(2)),f.page.getTranslationY(),.01);
++        }
++    }
++
++    @Test public void ordinaryScrollCollapsesLatchedGapButDoesNotCancelActivePull() {
++        try(var f=new Fixture()) {
++            f.reveal.start();f.reveal.pull(f.dp(80));f.reveal.onPageScroll();
++            assertEquals(f.dp(40),f.page.getTranslationY(),.01);
++            f.reveal.release(true);
++            org.robolectric.shadows.ShadowLooper.idleMainLooper(300,java.util.concurrent.TimeUnit.MILLISECONDS);
++            f.reveal.onPageScroll();
++            org.robolectric.shadows.ShadowLooper.idleMainLooper(300,java.util.concurrent.TimeUnit.MILLISECONDS);
++            assertEquals(0,f.page.getTranslationY(),0);assertFalse(f.reveal.isRevealed());
++        }
++    }
++
++    @Test public void tinyPullDoesNotLatchAndDetachedPageDeclinesGesture() {
++        try(var f=new Fixture()) {
++            f.reveal.start();f.reveal.pull(f.dp(4));assertFalse(f.reveal.release(true));
++            f.reveal.reset(false);assertFalse(f.reveal.isRevealed());
++            f.root.removeView(f.page);assertFalse(f.reveal.start());
++        }
++    }
 +}
 diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneStatusFadeTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneStatusFadeTest.java
 new file mode 100644

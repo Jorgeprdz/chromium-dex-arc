@@ -79,6 +79,8 @@ import org.chromium.chrome.browser.bookmarks.TabBookmarker;
 import org.chromium.chrome.browser.bottombar.BottomBarContainerCoordinator;
 import org.chromium.chrome.browser.arc.ArcPhoneNavigation;
 import org.chromium.chrome.browser.arc.ArcPhoneGlass;
+import org.chromium.chrome.browser.arc.ArcPhonePullReveal;
+import org.chromium.chrome.browser.SwipeRefreshHandler;
 import org.chromium.chrome.browser.lifecycle.PauseResumeWithNativeObserver;
 import org.chromium.chrome.browser.browser_controls.BottomControlsStacker;
 import org.chromium.chrome.browser.browser_controls.BottomControlsStacker.LayerType;
@@ -420,6 +422,8 @@ public class ToolbarManager
     private final BottomControlsStacker mBottomControlsStacker;
     private @Nullable ArcPhoneNavigation mArcPhoneNavigation;
     private @Nullable ArcPhoneGlass mArcPhoneGlass;
+    private @Nullable ArcPhonePullReveal mArcPhonePullReveal;
+    private @Nullable SwipeRefreshHandler mArcPhonePullHandler;
     private ArcPhoneGlass.@Nullable Backdrop mArcPhoneTopGlass;
     private ArcPhoneGlass.@Nullable Backdrop mArcPhoneStatusGlass;
     private ArcPhoneGlass.@Nullable Backdrop mArcPhoneBottomGlass;
@@ -439,9 +443,11 @@ public class ToolbarManager
     private android.animation.@Nullable ValueAnimator mArcPhoneCompactAnimation;
     private final GestureStateListener mArcPhoneGestureListener = new GestureStateListener() {
         @Override public void onScrollStarted(int offset, int extent, boolean directionUp) {
+            if (mArcPhonePullReveal != null) mArcPhonePullReveal.onPageScroll();
             setArcPhoneCompact(!directionUp || mFormFieldFocusedSupplier.get());
         }
         @Override public void onVerticalScrollDirectionChanged(boolean directionUp, float ratio) {
+            if (mArcPhonePullReveal != null) mArcPhonePullReveal.onPageScroll();
             setArcPhoneCompact(!directionUp || mFormFieldFocusedSupplier.get());
         }
         @Override public void onDestroyed() {
@@ -1486,6 +1492,7 @@ public class ToolbarManager
 
                     @Override
                     public void onObservingDifferentTab(@Nullable Tab tab) {
+                        if (mArcPhonePullReveal != null) mArcPhonePullReveal.reset(false);
                         if (mArcPhoneGlass != null) {mArcPhoneGlass.invalidateSource();mArcPhoneGlass.setEnabled(false);}
                         if (mArcPhoneHost != null) mToolbarLayout.post(ToolbarManager.this::updateArcPhoneFloatingSurfaces);
                         // ActivityTabProvider will null out the tab passed to
@@ -1574,6 +1581,7 @@ public class ToolbarManager
 
                     @Override
                     public void onLoadStarted(Tab tab, boolean toDifferentDocument) {
+                        if (mArcPhonePullReveal != null) mArcPhonePullReveal.reset(false);
                         onBackPressStateChanged();
                         if (!toDifferentDocument) return;
                         updateTabLoadingState(true);
@@ -2647,6 +2655,7 @@ public class ToolbarManager
         boolean glass = floating && glassTab != null && !glassTab.isNativePage();
         bindArcPhoneGestures(glass && glassTab != null ? glassTab.getWebContents() : null);
         if (!glass || isUrlBarFocused()) setArcPhoneCompact(false);
+        bindArcPhonePullReveal(glass && !isUrlBarFocused() ? glassTab : null);
         if (mToolbarLayout instanceof ToolbarPhone phone) {
             if (enabled && mArcPhoneGlass == null) {
                 mArcPhoneGlass = new ArcPhoneGlass(phone, ArcPhoneGlass.contentSource(
@@ -2777,6 +2786,28 @@ public class ToolbarManager
         }
     }
 
+    private void bindArcPhonePullReveal(@Nullable Tab tab) {
+        if (tab != null && mArcPhonePullReveal == null) {
+            mArcPhonePullReveal = new ArcPhonePullReveal(mCompositorViewHolder, () -> {
+                if (mArcPhonePullReveal != null) {
+                    mArcPhonePullReveal.setSurface(mToolbarThemeColorProvider.getArcPhonePageColor(
+                            mActivityTabProvider.get()));
+                }
+                setArcPhoneCompact(true);
+            });
+        }
+        SwipeRefreshHandler next = tab == null ? null : SwipeRefreshHandler.from(tab);
+        if (mArcPhonePullHandler != next) {
+            if (mArcPhonePullHandler != null) mArcPhonePullHandler.setArcPhonePullReveal(null);
+            mArcPhonePullHandler = next;
+            if (next != null) next.setArcPhonePullReveal(mArcPhonePullReveal);
+        }
+        if (mArcPhonePullReveal != null) {
+            mArcPhonePullReveal.setSurface(mToolbarThemeColorProvider.getArcPhonePageColor(tab));
+            mArcPhonePullReveal.setEnabled(tab != null);
+        }
+    }
+
     private void bindArcPhoneGestures(@Nullable WebContents contents) {
         if (contents == mArcPhoneGestureContents) return;
         if (mArcPhoneGestures != null) mArcPhoneGestures.removeListener(mArcPhoneGestureListener);
@@ -2795,6 +2826,7 @@ public class ToolbarManager
         boolean active = !mIsDestroyed && mArcPhoneGestureContents != null
                 && !mArcPhoneFullscreen && mArcPhoneResumed && !isUrlBarFocused();
         compact &= active;
+        if (!compact && mArcPhonePullReveal != null) mArcPhonePullReveal.reset(active);
         // The status owner restores its request in onDestroy; do not revive its fade afterward.
         if (!mIsDestroyed) {
             mStatusBarColorController.setArcPhoneCompactStatus(compact, mArcPhoneFullscreen);
@@ -3394,6 +3426,9 @@ public class ToolbarManager
         mArcPhoneGestureContents = null;
         setArcPhoneCompact(false);
         mControlContainer.setArcPhoneFloatingTouchFilter(null);
+        if (mArcPhonePullHandler != null) mArcPhonePullHandler.setArcPhonePullReveal(null);
+        mArcPhonePullHandler = null;
+        if (mArcPhonePullReveal != null) { mArcPhonePullReveal.destroy(); mArcPhonePullReveal = null; }
         mStatusBarColorController.setArcPhoneStatusBackdrop(null);
         if (mArcPhoneInsetLayoutListener != null) {
             mControlContainer.getView().removeOnLayoutChangeListener(mArcPhoneInsetLayoutListener);
@@ -3749,6 +3784,10 @@ public class ToolbarManager
      */
     @Override
     public void onThemeColorChanged(int color, boolean shouldAnimate) {
+        if (mArcPhonePullReveal != null) {
+            mArcPhonePullReveal.setSurface(mToolbarThemeColorProvider.getArcPhonePageColor(
+                    mActivityTabProvider.get()));
+        }
         if (mArcPhoneTopGlass != null) mArcPhoneTopGlass.setSurface(color);
         if (mArcPhoneGlass != null) mArcPhoneGlass.setSurface(color);
         if (mArcPhoneNavigation != null) {

@@ -441,6 +441,7 @@ if (is_android) {
       "src/org/chromium/chrome/browser/arc/ArcCommandBarTest.java",
       "src/org/chromium/chrome/browser/arc/ArcDesktopMaterialTest.java",
       "src/org/chromium/chrome/browser/arc/ArcPhoneStatusFadeTest.java",
+      "src/org/chromium/chrome/browser/arc/ArcPhonePullRevealTest.java",
       "src/org/chromium/chrome/browser/arc/ArcSplitStateTest.java",
       "src/org/chromium/chrome/browser/arc/ArcSplitViewportPolicyTest.java",
       "src/org/chromium/chrome/browser/arc/ArcSplitContentHostTest.java",
