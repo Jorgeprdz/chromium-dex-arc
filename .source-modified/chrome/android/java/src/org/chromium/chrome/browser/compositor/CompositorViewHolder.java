@@ -1087,32 +1087,6 @@ public class CompositorViewHolder extends FrameLayout
         return mLayoutManager;
     }
 
-    private boolean mArcPhoneContentMarginsOwned;
-    private int mArcPhoneContentOriginalTop, mArcPhoneContentOriginalBottom;
-
-    /** Phone-only safe interaction area. Move the actual renderer AND input host together. */
-    public void setArcPhoneContentInsets(int top, int bottom) {
-        if (!(getLayoutParams() instanceof ViewGroup.MarginLayoutParams margins)) return;
-        top = Math.max(0, top);
-        bottom = Math.max(0, bottom);
-        if (!mArcPhoneContentMarginsOwned) {
-            if (top == 0 && bottom == 0) return;
-            mArcPhoneContentOriginalTop = margins.topMargin;
-            mArcPhoneContentOriginalBottom = margins.bottomMargin;
-            mArcPhoneContentMarginsOwned = true;
-        }
-        boolean release = top == 0 && bottom == 0;
-        int desiredTop = release ? mArcPhoneContentOriginalTop
-                : Math.max(mArcPhoneContentOriginalTop, top);
-        int desiredBottom = release ? mArcPhoneContentOriginalBottom
-                : Math.max(mArcPhoneContentOriginalBottom, bottom);
-        if (release) mArcPhoneContentMarginsOwned = false;
-        if (margins.topMargin == desiredTop && margins.bottomMargin == desiredBottom) return;
-        margins.topMargin = desiredTop;
-        margins.bottomMargin = desiredBottom;
-        setLayoutParams(margins);
-    }
-
     /** Keep phone controls as overlays; native Desktop and IME logic remain with their owners. */
     public void setArcPhoneControlsOverlay(boolean enabled) {
         if (mBrowserControlsManager == null) return;

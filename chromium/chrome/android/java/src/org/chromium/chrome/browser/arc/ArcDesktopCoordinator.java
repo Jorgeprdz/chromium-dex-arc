@@ -330,7 +330,6 @@ public final class ArcDesktopCoordinator {
         mOriginalContentOutlineProvider = compositorViewHolder.getOutlineProvider();
         mOriginalContentClipToOutline = compositorViewHolder.getClipToOutline();
         mOriginalContentClipBounds = compositorViewHolder.getClipBounds();
-        compositorViewHolder.setArcPhoneContentInsets(0, 0);
         ViewGroup.LayoutParams rawContentLayoutParams = compositorViewHolder.getLayoutParams();
         if (rawContentLayoutParams instanceof ViewGroup.MarginLayoutParams) {
             ViewGroup.MarginLayoutParams margins = (ViewGroup.MarginLayoutParams) rawContentLayoutParams;

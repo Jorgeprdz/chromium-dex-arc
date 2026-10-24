@@ -509,6 +509,14 @@ public class StatusBarColorController
         updateStatusBarColor();
     }
 
+    public void setArcPhoneStatusBackdrop(android.graphics.drawable.@Nullable Drawable backdrop) {
+        mArcPhoneStatusFade.setBackdrop(backdrop);
+    }
+
+    public void getArcPhoneStatusBackdropBounds(android.graphics.Rect out) {
+        mArcPhoneStatusFade.getBackdropBounds(out);
+    }
+
     private @ColorInt int getArcPhoneSurfaceColor() {
         int fallback = calculateDefaultStatusBarColor();
         // Honor native dark/incognito choices. Otherwise reuse Chromium's existing page palette;

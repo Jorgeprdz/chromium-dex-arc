@@ -1,4 +1,4 @@
-"""Compile delivered content-margin ownership; not device input/graphics acceptance."""
+"""Delivered Desktop geometry/contrast; phone overlay regression is in test_phone_floating_input."""
 from pathlib import Path
 import unittest
 from test_phone_overlay_insets import method, run_probe
@@ -12,31 +12,6 @@ class ContentSafeGeometryTests(unittest.TestCase):
 if(contentTopMargin(0,8,32)!=40||contentTopMargin(32,8,32)!=40||contentTopMargin(7,8,0)!=15)throw new AssertionError("caption double padding");}}
 '''
   run_probe(self,{'CaptionProbe.java':code},'CaptionProbe')
- def test_content_margins_are_idempotent_restore_and_preserve_sidebar_width(self):
-  src=(ROOT/'.source-modified/chrome/android/java/src/org/chromium/chrome/browser/compositor/CompositorViewHolder.java').read_text()
-  self.assertIn('public void setArcPhoneContentInsets(',src,'Content must clear inaccessible system and compact-control regions')
-  body=method(src,'public void setArcPhoneContentInsets(')
-  code='''public class ContentMarginProbe {
-static class ViewGroup {static class MarginLayoutParams {int topMargin=7,bottomMargin=9,leftMargin=211,rightMargin=8;}}
-ViewGroup.MarginLayoutParams params=new ViewGroup.MarginLayoutParams();int changes;
-boolean mArcPhoneContentMarginsOwned;int mArcPhoneContentOriginalTop,mArcPhoneContentOriginalBottom;
-Object getLayoutParams(){return params;}void setLayoutParams(Object p){changes++;}
-'''+body+'''
-static void check(boolean ok){if(!ok)throw new AssertionError("safe geometry/ownership");}
-public static void main(String[] args){var p=new ContentMarginProbe();
-p.setArcPhoneContentInsets(86,0);check(p.params.topMargin==86&&p.params.bottomMargin==9);
-p.setArcPhoneContentInsets(86,0);check(p.changes==1);
-p.setArcPhoneContentInsets(86,200);check(p.params.topMargin==86&&p.params.bottomMargin==200);
-p.setArcPhoneContentInsets(86,0);check(p.params.bottomMargin==9);
-p.setArcPhoneContentInsets(0,0);check(p.params.topMargin==7&&p.params.bottomMargin==9&&!p.mArcPhoneContentMarginsOwned);
-check(p.params.leftMargin==211&&p.params.rightMargin==8);int count=p.changes;p.setArcPhoneContentInsets(0,0);check(p.changes==count);
-p.params.topMargin=44;p.setArcPhoneContentInsets(90,0);p.setArcPhoneContentInsets(0,0);check(p.params.topMargin==44);
-p.params.topMargin=86;p.params.bottomMargin=200;p.setArcPhoneContentInsets(86,200);check(p.params.topMargin==86&&p.params.bottomMargin==200);p.setArcPhoneContentInsets(0,0);check(p.params.topMargin==86&&p.params.bottomMargin==200);
-p.params.topMargin=-11;p.params.bottomMargin=-13;p.setArcPhoneContentInsets(80,200);p.setArcPhoneContentInsets(0,0);check(p.params.topMargin==-11&&p.params.bottomMargin==-13);
-}}
-'''
-  run_probe(self,{'ContentMarginProbe.java':code},'ContentMarginProbe')
-
  def test_header_tile_text_uses_its_actual_idle_surface(self):
   policy=ROOT/'chromium/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java'
   window=next((ROOT/'chromium').rglob('ArchiumWindowClass.java'))

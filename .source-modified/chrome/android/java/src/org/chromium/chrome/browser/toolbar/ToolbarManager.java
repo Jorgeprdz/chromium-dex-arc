@@ -421,6 +421,7 @@ public class ToolbarManager
     private @Nullable ArcPhoneNavigation mArcPhoneNavigation;
     private @Nullable ArcPhoneGlass mArcPhoneGlass;
     private ArcPhoneGlass.@Nullable Backdrop mArcPhoneTopGlass;
+    private ArcPhoneGlass.@Nullable Backdrop mArcPhoneStatusGlass;
     private ArcPhoneGlass.@Nullable Backdrop mArcPhoneBottomGlass;
     private @Nullable PauseResumeWithNativeObserver mArcPhoneLifecycle;
     private @Nullable Callback<Boolean> mArcPhoneMotionObserver;
@@ -457,7 +458,6 @@ public class ToolbarManager
     private int mArcPhoneOriginalProgressMargin;
     private boolean mArcPhoneOriginalStatusContrast;
     private View.@Nullable OnLayoutChangeListener mArcPhoneInsetLayoutListener;
-    private android.view.ViewTreeObserver.@Nullable OnGlobalLayoutListener mArcPhoneContentLayoutListener;
     private boolean mArcPhoneResumed = true;
     private boolean mArcPhoneFullscreen;
     private boolean mArcPhoneTransparentContainer;
@@ -2622,7 +2622,6 @@ public class ToolbarManager
         if (mArcPhoneInsetLayoutListener == null) {
             mArcPhoneInsetLayoutListener = (view, l, t, r, b, ol, ot, or, ob) -> {
                 if (mArcPhoneOverlayActive) updateArcPhoneTopInset();
-                updateArcPhoneContentInsets();
                 if (mArcPhoneCompact && (r-l != or-ol || b-t != ob-ot)) {
                     if (mArcPhoneCompactAnimation != null) {
                         android.animation.ValueAnimator animation = mArcPhoneCompactAnimation;
@@ -2635,11 +2634,6 @@ public class ToolbarManager
             };
             mControlContainer.getView().addOnLayoutChangeListener(mArcPhoneInsetLayoutListener);
         }
-        if (mArcPhoneContentLayoutListener == null) {
-            mArcPhoneContentLayoutListener = this::updateArcPhoneContentInsets;
-            mActivity.getWindow().getDecorView().getViewTreeObserver()
-                    .addOnGlobalLayoutListener(mArcPhoneContentLayoutListener);
-        }
         updateArcPhoneFloatingSurfaces();
         if (mArcPhoneNavigation != null) mArcPhoneNavigation.bind(host);
     }
@@ -2651,7 +2645,6 @@ public class ToolbarManager
         Tab glassTab = mActivityTabProvider.get();
         boolean floating = enabled && mArcPhoneResumed && !mArcPhoneFullscreen;
         boolean glass = floating && glassTab != null && !glassTab.isNativePage();
-        if (!glass) mCompositorViewHolder.setArcPhoneContentInsets(0, 0);
         bindArcPhoneGestures(glass && glassTab != null ? glassTab.getWebContents() : null);
         if (!glass || isUrlBarFocused()) setArcPhoneCompact(false);
         if (mToolbarLayout instanceof ToolbarPhone phone) {
@@ -2664,6 +2657,10 @@ public class ToolbarManager
                                     tab==null?null:tab.getWebContents(),region,width,height,callback::accept);
                         }));
                 mArcPhoneTopGlass = mArcPhoneGlass.add(phone, phone::getArcPhoneGlassBounds);
+                mArcPhoneStatusGlass = mArcPhoneGlass.add(mActivity.getWindow().getDecorView(),
+                        mStatusBarColorController::getArcPhoneStatusBackdropBounds);
+                mArcPhoneStatusGlass.setSampleOnly(true);
+                mArcPhoneStatusGlass.setCornerRadius(0);
                 mArcPhoneMotionObserver = moving -> {
                     if (mArcPhoneGlass != null) mArcPhoneGlass.setInMotion(Boolean.TRUE.equals(moving));
                 };
@@ -2695,6 +2692,8 @@ public class ToolbarManager
             }
             if (mArcPhoneTopGlass != null) mArcPhoneTopGlass.setSurface(mToolbarThemeColorProvider.getThemeColor());
             phone.setArcPhoneGlassBackground(glass ? mArcPhoneTopGlass : null);
+            mControlContainer.setArcPhoneFloatingTouchFilter(
+                    glass && !isUrlBarFocused() ? this::isArcPhoneFloatingTouch : null);
             ToolbarProgressBar nativeProgress = mProgressBarContainer.findViewById(R.id.toolbar_progress_bar);
             if (nativeProgress != null) nativeProgress.setArcPhonePerimeterTarget(glass ? phone : null);
             phone.setArcPhoneProgressPerimeterEnabled(glass);
@@ -2754,7 +2753,6 @@ public class ToolbarManager
                     org.chromium.ui.R.id.arc_phone_surface_decorator,
                     glass && mArcPhoneGlass != null ? mArcPhoneGlass.getSurfaceDecorator() : null);
             mCompositorViewHolder.setArcPhoneControlsOverlay(glass);
-            updateArcPhoneContentInsets();
             if (mArcPhoneGlass != null) {
                 mArcPhoneGlass.setInMotion(Boolean.TRUE.equals(mCompositorViewHolder.getInMotionSupplier().get()));
                 mArcPhoneGlass.setSurfaceLayersTag(org.chromium.ui.R.id.arc_phone_surface_layers);
@@ -2771,6 +2769,7 @@ public class ToolbarManager
             }
             phone.setArcPhoneFloatingSurfaceEnabled(enabled);
             mStatusBarColorController.setArcPhoneFloatingSurfaceEnabled(floating);
+            mStatusBarColorController.setArcPhoneStatusBackdrop(glass ? mArcPhoneStatusGlass : null);
         }
         if (mArcPhoneNavigation != null) {
             mArcPhoneNavigation.setPhoneModeActive(enabled);
@@ -2808,7 +2807,6 @@ public class ToolbarManager
         }
         mArcPhoneCompact = compact;
         if (mArcPhoneNavigation != null) mArcPhoneNavigation.setCompact(compact);
-        updateArcPhoneContentInsets();
         if (mArcPhoneCompactAnimation != null) {
             mArcPhoneCompactAnimation.cancel();
             mArcPhoneCompactAnimation = null;
@@ -2840,24 +2838,23 @@ public class ToolbarManager
         animation.start();
     }
 
-    private void updateArcPhoneContentInsets() {
-        if (!mArcPhoneOverlayActive || mIsDestroyed
-                || org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.isDesktopWindow(mActivity)) {
-            mCompositorViewHolder.setArcPhoneContentInsets(0, 0);
-            return;
-        }
-        android.view.WindowInsets raw = mActivity.getWindow().getDecorView().getRootWindowInsets();
-        if (raw == null) return;
-        int consumedTop = 0;
-        if (mCompositorViewHolder.getParent() instanceof View parent) {
-            int[] position = new int[2];
-            parent.getLocationInWindow(position);
-            consumedTop = Math.max(0, position[1] + parent.getPaddingTop());
-        }
-        mCompositorViewHolder.setArcPhoneContentInsets(
-                org.chromium.chrome.browser.arc.ArcPhoneStatusFade.contentTopInset(raw, consumedTop),
-                org.chromium.chrome.browser.arc.ArcPhoneStatusFade.contentBottomInset(
-                        raw, mArcPhoneCompact, ArcPhoneNavigation.getReservedHeight(mActivity)));
+
+    /** Match the actual translated, visible capsule rather than its full-width native parent. */
+    private boolean isArcPhoneFloatingTouch(android.view.MotionEvent event) {
+        if (!(mToolbarLayout instanceof ToolbarPhone phone) || !phone.isShown()
+                || phone.getAlpha() <= .01f) return false;
+        android.graphics.Rect bounds = new android.graphics.Rect();
+        phone.getArcPhoneGlassBounds(bounds);
+        int[] location = new int[2];
+        phone.getLocationOnScreen(location);
+        float x = event.getRawX() - location[0];
+        float y = event.getRawY() - location[1];
+        if (x < bounds.left || x >= bounds.right || y < bounds.top || y >= bounds.bottom) return false;
+        float radius = bounds.height() / 2f;
+        float centerX = Math.max(bounds.left + radius, Math.min(x, bounds.right - radius));
+        float dx = x - centerX;
+        float dy = y - (bounds.top + radius);
+        return dx * dx + dy * dy <= radius * radius;
     }
 
     /** Legacy top-inset owner does not position web-page controls beneath a consumed status bar. */
@@ -3392,12 +3389,8 @@ public class ToolbarManager
         mArcPhoneGestures = null;
         mArcPhoneGestureContents = null;
         setArcPhoneCompact(false);
-        mCompositorViewHolder.setArcPhoneContentInsets(0, 0);
-        if (mArcPhoneContentLayoutListener != null) {
-            mActivity.getWindow().getDecorView().getViewTreeObserver()
-                    .removeOnGlobalLayoutListener(mArcPhoneContentLayoutListener);
-            mArcPhoneContentLayoutListener = null;
-        }
+        mControlContainer.setArcPhoneFloatingTouchFilter(null);
+        mStatusBarColorController.setArcPhoneStatusBackdrop(null);
         if (mArcPhoneInsetLayoutListener != null) {
             mControlContainer.getView().removeOnLayoutChangeListener(mArcPhoneInsetLayoutListener);
             mArcPhoneInsetLayoutListener = null;

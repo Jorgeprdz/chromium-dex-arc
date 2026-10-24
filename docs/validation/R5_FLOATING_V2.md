@@ -194,3 +194,7 @@ Este candidato no tiene APK: aceptación gráfica Claro/Oscuro PENDIENTE, títul
 ### Input access follow-up — 24-oct-2026 UTC
 
 Installed baseline b62ece7 was inspected in phone and DeX. Approved floating pill geometry/material is retained; new candidate addresses native reattachment width, compact-mode content safety, NTP duplicate scene and readable popup backing. See [R5_INPUT_ACCESS_FIXES.md](R5_INPUT_ACCESS_FIXES.md) for implementation, recovery evidence and pending device acceptance. Candidate not yet built; no graphical PASS inferred from local tests.
+
+### Visual regression in63ea931 — 24-oct-2026
+
+Acceptance FAIL: direct phone screenshots and bounds prove that added compositor margins create solid exposed bands. The follow-up restores full-window phone rendering and introduces native input passthrough outside the actual floating capsule; status blur uses the existing bounded sampler. See [R5_FULL_WINDOW_INPUT_REGRESSION.md](R5_FULL_WINDOW_INPUT_REGRESSION.md) for evidence, tests and the unresolved system-indicator touch choice. No physical candidate PASS or new run is claimed.

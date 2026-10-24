@@ -24,6 +24,7 @@ p.setArcPhoneCompact(true);p.mArcPhoneGestureContents=null;p.setArcPhoneCompact(
 p.mArcPhoneResumed=false;p.setArcPhoneCompact(true);check(!p.mArcPhoneCompact);
 p.mArcPhoneCompactAnimation=new android.animation.ValueAnimator();p.mIsDestroyed=true;
 p.setArcPhoneCompact(false);check(p.mArcPhoneCompactAnimation==null&&android.animation.ValueAnimator.cancelled);
+check(p.insetUpdates==0);
 }}
 '''
   files={'AdaptiveProbe.java':code,

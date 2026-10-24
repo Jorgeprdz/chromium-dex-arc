@@ -28,21 +28,23 @@ import org.robolectric.annotation.SQLiteMode;
 @GraphicsMode(GraphicsMode.Mode.LEGACY)
 @SQLiteMode(SQLiteMode.Mode.LEGACY)
 public class ArcPhoneStatusFadeTest {
-    @Test public void contentClearsUnconsumedSystemAreaAndCompactControlsButNotIme() {
-        WindowInsets raw=new WindowInsets.Builder()
-                .setInsets(WindowInsets.Type.statusBars(),Insets.of(0,30,0,0))
-                .setInsetsIgnoringVisibility(WindowInsets.Type.statusBars(),Insets.of(0,30,0,0))
-                .setVisible(WindowInsets.Type.ime(),false).build();
-        assertEquals(30,ArcPhoneStatusFade.contentTopInset(raw,0));
-        assertEquals(0,ArcPhoneStatusFade.contentTopInset(raw,30));
-        assertEquals(20,ArcPhoneStatusFade.contentTopInset(raw,10));
-        assertEquals(76,ArcPhoneStatusFade.contentBottomInset(raw,true,76));
-        assertEquals(0,ArcPhoneStatusFade.contentBottomInset(raw,false,76));
-        WindowInsets keyboard=new WindowInsets.Builder(raw)
-                .setInsets(WindowInsets.Type.ime(),Insets.of(0,0,0,300))
-                .setVisible(WindowInsets.Type.ime(),true).build();
-        assertEquals(0,ArcPhoneStatusFade.contentBottomInset(keyboard,true,76));
+    @Test public void sampledBackdropSharesBoundsAndDetachesWithoutAddingATouchView() throws Exception {
+        var activity=Robolectric.buildActivity(Activity.class).setup();
+        var decor=new Decor(activity.get());decor.layout(0,0,400,800);
+        var owner=new ArcPhoneStatusFade(decor);owner.update(true,Color.WHITE);
+        final int[] draws={0};
+        var backdrop=new android.graphics.drawable.ColorDrawable(Color.BLUE) {
+            @Override public void draw(android.graphics.Canvas canvas){draws[0]++;super.draw(canvas);}
+        };
+        owner.setBackdrop(backdrop);
+        Rect region=new Rect();owner.getBackdropBounds(region);
+        assertEquals(new Rect(0,0,400,30),region);assertEquals(region,backdrop.getBounds());
+        assertNotNull(backdrop.getCallback());
+        drawable(owner).draw(new android.graphics.Canvas());assertEquals(1,draws[0]);
+        assertEquals(0,decor.getChildCount());owner.setBackdrop(null);assertNull(backdrop.getCallback());
+        owner.destroy();activity.pause().stop().destroy();
     }
+
     @Test public void toolbarUsesStableStatusInsetWhileLeavingFullscreen() throws Exception {
         WindowInsets raw = new WindowInsets.Builder()
                 .setInsets(WindowInsets.Type.statusBars(), Insets.NONE)
@@ -74,13 +76,13 @@ public class ArcPhoneStatusFadeTest {
     @Test public void gradientIsTranslucentAndEndsWithoutAnOpaqueStripe() {
         for(int c:new int[]{Color.WHITE,0xff202124}) {
             int[] stops=ArcPhoneStatusFade.Fade.colors(c);
-            assertEquals(217,Color.alpha(stops[0]));assertEquals(204,Color.alpha(stops[1]));
+            assertTrue(Color.alpha(stops[0]) <= 180);assertTrue(Color.alpha(stops[1]) <= 180);
             assertEquals(0,Color.alpha(stops[2]));
             for(int s:stops)assertEquals(c&0x00ffffff,s&0x00ffffff);
         }
     }
     @Test public void clockBackingMeetsAaEvenOverOppositePageColor() {
-        // The plateau under indicators is 80%; use worst-case black/white web backing.
+        // The plateau under indicators remains translucent; use worst-case black/white web backing.
         for(int surface:new int[]{Color.WHITE,0xff202124}) {
             int stop=ArcPhoneStatusFade.Fade.colors(surface)[1];
             int page=surface==Color.WHITE?Color.BLACK:Color.WHITE;

@@ -763,6 +763,15 @@ Verificación del checkpoint Desktop: suite host424 PASS; política Chromium61 m
 - [x] Candidate code: phone content safe regions with owned/restored margins, compact-width reattachment, NTP duplicate-bottom scene suppression, popup partial-frame backing, Desktop caption top clearance and readable idle tile labels. Expanded pills/material, sidebar widths, Split ratios and Spaces model preserved.
 - [x] Local RED/GREEN:165 Android executions (82 original shadow-policy methods),3 host geometry/contrast and2 adaptive probes; isolated SDK37.2 compilation PASS;197-file patch application/delta and identical regeneration PASS,187 unchanged timestamps preserved. Not graphical/device acceptance.
 - [x] Complete local suite438:437 PASS/1 obsolete NTP static contract FAIL; corrected assertion plus native-page matrix and final affected suites17 PASS. Full-suite run is not presented as green.
-- [ ] One incremental build/verified install authorized but not dispatched yet; preflight remains enabled. Details and honest pending device cases: [R5_INPUT_ACCESS_FIXES.md](docs/validation/R5_INPUT_ACCESS_FIXES.md).
+- [x] One incremental build dispatched: run40068726423, exact candidate63ea9314483288a729f226460c3d43256b7e8ef3; authorize/preflight PASS, checkpoint download/build pending. Native Termux monitor + verified installer open on /dev/pts/1, CDMX/600s; no additional dispatch. Details and honest pending device cases: [R5_INPUT_ACCESS_FIXES.md](docs/validation/R5_INPUT_ACCESS_FIXES.md).
 - [ ] Small-window Spaces access, narrow Split top-search root cause and broad physical regressions remain pending. Old inspection screenshots were accidentally deleted; do not claim retained visual evidence.
-- [ ] After run/monitor launch: finish MacDesk repair using hidden directories; Nautilus must be the default file manager, as requested.
+- [x] After run/monitor launch: MacDesk hidden-root startup and Panel/Docklike readiness PASS; GNOME Nautilus is default, actual native X11 folder open/close PASS; related9 tests PASS. Physical DeX appearance pending (disconnected). Separate MacDesk commitca67e88.
+
+## Phone full-window regression — 24-oct-2026
+
+- [x] Visual acceptance of installed63ea931: FAIL. Own capture/dump proves added margins reduce the page to [0,86][904,1766] while compact, exposing a200px solid bottom region.
+- [x] Candidate removes the phone compositor-margin owner; restores full-window overlay policy. Adds native phone-only DOWN passthrough outside the translated/visible capsule; preserves native find, editing, gesture sequence and Desktop routing.
+- [x] Status diffused surface reuses bounded web sampler, sample-only material, noninteractive Drawable fade and native contrast/theme owner; approved pill dimensions/material retained.
+- [x] Local440 host PASS, final5 input/adaptive PASS,167 Android executions PASS, genuine SDK37.2 input API check/preparation PASS,198-file reproducible patch and187 unchanged timestamps verified. Not physical acceptance.
+- [ ] System clock-region web touches: InputDispatcher delivers them to Android StatusBar. User was asked to choose temporary hiding while compact versus only system-height safe region. No visibility change or claim of web click-through here.
+- [ ] One incremental build authorized, not dispatched yet; physical candidate acceptance pending. See [R5_FULL_WINDOW_INPUT_REGRESSION.md](docs/validation/R5_FULL_WINDOW_INPUT_REGRESSION.md).

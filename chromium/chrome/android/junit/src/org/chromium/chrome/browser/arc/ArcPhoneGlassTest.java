@@ -28,6 +28,15 @@ import org.robolectric.annotation.SQLiteMode;
 @GraphicsMode(GraphicsMode.Mode.LEGACY)
 @SQLiteMode(SQLiteMode.Mode.LEGACY)
 public class ArcPhoneGlassTest {
+    @Test public void statusSampleOnlyDoesNotPaintPillTintOrOpaqueFallback() {
+        var backdrop=new ArcPhoneGlass.Backdrop();backdrop.setSampleOnly(true);backdrop.setCornerRadius(0);backdrop.setBounds(0,0,200,30);
+        final int[] fills={0};
+        var canvas=new Canvas(){@Override public void drawRect(RectF rect,Paint paint){fills[0]++;}};
+        backdrop.draw(canvas);assertEquals(0,fills[0]);
+        Bitmap frame=Bitmap.createBitmap(20,3,Bitmap.Config.ARGB_8888);backdrop.setFrame(frame);
+        backdrop.draw(canvas);assertEquals(0,fills[0]);backdrop.clear();frame.recycle();
+    }
+
     @Test public void milkyPopupWithPartialWebFramePaintsAnOpaqueBase() {
         var backdrop=new ArcPhoneGlass.Backdrop();
         backdrop.setMilky(true);backdrop.setSurface(0xff303238);backdrop.setBounds(0,0,200,100);

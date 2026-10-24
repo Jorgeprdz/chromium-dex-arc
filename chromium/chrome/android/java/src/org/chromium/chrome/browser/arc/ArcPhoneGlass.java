@@ -52,6 +52,8 @@ public final class ArcPhoneGlass {
         private int mTint=0xb3ffffff;
         private int mSurface=Color.WHITE;
         private boolean mMilky;
+        private boolean mSampleOnly;
+        public void setSampleOnly(boolean sampleOnly){mSampleOnly=sampleOnly;invalidateSelf();}
         private boolean mDesktop;
         private Paint mSheen;
         private int mAlpha=255;
@@ -105,7 +107,7 @@ public final class ArcPhoneGlass {
                 canvas.drawBitmap(mFrame,null,mFrameRect,mPaint);
                 if(!mPaintReported){android.util.Log.i("ArchiumGlass","painted frame bounds="+getBounds().toShortString());mPaintReported=true;}
             }
-            mPaint.setColor(mTint);mPaint.setAlpha((mMilky&&mFrame==null?255:Color.alpha(mTint))*mAlpha/255);canvas.drawRect(mRect,mPaint);
+            if(!mSampleOnly){mPaint.setColor(mTint);mPaint.setAlpha((mMilky&&mFrame==null?255:Color.alpha(mTint))*mAlpha/255);canvas.drawRect(mRect,mPaint);}
             if(mSheen!=null){mSheen.setAlpha(mAlpha);canvas.drawPath(mClip,mSheen);}
             if(mEdgeEnabled){
                 mEdgeRect.set(mRect);mEdgeRect.inset(mEdgeWidth/2,mEdgeWidth/2);
