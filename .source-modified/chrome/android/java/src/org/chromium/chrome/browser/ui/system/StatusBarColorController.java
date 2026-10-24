@@ -100,6 +100,8 @@ public class StatusBarColorController
 
     private boolean mArcPhoneFloatingSurface;
     private final ArcPhoneStatusFade mArcPhoneStatusFade;
+    private final ArcPhoneStatusFade.StatusVisibility mArcPhoneStatusVisibility;
+    private boolean mArcPhoneStatusCompact;
     private int mArcPhoneStatusSurface;
     private final Window mWindow;
     private final boolean mIsTablet;
@@ -197,6 +199,7 @@ public class StatusBarColorController
         mActivity = activity;
         mWindow = activity.getWindow();
         mArcPhoneStatusFade = new ArcPhoneStatusFade(mWindow.getDecorView());
+        mArcPhoneStatusVisibility = new ArcPhoneStatusFade.StatusVisibility(mWindow);
         mIsTablet = isTablet;
         mStatusBarColorProvider = statusBarColorProvider;
         mAllowToolbarColorOnTablets = false;
@@ -376,6 +379,7 @@ public class StatusBarColorController
     @Override
     @SuppressWarnings("NullAway")
     public void onDestroy() {
+        mArcPhoneStatusVisibility.update(false, false);
         mArcPhoneStatusFade.destroy();
         mStatusBarColorTabObserver.destroy();
         if (mLayoutStateProvider != null) {
@@ -509,6 +513,14 @@ public class StatusBarColorController
         updateStatusBarColor();
     }
 
+    /** Compact phone controls release Android's status touch window, never the gesture bar. */
+    public void setArcPhoneCompactStatus(boolean compact, boolean nativeFullscreen) {
+        mArcPhoneStatusVisibility.update(compact, nativeFullscreen);
+        if (mArcPhoneStatusCompact == compact) return;
+        mArcPhoneStatusCompact = compact;
+        updateStatusBarColor();
+    }
+
     public void setArcPhoneStatusBackdrop(android.graphics.drawable.@Nullable Drawable backdrop) {
         mArcPhoneStatusFade.setBackdrop(backdrop);
     }
@@ -532,7 +544,7 @@ public class StatusBarColorController
         @ColorInt int statusBarColor = calculateFinalStatusBarColor();
         boolean floatingPhoneSurface = mArcPhoneFloatingSurface && !mIsOmniboxFocused
                 && !isStandardNtp() && statusBarColor == getArcPhoneSurfaceColor();
-        mArcPhoneStatusFade.update(floatingPhoneSurface, statusBarColor);
+        mArcPhoneStatusFade.update(floatingPhoneSurface && !mArcPhoneStatusCompact, statusBarColor);
         // Keep contrast with the native owner, including focused/native phone surfaces, so
         // later inset/delegate updates cannot choose white icons from a transparent color.
         mEdgeToEdgeSystemBarColorHelper.setStatusBarIconContrastColorOverride(

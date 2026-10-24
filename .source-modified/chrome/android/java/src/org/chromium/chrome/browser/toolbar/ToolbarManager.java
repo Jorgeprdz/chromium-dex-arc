@@ -2795,6 +2795,10 @@ public class ToolbarManager
         boolean active = !mIsDestroyed && mArcPhoneGestureContents != null
                 && !mArcPhoneFullscreen && mArcPhoneResumed && !isUrlBarFocused();
         compact &= active;
+        // The status owner restores its request in onDestroy; do not revive its fade afterward.
+        if (!mIsDestroyed) {
+            mStatusBarColorController.setArcPhoneCompactStatus(compact, mArcPhoneFullscreen);
+        }
         if (mArcPhoneCompact == compact) {
             if (!active && mArcPhoneCompactAnimation != null) {
                 android.animation.ValueAnimator animation = mArcPhoneCompactAnimation;

@@ -5,7 +5,7 @@ ROOT=Path(__file__).resolve().parents[1]
 class PhoneStatusPolishTests(unittest.TestCase):
     def test_native_status_owner_installs_and_destroys_visual_fade(self):
         source=(ROOT/'.source-modified/chrome/android/java/src/org/chromium/chrome/browser/ui/system/StatusBarColorController.java').read_text()
-        self.assertIn('mArcPhoneStatusFade.update(floatingPhoneSurface, statusBarColor)',source,
+        self.assertIn('mArcPhoneStatusFade.update(floatingPhoneSurface && !mArcPhoneStatusCompact, statusBarColor)',source,
                       'Transparent status icons have no matching visual protection')
         self.assertIn('mArcPhoneStatusFade.destroy()',source)
     def test_fullscreen_and_pause_do_not_leave_status_overlay_opted_in(self):

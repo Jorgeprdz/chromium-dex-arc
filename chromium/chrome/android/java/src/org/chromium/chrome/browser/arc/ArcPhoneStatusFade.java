@@ -24,6 +24,11 @@ public final class ArcPhoneStatusFade {
     private final Fade mFade = new Fade();
     private final View.OnLayoutChangeListener mLayout = (v,l,t,r,b,ol,ot,or,ob) -> updateBounds();
     private boolean mAttached;
+    // Showing system bars changes insets without necessarily changing the edge-to-edge layout.
+    private final android.view.ViewTreeObserver.OnPreDrawListener mBeforeDraw = () -> {
+        updateBounds();
+        return true;
+    };
 
     public ArcPhoneStatusFade(View decor) { mDecor = decor; }
 
@@ -44,9 +49,11 @@ public final class ArcPhoneStatusFade {
                 // belong to a separate system window above the Activity overlay.
                 mDecor.getOverlay().add(mFade);
                 mDecor.addOnLayoutChangeListener(mLayout);
+                mDecor.getViewTreeObserver().addOnPreDrawListener(mBeforeDraw);
             } else {
                 mDecor.getOverlay().remove(mFade);
                 mDecor.removeOnLayoutChangeListener(mLayout);
+                mDecor.getViewTreeObserver().removeOnPreDrawListener(mBeforeDraw);
             }
         }
         if (enabled) updateBounds();
@@ -80,6 +87,37 @@ public final class ArcPhoneStatusFade {
     }
 
     public void destroy() { setBackdrop(null); update(false, Color.TRANSPARENT); }
+
+    /** Own only the status-bar hide requested by compact phone controls. */
+    public static final class StatusVisibility {
+        private final android.view.Window mWindow;
+        private boolean mOwnsHidden;
+
+        public StatusVisibility(android.view.Window window) { mWindow = window; }
+
+        public void update(boolean compact, boolean nativeFullscreen) {
+            // Fullscreen's native owner hides/restores system bars itself. Never show over video.
+            if (nativeFullscreen) { mOwnsHidden = false; return; }
+            View decor = mWindow.getDecorView();
+            if (compact == mOwnsHidden) return;
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                android.view.WindowInsetsController controller = mWindow.getInsetsController();
+                if (controller == null) return;
+                if (compact) {
+                    WindowInsets insets = decor.getRootWindowInsets();
+                    // Do not claim another owner's hide, or guess before system inset delivery.
+                    if (insets == null || !insets.isVisible(WindowInsets.Type.statusBars())) return;
+                    controller.hide(WindowInsets.Type.statusBars());
+                } else controller.show(WindowInsets.Type.statusBars());
+            } else {
+                int flags = decor.getSystemUiVisibility();
+                if (compact && (flags & View.SYSTEM_UI_FLAG_FULLSCREEN) != 0) return;
+                decor.setSystemUiVisibility(compact ? flags | View.SYSTEM_UI_FLAG_FULLSCREEN
+                        : flags & ~View.SYSTEM_UI_FLAG_FULLSCREEN);
+            }
+            mOwnsHidden = compact;
+        }
+    }
 
     static final class Fade extends Drawable implements Drawable.Callback {
         private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);

@@ -28,6 +28,69 @@ import org.robolectric.annotation.SQLiteMode;
 @GraphicsMode(GraphicsMode.Mode.LEGACY)
 @SQLiteMode(SQLiteMode.Mode.LEGACY)
 public class ArcPhoneStatusFadeTest {
+    @Test public void compactHidesOnlyStatusAndExpansionRestoresItOnce() {
+        var activity=Robolectric.buildActivity(Activity.class).setup();
+        var decor=new Decor(activity.get());
+        var window=org.mockito.Mockito.mock(android.view.Window.class);
+        var controller=org.mockito.Mockito.mock(android.view.WindowInsetsController.class);
+        org.mockito.Mockito.when(window.getDecorView()).thenReturn(decor);
+        org.mockito.Mockito.when(window.getInsetsController()).thenReturn(controller);
+        var owner=new ArcPhoneStatusFade.StatusVisibility(window);
+        owner.update(true,false);owner.update(true,false);
+        org.mockito.Mockito.verify(controller).hide(WindowInsets.Type.statusBars());
+        owner.update(false,false);owner.update(false,false);
+        org.mockito.Mockito.verify(controller).show(WindowInsets.Type.statusBars());
+        org.mockito.Mockito.verifyNoMoreInteractions(controller);
+        activity.pause().stop().destroy();
+    }
+
+    @Test public void prehiddenStatusAndNativeFullscreenKeepTheirOwnership() {
+        var activity=Robolectric.buildActivity(Activity.class).setup();
+        var decor=new Decor(activity.get());
+        var window=org.mockito.Mockito.mock(android.view.Window.class);
+        var controller=org.mockito.Mockito.mock(android.view.WindowInsetsController.class);
+        org.mockito.Mockito.when(window.getDecorView()).thenReturn(decor);
+        org.mockito.Mockito.when(window.getInsetsController()).thenReturn(controller);
+        var owner=new ArcPhoneStatusFade.StatusVisibility(window);
+        decor.raw=new WindowInsets.Builder(decor.raw)
+                .setVisible(WindowInsets.Type.statusBars(),false).build();
+        owner.update(true,false);owner.update(false,false);
+        org.mockito.Mockito.verifyNoInteractions(controller);
+        decor.raw=new WindowInsets.Builder(decor.raw)
+                .setVisible(WindowInsets.Type.statusBars(),true).build();
+        owner.update(true,false);owner.update(false,true);owner.update(false,false);
+        org.mockito.Mockito.verify(controller).hide(WindowInsets.Type.statusBars());
+        org.mockito.Mockito.verifyNoMoreInteractions(controller);
+        activity.pause().stop().destroy();
+    }
+
+    @Test @Config(sdk=29) public void legacyStatusTogglePreservesNavigationAndOtherNativeFlags() {
+        var activity=Robolectric.buildActivity(Activity.class).setup();
+        var decor=activity.get().getWindow().getDecorView();
+        int original=View.SYSTEM_UI_FLAG_LAYOUT_FULLSCREEN | View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR;
+        decor.setSystemUiVisibility(original);
+        var owner=new ArcPhoneStatusFade.StatusVisibility(activity.get().getWindow());
+        owner.update(true,false);
+        assertEquals(original | View.SYSTEM_UI_FLAG_FULLSCREEN,decor.getSystemUiVisibility());
+        owner.update(false,false);assertEquals(original,decor.getSystemUiVisibility());
+        decor.setSystemUiVisibility(original | View.SYSTEM_UI_FLAG_FULLSCREEN);
+        owner.update(true,false);owner.update(false,false);
+        assertEquals(original | View.SYSTEM_UI_FLAG_FULLSCREEN,decor.getSystemUiVisibility());
+        activity.pause().stop().destroy();
+    }
+
+    @Test public void restoredIndicatorsRefreshFadeWithoutRequiringAnotherLayout() throws Exception {
+        var activity=Robolectric.buildActivity(Activity.class).setup();
+        var decor=new Decor(activity.get());decor.layout(0,0,400,800);
+        var owner=new ArcPhoneStatusFade(decor);decor.raw=insets(0,24,0);
+        owner.update(true,Color.WHITE);assertTrue(drawable(owner).getBounds().isEmpty());
+        decor.raw=insets(30,24,0);decor.getViewTreeObserver().dispatchOnPreDraw();
+        assertEquals(new Rect(0,0,400,30),drawable(owner).getBounds());
+        owner.destroy();decor.raw=insets(40,24,0);decor.getViewTreeObserver().dispatchOnPreDraw();
+        assertEquals(new Rect(0,0,400,30),drawable(owner).getBounds());
+        activity.pause().stop().destroy();
+    }
+
     @Test public void sampledBackdropSharesBoundsAndDetachesWithoutAddingATouchView() throws Exception {
         var activity=Robolectric.buildActivity(Activity.class).setup();
         var decor=new Decor(activity.get());decor.layout(0,0,400,800);
@@ -63,7 +126,8 @@ public class ArcPhoneStatusFadeTest {
         WindowInsets.Builder builder = new WindowInsets.Builder()
                 .setSystemWindowInsets(Insets.of(0,top,0,bottom));
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            builder.setInsets(WindowInsets.Type.statusBars(), Insets.of(0,top,0,0))
+            builder.setVisible(WindowInsets.Type.statusBars(), top > 0)
+                    .setInsets(WindowInsets.Type.statusBars(), Insets.of(0,top,0,0))
                     .setInsets(WindowInsets.Type.navigationBars(), Insets.of(0,0,0,bottom))
                     .setInsets(WindowInsets.Type.ime(), Insets.of(0,0,0,ime));
         }

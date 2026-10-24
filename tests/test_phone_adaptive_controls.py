@@ -9,6 +9,8 @@ class AdaptiveControlsTests(unittest.TestCase):
   code='''public class AdaptiveProbe {
 Object mArcPhoneGestureContents=new Object();boolean mArcPhoneFullscreen,mArcPhoneResumed=true,mArcPhoneCompact,mIsDestroyed,focus;
 boolean isUrlBarFocused(){return focus;}
+static class Status {boolean compact,fullscreen;int calls;void setArcPhoneCompactStatus(boolean c,boolean f){calls++;compact=c;fullscreen=f;}}
+Status mStatusBarColorController=new Status();
 int insetUpdates;void updateArcPhoneContentInsets(){insetUpdates++;}
 static class View {static final int VISIBLE=0,INVISIBLE=4;int visibility;float translation,alpha=1;void setAlpha(float a){alpha=a;}float getAlpha(){return alpha;}void setVisibility(int v){visibility=v;}int getHeight(){return 56;}void setTranslationY(float y){translation=y;}float getTranslationY(){return translation;}}
 static class Navigation {boolean compact;void setCompact(boolean c){compact=c;}}Navigation mArcPhoneNavigation=new Navigation();
@@ -16,15 +18,18 @@ View mToolbarLayout=new View();android.animation.ValueAnimator mArcPhoneCompactA
 '''+method(src,'private void setArcPhoneCompact(')+'''
 static void check(boolean value){if(!value)throw new AssertionError("adaptive controls restoration/lifecycle");}
 public static void main(String[] a){AdaptiveProbe p=new AdaptiveProbe();
-p.setArcPhoneCompact(true);check(p.mArcPhoneCompact&&p.mArcPhoneNavigation.compact&&p.mToolbarLayout.visibility==0&&p.mToolbarLayout.alpha==0);
+p.setArcPhoneCompact(true);check(p.mStatusBarColorController.compact);check(p.mArcPhoneCompact&&p.mArcPhoneNavigation.compact&&p.mToolbarLayout.visibility==0&&p.mToolbarLayout.alpha==0);
 p.setArcPhoneCompact(false);check(!p.mArcPhoneCompact&&!p.mArcPhoneNavigation.compact&&p.mToolbarLayout.translation==0&&p.mToolbarLayout.alpha==1&&p.mToolbarLayout.visibility==0);
 p.focus=true;p.setArcPhoneCompact(true);check(!p.mArcPhoneCompact);p.focus=false;
-p.mArcPhoneFullscreen=true;p.setArcPhoneCompact(true);check(!p.mArcPhoneCompact);p.mArcPhoneFullscreen=false;
+p.mArcPhoneFullscreen=true;p.setArcPhoneCompact(true);check(!p.mArcPhoneCompact&&p.mStatusBarColorController.fullscreen&&!p.mStatusBarColorController.compact);p.mArcPhoneFullscreen=false;
 p.setArcPhoneCompact(true);p.mArcPhoneGestureContents=null;p.setArcPhoneCompact(false);check(!p.mArcPhoneCompact&&p.mToolbarLayout.translation==0);
 p.mArcPhoneResumed=false;p.setArcPhoneCompact(true);check(!p.mArcPhoneCompact);
-p.mArcPhoneCompactAnimation=new android.animation.ValueAnimator();p.mIsDestroyed=true;
+p.mArcPhoneCompactAnimation=new android.animation.ValueAnimator();p.mIsDestroyed=true;int statusCalls=p.mStatusBarColorController.calls;
 p.setArcPhoneCompact(false);check(p.mArcPhoneCompactAnimation==null&&android.animation.ValueAnimator.cancelled);
 check(p.insetUpdates==0);
+check(p.mStatusBarColorController.calls==statusCalls);
+check(!p.mStatusBarColorController.compact);
+
 }}
 '''
   files={'AdaptiveProbe.java':code,

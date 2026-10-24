@@ -198,3 +198,7 @@ Installed baseline b62ece7 was inspected in phone and DeX. Approved floating pil
 ### Visual regression in63ea931 — 24-oct-2026
 
 Acceptance FAIL: direct phone screenshots and bounds prove that added compositor margins create solid exposed bands. The follow-up restores full-window phone rendering and introduces native input passthrough outside the actual floating capsule; status blur uses the existing bounded sampler. See [R5_FULL_WINDOW_INPUT_REGRESSION.md](R5_FULL_WINDOW_INPUT_REGRESSION.md) for evidence, tests and the unresolved system-indicator touch choice. No physical candidate PASS or new run is claimed.
+
+### Full-window input follow-up: chosen status ownership
+
+User selected hiding status indicators while phone controls are compact. Existing floating pill material/size and Desktop remain unchanged. Native ownership and asynchronous diffused-status restoration tested locally; physical touch/visual acceptance remains PENDING candidate installation. See [R5_FULL_WINDOW_INPUT_REGRESSION.md](R5_FULL_WINDOW_INPUT_REGRESSION.md) for baseline device FAIL, exact evidence and current gates.
