@@ -7,6 +7,17 @@ import android.animation.Animator;
 import android.animation.AnimatorListenerAdapter;
 import android.animation.ValueAnimator;
 import android.graphics.Canvas;
+import android.graphics.Bitmap;
+import android.graphics.Color;
+import android.graphics.ColorFilter;
+import android.graphics.Paint;
+import android.graphics.Path;
+import android.graphics.PixelFormat;
+import android.graphics.RectF;
+import android.graphics.Typeface;
+import android.graphics.drawable.Drawable;
+import android.text.TextPaint;
+import android.text.TextUtils;
 import android.graphics.drawable.ColorDrawable;
 import android.view.View;
 import android.view.ViewGroup;
@@ -17,6 +28,32 @@ public final class ArcPhonePullReveal {
     private final Runnable mOnReveal;
     private final ColorDrawable mFill = new ColorDrawable();
     private final View mGap;
+    private final float mDensity;
+    private Bitmap mFavicon;
+    private String mSite = "", mTitle = "";
+    private final TextPaint mTextPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
+    private final Paint mImagePaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+    private final Paint mCornerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+    private final Path mCornerPath = new Path();
+    private final RectF mIconBounds = new RectF();
+    private boolean mCornersAttached;
+    // ViewOverlay Drawables have no touch/accessibility target and do not clip the compositor.
+    private final Drawable mCorners = new Drawable() {
+        @Override public void draw(Canvas canvas) {
+            float width = getBounds().width(), radius = getBounds().height();
+            if (radius <= 0) return;
+            int save = canvas.save();
+            canvas.clipRect(getBounds());
+            mCornerPath.reset(); mCornerPath.setFillType(Path.FillType.EVEN_ODD);
+            mCornerPath.addRect(0, 0, width, radius, Path.Direction.CW);
+            mCornerPath.addRoundRect(0, 0, width, radius * 2, radius, radius, Path.Direction.CW);
+            canvas.drawPath(mCornerPath, mCornerPaint);
+            canvas.restoreToCount(save);
+        }
+        @Override public void setAlpha(int alpha) { mCornerPaint.setAlpha(alpha); invalidateSelf(); }
+        @Override public void setColorFilter(ColorFilter filter) { mCornerPaint.setColorFilter(filter); invalidateSelf(); }
+        @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
+    };
     private final float mExtent;
     private final float mMinimumPull;
     private final float mRefreshPull;
@@ -37,6 +74,7 @@ public final class ArcPhonePullReveal {
         mContent = content;
         mOnReveal = onReveal;
         float density = content.getResources().getDisplayMetrics().density;
+        mDensity = density;
         mExtent = 64 * density;
         mMinimumPull = 24 * density;
         mRefreshPull = 120 * density;
@@ -44,7 +82,7 @@ public final class ArcPhonePullReveal {
         // second stage into that unchanged native range; never scale the web content.
         mNativePullScale = (2 * 64 * density) / (mRefreshPull - mExtent);
         mGap = new View(content.getContext()) {
-            @Override protected void onDraw(Canvas canvas) { mFill.draw(canvas); }
+            @Override protected void onDraw(Canvas canvas) { mFill.draw(canvas); drawIdentity(canvas); }
         };
         mGap.setWillNotDraw(false);
         mGap.setEnabled(false);
@@ -63,7 +101,48 @@ public final class ArcPhonePullReveal {
     }
 
     /** Native page palette, or its native theme fallback; never force white in dark mode. */
-    public void setSurface(int color) { mFill.setColor(color | 0xff000000); mGap.invalidate(); }
+    public void setSurface(int color) {
+        int surface = color | 0xff000000;
+        mFill.setColor(surface); mCornerPaint.setColor(surface);
+        mTextPaint.setColor(Color.luminance(surface) > .179 ? Color.BLACK : Color.WHITE);
+        mCorners.invalidateSelf(); mGap.invalidate();
+    }
+
+    /** Borrow the native cached icon; never fetch, copy or recycle tab-owned bitmaps. */
+    public void setIdentity(Bitmap favicon, String site, String title) {
+        mFavicon = favicon;
+        mSite = site == null ? "" : site;
+        mTitle = title == null || title.equals(mSite) ? "" : title;
+        mGap.invalidate();
+    }
+
+    private void drawIdentity(Canvas canvas) {
+        var bounds = mFill.getBounds();
+        if (bounds.isEmpty() || bounds.width() < 64 * mDensity) return;
+        int save = canvas.save(); canvas.clipRect(bounds);
+        float x = bounds.left + 16 * mDensity, center = bounds.exactCenterY();
+        float size = 22 * mDensity;
+        mIconBounds.set(x, center - size / 2, x + size, center + size / 2);
+        if (mFavicon != null && !mFavicon.isRecycled()) {
+            canvas.drawBitmap(mFavicon, null, mIconBounds, mImagePaint);
+        } else {
+            mTextPaint.setTextSize(18 * mDensity); mTextPaint.setTypeface(Typeface.DEFAULT);
+            canvas.drawText(mSite.isEmpty() ? "A" : mSite.substring(0, 1).toUpperCase(java.util.Locale.ROOT),
+                    x + 4 * mDensity, center + 6 * mDensity, mTextPaint);
+        }
+        x += size + 12 * mDensity;
+        float available = Math.max(0, bounds.right - 16 * mDensity - x);
+        mTextPaint.setTextSize(14 * mDensity); mTextPaint.setTypeface(Typeface.DEFAULT_BOLD);
+        canvas.drawText(TextUtils.ellipsize(mSite.isEmpty() ? "Archium" : mSite,
+                mTextPaint, available, TextUtils.TruncateAt.END).toString(),
+                x, center + (mTitle.isEmpty() ? 5 : -2) * mDensity, mTextPaint);
+        if (!mTitle.isEmpty()) {
+            mTextPaint.setTextSize(11 * mDensity); mTextPaint.setTypeface(Typeface.DEFAULT);
+            canvas.drawText(TextUtils.ellipsize(mTitle, mTextPaint, available,
+                    TextUtils.TruncateAt.END).toString(), x, center + 14 * mDensity, mTextPaint);
+        }
+        canvas.restoreToCount(save);
+    }
 
     public boolean isRevealed() { return mOffset > 0 || mLatched; }
 
@@ -147,6 +226,8 @@ public final class ArcPhonePullReveal {
         if (offset <= 0) {
             mOwnsTranslation = false;
             mFill.setBounds(0,0,0,0);
+            mCorners.setBounds(0,0,0,0);
+            if (mCornersAttached) { mContent.getOverlay().remove(mCorners); mCornersAttached = false; }
             detachGap();
             return;
         }
@@ -160,6 +241,9 @@ public final class ArcPhonePullReveal {
         int left = Math.round(mContent.getX());
         int top = Math.round(mContent.getTop() + mOriginalTranslation);
         mFill.setBounds(left, top, left + mContent.getWidth(), top + Math.round(offset));
+        int radius = Math.round(Math.min(offset, Math.min(16 * mDensity, mContent.getWidth() / 2f)));
+        mCorners.setBounds(0, 0, mContent.getWidth(), radius);
+        if (!mCornersAttached) { mContent.getOverlay().add(mCorners); mCornersAttached = true; }
         mGap.invalidate();
     }
 
@@ -175,6 +259,7 @@ public final class ArcPhonePullReveal {
         mDestroyed = true;
         mEnabled = false;
         reset(false);
+        mFavicon = null;
         mContent.removeOnLayoutChangeListener(mLayout);
     }
 }

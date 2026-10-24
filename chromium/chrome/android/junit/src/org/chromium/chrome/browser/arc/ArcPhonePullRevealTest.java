@@ -46,6 +46,58 @@ public class ArcPhonePullRevealTest {
         @Override public void close(){reveal.destroy();activity.pause().stop().destroy();}
     }
 
+    @Test public void contextualIdentityHasFallbackAndClearsOnReplacement() throws Exception {
+        try(var f=new Fixture()) {
+            var set=ArcPhonePullReveal.class.getMethod("setIdentity",android.graphics.Bitmap.class,String.class,String.class);
+            var icon=android.graphics.Bitmap.createBitmap(16,16,android.graphics.Bitmap.Config.ARGB_8888);
+            set.invoke(f.reveal,icon,"github.com","chromium-dex-arc");
+            for(String field:new String[]{"mFavicon","mSite","mTitle"}) {
+                var value=ArcPhonePullReveal.class.getDeclaredField(field);value.setAccessible(true);
+                assertEquals(field.equals("mFavicon")?icon:field.equals("mSite")?"github.com":"chromium-dex-arc",value.get(f.reveal));
+            }
+            set.invoke(f.reveal,null,"example.test","A long title");
+            var favicon=ArcPhonePullReveal.class.getDeclaredField("mFavicon");favicon.setAccessible(true);
+            assertNull(favicon.get(f.reveal));
+            for(int color:new int[]{Color.WHITE,0xff202124,0xffe87524}) {
+                f.reveal.setSurface(color);
+                var text=ArcPhonePullReveal.class.getDeclaredField("mTextPaint");text.setAccessible(true);
+                int fg=((android.graphics.Paint)text.get(f.reveal)).getColor();
+                double a=Color.luminance(color),b=Color.luminance(fg);
+                assertTrue((Math.max(a,b)+.05)/(Math.min(a,b)+.05)>=4.5);
+            }
+            f.reveal.start();f.reveal.pull(f.dp(64));f.reveal.reset(false);
+            assertTrue(f.fill().getBounds().isEmpty());
+            set.invoke(f.reveal,null,"","");assertNull(favicon.get(f.reveal));
+        }
+    }
+
+    @Test public void drawCommandsRetainFaviconAndBoundedNonClippingCornerMask() throws Exception {
+        try(var f=new Fixture()) {
+            var icon=android.graphics.Bitmap.createBitmap(16,16,android.graphics.Bitmap.Config.ARGB_8888);icon.eraseColor(Color.RED);
+            var set=ArcPhonePullReveal.class.getMethod("setIdentity",android.graphics.Bitmap.class,String.class,String.class);
+            set.invoke(f.reveal,icon,"github.com","Long page title that must fit without leaving its reveal area");
+            f.reveal.setSurface(Color.BLUE);f.reveal.start();f.reveal.pull(f.dp(64));
+            View gap=f.root.getChildAt(0);
+            var image=android.graphics.Bitmap.createBitmap(400,800,android.graphics.Bitmap.Config.ARGB_8888);
+            gap.draw(new android.graphics.Canvas(image));
+            var recorded=org.robolectric.Shadows.shadowOf(new android.graphics.Canvas());
+            // The local ARM64 host cannot run Robolectric's x86 native raster. Check actual
+            // Android draw commands and mask bounds here; physical pixel acceptance is pending.
+            var canvas=new android.graphics.Canvas(image);gap.draw(canvas);
+            recorded=org.robolectric.Shadows.shadowOf(canvas);
+            assertEquals(2,recorded.getTextHistoryCount());
+            assertTrue(recorded.getDescription().contains("Bitmap"));
+            var field=ArcPhonePullReveal.class.getDeclaredField("mCorners");field.setAccessible(true);
+            var mask=(android.graphics.drawable.Drawable)field.get(f.reveal);
+            assertEquals(new Rect(0,0,400,Math.round(f.dp(16))),mask.getBounds());
+            var corners=new android.graphics.Canvas(image);mask.draw(corners);
+            assertEquals(1,org.robolectric.Shadows.shadowOf(corners).getPathPaintHistoryCount());
+            assertEquals(Color.BLUE,org.robolectric.Shadows.shadowOf(corners).getDrawnPathPaint(0).getColor());
+            assertFalse(f.page.getClipToOutline());
+            f.reveal.reset(false);assertTrue(mask.getBounds().isEmpty());
+        }
+    }
+
     @Test public void approvedShortAndLongPullUseActualPinnedNativeRefreshWidget() {
         for(int dragDp:new int[]{64,119,121}) {
             try(var f=new Fixture()) {

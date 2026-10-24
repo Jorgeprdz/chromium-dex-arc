@@ -64,3 +64,22 @@ if(p.mArcPhonePullReveal.scrolls!=3||!p.compact)throw new AssertionError("form c
 p.mArcPhonePullReveal=null;p.onScrollStarted(0,200,true);}}
 '''
   run_probe(self,{'ScrollProbe.java':code},'ScrollProbe')
+
+ def test_context_identity_comes_from_current_native_tab_and_clears_on_unbind(self):
+  src=(ROOT/'.source-modified/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java').read_text()
+  body=method(src,'private void updateArcPhoneRevealIdentity(')
+  code='''public class IdentityProbe {
+@interface Nullable {} static class Url {String getSpec(){return "https://www.github.com/Jorgeprdz/chromium-dex-arc";}}
+static class Tab {Url getUrl(){return new Url();}String getTitle(){return "chromium-dex-arc";}}
+static class TabFavicon {static final Object ICON=new Object();static Object getBitmap(Tab tab){return ICON;}}
+static class Reveal {Object icon;String site,title;void setIdentity(Object i,String s,String t){icon=i;site=s;title=t;}}
+Reveal mArcPhonePullReveal=new Reveal();
+'''+body+'''
+public static void main(String[] args){IdentityProbe p=new IdentityProbe();p.updateArcPhoneRevealIdentity(new Tab());
+if(p.mArcPhonePullReveal.icon!=TabFavicon.ICON||!p.mArcPhonePullReveal.site.equals("github.com")||!p.mArcPhonePullReveal.title.equals("chromium-dex-arc"))throw new AssertionError("native tab identity");
+p.updateArcPhoneRevealIdentity(null);if(p.mArcPhonePullReveal.icon!=null||!p.mArcPhonePullReveal.site.isEmpty()||!p.mArcPhonePullReveal.title.isEmpty())throw new AssertionError("old tab leaked");
+p.mArcPhonePullReveal=null;p.updateArcPhoneRevealIdentity(new Tab());}}
+'''
+  # URI parsing is the explicit Android boundary; the delivered ToolbarManager body runs verbatim.
+  uri='package android.net;public class Uri {java.net.URI value;Uri(String s){value=java.net.URI.create(s);}public static Uri parse(String s){return new Uri(s);}public String getHost(){return value.getHost();}}'
+  run_probe(self,{'IdentityProbe.java':code,'android/net/Uri.java':uri},'IdentityProbe')

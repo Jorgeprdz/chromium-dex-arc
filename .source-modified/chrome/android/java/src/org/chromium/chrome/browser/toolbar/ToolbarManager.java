@@ -1547,6 +1547,7 @@ public class ToolbarManager
                     public void onTitleUpdated(Tab tab) {
                         onBackPressStateChanged();
                         mLocationBarModel.notifyTitleChanged();
+                        updateArcPhoneRevealIdentity(tab);
                     }
 
                     @Override
@@ -2786,10 +2787,20 @@ public class ToolbarManager
         }
     }
 
+    private void updateArcPhoneRevealIdentity(@Nullable Tab tab) {
+        if (mArcPhonePullReveal == null) return;
+        String host = tab == null ? "" : android.net.Uri.parse(tab.getUrl().getSpec()).getHost();
+        if (host == null) host = "";
+        if (host.startsWith("www.")) host = host.substring(4);
+        mArcPhonePullReveal.setIdentity(tab == null ? null : TabFavicon.getBitmap(tab),
+                host, tab == null ? "" : tab.getTitle());
+    }
+
     private void bindArcPhonePullReveal(@Nullable Tab tab) {
         if (tab != null && mArcPhonePullReveal == null) {
             mArcPhonePullReveal = new ArcPhonePullReveal(mCompositorViewHolder, () -> {
                 if (mArcPhonePullReveal != null) {
+                    updateArcPhoneRevealIdentity(mActivityTabProvider.get());
                     mArcPhonePullReveal.setSurface(mToolbarThemeColorProvider.getArcPhonePageColor(
                             mActivityTabProvider.get()));
                 }
@@ -2803,6 +2814,7 @@ public class ToolbarManager
             if (next != null) next.setArcPhonePullReveal(mArcPhonePullReveal);
         }
         if (mArcPhonePullReveal != null) {
+            updateArcPhoneRevealIdentity(tab);
             mArcPhonePullReveal.setSurface(mToolbarThemeColorProvider.getArcPhonePageColor(tab));
             mArcPhonePullReveal.setEnabled(tab != null);
         }

@@ -3534,7 +3534,12 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          // ActivityTabProvider will null out the tab passed to
                          // onObservingDifferentTab when the tab is non-interactive (e.g. when
                          // entering the TabSwitcher).
-@@ -1481,6 +1551,10 @@
+@@ -1477,10 +1547,15 @@
+                     public void onTitleUpdated(Tab tab) {
+                         onBackPressStateChanged();
+                         mLocationBarModel.notifyTitleChanged();
++                        updateArcPhoneRevealIdentity(tab);
+                     }
 
                      @Override
                      public void onUrlUpdated(Tab tab) {
@@ -3545,7 +3550,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          // Update the SSL security state as a result of this notification as it will
                          // sometimes be the only update we receive.
                          updateTabLoadingState(true);
-@@ -1507,6 +1581,7 @@
+@@ -1507,6 +1582,7 @@
 
                      @Override
                      public void onLoadStarted(Tab tab, boolean toDifferentDocument) {
@@ -3553,7 +3558,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          onBackPressStateChanged();
                          if (!toDifferentDocument) return;
                          updateTabLoadingState(true);
-@@ -1751,6 +1826,8 @@
+@@ -1751,6 +1827,8 @@
                  new FullscreenManager.Observer() {
                      @Override
                      public void onEnterFullscreen(Tab tab, FullscreenOptions options) {
@@ -3562,7 +3567,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          if (mFindToolbarManager != null) mFindToolbarManager.hideToolbar();
                          mFullscreenHairlineToken =
                                  setToolbarShadowVisibilityAndClearOldToken(
-@@ -1759,6 +1836,8 @@
+@@ -1759,6 +1837,8 @@
 
                      @Override
                      public void onExitFullscreen(Tab tab) {
@@ -3571,7 +3576,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          mFullscreenHairlineToken =
                                  setToolbarShadowVisibilityAndClearOldToken(
                                          true, mFullscreenHairlineToken);
-@@ -2524,8 +2603,330 @@
+@@ -2524,8 +2604,341 @@
          return ((LocationBarCoordinator) mLocationBar).getUrlBarViewRectProvider();
      }
 
@@ -3758,10 +3763,20 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 +        }
 +    }
 +
++    private void updateArcPhoneRevealIdentity(@Nullable Tab tab) {
++        if (mArcPhonePullReveal == null) return;
++        String host = tab == null ? "" : android.net.Uri.parse(tab.getUrl().getSpec()).getHost();
++        if (host == null) host = "";
++        if (host.startsWith("www.")) host = host.substring(4);
++        mArcPhonePullReveal.setIdentity(tab == null ? null : TabFavicon.getBitmap(tab),
++                host, tab == null ? "" : tab.getTitle());
++    }
++
 +    private void bindArcPhonePullReveal(@Nullable Tab tab) {
 +        if (tab != null && mArcPhonePullReveal == null) {
 +            mArcPhonePullReveal = new ArcPhonePullReveal(mCompositorViewHolder, () -> {
 +                if (mArcPhonePullReveal != null) {
++                    updateArcPhoneRevealIdentity(mActivityTabProvider.get());
 +                    mArcPhonePullReveal.setSurface(mToolbarThemeColorProvider.getArcPhonePageColor(
 +                            mActivityTabProvider.get()));
 +                }
@@ -3775,6 +3790,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 +            if (next != null) next.setArcPhonePullReveal(mArcPhonePullReveal);
 +        }
 +        if (mArcPhonePullReveal != null) {
++            updateArcPhoneRevealIdentity(tab);
 +            mArcPhonePullReveal.setSurface(mToolbarThemeColorProvider.getArcPhonePageColor(tab));
 +            mArcPhonePullReveal.setEnabled(tab != null);
 +        }
@@ -3902,7 +3918,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          enableTabGroupUiControls();
          if (BottomBarConfigUtils.isBottomBarEnabled(mActivity)) {
              enableBottomBar();
-@@ -2605,26 +3006,47 @@
+@@ -2605,26 +3018,47 @@
          OneshotSupplier<String> countrySupplier =
                  mCountrySupplier != null ? mCountrySupplier : new OneshotSupplierImpl<>();
 
@@ -3970,7 +3986,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          }
 
          var bottomAppBarCoordinator =
-@@ -2639,7 +3061,8 @@
+@@ -2639,7 +3073,8 @@
                          mActivityTabProvider.asObservable(),
                          (ScrollingBottomViewResourceFrameLayout) bottomAppBarContainer,
                          LayerType.BOTTOM_APP_BAR,
@@ -3980,7 +3996,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          bottomBarContainerOneshotSupplier,
                          mTabObscuringHandler,
                          mLayoutManager.getOverlayPanelManager().getPanelStateSupplier(),
-@@ -2652,6 +3075,7 @@
+@@ -2652,6 +3087,7 @@
              bottomAppBarCoordinator.initializeWithNative();
          }
          mBottomAppBarCoordinatorSupplier.set(bottomAppBarCoordinator);
@@ -3988,7 +4004,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
      }
 
      /**
-@@ -2840,7 +3264,7 @@
+@@ -2840,7 +3276,7 @@
                  mBrowserControlsSizer,
                  mToolbarThemeColorProvider,
                  mBottomToolbarControlsOffsetSupplier,
@@ -3997,7 +4013,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                  mToolbarProgressBarLayer::onProgressBarInfoUpdate,
                  mCaptureResourceIdSupplier,
                  mTabStripTopControlLayer,
-@@ -2992,6 +3416,36 @@
+@@ -2992,6 +3428,36 @@
      public void destroy() {
          if (mIsDestroyed) return;
          mIsDestroyed = true;
@@ -4034,7 +4050,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 
          if (mAppInstalledDelegate != null) {
              mAppInstalledDelegate.destroy();
-@@ -3052,9 +3506,20 @@
+@@ -3052,9 +3518,20 @@
              mTabGroupUiBottomControlsCoordinatorSupplier = null;
          }
 
@@ -4055,7 +4071,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
              mBottomAppBarCoordinatorSupplier = null;
          }
 
-@@ -3268,6 +3733,7 @@
+@@ -3268,6 +3745,7 @@
          }
 
          mToolbar.onUrlFocusChange(hasFocus);
@@ -4063,7 +4079,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 
          if (mFindToolbarManager != null && hasFocus) mFindToolbarManager.hideToolbar();
 
-@@ -3318,6 +3784,16 @@
+@@ -3318,6 +3796,16 @@
       */
      @Override
      public void onThemeColorChanged(int color, boolean shouldAnimate) {
@@ -4080,7 +4096,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          if (!mShouldUpdateToolbarPrimaryColor) return;
 
          boolean colorChanged = mCurrentThemeColor != color;
-@@ -3658,6 +4134,8 @@
+@@ -3658,6 +4146,8 @@
 
          updateButtonStatus();
          mCurrentTabSupplier.set(tab);
@@ -4089,7 +4105,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          mFormFieldFocusedSupplier.onWebContentsChanged(tab == null ? null : tab.getWebContents());
      }
 
-@@ -3945,8 +4423,24 @@
+@@ -3945,8 +4435,24 @@
          updateToolbarSceneLayerSuppression();
      }
 
@@ -14076,7 +14092,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhonePul
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhonePullReveal.java
-@@ -0,0 +1,180 @@
+@@ -0,0 +1,265 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -14086,6 +14102,17 @@ new file mode 100644
 +import android.animation.AnimatorListenerAdapter;
 +import android.animation.ValueAnimator;
 +import android.graphics.Canvas;
++import android.graphics.Bitmap;
++import android.graphics.Color;
++import android.graphics.ColorFilter;
++import android.graphics.Paint;
++import android.graphics.Path;
++import android.graphics.PixelFormat;
++import android.graphics.RectF;
++import android.graphics.Typeface;
++import android.graphics.drawable.Drawable;
++import android.text.TextPaint;
++import android.text.TextUtils;
 +import android.graphics.drawable.ColorDrawable;
 +import android.view.View;
 +import android.view.ViewGroup;
@@ -14096,6 +14123,32 @@ new file mode 100644
 +    private final Runnable mOnReveal;
 +    private final ColorDrawable mFill = new ColorDrawable();
 +    private final View mGap;
++    private final float mDensity;
++    private Bitmap mFavicon;
++    private String mSite = "", mTitle = "";
++    private final TextPaint mTextPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
++    private final Paint mImagePaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
++    private final Paint mCornerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Path mCornerPath = new Path();
++    private final RectF mIconBounds = new RectF();
++    private boolean mCornersAttached;
++    // ViewOverlay Drawables have no touch/accessibility target and do not clip the compositor.
++    private final Drawable mCorners = new Drawable() {
++        @Override public void draw(Canvas canvas) {
++            float width = getBounds().width(), radius = getBounds().height();
++            if (radius <= 0) return;
++            int save = canvas.save();
++            canvas.clipRect(getBounds());
++            mCornerPath.reset(); mCornerPath.setFillType(Path.FillType.EVEN_ODD);
++            mCornerPath.addRect(0, 0, width, radius, Path.Direction.CW);
++            mCornerPath.addRoundRect(0, 0, width, radius * 2, radius, radius, Path.Direction.CW);
++            canvas.drawPath(mCornerPath, mCornerPaint);
++            canvas.restoreToCount(save);
++        }
++        @Override public void setAlpha(int alpha) { mCornerPaint.setAlpha(alpha); invalidateSelf(); }
++        @Override public void setColorFilter(ColorFilter filter) { mCornerPaint.setColorFilter(filter); invalidateSelf(); }
++        @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
++    };
 +    private final float mExtent;
 +    private final float mMinimumPull;
 +    private final float mRefreshPull;
@@ -14116,6 +14169,7 @@ new file mode 100644
 +        mContent = content;
 +        mOnReveal = onReveal;
 +        float density = content.getResources().getDisplayMetrics().density;
++        mDensity = density;
 +        mExtent = 64 * density;
 +        mMinimumPull = 24 * density;
 +        mRefreshPull = 120 * density;
@@ -14123,7 +14177,7 @@ new file mode 100644
 +        // second stage into that unchanged native range; never scale the web content.
 +        mNativePullScale = (2 * 64 * density) / (mRefreshPull - mExtent);
 +        mGap = new View(content.getContext()) {
-+            @Override protected void onDraw(Canvas canvas) { mFill.draw(canvas); }
++            @Override protected void onDraw(Canvas canvas) { mFill.draw(canvas); drawIdentity(canvas); }
 +        };
 +        mGap.setWillNotDraw(false);
 +        mGap.setEnabled(false);
@@ -14142,7 +14196,48 @@ new file mode 100644
 +    }
 +
 +    /** Native page palette, or its native theme fallback; never force white in dark mode. */
-+    public void setSurface(int color) { mFill.setColor(color | 0xff000000); mGap.invalidate(); }
++    public void setSurface(int color) {
++        int surface = color | 0xff000000;
++        mFill.setColor(surface); mCornerPaint.setColor(surface);
++        mTextPaint.setColor(Color.luminance(surface) > .179 ? Color.BLACK : Color.WHITE);
++        mCorners.invalidateSelf(); mGap.invalidate();
++    }
++
++    /** Borrow the native cached icon; never fetch, copy or recycle tab-owned bitmaps. */
++    public void setIdentity(Bitmap favicon, String site, String title) {
++        mFavicon = favicon;
++        mSite = site == null ? "" : site;
++        mTitle = title == null || title.equals(mSite) ? "" : title;
++        mGap.invalidate();
++    }
++
++    private void drawIdentity(Canvas canvas) {
++        var bounds = mFill.getBounds();
++        if (bounds.isEmpty() || bounds.width() < 64 * mDensity) return;
++        int save = canvas.save(); canvas.clipRect(bounds);
++        float x = bounds.left + 16 * mDensity, center = bounds.exactCenterY();
++        float size = 22 * mDensity;
++        mIconBounds.set(x, center - size / 2, x + size, center + size / 2);
++        if (mFavicon != null && !mFavicon.isRecycled()) {
++            canvas.drawBitmap(mFavicon, null, mIconBounds, mImagePaint);
++        } else {
++            mTextPaint.setTextSize(18 * mDensity); mTextPaint.setTypeface(Typeface.DEFAULT);
++            canvas.drawText(mSite.isEmpty() ? "A" : mSite.substring(0, 1).toUpperCase(java.util.Locale.ROOT),
++                    x + 4 * mDensity, center + 6 * mDensity, mTextPaint);
++        }
++        x += size + 12 * mDensity;
++        float available = Math.max(0, bounds.right - 16 * mDensity - x);
++        mTextPaint.setTextSize(14 * mDensity); mTextPaint.setTypeface(Typeface.DEFAULT_BOLD);
++        canvas.drawText(TextUtils.ellipsize(mSite.isEmpty() ? "Archium" : mSite,
++                mTextPaint, available, TextUtils.TruncateAt.END).toString(),
++                x, center + (mTitle.isEmpty() ? 5 : -2) * mDensity, mTextPaint);
++        if (!mTitle.isEmpty()) {
++            mTextPaint.setTextSize(11 * mDensity); mTextPaint.setTypeface(Typeface.DEFAULT);
++            canvas.drawText(TextUtils.ellipsize(mTitle, mTextPaint, available,
++                    TextUtils.TruncateAt.END).toString(), x, center + 14 * mDensity, mTextPaint);
++        }
++        canvas.restoreToCount(save);
++    }
 +
 +    public boolean isRevealed() { return mOffset > 0 || mLatched; }
 +
@@ -14226,6 +14321,8 @@ new file mode 100644
 +        if (offset <= 0) {
 +            mOwnsTranslation = false;
 +            mFill.setBounds(0,0,0,0);
++            mCorners.setBounds(0,0,0,0);
++            if (mCornersAttached) { mContent.getOverlay().remove(mCorners); mCornersAttached = false; }
 +            detachGap();
 +            return;
 +        }
@@ -14239,6 +14336,9 @@ new file mode 100644
 +        int left = Math.round(mContent.getX());
 +        int top = Math.round(mContent.getTop() + mOriginalTranslation);
 +        mFill.setBounds(left, top, left + mContent.getWidth(), top + Math.round(offset));
++        int radius = Math.round(Math.min(offset, Math.min(16 * mDensity, mContent.getWidth() / 2f)));
++        mCorners.setBounds(0, 0, mContent.getWidth(), radius);
++        if (!mCornersAttached) { mContent.getOverlay().add(mCorners); mCornersAttached = true; }
 +        mGap.invalidate();
 +    }
 +
@@ -14254,6 +14354,7 @@ new file mode 100644
 +        mDestroyed = true;
 +        mEnabled = false;
 +        reset(false);
++        mFavicon = null;
 +        mContent.removeOnLayoutChangeListener(mLayout);
 +    }
 +}
@@ -18714,7 +18815,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhonePu
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhonePullRevealTest.java
-@@ -0,0 +1,185 @@
+@@ -0,0 +1,237 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -18761,6 +18862,58 @@ new file mode 100644
 +            return (ColorDrawable)f.get(reveal);
 +        }
 +        @Override public void close(){reveal.destroy();activity.pause().stop().destroy();}
++    }
++
++    @Test public void contextualIdentityHasFallbackAndClearsOnReplacement() throws Exception {
++        try(var f=new Fixture()) {
++            var set=ArcPhonePullReveal.class.getMethod("setIdentity",android.graphics.Bitmap.class,String.class,String.class);
++            var icon=android.graphics.Bitmap.createBitmap(16,16,android.graphics.Bitmap.Config.ARGB_8888);
++            set.invoke(f.reveal,icon,"github.com","chromium-dex-arc");
++            for(String field:new String[]{"mFavicon","mSite","mTitle"}) {
++                var value=ArcPhonePullReveal.class.getDeclaredField(field);value.setAccessible(true);
++                assertEquals(field.equals("mFavicon")?icon:field.equals("mSite")?"github.com":"chromium-dex-arc",value.get(f.reveal));
++            }
++            set.invoke(f.reveal,null,"example.test","A long title");
++            var favicon=ArcPhonePullReveal.class.getDeclaredField("mFavicon");favicon.setAccessible(true);
++            assertNull(favicon.get(f.reveal));
++            for(int color:new int[]{Color.WHITE,0xff202124,0xffe87524}) {
++                f.reveal.setSurface(color);
++                var text=ArcPhonePullReveal.class.getDeclaredField("mTextPaint");text.setAccessible(true);
++                int fg=((android.graphics.Paint)text.get(f.reveal)).getColor();
++                double a=Color.luminance(color),b=Color.luminance(fg);
++                assertTrue((Math.max(a,b)+.05)/(Math.min(a,b)+.05)>=4.5);
++            }
++            f.reveal.start();f.reveal.pull(f.dp(64));f.reveal.reset(false);
++            assertTrue(f.fill().getBounds().isEmpty());
++            set.invoke(f.reveal,null,"","");assertNull(favicon.get(f.reveal));
++        }
++    }
++
++    @Test public void drawCommandsRetainFaviconAndBoundedNonClippingCornerMask() throws Exception {
++        try(var f=new Fixture()) {
++            var icon=android.graphics.Bitmap.createBitmap(16,16,android.graphics.Bitmap.Config.ARGB_8888);icon.eraseColor(Color.RED);
++            var set=ArcPhonePullReveal.class.getMethod("setIdentity",android.graphics.Bitmap.class,String.class,String.class);
++            set.invoke(f.reveal,icon,"github.com","Long page title that must fit without leaving its reveal area");
++            f.reveal.setSurface(Color.BLUE);f.reveal.start();f.reveal.pull(f.dp(64));
++            View gap=f.root.getChildAt(0);
++            var image=android.graphics.Bitmap.createBitmap(400,800,android.graphics.Bitmap.Config.ARGB_8888);
++            gap.draw(new android.graphics.Canvas(image));
++            var recorded=org.robolectric.Shadows.shadowOf(new android.graphics.Canvas());
++            // The local ARM64 host cannot run Robolectric's x86 native raster. Check actual
++            // Android draw commands and mask bounds here; physical pixel acceptance is pending.
++            var canvas=new android.graphics.Canvas(image);gap.draw(canvas);
++            recorded=org.robolectric.Shadows.shadowOf(canvas);
++            assertEquals(2,recorded.getTextHistoryCount());
++            assertTrue(recorded.getDescription().contains("Bitmap"));
++            var field=ArcPhonePullReveal.class.getDeclaredField("mCorners");field.setAccessible(true);
++            var mask=(android.graphics.drawable.Drawable)field.get(f.reveal);
++            assertEquals(new Rect(0,0,400,Math.round(f.dp(16))),mask.getBounds());
++            var corners=new android.graphics.Canvas(image);mask.draw(corners);
++            assertEquals(1,org.robolectric.Shadows.shadowOf(corners).getPathPaintHistoryCount());
++            assertEquals(Color.BLUE,org.robolectric.Shadows.shadowOf(corners).getDrawnPathPaint(0).getColor());
++            assertFalse(f.page.getClipToOutline());
++            f.reveal.reset(false);assertTrue(mask.getBounds().isEmpty());
++        }
 +    }
 +
 +    @Test public void approvedShortAndLongPullUseActualPinnedNativeRefreshWidget() {

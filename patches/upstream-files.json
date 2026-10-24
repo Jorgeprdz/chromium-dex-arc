@@ -236,7 +236,7 @@
     "chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java": "fc27bad7451ca8da011c828efb4239759b26f584f6e0523773fce9c2f8b2e62b",
     "chrome/android/java/src/org/chromium/chrome/browser/tab/TabWebContentsDelegateAndroidImpl.java": "67d47aefea359f133a57e39a8c0a90d921905e09e2157a3bd00460f90a95cbc0",
     "chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java": "a5c47302dfe3c31b1b83849b24321dfe12c14f0a02a9b9f09a212b34cb413744",
-    "chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java": "7460441783f8a04be372715a51f019be29712d002c21f5838431e8af01a69b33",
+    "chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java": "d11eb1af5e4565300f75f4be348c5d51fcbad9c185332017b8b6df2b07cc7afb",
     "chrome/android/java/src/org/chromium/chrome/browser/ui/system/StatusBarColorController.java": "1cee623cf620d8047b76ce4a978b7bbe1e12414707e3798f9b9f44effc4f69ea",
     "chrome/android/junit/BUILD.gn": "003fec7b04c88dbce557103f12ef0e6b79ab46865d09553396d76e070c78e7b6",
     "chrome/android/junit/src/org/chromium/chrome/browser/modaldialog/ChromeTabModalPresenterUnitTest.java": "fc44f988f2756694fb64cb1918ce16c25021280c61915ecd2bee75be495c173a",
@@ -338,7 +338,7 @@
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcOmniboxPlacement.java": "5e87e215d032ea6490db58099237e7c33d4e4c9632056c81c8cefd9297a249d7",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneGlass.java": "84a18de0a22bd43422c274bd00c39b8e0765030fe8d019748f992afd9bef34af",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneNavigation.java": "171149b0877541ae47b7f4a2495be99b814c4c12125e36433c8a3d01f0447055",
-    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhonePullReveal.java": "bee27f91fbe7189015afbc435427a8fab2a21e8f2daf3b628d98ba4f94994099",
+    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhonePullReveal.java": "a7c748d6ec7ac2c119da8828744cd19a05523f3dbc792c7721304f657ad25ec7",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneStatusFade.java": "7bb9710c4b29bb8df58e5d8b797580d8cbd2ec65c382a20fcafb7aa308744e63",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarProfiles.java": "16ca484649483c7255aac1d31e3e55a391f5c36cce8921509232cf8ac9ffb52c",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarState.java": "51d86f3d0962ef8cea9777fba256db50e57b1bb1db23df2bd2be0cc1f0d8505f",
@@ -366,7 +366,7 @@
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcOmniboxPlacementTest.java": "8f648fd7a93b27b8d21a9f503717d3697ce4515c7b1095a29ee28d3201b81eff",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneGlassTest.java": "4e75f5216d2ea0db139966652ef6c55491c1872a08a1dece4bf1542323ca9a8f",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneNavigationTest.java": "af8af22ffadc244fa313d04495034161f75b0aec6d6c9a1f305db66da6886153",
-    "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhonePullRevealTest.java": "becbc4b7df2effd77f46387edef07ee58d7dab812ec8f6b8c3d08ceb607e7d76",
+    "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhonePullRevealTest.java": "5f535df3d661311c567ae576199a0d33695cc9da1dcb77574b19521f0b3f872b",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneStatusFadeTest.java": "7e4f9dcb9e2bc0e1e20bceacd7761d29332191353f2df4b07151b13f1006094c",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitContentHostTest.java": "1936e7181ffd28b3483fc41aa1288baa284c9605e29f1e717b77ba57663c673d",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitControlsTest.java": "f88843322e9076240012915ccc1dd0ab467640d8b48e2986e78ac62ae105d216",
@@ -406,5 +406,5 @@
     "components/password_manager/core/browser/password_store/password_store_backend.cc": "45764d4ad0e05acc5a216944a5a6763212f6c17e71bf689e9c973f12fb5c87d8",
     "components/password_manager/core/browser/password_store/password_store_interface.cc": "7e9dd5813ce8ece459ec66abdd3306028b7b3d6bbae048664872a34d8d097268"
   },
-  "patch_sha256": "3a45bb0027149835c287a43cbf7b543cd94710f8186d68e6ebc8424480f7559c"
+  "patch_sha256": "24f49e61e430cea889d1efa6111818deb70bc83e4020935a458c23d66e1d5b48"
 }

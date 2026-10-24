@@ -796,3 +796,9 @@ Verificación del checkpoint Desktop: suite host424 PASS; política Chromium61 m
 - [x] Causa localizada en crash real y desensamblado del APK instalado0f6c610: animación nativa busca bottom_bar_container inexistente y después invoca findViewById sobre null.
 - [x] IDs nativos restaurados en la única floating pill y su botón real Pestañas; sin cambio visual. RED en SDK30/36;194 Android/Robolectric GREEN,10 host PASS, preparación SDK y parche incremental reproducible PASS.
 - [ ] Build/APK y aceptación física de nueva pestaña, grupo, ventana e incógnito; sin relanzamientos automáticos. Véase docs/validation/R5_MOBILE_BACKGROUND_TAB_CRASH.md.
+
+## 24-oct-2026 — Integración final y reveal contextual
+
+- [x] Ambos fixes preservados: Desktop54ec816 y crash3d72ea2, no incluidos en APK0f6c610.
+- [x] Identidad nativa (favicon/dominio/título) en mGap y máscara decorativa de esquinas16dp, sin clipping ni cambios de gesto64/120, colores, input o píldoras.198 Android/Robolectric y18 host PASS; SDK/preparación/parche incremental reproducible PASS.
+- [ ] APK y validación física real (incluido SurfaceView/máscaras, crash y marco Desktop). Evidencia y límites: docs/validation/R5_FINAL_REVEAL_UI.md.
