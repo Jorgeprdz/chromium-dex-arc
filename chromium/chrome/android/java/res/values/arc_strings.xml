@@ -88,6 +88,8 @@
     <string name="arc_phone_home">Inicio</string>
     <string name="arc_phone_new">Nueva</string>
     <string name="arc_phone_tabs">Pestañas</string>
+    <string name="arc_phone_compact_controls">Menú. Mantén pulsado para compactar los controles.</string>
+    <string name="arc_phone_expand_controls">Mostrar controles de Archium. Arrastra para mover; mantén pulsado para abrir el menú.</string>
     <string name="arc_phone_menu">Menú</string>
     <string name="arc_phone_menu_closed">Menú cerrado</string>
     <string name="arc_phone_site_info">Información del sitio</string>

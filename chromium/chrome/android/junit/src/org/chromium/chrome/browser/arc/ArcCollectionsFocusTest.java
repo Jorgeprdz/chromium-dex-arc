@@ -128,6 +128,33 @@ public class ArcCollectionsFocusTest {
     }
 
     @Test
+    public void pinInsideOpenFolderRemainsVisibleAndPersists() {
+        Fixture f = new Fixture();
+        String folder = f.controller.createFolder(null, "Folder");
+        f.view.refresh();
+        f.view.findViewWithTag("arc-folder:" + folder).performClick();
+        f.view.findViewWithTag("arc-pin-current").performClick();
+        ArcSidebarState saved = ArcSidebarState.deserialize(f.controller.state().serialize());
+        ArcSidebarState.Entry entry = saved.entries(saved.selectedSpace()).get(0);
+        assertEquals("Pin must use the folder the user is looking at", folder, entry.folderId);
+        assertNotNull(f.view.findViewWithTag("arc-entry:" + entry.id));
+        f.view.findViewWithTag("arc-pin-current").performClick();
+        assertEquals(1, f.controller.state().entries(saved.selectedSpace()).size());
+    }
+
+    @Test
+    public void convertingFavoriteToPinUsesOpenFolderWithoutDuplicatingEntry() {
+        Fixture f = new Fixture();
+        String id = f.controller.rememberTab(7,"https://example.test","Saved",true);
+        String folder = f.controller.createFolder(null,"Folder");
+        f.view.refresh();f.view.findViewWithTag("arc-folder:"+folder).performClick();
+        f.view.findViewWithTag("arc-pin-current").performClick();
+        assertEquals(folder,f.controller.state().entry(id).folderId);
+        assertTrue(f.controller.state().favorites().isEmpty());
+        assertNotNull(f.view.findViewWithTag("arc-entry:"+id));
+    }
+
+    @Test
     public void emptyCollectionWrapsContentInsideBudget() {
         Fixture f = new Fixture();
         f.view.setCollectionHeight(240);

@@ -149,6 +149,8 @@ def host_gate(android_jar: Path, out_dir: Path, *, phase: str = 'all') -> None:
             'VerticalTabListCoordinatorUnitTest.*',
             'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.'
             'TabVerticalViewBinderUnitTest.*',
+            'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalPinnedTabListRecyclerViewUnitTest.*',
+            'org.chromium.chrome.browser.tabstrip.TabStripTopControlLayerUnitTest.*',
             'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.'
             'VerticalTabRailLayoutUnitTest.*',
             'org.chromium.chrome.browser.tasks.tab_management.NestedLayoutDelegateUnitTest.*',

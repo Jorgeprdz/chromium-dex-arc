@@ -52,6 +52,15 @@ public final class ArcPhoneStatusFade {
         if (enabled) updateBounds();
     }
 
+    /** Stable system geometry prevents a transient zero inset on fullscreen/IME exit. */
+    public static int toolbarTopInset(WindowInsets raw) {
+        int top = Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
+                ? raw.getInsetsIgnoringVisibility(WindowInsets.Type.statusBars()).top
+                : raw.getSystemWindowInsetTop();
+        android.view.DisplayCutout cutout = raw.getDisplayCutout();
+        return cutout == null ? top : Math.max(top, cutout.getSafeInsetTop());
+    }
+
     private void updateBounds() {
         WindowInsets raw = mDecor.getRootWindowInsets();
         int top = raw == null ? 0 : Build.VERSION.SDK_INT >= Build.VERSION_CODES.R

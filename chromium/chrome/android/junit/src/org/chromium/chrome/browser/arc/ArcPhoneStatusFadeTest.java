@@ -28,6 +28,14 @@ import org.robolectric.annotation.SQLiteMode;
 @GraphicsMode(GraphicsMode.Mode.LEGACY)
 @SQLiteMode(SQLiteMode.Mode.LEGACY)
 public class ArcPhoneStatusFadeTest {
+    @Test public void toolbarUsesStableStatusInsetWhileLeavingFullscreen() throws Exception {
+        WindowInsets raw = new WindowInsets.Builder()
+                .setInsets(WindowInsets.Type.statusBars(), Insets.NONE)
+                .setInsetsIgnoringVisibility(WindowInsets.Type.statusBars(), Insets.of(0,30,0,0))
+                .build();
+        assertEquals(30, ArcPhoneStatusFade.toolbarTopInset(raw));
+    }
+
     // OS inset delivery is explicit; overlay, layout, input and drawable are actual Android views.
     private static class Decor extends FrameLayout {
         WindowInsets raw;

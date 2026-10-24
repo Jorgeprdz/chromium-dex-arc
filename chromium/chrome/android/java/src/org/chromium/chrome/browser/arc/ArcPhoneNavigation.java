@@ -20,6 +20,8 @@ import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.graphics.drawable.RippleDrawable;
 import android.view.Gravity;
+import android.view.MotionEvent;
+import android.view.ViewConfiguration;
 import android.view.HapticFeedbackConstants;
 import android.view.View;
 import android.view.ViewGroup;
@@ -81,6 +83,11 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
     private ArcPhoneGlass mGlassSampler;
     private boolean mGlassEnabled;
     private String mCount="";
+    private boolean mCompact;
+    private Runnable mCompactListener;
+    private float mCompactDownX, mCompactStartX;
+    private boolean mCompactDragged;
+    private final View.OnLayoutChangeListener mCompactLayoutListener=(v,l,t,r,b,ol,ot,or,ob)->clampCompactPosition();
 
     public ArcPhoneNavigation(FrameLayout slot, BottomSheetController controller) {
         this(slot,controller,Math.round(HEIGHT_DP*slot.getResources().getDisplayMetrics().density));
@@ -108,11 +115,41 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
             TextView text=text(mContext.getString(labels[i]),12);text.setGravity(Gravity.CENTER);
             button.addView(text,new LinearLayout.LayoutParams(-1,dp(18)));
             accessible(button,mContext.getString(labels[i]),"arc-phone-"+tags[i]);
-            button.setOnClickListener(v->{if(mDestroyed||mHost==null)return;haptic(v);if(action==MENU)showMenu();else mHost.action(action);});
+            button.setOnClickListener(v->{if(mDestroyed||mHost==null)return;haptic(v);if(mCompact){setCompact(false);if(mCompactListener!=null)mCompactListener.run();}
+                else if(action==MENU)showMenu();else mHost.action(action);});
+            if(i==MENU) {
+                button.setOnLongClickListener(v->{
+                    if(mCompact)showMenu();
+                    else {setCompact(true);if(mCompactListener!=null)mCompactListener.run();}
+                    return true;
+                });
+                button.setOnTouchListener((v,event)->{
+                    if(!mCompact)return false;
+                    switch(event.getActionMasked()) {
+                        case MotionEvent.ACTION_DOWN:
+                            mCompactDownX=event.getRawX();mCompactStartX=mBar.getTranslationX();mCompactDragged=false;break;
+                        case MotionEvent.ACTION_MOVE:
+                            float delta=event.getRawX()-mCompactDownX;
+                            if(Math.abs(delta)>ViewConfiguration.get(mContext).getScaledTouchSlop())mCompactDragged=true;
+                            if(mCompactDragged){
+                                v.cancelLongPress();v.setPressed(false);
+                                float limit=Math.max(0,(mSlot.getWidth()-mBar.getWidth())/2f-dp(18));
+                                mBar.setTranslationX(Math.max(-limit,Math.min(limit,mCompactStartX+delta)));
+                                v.getParent().requestDisallowInterceptTouchEvent(true);
+                                return true;
+                            }break;
+                        case MotionEvent.ACTION_UP:
+                        case MotionEvent.ACTION_CANCEL:
+                            if(mCompactDragged){v.setPressed(false);v.getParent().requestDisallowInterceptTouchEvent(false);return true;}break;
+                    }
+                    return false;
+                });
+            }
             mBar.addView(button,new LinearLayout.LayoutParams(0,mBarHeight,1));mButtons[i]=button;
         }
         // Native BottomControlsCoordinator owns size, insets, fullscreen, keyboard and raster capture.
         slot.addView(mBar,floatingLayout());
+        slot.addOnLayoutChangeListener(mCompactLayoutListener);
         refresh();
     }
     /** Let Chromium's tab switcher borrow the same view, never a duplicate bar. */
@@ -120,7 +157,7 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
         return new BottomBar() {
             public View getView(){return mBar;}
             public int getBackgroundColor(){return isFloatingSurface()?Color.TRANSPARENT:mSurface;}
-            public void setParent(int host){mTabbedHost=host==BottomBarHostManager.Host.TABBED;dismissMenu();refresh();}
+            public void setParent(int host){mTabbedHost=host==BottomBarHostManager.Host.TABBED;if(!mTabbedHost)setCompact(false);dismissMenu();refresh();}
             public boolean maybeShowPromoDialog(Profile profile){return false;}
             public void onStartupPromoFlowFinished(boolean promoShown){}
         };
@@ -141,8 +178,25 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
     public void setPhoneModeActive(boolean active) {
         if(mPhoneModeActive==active)return;
         mPhoneModeActive=active;
-        if(!active)dismissMenu();
+        if(!active){setCompact(false);dismissMenu();}
         refresh();
+    }
+    public void setCompactListener(Runnable listener){mCompactListener=listener;}
+    public boolean isCompact(){return mCompact;}
+    public void setCompact(boolean compact){
+        if(mDestroyed||mCompact==compact)return;
+        if(compact&&(!mPhoneModeActive||!mTabbedHost||mHost==null||!mHost.webPage()))return;
+        mCompact=compact;
+        mBar.setTranslationX(0);
+        FrameLayout.LayoutParams params=floatingLayout();
+        if(compact)params.width=dp(96);
+        mBar.setLayoutParams(params);
+        refresh();
+    }
+    private void clampCompactPosition(){
+        if(!mCompact)return;
+        float limit=Math.max(0,(mSlot.getWidth()-mBar.getWidth())/2f-dp(18));
+        mBar.setTranslationX(Math.max(-limit,Math.min(limit,mBar.getTranslationX())));
     }
     public View getGlassTarget(){return mBar;}
     public void setGlassSampler(ArcPhoneGlass sampler){mGlassSampler=sampler;}
@@ -162,7 +216,15 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
         int active=mSheet!=null?MENU:!mTabbedHost?TABS:mHost!=null&&mHost.homePage()?HOME:-1;
         String count=mHost==null?"0":Integer.toString(Math.max(0,mHost.tabCount()));
         for(int i=0;i<4;i++) {
-            LinearLayout button=(LinearLayout)mButtons[i];button.setEnabled(mHost!=null && mPhoneModeActive);
+            LinearLayout button=(LinearLayout)mButtons[i];
+            button.setVisibility(mCompact&&i!=MENU?View.GONE:View.VISIBLE);
+            TextView label=(TextView)button.getChildAt(1);
+            if(i==MENU)label.setText(mCompact?"Archium":mContext.getString(R.string.arc_phone_menu));
+            if(i==MENU){
+                String hint=mContext.getString(mCompact?R.string.arc_phone_expand_controls:R.string.arc_phone_compact_controls);
+                button.setContentDescription(hint);button.setTooltipText(hint);
+            }
+            button.setEnabled(mHost!=null && mPhoneModeActive);
             button.setBackground(ripple(Color.TRANSPARENT,24));
             boolean selected=i==active;button.setSelected(selected);
             int foreground=selected?(Color.luminance(mSurface)>.45?0xff155dff:0xff8ab4f8):mForeground;
@@ -187,7 +249,7 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
         refresh();
     }
     public void dismissMenu(){MenuSheet sheet=mSheet;if(sheet==null)return;mSheet=null;mController.hideContent(sheet,ValueAnimator.areAnimatorsEnabled());sheet.destroy();}
-    @Override public void destroy(){if(mDestroyed)return;mDestroyed=true;dismissMenu();mHost=null;mCapture=null;mVisibility=null;if(mBar.getParent() instanceof ViewGroup parent)parent.removeView(mBar);}
+    @Override public void destroy(){if(mDestroyed)return;mDestroyed=true;mSlot.removeOnLayoutChangeListener(mCompactLayoutListener);dismissMenu();mCompactListener=null;mHost=null;mCapture=null;mVisibility=null;if(mBar.getParent() instanceof ViewGroup parent)parent.removeView(mBar);}
     private boolean valid(MenuSheet sheet){return !mDestroyed && mPhoneModeActive && !sheet.mClosed && mHost!=null && sheet.mToken==mHost.pageToken();}
     private void act(MenuSheet sheet,int action){if(!valid(sheet))return;Host host=mHost;dismissMenu();host.action(action);refresh();}
     private void haptic(View view){view.performHapticFeedback(HapticFeedbackConstants.KEYBOARD_TAP);}

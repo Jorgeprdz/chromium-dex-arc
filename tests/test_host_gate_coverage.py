@@ -94,6 +94,8 @@ class HostGateCoverageTests(unittest.TestCase):
 
             'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabListCoordinatorUnitTest.*',
             'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.TabVerticalViewBinderUnitTest.*',
+            'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalPinnedTabListRecyclerViewUnitTest.*',
+            'org.chromium.chrome.browser.tabstrip.TabStripTopControlLayerUnitTest.*',
             'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabRailLayoutUnitTest.*',
             'org.chromium.chrome.browser.tasks.tab_management.NestedLayoutDelegateUnitTest.*',
             'org.chromium.chrome.browser.tasks.tab_management.TabListMediatorUnitTest.*',

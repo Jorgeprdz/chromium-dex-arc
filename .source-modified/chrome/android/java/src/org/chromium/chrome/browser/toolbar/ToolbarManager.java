@@ -274,6 +274,8 @@ import org.chromium.components.search_engines.TemplateUrl;
 import org.chromium.components.search_engines.TemplateUrlService;
 import org.chromium.components.search_engines.TemplateUrlService.TemplateUrlServiceObserver;
 import org.chromium.content_public.browser.LoadUrlParams;
+import org.chromium.content_public.browser.GestureListenerManager;
+import org.chromium.content_public.browser.GestureStateListener;
 import org.chromium.content_public.browser.NavigationController;
 import org.chromium.content_public.browser.NavigationEntry;
 import org.chromium.content_public.browser.NavigationHandle;
@@ -368,6 +370,11 @@ public class ToolbarManager
             mBottomAppBarCoordinatorSupplier = ObservableSuppliers.createMonotonic();
     private final SettableNonNullObservableSupplier<Boolean> mSuppressToolbarSceneLayerSupplier =
             ObservableSuppliers.createNonNull(false);
+    // Native IME/mini-origin owners may release their suppression independently. They must
+    // not expose the cached compositor toolbar while Arc is drawing the live floating view.
+    private final SettableNonNullObservableSupplier<Boolean> mArcToolbarSceneGuardSupplier =
+            ObservableSuppliers.createNonNull(false);
+    private final Callback<Boolean> mArcToolbarSceneGuardObserver = ignored -> updateArcToolbarSceneGuard();
     private final SettableMonotonicObservableSupplier<Long> mCaptureResourceIdSupplier =
             ObservableSuppliers.createMonotonic();
     private @MonotonicNonNull TabModelSelector mTabModelSelector;
@@ -421,6 +428,26 @@ public class ToolbarManager
     private @Nullable Drawable mArcPhoneBottomBackground;
     private boolean mArcPhoneBottomTransparent;
     private boolean mArcPhoneOverlayActive;
+    private @Nullable GestureListenerManager mArcPhoneGestures;
+    private @Nullable WebContents mArcPhoneGestureContents;
+    private boolean mArcPhoneCompact;
+    private boolean mArcPhoneFormObserved;
+    private final Callback<Boolean> mArcPhoneFormObserver = focused -> {
+        if (Boolean.TRUE.equals(focused)) setArcPhoneCompact(true);
+    };
+    private @Nullable android.animation.ValueAnimator mArcPhoneCompactAnimation;
+    private final GestureStateListener mArcPhoneGestureListener = new GestureStateListener() {
+        @Override public void onScrollStarted(int offset, int extent, boolean directionUp) {
+            setArcPhoneCompact(!directionUp || mFormFieldFocusedSupplier.get());
+        }
+        @Override public void onVerticalScrollDirectionChanged(boolean directionUp, float ratio) {
+            setArcPhoneCompact(!directionUp || mFormFieldFocusedSupplier.get());
+        }
+        @Override public void onDestroyed() {
+            mArcPhoneGestures = null;
+            mArcPhoneGestureContents = null;
+        }
+    };
     private boolean mArcPhoneProgressOwned;
     private float mArcPhoneOriginalProgressAlpha;
     private @Nullable OmniboxSuggestionsContainer mArcPhoneSuggestions;
@@ -888,6 +915,7 @@ public class ToolbarManager
             boolean suppressTabStripAtStart,
             @Nullable OneshotSupplier<HubManager> hubManagerSupplier) {
         TraceEvent.begin("ToolbarManager.ToolbarManager");
+        mSuppressToolbarSceneLayerSupplier.addSyncObserverAndPostIfNonNull(mArcToolbarSceneGuardObserver);
         mActionRegistry = actionRegistry;
         mCountrySupplier = countrySupplier;
         mToggleGlicCallback = toggleGlicCallback;
@@ -1515,6 +1543,7 @@ public class ToolbarManager
 
                     @Override
                     public void onUrlUpdated(Tab tab) {
+                        setArcPhoneCompact(false);
                         if (mArcPhoneGlass != null) mArcPhoneGlass.invalidateSource();
                         if (mArcPhoneHost != null) updateArcPhoneFloatingSurfaces();
                         if (mArcPhoneNavigation != null) mArcPhoneNavigation.refresh();
@@ -2569,6 +2598,10 @@ public class ToolbarManager
     public void configureArcPhoneNavigation(ArcPhoneNavigation.Host host) {
         if (org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.isDesktopWindow(mActivity)) return;
         mArcPhoneHost = host;
+        if (!mArcPhoneFormObserved) {
+            mFormFieldFocusedSupplier.getObservable().addSyncObserverAndPostIfNonNull(mArcPhoneFormObserver);
+            mArcPhoneFormObserved = true;
+        }
         if (mArcPhoneModeObserver == null) {
             mArcPhoneModeObserver = (prefs, key) -> {
                 if (org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.UI_MODE_KEY.equals(key)) {
@@ -2588,6 +2621,15 @@ public class ToolbarManager
         if (mArcPhoneInsetLayoutListener == null) {
             mArcPhoneInsetLayoutListener = (view, l, t, r, b, ol, ot, or, ob) -> {
                 if (mArcPhoneOverlayActive) updateArcPhoneTopInset();
+                if (mArcPhoneCompact && (r-l != or-ol || b-t != ob-ot)) {
+                    if (mArcPhoneCompactAnimation != null) {
+                        android.animation.ValueAnimator animation = mArcPhoneCompactAnimation;
+                        mArcPhoneCompactAnimation = null;
+                        animation.cancel();
+                    }
+                    mToolbarLayout.setTranslationY(-mToolbarLayout.getHeight());
+                    mToolbarLayout.setAlpha(0f);
+                }
             };
             mControlContainer.getView().addOnLayoutChangeListener(mArcPhoneInsetLayoutListener);
         }
@@ -2602,6 +2644,8 @@ public class ToolbarManager
         Tab glassTab = mActivityTabProvider.get();
         boolean floating = enabled && mArcPhoneResumed && !mArcPhoneFullscreen;
         boolean glass = floating && glassTab != null && !glassTab.isNativePage();
+        bindArcPhoneGestures(glass && glassTab != null ? glassTab.getWebContents() : null);
+        if (!glass || isUrlBarFocused()) setArcPhoneCompact(false);
         if (mToolbarLayout instanceof ToolbarPhone phone) {
             if (enabled && mArcPhoneGlass == null) {
                 mArcPhoneGlass = new ArcPhoneGlass(phone, ArcPhoneGlass.contentSource(
@@ -2725,6 +2769,67 @@ public class ToolbarManager
         }
     }
 
+    private void bindArcPhoneGestures(@Nullable WebContents contents) {
+        if (contents == mArcPhoneGestureContents) return;
+        if (mArcPhoneGestures != null) mArcPhoneGestures.removeListener(mArcPhoneGestureListener);
+        mArcPhoneGestureContents = contents;
+        mArcPhoneGestures = contents == null ? null : GestureListenerManager.fromWebContents(contents);
+        if (mArcPhoneGestures != null) mArcPhoneGestures.addListener(mArcPhoneGestureListener);
+        setArcPhoneCompact(false);
+        if (contents != null && mFormFieldFocusedSupplier.get()) setArcPhoneCompact(true);
+        ArcPhoneNavigation navigation = mArcPhoneNavigation;
+        if (navigation != null) {
+            navigation.setCompactListener(() -> setArcPhoneCompact(navigation.isCompact()));
+        }
+    }
+
+    private void setArcPhoneCompact(boolean compact) {
+        boolean active = !mIsDestroyed && mArcPhoneGestureContents != null
+                && !mArcPhoneFullscreen && mArcPhoneResumed && !isUrlBarFocused();
+        compact &= active;
+        if (mArcPhoneCompact == compact) {
+            if (!active && mArcPhoneCompactAnimation != null) {
+                android.animation.ValueAnimator animation = mArcPhoneCompactAnimation;
+                mArcPhoneCompactAnimation = null;
+                animation.cancel();
+                mToolbarLayout.setTranslationY(0);
+                mToolbarLayout.setAlpha(1f);
+            }
+            return;
+        }
+        mArcPhoneCompact = compact;
+        if (mArcPhoneNavigation != null) mArcPhoneNavigation.setCompact(compact);
+        if (mArcPhoneCompactAnimation != null) {
+            mArcPhoneCompactAnimation.cancel();
+            mArcPhoneCompactAnimation = null;
+        }
+        // Keep the native editor focusable for hardware Ctrl+L while it is off-screen.
+        float target = compact ? -mToolbarLayout.getHeight() : 0;
+        if (!android.animation.ValueAnimator.areAnimatorsEnabled() || mIsDestroyed) {
+            mToolbarLayout.setTranslationY(target);
+            mToolbarLayout.setAlpha(compact ? 0f : 1f);
+            return;
+        }
+        android.animation.ValueAnimator animation = android.animation.ValueAnimator.ofFloat(
+                mToolbarLayout.getTranslationY(), target);
+        mArcPhoneCompactAnimation = animation;
+        animation.setDuration(180);
+        float startAlpha = mToolbarLayout.getAlpha();
+        animation.addUpdateListener(value -> {
+            mToolbarLayout.setTranslationY((float)value.getAnimatedValue());
+            float endAlpha = mArcPhoneCompact ? 0f : 1f;
+            mToolbarLayout.setAlpha(startAlpha + (endAlpha - startAlpha) * value.getAnimatedFraction());
+        });
+        animation.addListener(new android.animation.AnimatorListenerAdapter() {
+            @Override public void onAnimationEnd(android.animation.Animator value) {
+                if (mArcPhoneCompactAnimation != value) return;
+                mArcPhoneCompactAnimation = null;
+                mToolbarLayout.setAlpha(mArcPhoneCompact ? 0f : 1f);
+            }
+        });
+        animation.start();
+    }
+
     /** Legacy top-inset owner does not position web-page controls beneath a consumed status bar. */
     private void updateArcPhoneTopInset() {
         View controls = mControlContainer.getView();
@@ -2742,9 +2847,7 @@ public class ToolbarManager
         if (ownMargin) {
             android.view.WindowInsets raw = mActivity.getWindow().getDecorView().getRootWindowInsets();
             if (raw != null) {
-                inset = raw.getSystemWindowInsetTop();
-                android.view.DisplayCutout cutout = raw.getDisplayCutout();
-                if (cutout != null) inset = Math.max(inset, cutout.getSafeInsetTop());
+                inset = org.chromium.chrome.browser.arc.ArcPhoneStatusFade.toolbarTopInset(raw);
             }
         }
         int desiredTop = mArcPhoneOriginalTopMargin + inset;
@@ -2847,6 +2950,9 @@ public class ToolbarManager
                     bottomAppBarContainer.findViewById(R.id.bottom_container_slot), mBottomSheetController,
                     ArcPhoneNavigation.getReservedHeight(mActivity));
             if (mArcPhoneHost != null) mArcPhoneNavigation.bind(mArcPhoneHost);
+            ArcPhoneNavigation navigation = mArcPhoneNavigation;
+            navigation.setCompactListener(() -> setArcPhoneCompact(navigation.isCompact()));
+            navigation.setCompact(mArcPhoneCompact);
             bottomBarContainerOneshotSupplier.set(mArcPhoneNavigation);
             if (mBottomBarHostManager != null) {
                 mBottomBarHostManager.registerBottomBar(
@@ -3095,7 +3201,7 @@ public class ToolbarManager
                 mBrowserControlsSizer,
                 mToolbarThemeColorProvider,
                 mBottomToolbarControlsOffsetSupplier,
-                mSuppressToolbarSceneLayerSupplier,
+                mArcToolbarSceneGuardSupplier,
                 mToolbarProgressBarLayer::onProgressBarInfoUpdate,
                 mCaptureResourceIdSupplier,
                 mTabStripTopControlLayer,
@@ -3247,6 +3353,15 @@ public class ToolbarManager
     public void destroy() {
         if (mIsDestroyed) return;
         mIsDestroyed = true;
+        mSuppressToolbarSceneLayerSupplier.removeObserver(mArcToolbarSceneGuardObserver);
+        if (mArcPhoneFormObserved) {
+            mFormFieldFocusedSupplier.getObservable().removeObserver(mArcPhoneFormObserver);
+            mArcPhoneFormObserved = false;
+        }
+        if (mArcPhoneGestures != null) mArcPhoneGestures.removeListener(mArcPhoneGestureListener);
+        mArcPhoneGestures = null;
+        mArcPhoneGestureContents = null;
+        setArcPhoneCompact(false);
         if (mArcPhoneInsetLayoutListener != null) {
             mControlContainer.getView().removeOnLayoutChangeListener(mArcPhoneInsetLayoutListener);
             mArcPhoneInsetLayoutListener = null;
@@ -4244,9 +4359,16 @@ public class ToolbarManager
         updateToolbarSceneLayerSuppression();
     }
 
+    private void updateArcToolbarSceneGuard() {
+        mArcToolbarSceneGuardSupplier.set(mSuppressToolbarSceneLayerSupplier.get()
+                || mArcPhoneOverlayActive || mIsArcToolbarSuppressed
+                || mIsXrFsm || mIsVerticalTabsHiddenDueToNarrow);
+    }
+
     private void updateToolbarSceneLayerSuppression() {
         mSuppressToolbarSceneLayerSupplier.set(
                 mIsXrFsm || mIsVerticalTabsHiddenDueToNarrow || mIsArcToolbarSuppressed || mArcPhoneOverlayActive);
+        updateArcToolbarSceneGuard();
     }
 
     @VisibleForTesting

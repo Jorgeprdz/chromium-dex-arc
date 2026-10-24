@@ -48,10 +48,15 @@ public final class ViewUtils {
 
     /** Attach an optional Activity-owned backdrop without changing native input or menu actions. */
     public static boolean attachArcPhoneSurface(View owner, View surface, View... layers) {
-        Activity activity = ContextUtils.activityFromContext(owner.getContext());
-        if (activity == null) return false;
-        Object decorator = activity.getWindow().getDecorView()
-                .getTag(org.chromium.ui.R.id.arc_phone_surface_decorator);
+        // Native ContentViews may use a window/profile context rather than an Activity.
+        // Their attached root still identifies the exact owning window, including DeX.
+        Object decorator = owner.getRootView().getTag(org.chromium.ui.R.id.arc_phone_surface_decorator);
+        if (!(decorator instanceof View.OnAttachStateChangeListener)) {
+            Activity activity = ContextUtils.activityFromContext(owner.getContext());
+            if (activity == null) return false;
+            decorator = activity.getWindow().getDecorView()
+                    .getTag(org.chromium.ui.R.id.arc_phone_surface_decorator);
+        }
         if (!(decorator instanceof View.OnAttachStateChangeListener listener)) return false;
         surface.setTag(org.chromium.ui.R.id.arc_phone_surface_layers, layers);
         surface.addOnAttachStateChangeListener(listener);

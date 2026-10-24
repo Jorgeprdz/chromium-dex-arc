@@ -605,6 +605,10 @@ class TabVerticalViewBinder {
                                         .getColor(R.color.gm3_baseline_surface_container_high_dark))
                         : null;
         updateSelectionAndBackground(model, view, defaultBackgroundColor);
+        if (ArcDesktopAppearance.isDesktopWindow(view.getContext())) {
+            view.getTitleView().setTextColor(getTextColor(view.getContext(),
+                    model.get(TabProperties.IS_SELECTED), isIncognito));
+        }
     }
 
     /**
@@ -1135,6 +1139,7 @@ class TabVerticalViewBinder {
     /** See {@link VerticalTabRailCollapseController#shouldShowIconOnly}. */
     private static boolean shouldShowIconOnly(PropertyModel model, View view) {
         return VerticalTabRailCollapseController.shouldShowIconOnly(
-                model.get(TabProperties.RAIL_COLLAPSE_STATE), isPinned(model, view));
+                model.get(TabProperties.RAIL_COLLAPSE_STATE),
+                isPinned(model, view) && !ArcDesktopAppearance.isDesktopWindow(view.getContext()));
     }
 }

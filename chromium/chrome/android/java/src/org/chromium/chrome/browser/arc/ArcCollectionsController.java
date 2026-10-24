@@ -61,6 +61,11 @@ public final class ArcCollectionsController {
     }
 
     public String rememberTab(int tabId, String url, String title, boolean favorite) {
+        return rememberTab(tabId, url, title, favorite, null);
+    }
+
+    public String rememberTab(int tabId, String url, String title, boolean favorite,
+            String folderId) {
         requireLive();
         if (!mTabs.exists(tabId)) throw new IllegalStateException("Arc tab is not active");
         ArcSidebarState draft = state();
@@ -75,9 +80,16 @@ public final class ArcCollectionsController {
         }
         if (existingId == null) {
             existingId = favorite ? draft.favorite(url, title, tabId)
-                    : draft.pin(draft.selectedSpace(), null, url, title, tabId);
+                    : draft.pin(draft.selectedSpace(), folderId, url, title, tabId);
         } else {
             draft.setFavorite(existingId, favorite);
+            ArcSidebarState.Entry existing = draft.entry(existingId);
+            if (!favorite && (!draft.selectedSpace().equals(existing.spaceId)
+                    || !java.util.Objects.equals(folderId, existing.folderId))) {
+                int end = draft.entries(draft.selectedSpace()).size()
+                        - (draft.selectedSpace().equals(existing.spaceId) ? 1 : 0);
+                draft.move(existingId, draft.selectedSpace(), folderId, end);
+            }
         }
         // Publish metadata before changing the native tab; a failed write leaves it untouched.
         mStore.save(draft);

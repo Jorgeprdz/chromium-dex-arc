@@ -51,6 +51,7 @@ p.mArcPhoneOverlayActive=false;p.updateArcPhoneTopInset();check(!p.mArcPhoneMarg
 org.chromium.chrome.browser.ui.edge_to_edge.EdgeToEdgeUtils.refactor=true;p.mArcPhoneOverlayActive=true;p.updateArcPhoneTopInset();check(!p.mArcPhoneMarginOwned&&top.topMargin==7);}}
 '''
         files={'InsetProbe.java':code,
+        'org/chromium/chrome/browser/arc/ArcPhoneStatusFade.java':'package org.chromium.chrome.browser.arc;public class ArcPhoneStatusFade {public static int toolbarTopInset(android.view.WindowInsets raw){return Math.max(raw.getSystemWindowInsetTop(),raw.getDisplayCutout().getSafeInsetTop());}}',
         'android/view/WindowInsets.java':'package android.view;public class WindowInsets {public int top=86;public DisplayCutout cutout=new DisplayCutout();public int getSystemWindowInsetTop(){return top;}public DisplayCutout getDisplayCutout(){return cutout;}}',
         'android/view/DisplayCutout.java':'package android.view;public class DisplayCutout {public int safe=100;public int getSafeInsetTop(){return safe;}}',
         'org/chromium/chrome/browser/ui/edge_to_edge/EdgeToEdgeUtils.java':'package org.chromium.chrome.browser.ui.edge_to_edge;public class EdgeToEdgeUtils {public static boolean refactor;public static boolean isEdgeToEdgeRefactorEnabled(){return refactor;}}'}

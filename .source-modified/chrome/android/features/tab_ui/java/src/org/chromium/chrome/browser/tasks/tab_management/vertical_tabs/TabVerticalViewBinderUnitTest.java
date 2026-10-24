@@ -1075,6 +1075,31 @@ public class TabVerticalViewBinderUnitTest {
     }
 
     @Test
+    public void testDesktopPinnedTitleVisibleOnlyWhileRailExpanded() {
+        org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.setUiMode(
+                mActivity, org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy.MODE_ARC);
+        try {
+            VerticalTabItemLayout pinnedView = inflatePinnedTabView();
+            mModel.set(TabProperties.IS_PINNED, true);
+            mModel.set(TabProperties.TITLE, TEST_TITLE);
+            mModel.set(TabProperties.RAIL_COLLAPSE_STATE, RailCollapseState.EXPANDED);
+            org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.setPreviewColor(mActivity, 0xff101010);
+            TabVerticalViewBinder.bindPinnedTab(mModel, pinnedView, TabProperties.IS_SELECTED);
+            assertEquals(org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.foreground(mActivity, false),
+                    pinnedView.getTitleView().getCurrentTextColor());
+            TabVerticalViewBinder.bindPinnedTab(mModel, pinnedView, TabProperties.TITLE);
+            assertEquals(View.VISIBLE, pinnedView.findViewById(R.id.tab_title).getVisibility());
+            mModel.set(TabProperties.RAIL_COLLAPSE_STATE, RailCollapseState.COLLAPSED);
+            TabVerticalViewBinder.bindPinnedTab(mModel, pinnedView, TabProperties.RAIL_COLLAPSE_STATE);
+            assertEquals(View.GONE, pinnedView.findViewById(R.id.tab_title).getVisibility());
+        } finally {
+            org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.setPreviewColor(mActivity, null);
+            org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.setUiMode(
+                    mActivity, org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy.MODE_AUTO);
+        }
+    }
+
+    @Test
     public void testBindPinnedTab_ContentDescription() {
         VerticalTabItemLayout pinnedView = inflatePinnedTabView();
         mModel.set(TabProperties.IS_PINNED, true);
@@ -2807,6 +2832,19 @@ public class TabVerticalViewBinderUnitTest {
 
     @Test
     public void testBindPinnedTab_TitleVisibilityAndCloseButton() {
+        // This existing test covers Chromium's compact native pins. Archium's expanded
+        // Desktop titles are covered independently by testDesktopPinnedTitleVisibleOnlyWhileRailExpanded.
+        int mode = org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.getUiMode(mActivity);
+        org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.setUiMode(
+                mActivity, org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy.MODE_MOBILE);
+        try {
+            verifyNativePinnedTitleAndCloseButton();
+        } finally {
+            org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.setUiMode(mActivity, mode);
+        }
+    }
+
+    private void verifyNativePinnedTitleAndCloseButton() {
         VerticalTabItemLayout pinnedView = inflatePinnedTabView();
         TextView titleView = pinnedView.findViewById(R.id.tab_title);
         View actionButton = pinnedView.findViewById(R.id.action_button);

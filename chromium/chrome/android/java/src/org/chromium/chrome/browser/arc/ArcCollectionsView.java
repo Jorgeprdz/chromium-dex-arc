@@ -278,7 +278,7 @@ public final class ArcCollectionsView extends LinearLayout {
         if (tab == null) throw new IllegalStateException("No active tab");
         String title = tab.title == null || tab.title.isEmpty() ? tab.url : tab.title;
         if (title.length() > 256) title = title.substring(0, 256);
-        mController.rememberTab(tab.id, tab.url, title, favorite);
+        mController.rememberTab(tab.id, tab.url, title, favorite, favorite ? null : mOpenFolder);
     }
 
     public void refresh() {

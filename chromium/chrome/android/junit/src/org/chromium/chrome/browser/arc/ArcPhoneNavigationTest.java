@@ -184,6 +184,43 @@ public class ArcPhoneNavigationTest {
         assertTrue(((GradientDrawable)bar.getBackground()).getCornerRadius()>=bar.getHeight()/2f);
         for(String tag:new String[]{"home","new","tabs","menu"}){View v=find("arc-phone-"+tag);assertTrue(v.getWidth()>=48);assertTrue(v.getHeight()>=48);}
     }
+    @Test public void compactControlKeepsIdentityAndRestoresSameFourActions() throws Exception {
+        View original=mSlot.getChildAt(0);
+        final int[] restored={0};
+        mNavigation.setCompactListener(()->restored[0]++);
+        mNavigation.setCompact(true);
+        assertSame(original,mSlot.getChildAt(0));assertEquals(1,mSlot.getChildCount());
+        assertEquals(View.GONE,find("arc-phone-home").getVisibility());
+        assertEquals(View.VISIBLE,find("arc-phone-menu").getVisibility());
+        assertEquals("Archium",((TextView)((LinearLayout)find("arc-phone-menu")).getChildAt(1)).getText().toString());
+        assertTrue(find("arc-phone-menu").performClick());assertEquals(1,restored[0]);
+        for(String tag:new String[]{"home","new","tabs","menu"})assertEquals(View.VISIBLE,find("arc-phone-"+tag).getVisibility());
+    }
+
+    @Test public void draggingCompactControlClearsPressAndDoesNotOpenMenu() {
+        mNavigation.setCompact(true);
+        mSlot.measure(View.MeasureSpec.makeMeasureSpec(320,View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(80,View.MeasureSpec.EXACTLY));
+        mSlot.layout(0,0,320,80);
+        View button=find("arc-phone-menu");
+        View bar=mSlot.getChildAt(0);
+        android.view.MotionEvent down=android.view.MotionEvent.obtain(0,1,0,48,24,0);
+        android.view.MotionEvent move=android.view.MotionEvent.obtain(0,2,2,500,24,0);
+        android.view.MotionEvent up=android.view.MotionEvent.obtain(0,3,1,500,24,0);
+        button.dispatchTouchEvent(down);button.setPressed(true);
+        button.dispatchTouchEvent(move);button.dispatchTouchEvent(up);
+        down.recycle();move.recycle();up.recycle();
+        assertFalse("Drag must release the pressed/ripple state",button.isPressed());
+        assertTrue(mNavigation.isCompact());
+        assertTrue(bar.getTranslationX()>0);
+        assertTrue(bar.getRight()+bar.getTranslationX()<=320-18);
+        mSlot.measure(View.MeasureSpec.makeMeasureSpec(240,View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(80,View.MeasureSpec.EXACTLY));
+        mSlot.layout(0,0,240,80);
+        assertTrue("Resizing must keep compact control reachable",bar.getRight()+bar.getTranslationX()<=240-18);
+        verify(mController,never()).requestShowContent(any(),anyBoolean());
+    }
+
     @Test public void homeAndHubSelectionFollowNativeState(){
         mHost.home=true;mNavigation.refresh();assertTrue(find("arc-phone-home").isSelected());
         TextView label=(TextView)((LinearLayout)find("arc-phone-home")).getChildAt(1);

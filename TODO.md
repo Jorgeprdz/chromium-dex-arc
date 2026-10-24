@@ -734,3 +734,13 @@ Verificación del checkpoint Desktop: suite host424 PASS; política Chromium61 m
 - [x] Host426:425 PASS/1 contrato estático obsoleto FAIL; suite afectada actualizada y repetida6 PASS; probes nuevos4 PASS. Recibos finales y parche192 reproducible/transición151 timestamps PASS; no presentar primera suite como verde.
 - [ ] Único dispatch incremental autorizado tras commit; fuente39829306775-1 conservada, sin clean/reintentos. Estado nuevo archium-r5-mobile-status-polish; build/APK pendientes, aceptación física pendiente.
 - [ ] Validación física del candidato: fade e indicadores claro/oscuro, cambio automático, teclados, YouTube/HTML5 fullscreen/orientación/resume, gestos, Desktop↔Phone. Ver docs/validation/R5_MOBILE_STATUS_POLISH.md.
+
+
+## Fixes de revisiones móvil y DeX — 23-oct-2026 CDMX
+
+- [x] Candidato sobre cd84ed4: fijar en carpeta abierta (incluida conversión desde favorito), títulos/contraste de fijadas en rail expandido, detach antes de callbacks de teardown del tab strip y solicitud de escritura inmediata de metadata mediante PrefService nativo.
+- [x] Compactación móvil aprobada: scroll/foco nativos, un control Archium de la misma pill, restauración, movimiento lateral y salida manual para páginas sin scroll; sin reglas por sitio ni cambios de tamaño/material de la omnibar expandida.
+- [x] Guard de textura de toolbar frente a releases de owners nativos; inset estable al salir de fullscreen; lookup de decorador por ventana real para menús con ContentView no-Activity.
+- [x] RED/GREEN de lógica y Android local; suites y límites en docs/validation/R5_REVIEW_FIXES.md. No equivalen a aceptación física.
+- [ ] Compilación Chromium/JUnit integrados y APK del candidato: NO LANZADOS. No se borraron checkpoints ni se hizo clean.
+- [ ] Aceptación física en móvil/DeX, temas, subcarpetas tras reinicio, controles de webs arbitrarias, teclado/foco, fullscreen y menús: PENDIENTE. No declarar DONE ni paridad de rendimiento/seguridad.
