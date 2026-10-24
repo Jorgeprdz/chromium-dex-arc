@@ -1369,18 +1369,8 @@ public final class ArcDesktopCoordinator {
         mCompositorViewHolder.setClipToOutline(true);
         int outer = dp(ArcDesktopPolicy.ARC_OUTER_PADDING_DP);
         int gap = dp(ArcDesktopPolicy.ARC_FRAME_GAP_DP);
-        int caption = Math.max(mCaptionSpacer.getHeight(), Math.max(0, mCaptionSpacer.getLayoutParams().height));
-        android.view.WindowInsets insets = mActivity.getWindow().getDecorView().getRootWindowInsets();
-        if (insets != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            int consumed = 0;
-            if (mCompositorViewHolder.getParent() instanceof View parent) {
-                int[] position = new int[2];
-                parent.getLocationInWindow(position);
-                consumed = Math.max(0, position[1] + parent.getPaddingTop());
-            }
-            caption = Math.max(caption, Math.max(0,
-                    insets.getInsets(android.view.WindowInsets.Type.captionBar()).top - consumed));
-        }
+        // Native caption controls retain their window/rail owners. Reserving the caption's
+        // full height here creates a second title row above the original thin content frame.
         // Preserve the complete Side UI width, especially the 52dp collapsed contract. The frame
         // gap belongs between Side UI and content, not inside the rail where it would shrink
         // native tab hit targets. Top/bottom padding remains part of the Arc frame.
@@ -1391,7 +1381,7 @@ public final class ArcDesktopCoordinator {
         if (raw instanceof ViewGroup.MarginLayoutParams) {
             ViewGroup.MarginLayoutParams margins = (ViewGroup.MarginLayoutParams) raw;
             int contentLeftMargin = mOriginalContentMarginLeft + gap;
-            int contentTopMargin = ArcDesktopPolicy.contentTopMargin(mOriginalContentMarginTop, outer, caption);
+            int contentTopMargin = ArcDesktopPolicy.contentTopMargin(mOriginalContentMarginTop, outer);
             int contentRightMargin = mOriginalContentMarginRight + outer;
             int contentBottomMargin = mOriginalContentMarginBottom + outer;
             if (margins.leftMargin != contentLeftMargin

@@ -783,3 +783,10 @@ Verificación del checkpoint Desktop: suite host424 PASS; política Chromium61 m
 - [x] Implemented short pull with colored temporary gap, persistent touch access, excess routed to existing native refresh and dismissal on normal scroll/lifecycle.190 Android and37 phone host executions PASS; SDK37.2 preparation and201-file incremental/reproducibility PASS. Broad host443:442 PASS/1 old registry expectation FAIL; corrected registration module2/2 PASS (full suite not rerun after that test-only correction). No new build dispatched; physical/site acceptance PENDING. See [R5_PULL_TO_REVEAL.md](docs/validation/R5_PULL_TO_REVEAL.md).
 
 - [x] Refined64dp/120dp specification: short release retains64dp; repeated short gestures do not refresh;119dp unarmed/121dp refresh proven with real pinned native widget and callback.192 Android executions PASS, SDK37.2 and201-file transition/reproducibility PASS. Current complete host suite443 PASS (760.108s),192 Android executions PASS; single incremental run authorized, dispatch pending exact committed remote SHA. Physical candidate acceptance PENDING.
+
+## 24-oct-2026 — Desktop: recuperar marco superior fino
+
+- [x] Regresión observada en DeX: compositor top48px, caption40px, marco original8dp; toolbar nativa oculta. Reserva adicional introducida en63ea931.
+- [x] Corrección local: margen original +8dp, sin alterar material, sidebar, Split ni Mobile; parche regenerado/reproducible.13 pruebas host PASS + preparación SDK/sparse PASS.
+- [ ] APK y comprobación física del marco/controles nativos/transiciones. El runner Robolectric histórico de frame tiene fixture desactualizada (FAIL de compilación, documentado); no se declara PASS Android.
+- [ ] Este cambio NO está incluido en el run40116057788, que continúa sin modificaciones. No se lanzó otro build. Véase docs/validation/R5_DESKTOP_THIN_FRAME.md.

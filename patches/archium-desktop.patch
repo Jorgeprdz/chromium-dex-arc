@@ -10869,7 +10869,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopC
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
-@@ -0,0 +1,1638 @@
+@@ -0,0 +1,1628 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -12241,18 +12241,8 @@ new file mode 100644
 +        mCompositorViewHolder.setClipToOutline(true);
 +        int outer = dp(ArcDesktopPolicy.ARC_OUTER_PADDING_DP);
 +        int gap = dp(ArcDesktopPolicy.ARC_FRAME_GAP_DP);
-+        int caption = Math.max(mCaptionSpacer.getHeight(), Math.max(0, mCaptionSpacer.getLayoutParams().height));
-+        android.view.WindowInsets insets = mActivity.getWindow().getDecorView().getRootWindowInsets();
-+        if (insets != null && android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-+            int consumed = 0;
-+            if (mCompositorViewHolder.getParent() instanceof View parent) {
-+                int[] position = new int[2];
-+                parent.getLocationInWindow(position);
-+                consumed = Math.max(0, position[1] + parent.getPaddingTop());
-+            }
-+            caption = Math.max(caption, Math.max(0,
-+                    insets.getInsets(android.view.WindowInsets.Type.captionBar()).top - consumed));
-+        }
++        // Native caption controls retain their window/rail owners. Reserving the caption's
++        // full height here creates a second title row above the original thin content frame.
 +        // Preserve the complete Side UI width, especially the 52dp collapsed contract. The frame
 +        // gap belongs between Side UI and content, not inside the rail where it would shrink
 +        // native tab hit targets. Top/bottom padding remains part of the Arc frame.
@@ -12263,7 +12253,7 @@ new file mode 100644
 +        if (raw instanceof ViewGroup.MarginLayoutParams) {
 +            ViewGroup.MarginLayoutParams margins = (ViewGroup.MarginLayoutParams) raw;
 +            int contentLeftMargin = mOriginalContentMarginLeft + gap;
-+            int contentTopMargin = ArcDesktopPolicy.contentTopMargin(mOriginalContentMarginTop, outer, caption);
++            int contentTopMargin = ArcDesktopPolicy.contentTopMargin(mOriginalContentMarginTop, outer);
 +            int contentRightMargin = mOriginalContentMarginRight + outer;
 +            int contentBottomMargin = mOriginalContentMarginBottom + outer;
 +            if (margins.leftMargin != contentLeftMargin
@@ -24817,9 +24807,9 @@ new file mode 100644
 +                && railHeightPx >= Math.round(ARC_FULL_CONTROLS_MIN_HEIGHT_DP * density);
 +    }
 +
-+    /** A native caption already present in the original margin must not be counted twice. */
-+    public static int contentTopMargin(int original, int outer, int caption) {
-+        return Math.max(original, Math.max(0, caption)) + outer;
++    /** Preserve original native geometry and add only the thin Arc frame. */
++    public static int contentTopMargin(int original, int outer) {
++        return original + outer;
 +    }
 +
 +    /** Reserve caption, five control rows, collection chrome and native tab space. */

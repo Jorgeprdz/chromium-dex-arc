@@ -66,9 +66,9 @@ public final class ArcDesktopPolicy {
                 && railHeightPx >= Math.round(ARC_FULL_CONTROLS_MIN_HEIGHT_DP * density);
     }
 
-    /** A native caption already present in the original margin must not be counted twice. */
-    public static int contentTopMargin(int original, int outer, int caption) {
-        return Math.max(original, Math.max(0, caption)) + outer;
+    /** Preserve original native geometry and add only the thin Arc frame. */
+    public static int contentTopMargin(int original, int outer) {
+        return original + outer;
     }
 
     /** Reserve caption, five control rows, collection chrome and native tab space. */

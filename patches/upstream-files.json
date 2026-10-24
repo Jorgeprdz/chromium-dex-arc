@@ -328,7 +328,7 @@
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcColorPicker.java": "b603b1bdecf3f4c31cc9a3a32f4a86dfde99e5849edd0ba704ee7878a0d7f3da",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCommandBar.java": "b8ef3b0875ec392ccb454e894b5ba602d8385844a204bedfb392ea794f701665",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCompactOmnibox.java": "453e65d94119b3a680f7eb91dfc1a76d340a73fb3c496e0aa0656e7f0f857d73",
-    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java": "91a3f5d00125300e1801bba25d0e90e94fb8f873f8463d880aedf640ee1d07d0",
+    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java": "216350a65a78a4cf4f9f45e28bd94b141a7ebbfa37ef7350f184b31b32b7c51a",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopMaterial.java": "74a0e4563435527261425461aaeacdd5383ae708a0bac3ccb6ee4cedc06525ed",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopMaterialDialog.java": "7a5e3881ec9bf8c0f66e2c878c7698ecb858ad8d178a746c6afe5b5cddc91ba1",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopWindowObserver.java": "5587093c6ee41d607d91857de9ee1284b2effd36c840bab11905f97f8a879c7f",
@@ -395,7 +395,7 @@
     "chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordManagerBridge.java": "dd3e257ba2793f6f242141396818d89b1906f3fcfb6cb0ca30d010548a6b46f4",
     "chrome/browser/password_manager/android/java/src/org/chromium/chrome/browser/password_manager/ArchiumPasswordSettingsFragment.java": "b529ab8f1a7c53b814397770698d38cde9869115e47c117bb638d009275e9f6e",
     "chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java": "088a88f6adb700a2621f19450f69c6aa6c43c044b3540e3128da0257e7527aa0",
-    "chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java": "03c1eea8b7a4569c9bc77a7c5349651bdc0762fe46dbf2bdaa009b41eeab987b",
+    "chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java": "1b32d96c9f5816b02fce008218e488c3d7f23910e1df8ed1df925cfd8ef2cbdf",
     "chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcSplitPairProjection.java": "cbbd259c7f6a03ceb49b012266ae331aaeff6fe8d9f1a0562f33e94a7339a31f",
     "chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcSplitPairVisuals.java": "c74577d3fc5bb5dc48b7fa8c9a26cb96e9220584dc4045f047c87cacab0622d8",
     "components/password_manager/core/browser/import/archium_password_import_preview.cc": "5ec8255bf6346ac15d04c143d5f70e21708406c024d1f12382fd49a8b25e14bb",
@@ -406,5 +406,5 @@
     "components/password_manager/core/browser/password_store/password_store_backend.cc": "45764d4ad0e05acc5a216944a5a6763212f6c17e71bf689e9c973f12fb5c87d8",
     "components/password_manager/core/browser/password_store/password_store_interface.cc": "7e9dd5813ce8ece459ec66abdd3306028b7b3d6bbae048664872a34d8d097268"
   },
-  "patch_sha256": "13c4b1b464b64c89006c39c34b0d9190bdd75b6d1b2539c3fae1afecab76b333"
+  "patch_sha256": "32956cbf474267f34b0a8486b6a85b25bdcfbc3605835f915e7aa54ab10c87f7"
 }

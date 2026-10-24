@@ -4,14 +4,20 @@ import unittest
 from test_phone_overlay_insets import method, run_probe
 ROOT=Path(__file__).resolve().parents[1]
 class ContentSafeGeometryTests(unittest.TestCase):
- def test_desktop_caption_is_reserved_once_without_changing_frame_width(self):
+ def test_desktop_retains_thin_frame_and_original_native_margin(self):
   src=(ROOT/'chromium/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java').read_text()
-  self.assertIn('public static int contentTopMargin(',src,'Desktop content must clear its caption controls')
   body=method(src,'public static int contentTopMargin(')
   code='public class CaptionProbe {'+body+'''public static void main(String[] a){
-if(contentTopMargin(0,8,32)!=40||contentTopMargin(32,8,32)!=40||contentTopMargin(7,8,0)!=15)throw new AssertionError("caption double padding");}}
+if(contentTopMargin(0,8)!=8||contentTopMargin(32,8)!=40||contentTopMargin(7,8)!=15)throw new AssertionError("Desktop frame grew beyond its original margin + 8dp");}}
 '''
   run_probe(self,{'CaptionProbe.java':code},'CaptionProbe')
+ def test_desktop_frame_does_not_reserve_a_second_title_row(self):
+  src=(ROOT/'chromium/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java').read_text()
+  body=method(src,'private void applyFrameGeometry(')
+  self.assertIn('contentTopMargin(mOriginalContentMarginTop, outer)',body)
+  self.assertNotIn('WindowInsets.Type.captionBar()',body)
+  # The native window controls and sidebar caption spacer keep their existing owner.
+  self.assertIn('setDesktopWindowSpacerHost(captionSpacer)',src)
  def test_header_tile_text_uses_its_actual_idle_surface(self):
   policy=ROOT/'chromium/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java'
   window=next((ROOT/'chromium').rglob('ArchiumWindowClass.java'))
