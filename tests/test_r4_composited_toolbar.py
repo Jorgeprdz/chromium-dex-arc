@@ -11,11 +11,15 @@ ROOT = Path(__file__).resolve().parents[1]
 class CompositedToolbarTest(unittest.TestCase):
     def test_arc_suppresses_texture_and_preserves_xr_and_narrow_reasons(self):
         path = ROOT / '.source-modified/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java'
-        body = method_body(path.read_text(), r'private void updateToolbarSceneLayerSuppression\(')
+        text = path.read_text()
+        body = method_body(text, r'private void updateToolbarSceneLayerSuppression\(')
+        guard = method_body(text, r'private void updateArcToolbarSceneGuard\(')
         source = '''public class SuppressionProbe {
             boolean mIsXrFsm, mIsVerticalTabsHiddenDueToNarrow, mIsArcToolbarSuppressed, mArcPhoneOverlayActive;
-            static class Supplier { boolean value; void set(boolean v) { value=v; } }
+            static class Supplier { boolean value; void set(boolean v) { value=v; } boolean get() { return value; } }
             final Supplier mSuppressToolbarSceneLayerSupplier=new Supplier();
+            final Supplier mArcToolbarSceneGuardSupplier=new Supplier();
+            void updateArcToolbarSceneGuard() GUARD
             void updateToolbarSceneLayerSuppression() BODY
             public static void main(String[] args) {
                 SuppressionProbe p=new SuppressionProbe();
@@ -27,9 +31,16 @@ class CompositedToolbarTest(unittest.TestCase):
                     p.updateToolbarSceneLayerSuppression();
                     if(p.mSuppressToolbarSceneLayerSupplier.value!=(mask!=0))
                         throw new AssertionError("texture suppression lost for mask="+mask);
+                    if(p.mArcToolbarSceneGuardSupplier.value!=(mask!=0))
+                        throw new AssertionError("scene guard lost for mask="+mask);
+                    // Another native owner releasing suppression must preserve Arc's guard.
+                    p.mSuppressToolbarSceneLayerSupplier.set(false);
+                    p.updateArcToolbarSceneGuard();
+                    if(p.mArcToolbarSceneGuardSupplier.value!=(mask!=0))
+                        throw new AssertionError("native release lost guard for mask="+mask);
                 }
             }
-        }'''.replace('BODY', body)
+        }'''.replace('BODY', body).replace('GUARD', guard)
         with tempfile.TemporaryDirectory() as directory:
             file = Path(directory)/'SuppressionProbe.java'
             file.write_text(source)

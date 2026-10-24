@@ -744,3 +744,9 @@ Verificación del checkpoint Desktop: suite host424 PASS; política Chromium61 m
 - [x] RED/GREEN de lógica y Android local; suites y límites en docs/validation/R5_REVIEW_FIXES.md. No equivalen a aceptación física.
 - [ ] Compilación Chromium/JUnit integrados y APK del candidato: NO LANZADOS. No se borraron checkpoints ni se hizo clean.
 - [ ] Aceptación física en móvil/DeX, temas, subcarpetas tras reinicio, controles de webs arbitrarias, teclado/foco, fullscreen y menús: PENDIENTE. No declarar DONE ni paridad de rendimiento/seguridad.
+
+### Preflight recovery — 23-oct-2026 CDMX
+
+- [x] Run40046612155/f6a998a: authorize PASS, preflight FAIL; restore/build skipped, NO_APK. First causal error: missing extracted updateArcToolbarSceneGuard dependency in the host Java probe.
+- [x] Probe repaired with the real guard body,16 state combinations and native-owner release assertions; local RED/GREEN retained. Related adaptive/scene ownership tests2 PASS. Production patch unchanged.
+- [ ] New single incremental attempt explicitly authorized by user; dispatch only after available local checks. Candidate APK/device validation remains pending.

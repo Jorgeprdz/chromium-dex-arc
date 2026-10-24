@@ -46,3 +46,13 @@ Final phone runner:159 PASS; collections:32 PASS; delivered lifecycle/persistenc
 Additional regressions caught during implementation: compact drag could leave pressed state active; narrowing after a drag could place the compact control outside the window; teardown during a reveal animation could leave an animator writing to released views. drag-red.log, compact-resize-red.log and animation-destroy-red.log preserve failures. Final candidate passes the corresponding local tests. Focus uses the existing native supplier and keeps compaction while editing even if scroll direction changes. Mobile/DeX physical acceptance remains NOT RUN for this candidate.
 
 Status: READY FOR BUILD against available local gates; native integrated compilation/tests and candidate APK/device acceptance remain pending. No new run was dispatched.
+
+## Follow-up: preflight run 40046612155
+
+The single authorized incremental dispatch built SHA f6a998ab568f215747ebb7581ca9df5ddd097d27. Authorization passed; preflight failed before checkpoint restore/native compilation. CI ran434 host tests and reported one failure: test_r4_composited_toolbar extracted updateToolbarSceneLayerSuppression into a Java fixture without the newly called updateArcToolbarSceneGuard. This is a missing dependency in the host probe; native Chromium compilation was not reached.
+
+The probe now includes the actual extracted guard method and its supplier, checks all16 combinations, and asserts that another owner releasing its supplier cannot release Arc's independent guard. No production code, generated patch, preflight policy or gate was weakened. Local RED reproduces the missing-symbol error; GREEN passes. Related adaptive/ownership suite:2 PASS. Evidence: run-40046612155-preflight.log, preflight-probe-red.log, preflight-probe-green.log, host-after-preflight-fix.log under /workspace/archium-evidence/r5-review-fixes/.
+
+User explicitly authorized one new incremental attempt after this fix. Full local host rerun, final SHA and new run receipt are recorded separately when available. No native compilation or physical acceptance inferred from host tests.
+
+Dispatch readiness: causal probe1 PASS and related adaptive/scene tests2 PASS; git diff --check PASS. Full434-test local rerun is still in progress, not reported as PASS. User reiterated immediate Archium dispatch; mandatory remote preflight remains enabled and independently reruns all gates before any checkpoint restore or native compilation. This follow-up changes only the host probe and documentation; production patch/manifest are unchanged from f6a998a.
