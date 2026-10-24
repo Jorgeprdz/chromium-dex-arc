@@ -435,7 +435,7 @@ public class ToolbarManager
     private final Callback<Boolean> mArcPhoneFormObserver = focused -> {
         if (Boolean.TRUE.equals(focused)) setArcPhoneCompact(true);
     };
-    private @Nullable android.animation.ValueAnimator mArcPhoneCompactAnimation;
+    private android.animation.@Nullable ValueAnimator mArcPhoneCompactAnimation;
     private final GestureStateListener mArcPhoneGestureListener = new GestureStateListener() {
         @Override public void onScrollStarted(int offset, int extent, boolean directionUp) {
             setArcPhoneCompact(!directionUp || mFormFieldFocusedSupplier.get());

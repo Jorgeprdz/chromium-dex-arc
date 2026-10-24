@@ -750,3 +750,9 @@ Verificación del checkpoint Desktop: suite host424 PASS; política Chromium61 m
 - [x] Run40046612155/f6a998a: authorize PASS, preflight FAIL; restore/build skipped, NO_APK. First causal error: missing extracted updateArcToolbarSceneGuard dependency in the host Java probe.
 - [x] Probe repaired with the real guard body,16 state combinations and native-owner release assertions; local RED/GREEN retained. Related adaptive/scene ownership tests2 PASS. Production patch unchanged.
 - [ ] New single incremental attempt explicitly authorized by user; dispatch only after available local checks. Candidate APK/device validation remains pending.
+
+### Java TYPE_USE fix — run40049206996
+
+- [x] Remote preflight PASS and checkpoint restoration VERIFIED_BY_CI; native Java compilation FAIL at ToolbarManager438, invalid placement of @Nullable on a fully qualified ValueAnimator type. NO_APK / no installation.
+- [x] Localized declaration fix with SDK-based RED/GREEN; adaptive2 and scene/suppression1 PASS. Patch regenerated and reproducibility checked. Previous candidate's full local434-test suite finished PASS; not claimed as a full rerun after this fix.
+- [ ] New integrated native build requires fresh user authorization; no automatic retry. Published checkpoint40049206996-1 remains unverified locally. Device/UI acceptance pending.
