@@ -14,7 +14,12 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFINITIONS = {
-    'org.chromium.base.ThreadUtils': 'public class ThreadUtils { public static void assertOnUiThread(){} }',
+    'org.chromium.base.ThreadUtils': '''public class ThreadUtils {
+        private static final java.util.ArrayDeque<Runnable> tasks=new java.util.ArrayDeque<>();
+        public static void assertOnUiThread(){}
+        public static void postOnUiThread(Runnable r){tasks.add(r);}
+        public static void flushUiThreadTasks(){while(!tasks.isEmpty())tasks.remove().run();}
+    }''',
     'org.chromium.base.Callback': 'public interface Callback<T> { void onResult(T value); }',
     'org.chromium.base.supplier.NullableObservableSupplier': 'public interface NullableObservableSupplier<T> extends java.util.function.Supplier<T> {}',
     'org.chromium.chrome.browser.profiles.Profile': '''public class Profile {
@@ -66,6 +71,7 @@ DEFINITIONS = {
     'org.chromium.chrome.browser.tabmodel.TabModelObserver': '''public interface TabModelObserver {
         default void didAddTab(org.chromium.chrome.browser.tab.Tab t,int type,int creationState,boolean markedForSelection){}
         default void didSelectTab(org.chromium.chrome.browser.tab.Tab t,int type,int lastId){}
+        default void didRemoveTabForClosure(org.chromium.chrome.browser.tab.Tab t){}
         default void restoreCompleted(){} default void tabClosureUndone(org.chromium.chrome.browser.tab.Tab t){}
         default void tabClosureCommitted(org.chromium.chrome.browser.tab.Tab t){}
         default void onTabCloseCommitted(java.util.List<org.chromium.chrome.browser.tab.Tab> t,boolean all,boolean restore,int source){}

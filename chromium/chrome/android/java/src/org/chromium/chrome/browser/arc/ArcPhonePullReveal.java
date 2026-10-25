@@ -40,9 +40,11 @@ public final class ArcPhonePullReveal {
     private String mSite = "", mTitle = "";
     private final TextPaint mTextPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mImagePaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
+    private final Paint mIconBackingPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint mCornerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path mCornerPath = new Path();
     private final RectF mIconBounds = new RectF();
+    private final RectF mIconBackingBounds = new RectF();
     private boolean mCornersAttached;
     // ViewOverlay Drawables have no touch/accessibility target and do not clip the compositor.
     private final Drawable mCorners = new Drawable() {
@@ -127,10 +129,35 @@ public final class ArcPhonePullReveal {
 
     /** Borrow the native cached icon; never fetch, copy or recycle tab-owned bitmaps. */
     public void setIdentity(Bitmap favicon, String site, String title) {
+        if (favicon != mFavicon) mIconBackingPaint.setColor(faviconBacking(favicon));
         mFavicon = favicon;
         mSite = site == null ? "" : site;
         mTitle = title == null || title.equals(mSite) ? "" : title;
         mGap.invalidate();
+    }
+
+    private int faviconBacking(Bitmap icon) {
+        final int light = Color.WHITE, dark = 0xff202124;
+        if (icon == null || icon.isRecycled() || icon.getConfig() == Bitmap.Config.HARDWARE) {
+            return Color.luminance(mFill.getColor()) > .179 ? light : dark;
+        }
+        // Only the cached favicon, only on replacement: at most 16 reads, no page capture,
+        // bitmap copy, allocation or work per scroll frame. Ignore transparent padding.
+        double luminance = 0, weight = 0;
+        for (int y = 0; y < 4; y++) {
+            for (int x = 0; x < 4; x++) {
+                int pixel = icon.getPixel(Math.min(icon.getWidth()-1, (2*x+1)*icon.getWidth()/8),
+                        Math.min(icon.getHeight()-1, (2*y+1)*icon.getHeight()/8));
+                int alpha = Color.alpha(pixel);
+                if (alpha < 128) continue;
+                luminance += Color.luminance(pixel) * alpha;
+                weight += alpha;
+            }
+        }
+        if (weight == 0) return Color.luminance(mFill.getColor()) > .179 ? light : dark;
+        double value = luminance / weight;
+        return 1.05 / (value + .05) >= (value + .05) / (Color.luminance(dark) + .05)
+                ? light : dark;
     }
 
     private void drawIdentity(Canvas canvas) {
@@ -141,6 +168,10 @@ public final class ArcPhonePullReveal {
         float size = 22 * mDensity;
         mIconBounds.set(x, center - size / 2, x + size, center + size / 2);
         if (mFavicon != null && !mFavicon.isRecycled()) {
+            float pad = 3 * mDensity;
+            mIconBackingBounds.set(mIconBounds.left-pad, mIconBounds.top-pad,
+                    mIconBounds.right+pad, mIconBounds.bottom+pad);
+            canvas.drawRoundRect(mIconBackingBounds, 6*mDensity, 6*mDensity, mIconBackingPaint);
             canvas.drawBitmap(mFavicon, null, mIconBounds, mImagePaint);
         } else {
             mTextPaint.setTextSize(18 * mDensity); mTextPaint.setTypeface(Typeface.DEFAULT);

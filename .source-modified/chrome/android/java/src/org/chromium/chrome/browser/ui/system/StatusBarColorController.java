@@ -539,16 +539,26 @@ public class StatusBarColorController
         return mArcPhoneStatusSurface;
     }
 
+    private int getArcPhoneIconContrastColor(int statusBarColor) {
+        // A focused transparent surface is not a black backing. Keep the native editor theme
+        // as contrast authority without changing the actual transparent system-bar color.
+        if (mArcPhoneFloatingSurface && mIsOmniboxFocused && Color.alpha(statusBarColor) == 0) {
+            return calculateDefaultStatusBarColor();
+        }
+        return statusBarColor;
+    }
+
     /** Calculate and update the status bar's color. */
     public void updateStatusBarColor() {
         @ColorInt int statusBarColor = calculateFinalStatusBarColor();
+        @ColorInt int iconContrastColor = getArcPhoneIconContrastColor(statusBarColor);
         boolean floatingPhoneSurface = mArcPhoneFloatingSurface && !mIsOmniboxFocused
                 && !isStandardNtp() && statusBarColor == getArcPhoneSurfaceColor();
         mArcPhoneStatusFade.update(floatingPhoneSurface && !mArcPhoneStatusCompact, statusBarColor);
         // Keep contrast with the native owner, including focused/native phone surfaces, so
         // later inset/delegate updates cannot choose white icons from a transparent color.
         mEdgeToEdgeSystemBarColorHelper.setStatusBarIconContrastColorOverride(
-                mArcPhoneFloatingSurface ? Integer.valueOf(statusBarColor) : null);
+                mArcPhoneFloatingSurface ? Integer.valueOf(iconContrastColor) : null);
         setStatusBarColor(
                 mEdgeToEdgeSystemBarColorHelper,
                 mActivity,
@@ -557,9 +567,10 @@ public class StatusBarColorController
 
         // Native indicator/scrim/focus/NTP owners retain their colors. The helper keeps the
         // fade's contrast backing across delegate/inset updates, including transparent colors.
-        if (floatingPhoneSurface && !mEdgeToEdgeSystemBarColorHelper.canSetStatusBarColor()) {
+        if ((floatingPhoneSurface || (mArcPhoneFloatingSurface && mIsOmniboxFocused))
+                && !mEdgeToEdgeSystemBarColorHelper.canSetStatusBarColor()) {
             UiUtils.setStatusBarIconColor(mWindow.getDecorView().getRootView(),
-                    !ColorUtils.shouldUseLightForegroundOnBackground(statusBarColor));
+                    !ColorUtils.shouldUseLightForegroundOnBackground(iconContrastColor));
         }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {

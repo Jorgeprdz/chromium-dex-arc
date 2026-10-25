@@ -3,6 +3,30 @@ from pathlib import Path
 import unittest
 ROOT=Path(__file__).resolve().parents[1]
 class PhoneStatusPolishTests(unittest.TestCase):
+    def test_transparent_focused_surface_does_not_choose_white_icons_in_light_theme(self):
+        from test_phone_overlay_insets import method,run_probe
+        source=(ROOT/'.source-modified/chrome/android/java/src/org/chromium/chrome/browser/ui/system/StatusBarColorController.java').read_text()
+        # The current owner forwards transparent black as contrast. Exercise that path first;
+        # the replacement method must derive a backing while retaining the real window color.
+        import re
+        argument=re.search(r'setStatusBarIconContrastColorOverride\(\s*(.*?)\);',source,re.S).group(1)
+        body=(method(source,'private int getArcPhoneIconContrastColor(')
+              if 'private int getArcPhoneIconContrastColor(' in source else
+              'private int getArcPhoneIconContrastColor(int statusBarColor){Integer contrast='
+              +argument+';return contrast==null?statusBarColor:contrast;}')
+        code='''public class FocusBackingProbe {
+static class Color {static int alpha(int c){return c>>>24;}}
+boolean mArcPhoneFloatingSurface=true,mIsOmniboxFocused=true;int fallback=0xffffffff;
+int calculateDefaultStatusBarColor(){return fallback;}
+'''+body+'''
+public static void main(String[] args){FocusBackingProbe p=new FocusBackingProbe();
+if(p.getArcPhoneIconContrastColor(0)!=0xffffffff)throw new AssertionError("Transparent focus loses light native editor backing");
+p.fallback=0xff202124;if(p.getArcPhoneIconContrastColor(0)!=0xff202124)throw new AssertionError("Dark native editor backing lost");
+if(p.getArcPhoneIconContrastColor(0xffff0000)!=0xffff0000)throw new AssertionError("Opaque native indicators must retain contrast color");
+p.mArcPhoneFloatingSurface=false;if(p.getArcPhoneIconContrastColor(0)!=0)throw new AssertionError("Desktop color changed");
+p.mArcPhoneFloatingSurface=true;p.mIsOmniboxFocused=false;if(p.getArcPhoneIconContrastColor(0)!=0)throw new AssertionError("Unfocused native owner changed");}}
+'''
+        run_probe(self,{'FocusBackingProbe.java':code},'FocusBackingProbe')
     def test_native_status_owner_installs_and_destroys_visual_fade(self):
         source=(ROOT/'.source-modified/chrome/android/java/src/org/chromium/chrome/browser/ui/system/StatusBarColorController.java').read_text()
         self.assertIn('mArcPhoneStatusFade.update(floatingPhoneSurface && !mArcPhoneStatusCompact, statusBarColor)',source,
@@ -19,6 +43,7 @@ class PhoneStatusPolishTests(unittest.TestCase):
         expression=re.search(r'setStatusBarIconContrastColorOverride\(\s*(.*?)\);',source,re.S).group(1)
         code='''public class FocusStatusProbe {public static void main(String[] a){
 boolean mArcPhoneFloatingSurface=true,floatingPhoneSurface=false;int statusBarColor=0xffffffff;
+int iconContrastColor=statusBarColor;
 Integer contrast='''+expression+''';
 if(contrast==null||contrast!=statusBarColor)throw new AssertionError("focused editor loses contrast to transparent native owner");
 mArcPhoneFloatingSurface=false;contrast='''+expression+''';

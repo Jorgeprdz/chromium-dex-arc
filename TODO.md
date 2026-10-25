@@ -808,3 +808,12 @@ Verificación del checkpoint Desktop: suite host424 PASS; política Chromium61 m
 - [x] Corrección local: gap/máscara estables entre gestos, alta/baja diferida en la cola UI para evitar mutaciones del árbol durante reset/render. Crash de recorrido confirmado; aceptación Samsung pendiente.
 - [x] Sólo primera fila favicon/sitio abre el editor nativo actual; restaura controles, sin cambiar diseño ni política de scroll.202 Android/Robolectric,6 host y preparación SDK PASS; parche incremental reproducible.
 - [ ] APK y refresh real repetido, teclado/foco y recuperación al scroll. Evidencia: docs/validation/R5_REFRESH_FOLLOWUP.md. Un build incremental autorizado, sin reintentos automáticos.
+
+## 25-oct-2026 — Hallazgos del reporte y DeX real
+
+- [x] Baseline instalado fc910e0: marco aprobado por usuario/DeX; Split50→25→50 y25→75→25 PASS en fixture responsive, sin recargas/zoom residual y con formulario conservado. DeX↔Phone PASS en una ronda; no aceptación universal.
+- [x] FAIL de Spaces confirmado físicamente en DeX: cierre de última pestaña deja página de Personal tras selector de Space vacío. Candidato reconcilia selección después del cierre nativo; RED/GREEN y16 escenarios del adaptador PASS, conservando undo/perfiles/cierre global.
+- [x] Candidato: contraste del editor transparente usa backing del tema nativo; favicon con respaldo neutro calculado al cambiar el bitmap. Esquinas existentes conservadas; ningún cambio de marco, píldoras, viewport o Split.
+- [x] Local:204 ejecuciones Android/Robolectric PASS,11 host relacionados PASS; preparación SDK37.2 PASS; parche201 archivos aplicado, transición incremental de prueba y regeneración idéntica PASS. No build Chromium ni aceptación física del candidato.
+- [ ] Teléfono bloqueado: completar comprobaciones físicas/limpieza de pestañas QA al desbloquear. Contraste, fullscreen, IME, nuevos contextos, persistencia y matriz restante siguen pendientes; no atribuir capturas apagadas/bloqueadas a Archium.
+- [ ] Build/instalación NO autorizados por este prompt. Commit recuperable tras gates; solicitar autorización para un único incremental cuando corresponda. Detalle: [R5_REPORT_FIXES_20261025.md](docs/validation/R5_REPORT_FIXES_20261025.md).

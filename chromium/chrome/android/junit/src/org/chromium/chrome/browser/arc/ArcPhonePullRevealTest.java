@@ -26,6 +26,28 @@ import org.robolectric.annotation.SQLiteMode;
 @GraphicsMode(GraphicsMode.Mode.LEGACY)
 @SQLiteMode(SQLiteMode.Mode.LEGACY)
 public class ArcPhonePullRevealTest {
+    @Test public void faviconGetsNeutralBackingWhenItsColorMatchesPage() throws Exception {
+        try(var f=new Fixture()) {
+            for(int color:new int[]{0xffff8a00,0xff17181a}) {
+                var icon=android.graphics.Bitmap.createBitmap(16,16,android.graphics.Bitmap.Config.ARGB_8888);
+                icon.eraseColor(color);f.reveal.setSurface(color);
+                f.reveal.setIdentity(icon,"example.test","Page");
+                f.reveal.start();f.reveal.pull(f.dp(64));
+                org.robolectric.shadows.ShadowLooper.idleMainLooper();
+                var image=android.graphics.Bitmap.createBitmap(400,800,android.graphics.Bitmap.Config.ARGB_8888);
+                var canvas=new android.graphics.Canvas(image);f.root.getChildAt(0).draw(canvas);
+                var drawing=org.robolectric.Shadows.shadowOf(canvas);
+                assertTrue("Same-color favicon needs a separate neutral surface",drawing.getRoundRectPaintHistoryCount()>0);
+                int backing=drawing.getLastDrawnRoundRect().paint.getColor();
+                double a=Color.luminance(backing),b=Color.luminance(color);
+                assertTrue("Opaque same-color fixture must have useful icon/backing contrast",
+                        (Math.max(a,b)+.05)/(Math.min(a,b)+.05)>=3);
+                assertTrue("Backing must not replace the tab-owned favicon",drawing.getDescription().contains("Bitmap"));
+                assertFalse("Icon background cannot introduce web clipping",f.page.getClipToOutline());
+                f.reveal.reset(false);
+            }
+        }
+    }
     private static class Fixture implements AutoCloseable {
         final org.robolectric.android.controller.ActivityController<Activity> activity =
                 Robolectric.buildActivity(Activity.class).setup();

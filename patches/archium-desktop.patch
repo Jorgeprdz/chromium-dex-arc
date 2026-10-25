@@ -4176,7 +4176,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ui/system/Statu
          mStatusBarColorTabObserver.destroy();
          if (mLayoutStateProvider != null) {
              mLayoutStateProvider.removeObserver(mLayoutStateObserver);
-@@ -496,14 +506,61 @@
+@@ -496,14 +506,72 @@
          }
      }
 
@@ -4213,16 +4213,26 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ui/system/Statu
 +        return mArcPhoneStatusSurface;
 +    }
 +
++    private int getArcPhoneIconContrastColor(int statusBarColor) {
++        // A focused transparent surface is not a black backing. Keep the native editor theme
++        // as contrast authority without changing the actual transparent system-bar color.
++        if (mArcPhoneFloatingSurface && mIsOmniboxFocused && Color.alpha(statusBarColor) == 0) {
++            return calculateDefaultStatusBarColor();
++        }
++        return statusBarColor;
++    }
++
      /** Calculate and update the status bar's color. */
      public void updateStatusBarColor() {
          @ColorInt int statusBarColor = calculateFinalStatusBarColor();
++        @ColorInt int iconContrastColor = getArcPhoneIconContrastColor(statusBarColor);
 +        boolean floatingPhoneSurface = mArcPhoneFloatingSurface && !mIsOmniboxFocused
 +                && !isStandardNtp() && statusBarColor == getArcPhoneSurfaceColor();
 +        mArcPhoneStatusFade.update(floatingPhoneSurface && !mArcPhoneStatusCompact, statusBarColor);
 +        // Keep contrast with the native owner, including focused/native phone surfaces, so
 +        // later inset/delegate updates cannot choose white icons from a transparent color.
 +        mEdgeToEdgeSystemBarColorHelper.setStatusBarIconContrastColorOverride(
-+                mArcPhoneFloatingSurface ? Integer.valueOf(statusBarColor) : null);
++                mArcPhoneFloatingSurface ? Integer.valueOf(iconContrastColor) : null);
          setStatusBarColor(
                  mEdgeToEdgeSystemBarColorHelper,
                  mActivity,
@@ -4232,14 +4242,15 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/ui/system/Statu
 +
 +        // Native indicator/scrim/focus/NTP owners retain their colors. The helper keeps the
 +        // fade's contrast backing across delegate/inset updates, including transparent colors.
-+        if (floatingPhoneSurface && !mEdgeToEdgeSystemBarColorHelper.canSetStatusBarColor()) {
++        if ((floatingPhoneSurface || (mArcPhoneFloatingSurface && mIsOmniboxFocused))
++                && !mEdgeToEdgeSystemBarColorHelper.canSetStatusBarColor()) {
 +            UiUtils.setStatusBarIconColor(mWindow.getDecorView().getRootView(),
-+                    !ColorUtils.shouldUseLightForegroundOnBackground(statusBarColor));
++                    !ColorUtils.shouldUseLightForegroundOnBackground(iconContrastColor));
 +        }
 
          if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
              @ColorInt
-@@ -567,6 +624,10 @@
+@@ -567,6 +635,10 @@
          }
          if (baseStatusBarColor != UNDEFINED_STATUS_BAR_COLOR) {
              return baseStatusBarColor;
@@ -12820,7 +12831,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcNativeTa
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcNativeTabSession.java
-@@ -0,0 +1,342 @@
+@@ -0,0 +1,361 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -12866,6 +12877,7 @@ new file mode 100644
 +    private final TabWindowManager.Observer mWindowObserver;
 +    private RestoreState mRestoreState;
 +    private boolean mDestroyed;
++    private boolean mCloseSelectionPending;
 +
 +    public ArcNativeTabSession(TabModel model, TabCreator creator,
 +            BooleanSupplier isCurrentModel, Runnable onStateChanged) {
@@ -12910,6 +12922,10 @@ new file mode 100644
 +                if (mDestroyed) return;
 +                if (restoreComplete()) adoptTab(tab.getId());
 +                if (active()) mOnStateChanged.run();
++            }
++
++            @Override public void didRemoveTabForClosure(Tab tab) {
++                reconcileSelectionAfterClose();
 +            }
 +
 +            @Override public void tabClosureCommitted(Tab tab) { confirmedClose(tab.getId()); }
@@ -13069,6 +13085,20 @@ new file mode 100644
 +        } catch (RuntimeException ignored) {
 +            // Metadata failure must not close, move, or otherwise mutate native tabs.
 +        }
++    }
++
++    private void reconcileSelectionAfterClose() {
++        if (!active() || !restoreComplete() || mCloseSelectionPending) return;
++        mCloseSelectionPending = true;
++        // Chromium chooses its global successor during the closure operation. Wait until that
++        // operation completes before selecting a Space peer or creating the native empty page.
++        // Coalesce batch callbacks and leave a globally empty model to Chromium's own lifecycle.
++        ThreadUtils.postOnUiThread(() -> {
++            mCloseSelectionPending = false;
++            if (!active() || !restoreComplete() || mModel.getCount() == 0) return;
++            selectForActiveSpaceAfterRestore();
++            if (active()) mOnStateChanged.run();
++        });
 +    }
 +
 +    private void selectForActiveSpace(ArcSidebarState state) {
@@ -14096,7 +14126,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhonePul
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhonePullReveal.java
-@@ -0,0 +1,304 @@
+@@ -0,0 +1,335 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -14139,9 +14169,11 @@ new file mode 100644
 +    private String mSite = "", mTitle = "";
 +    private final TextPaint mTextPaint = new TextPaint(Paint.ANTI_ALIAS_FLAG);
 +    private final Paint mImagePaint = new Paint(Paint.ANTI_ALIAS_FLAG | Paint.FILTER_BITMAP_FLAG);
++    private final Paint mIconBackingPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 +    private final Paint mCornerPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 +    private final Path mCornerPath = new Path();
 +    private final RectF mIconBounds = new RectF();
++    private final RectF mIconBackingBounds = new RectF();
 +    private boolean mCornersAttached;
 +    // ViewOverlay Drawables have no touch/accessibility target and do not clip the compositor.
 +    private final Drawable mCorners = new Drawable() {
@@ -14226,10 +14258,35 @@ new file mode 100644
 +
 +    /** Borrow the native cached icon; never fetch, copy or recycle tab-owned bitmaps. */
 +    public void setIdentity(Bitmap favicon, String site, String title) {
++        if (favicon != mFavicon) mIconBackingPaint.setColor(faviconBacking(favicon));
 +        mFavicon = favicon;
 +        mSite = site == null ? "" : site;
 +        mTitle = title == null || title.equals(mSite) ? "" : title;
 +        mGap.invalidate();
++    }
++
++    private int faviconBacking(Bitmap icon) {
++        final int light = Color.WHITE, dark = 0xff202124;
++        if (icon == null || icon.isRecycled() || icon.getConfig() == Bitmap.Config.HARDWARE) {
++            return Color.luminance(mFill.getColor()) > .179 ? light : dark;
++        }
++        // Only the cached favicon, only on replacement: at most 16 reads, no page capture,
++        // bitmap copy, allocation or work per scroll frame. Ignore transparent padding.
++        double luminance = 0, weight = 0;
++        for (int y = 0; y < 4; y++) {
++            for (int x = 0; x < 4; x++) {
++                int pixel = icon.getPixel(Math.min(icon.getWidth()-1, (2*x+1)*icon.getWidth()/8),
++                        Math.min(icon.getHeight()-1, (2*y+1)*icon.getHeight()/8));
++                int alpha = Color.alpha(pixel);
++                if (alpha < 128) continue;
++                luminance += Color.luminance(pixel) * alpha;
++                weight += alpha;
++            }
++        }
++        if (weight == 0) return Color.luminance(mFill.getColor()) > .179 ? light : dark;
++        double value = luminance / weight;
++        return 1.05 / (value + .05) >= (value + .05) / (Color.luminance(dark) + .05)
++                ? light : dark;
 +    }
 +
 +    private void drawIdentity(Canvas canvas) {
@@ -14240,6 +14297,10 @@ new file mode 100644
 +        float size = 22 * mDensity;
 +        mIconBounds.set(x, center - size / 2, x + size, center + size / 2);
 +        if (mFavicon != null && !mFavicon.isRecycled()) {
++            float pad = 3 * mDensity;
++            mIconBackingBounds.set(mIconBounds.left-pad, mIconBounds.top-pad,
++                    mIconBounds.right+pad, mIconBounds.bottom+pad);
++            canvas.drawRoundRect(mIconBackingBounds, 6*mDensity, 6*mDensity, mIconBackingPaint);
 +            canvas.drawBitmap(mFavicon, null, mIconBounds, mImagePaint);
 +        } else {
 +            mTextPaint.setTextSize(18 * mDensity); mTextPaint.setTypeface(Typeface.DEFAULT);
@@ -18858,7 +18919,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhonePu
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhonePullRevealTest.java
-@@ -0,0 +1,279 @@
+@@ -0,0 +1,301 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -18887,6 +18948,28 @@ new file mode 100644
 +@GraphicsMode(GraphicsMode.Mode.LEGACY)
 +@SQLiteMode(SQLiteMode.Mode.LEGACY)
 +public class ArcPhonePullRevealTest {
++    @Test public void faviconGetsNeutralBackingWhenItsColorMatchesPage() throws Exception {
++        try(var f=new Fixture()) {
++            for(int color:new int[]{0xffff8a00,0xff17181a}) {
++                var icon=android.graphics.Bitmap.createBitmap(16,16,android.graphics.Bitmap.Config.ARGB_8888);
++                icon.eraseColor(color);f.reveal.setSurface(color);
++                f.reveal.setIdentity(icon,"example.test","Page");
++                f.reveal.start();f.reveal.pull(f.dp(64));
++                org.robolectric.shadows.ShadowLooper.idleMainLooper();
++                var image=android.graphics.Bitmap.createBitmap(400,800,android.graphics.Bitmap.Config.ARGB_8888);
++                var canvas=new android.graphics.Canvas(image);f.root.getChildAt(0).draw(canvas);
++                var drawing=org.robolectric.Shadows.shadowOf(canvas);
++                assertTrue("Same-color favicon needs a separate neutral surface",drawing.getRoundRectPaintHistoryCount()>0);
++                int backing=drawing.getLastDrawnRoundRect().paint.getColor();
++                double a=Color.luminance(backing),b=Color.luminance(color);
++                assertTrue("Opaque same-color fixture must have useful icon/backing contrast",
++                        (Math.max(a,b)+.05)/(Math.min(a,b)+.05)>=3);
++                assertTrue("Backing must not replace the tab-owned favicon",drawing.getDescription().contains("Bitmap"));
++                assertFalse("Icon background cannot introduce web clipping",f.page.getClipToOutline());
++                f.reveal.reset(false);
++            }
++        }
++    }
 +    private static class Fixture implements AutoCloseable {
 +        final org.robolectric.android.controller.ActivityController<Activity> activity =
 +                Robolectric.buildActivity(Activity.class).setup();

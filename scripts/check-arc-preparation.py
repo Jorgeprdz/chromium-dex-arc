@@ -293,6 +293,7 @@ def main():
         arc_module = importlib.util.module_from_spec(arc_spec)
         arc_spec.loader.exec_module(arc_module)
         for name in (
+                'org.chromium.base.ThreadUtils',
                 'org.chromium.chrome.browser.tabmodel.TabList',
                 'org.chromium.chrome.browser.tabmodel.TabModel',
                 'org.chromium.chrome.browser.tabmodel.TabModelObserver',

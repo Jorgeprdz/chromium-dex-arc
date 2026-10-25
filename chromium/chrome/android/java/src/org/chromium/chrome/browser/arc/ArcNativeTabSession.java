@@ -43,6 +43,7 @@ public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
     private final TabWindowManager.Observer mWindowObserver;
     private RestoreState mRestoreState;
     private boolean mDestroyed;
+    private boolean mCloseSelectionPending;
 
     public ArcNativeTabSession(TabModel model, TabCreator creator,
             BooleanSupplier isCurrentModel, Runnable onStateChanged) {
@@ -87,6 +88,10 @@ public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
                 if (mDestroyed) return;
                 if (restoreComplete()) adoptTab(tab.getId());
                 if (active()) mOnStateChanged.run();
+            }
+
+            @Override public void didRemoveTabForClosure(Tab tab) {
+                reconcileSelectionAfterClose();
             }
 
             @Override public void tabClosureCommitted(Tab tab) { confirmedClose(tab.getId()); }
@@ -246,6 +251,20 @@ public final class ArcNativeTabSession implements ArcTabActions.NativeTabs {
         } catch (RuntimeException ignored) {
             // Metadata failure must not close, move, or otherwise mutate native tabs.
         }
+    }
+
+    private void reconcileSelectionAfterClose() {
+        if (!active() || !restoreComplete() || mCloseSelectionPending) return;
+        mCloseSelectionPending = true;
+        // Chromium chooses its global successor during the closure operation. Wait until that
+        // operation completes before selecting a Space peer or creating the native empty page.
+        // Coalesce batch callbacks and leave a globally empty model to Chromium's own lifecycle.
+        ThreadUtils.postOnUiThread(() -> {
+            mCloseSelectionPending = false;
+            if (!active() || !restoreComplete() || mModel.getCount() == 0) return;
+            selectForActiveSpaceAfterRestore();
+            if (active()) mOnStateChanged.run();
+        });
     }
 
     private void selectForActiveSpace(ArcSidebarState state) {

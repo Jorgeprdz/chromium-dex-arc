@@ -39,6 +39,7 @@ public final class ArcNativeTabSessionSyntheticBoundaryTest {
         final List<TabModelObserver> observers = new ArrayList<>();
         boolean restored = true;
         int current = -1, opened, selected, pinned;
+        String lastOpenedUrl;
         SyntheticModel(Profile p) { profile = p; otr = p != null && p.isOffTheRecord(); }
         SyntheticModel(boolean emptyOtrStub) { profile = null; otr = emptyOtrStub; }
         void add(int id) { visible.put(id, new Tab(id)); if (current < 0) current = id; }
@@ -53,6 +54,7 @@ public final class ArcNativeTabSessionSyntheticBoundaryTest {
         void pend(int id) {
             Tab tab = visible.remove(id); pending.put(id, tab);
             if (current == id) current = visible.isEmpty() ? -1 : visible.keySet().iterator().next();
+            for (TabModelObserver o : List.copyOf(observers)) o.didRemoveTabForClosure(tab);
         }
         void commit(int id, boolean batch) {
             Tab tab = pending.remove(id);
@@ -148,6 +150,7 @@ public final class ArcNativeTabSessionSyntheticBoundaryTest {
         }
         ArcNativeTabSession attach(SyntheticModel model, boolean active) {
             return new ArcNativeTabSession(model, (params, type, parent) -> {
+                model.lastOpenedUrl=params.url;
                 model.opened++; int id = 10000 + model.opened; model.emitAdd(id); return model.getTabById(id);
             }, () -> active, () -> refreshes++);
         }
@@ -340,6 +343,78 @@ public final class ArcNativeTabSessionSyntheticBoundaryTest {
         check(f.store.load().favorites().isEmpty() && f.local.pinned==0,"No implicit favorite/native pin");
         session.destroy();
     }
+    private static void closeLastSpaceTabKeepsPageAndSpaceCoherent() {
+        Fixture f=new Fixture(); f.local.add(20);
+        ArcSidebarState state=f.store.load(); String personal=state.selectedSpace();
+        String work=state.addSpace("Work"); state.associateTab(10,personal);
+        state.associateTab(20,work); state.selectSpace(work); f.store.save(state);
+        ArcNativeTabSession session=f.attach();
+        check(f.local.current==20,"Select the active Space tab first");
+        String entry=f.pin(20);
+        session.actions().closeTab(20);
+        check(f.local.opened==0,"Do not create a tab reentrantly inside native close callbacks");
+        org.chromium.base.ThreadUtils.flushUiThreadTasks();
+        check(f.local.current!=10 && f.store.load().visibleTab(f.local.current),
+                "Closing last Work tab must not leave Personal page behind Work selector");
+        check(f.local.opened==1 && f.store.load().selectedSpace().equals(work),
+                "Empty Space gets one native NTP without changing its identity");
+        check("chrome://newtab/".equals(f.local.lastOpenedUrl),"Fallback uses Chromium's native NTP");
+        check(f.local.isClosurePending(20) && f.store.load().entry(entry).tabId==20,
+                "Native undo and saved entry binding survive the fallback");
+        check(session.actions().selectOrOpen(entry)==ArcTabActions.Result.SELECTED,
+                "Reopening the saved entry undoes the same tab");
+        check(f.local.current==20 && f.local.opened==1,"Undo restores the page without duplicate reopen");
+        session.actions().closeTab(20);org.chromium.base.ThreadUtils.flushUiThreadTasks();
+        f.local.commit(20,false);
+        check(session.actions().selectOrOpen(entry)==ArcTabActions.Result.OPENED,
+                "Committed saved entry reopens its original URL in a real new tab");
+        check("https://pin.test/20".equals(f.local.lastOpenedUrl),"Reopen retains saved page, not fallback URL");
+        session.destroy();
+    }
+    private static void closeUsesExistingSpaceTabAndCancelsAfterDestroy() {
+        Fixture f=new Fixture();f.local.add(20);f.local.add(21);
+        ArcSidebarState state=f.store.load();String personal=state.selectedSpace(),work=state.addSpace("Work");
+        state.associateTab(10,personal);state.associateTab(20,work);state.associateTab(21,work);
+        state.selectSpace(work);f.store.save(state);ArcNativeTabSession session=f.attach();
+        session.actions().closeTab(20);org.chromium.base.ThreadUtils.flushUiThreadTasks();
+        check(f.local.current==21 && f.local.opened==0,"Prefer another Work tab over creating NTP");
+        session.actions().closeTab(21);session.destroy();
+        org.chromium.base.ThreadUtils.flushUiThreadTasks();
+        check(f.local.opened==0,"Queued close fallback cannot act after lifecycle teardown");
+    }
+    private static void normalCloseUndoSpaceSwitchAndGlobalEmpty() {
+        Fixture f=new Fixture();f.local.add(20);
+        ArcSidebarState state=f.store.load();String personal=state.selectedSpace(),work=state.addSpace("Work");
+        state.associateTab(10,personal);state.associateTab(20,work);state.selectSpace(work);f.store.save(state);
+        ArcNativeTabSession session=f.attach();session.actions().closeTab(20);
+        org.chromium.base.ThreadUtils.flushUiThreadTasks();
+        check(f.local.opened==1 && f.store.load().visibleTab(f.local.current),"Normal last-tab close stays in Work");
+        check(f.store.load().entries(work).isEmpty(),"Fallback creates no saved entry or implicit pin");
+        f.local.cancelTabClosure(20);check(f.local.current==20,"Native undo restores normal tab");
+        session.actions().closeTab(20);
+        state=f.store.load();state.selectSpace(personal);f.store.save(state);session.onSpaceChanged(state);
+        org.chromium.base.ThreadUtils.flushUiThreadTasks();
+        check(f.local.current==10 && f.local.opened==1,"Queued work respects a subsequent Space switch");
+        // Native close-all must retain its own empty-model/Activity lifecycle, not create NTP.
+        for(int id:List.copyOf(f.local.visible.keySet()))f.local.pend(id);
+        org.chromium.base.ThreadUtils.flushUiThreadTasks();
+        check(f.local.getCount()==0 && f.local.opened==1,"Closing all tabs must not resurrect a native tab");
+        session.destroy();
+    }
+    private static void emptySpaceFallbackSurvivesSessionReattach() {
+        Fixture f=new Fixture();f.local.add(20);
+        ArcSidebarState state=f.store.load();String personal=state.selectedSpace(),work=state.addSpace("Work");
+        state.associateTab(10,personal);state.associateTab(20,work);state.selectSpace(work);f.store.save(state);
+        ArcNativeTabSession session=f.attach();session.actions().closeTab(20);
+        org.chromium.base.ThreadUtils.flushUiThreadTasks();int ntp=f.local.current;session.destroy();
+        f.local.current=10;ArcNativeTabSession restored=f.attach();
+        check(f.local.current==ntp && f.local.opened==1,"Restore reuses Work's native empty page without duplication");
+        state=f.store.load();state.selectSpace(personal);f.store.save(state);restored.onSpaceChanged(state);
+        check(f.local.current==10,"Personal remains intact");
+        state=f.store.load();state.selectSpace(work);f.store.save(state);restored.onSpaceChanged(state);
+        check(f.local.current==ntp && f.local.opened==1,"Returning to empty Work preserves its existing native page");
+        restored.destroy();
+    }
     public static void main(String[] args) {
         Map<String, Runnable> cases = new LinkedHashMap<>();
         cases.put("two-windows", ArcNativeTabSessionSyntheticBoundaryTest::twoWindows);
@@ -354,6 +429,10 @@ public final class ArcNativeTabSessionSyntheticBoundaryTest {
         cases.put("authority-unavailable", ArcNativeTabSessionSyntheticBoundaryTest::authorityUnavailable);
         cases.put("destroyed-callbacks", ArcNativeTabSessionSyntheticBoundaryTest::destroyedCallbacks);
         cases.put("no-implicit-pins", ArcNativeTabSessionSyntheticBoundaryTest::restoreAndSpaceChangesDoNotCreatePins);
+        cases.put("close-last-space", ArcNativeTabSessionSyntheticBoundaryTest::closeLastSpaceTabKeepsPageAndSpaceCoherent);
+        cases.put("close-space-lifecycle", ArcNativeTabSessionSyntheticBoundaryTest::closeUsesExistingSpaceTabAndCancelsAfterDestroy);
+        cases.put("normal-close-space", ArcNativeTabSessionSyntheticBoundaryTest::normalCloseUndoSpaceSwitchAndGlobalEmpty);
+        cases.put("empty-space-restore", ArcNativeTabSessionSyntheticBoundaryTest::emptySpaceFallbackSurvivesSessionReattach);
         int failures = 0;
         for (String name : args.length == 0 ? cases.keySet() : List.of(args)) {
             try { cases.get(name).run(); System.out.println("PASS " + name); }

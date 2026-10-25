@@ -237,7 +237,7 @@
     "chrome/android/java/src/org/chromium/chrome/browser/tab/TabWebContentsDelegateAndroidImpl.java": "67d47aefea359f133a57e39a8c0a90d921905e09e2157a3bd00460f90a95cbc0",
     "chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java": "a5c47302dfe3c31b1b83849b24321dfe12c14f0a02a9b9f09a212b34cb413744",
     "chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java": "c56495b72f3f8e5e1119c90600c80dce65ae86291b8a748e41ee52ab363d02ac",
-    "chrome/android/java/src/org/chromium/chrome/browser/ui/system/StatusBarColorController.java": "1cee623cf620d8047b76ce4a978b7bbe1e12414707e3798f9b9f44effc4f69ea",
+    "chrome/android/java/src/org/chromium/chrome/browser/ui/system/StatusBarColorController.java": "9c97d92bdad3455b524f5abb9f7ead7e77e33dbd61be0c0142623248667f0835",
     "chrome/android/junit/BUILD.gn": "003fec7b04c88dbce557103f12ef0e6b79ab46865d09553396d76e070c78e7b6",
     "chrome/android/junit/src/org/chromium/chrome/browser/modaldialog/ChromeTabModalPresenterUnitTest.java": "fc44f988f2756694fb64cb1918ce16c25021280c61915ecd2bee75be495c173a",
     "chrome/android/junit/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinatorUnitTest.java": "d5261f64fe0e5e5612125143d95ca54001a217cee00d0f77920bd9cf114aace6",
@@ -333,12 +333,12 @@
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopMaterialDialog.java": "7a5e3881ec9bf8c0f66e2c878c7698ecb858ad8d178a746c6afe5b5cddc91ba1",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopWindowObserver.java": "5587093c6ee41d607d91857de9ee1284b2effd36c840bab11905f97f8a879c7f",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcFrameDispatch.java": "ad74cfee9225530151b6c10bbb267e174aa6921e5cd99752723972474a44acd4",
-    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcNativeTabSession.java": "6cb8696d8c1444cdb3a6a99441700c1d91773af9a16cf7bc317a189e11eb9b16",
+    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcNativeTabSession.java": "066b9bc2f33b994a7a1ebce80fa11dee67fbe1ccc7cc3ee9194822f9e4d3208a",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcNavigationControls.java": "b9565e8723e4be96270ead77600756a260bca45d702da88c3fc87bdbac9386e2",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcOmniboxPlacement.java": "5e87e215d032ea6490db58099237e7c33d4e4c9632056c81c8cefd9297a249d7",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneGlass.java": "84a18de0a22bd43422c274bd00c39b8e0765030fe8d019748f992afd9bef34af",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneNavigation.java": "171149b0877541ae47b7f4a2495be99b814c4c12125e36433c8a3d01f0447055",
-    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhonePullReveal.java": "d62f00286f684764cdd3898575aa5ca83c107bc3b542e09729e84ae53b79779c",
+    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhonePullReveal.java": "004db58789f0556d998c135617d446b59c11bdd2e5ccda3a70309429b95c846d",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneStatusFade.java": "7bb9710c4b29bb8df58e5d8b797580d8cbd2ec65c382a20fcafb7aa308744e63",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarProfiles.java": "16ca484649483c7255aac1d31e3e55a391f5c36cce8921509232cf8ac9ffb52c",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarState.java": "51d86f3d0962ef8cea9777fba256db50e57b1bb1db23df2bd2be0cc1f0d8505f",
@@ -366,7 +366,7 @@
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcOmniboxPlacementTest.java": "8f648fd7a93b27b8d21a9f503717d3697ce4515c7b1095a29ee28d3201b81eff",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneGlassTest.java": "4e75f5216d2ea0db139966652ef6c55491c1872a08a1dece4bf1542323ca9a8f",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneNavigationTest.java": "af8af22ffadc244fa313d04495034161f75b0aec6d6c9a1f305db66da6886153",
-    "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhonePullRevealTest.java": "9350722313be80c68ad4a71246ffad3e661571ed972b8a27db1ab06b6890e30e",
+    "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhonePullRevealTest.java": "ab3a76c910da43290c233a5abe47b486c8f49c949d0718560d80182866ff0358",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneStatusFadeTest.java": "7e4f9dcb9e2bc0e1e20bceacd7761d29332191353f2df4b07151b13f1006094c",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitContentHostTest.java": "1936e7181ffd28b3483fc41aa1288baa284c9605e29f1e717b77ba57663c673d",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitControlsTest.java": "f88843322e9076240012915ccc1dd0ab467640d8b48e2986e78ac62ae105d216",
@@ -406,5 +406,5 @@
     "components/password_manager/core/browser/password_store/password_store_backend.cc": "45764d4ad0e05acc5a216944a5a6763212f6c17e71bf689e9c973f12fb5c87d8",
     "components/password_manager/core/browser/password_store/password_store_interface.cc": "7e9dd5813ce8ece459ec66abdd3306028b7b3d6bbae048664872a34d8d097268"
   },
-  "patch_sha256": "33b0a7a58873fc20ead662fc490ac48488986072ba85364a0a68171b4b661687"
+  "patch_sha256": "63354f9d4c8e55c8483da8da76b06bfc141ea84635257ad036c895274c526a5a"
 }
