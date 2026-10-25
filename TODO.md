@@ -818,3 +818,9 @@ Verificación del checkpoint Desktop: suite host424 PASS; política Chromium61 m
 - [x] Ronda física baseline tras desbloqueo: HTML5 fullscreen/salida, composer fijo+IME, preview, descarga propia y apertura/cancelación de permisos comprobados. QA normal/incógnito cerradas, contador normal5; configuración restaurada y Termux al finalizar.
 - [ ] Candidato aún sin APK: aceptación física de Spaces/undo, contraste y favicon pendiente. En baseline se reprodujo reloj ilegible al editar en claro; incógnito abre sin crash pero fixture vacío queda OBSERVADO, no PASS. Resto de matriz y persistencia DeX pendientes.
 - [ ] Build/instalación NO autorizados por este prompt. Commit recuperable tras gates; solicitar autorización para un único incremental cuando corresponda. Detalle: [R5_REPORT_FIXES_20261025.md](docs/validation/R5_REPORT_FIXES_20261025.md).
+
+## 25-oct-2026 — Preflight40213865886 y aviso Termux
+
+- [x] Causa CI:1/447 host falló por contrato textual antiguo de contraste; restore/build omitidos, sin APK ni instalación. RED local reproducido; contrato actualizado al backing derivado,6+5 pruebas relacionadas PASS, sin modificar producción/parche ni relajar gates.
+- [x] Android registró aviso de fallo pero canal anterior silencioso. Canal dedicado con sonido configurado y aviso reenviado; wrapper persistente actualizado. Entrega API no equivale a sonido/heads-up, que dependen del sistema.
+- [ ] Nuevo build requiere autorización; suite completa y aceptación de candidato físico pendientes. Evidencia: docs/validation/R5_REPORT_FIXES_20261025.md.

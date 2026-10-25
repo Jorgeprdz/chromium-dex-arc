@@ -62,7 +62,10 @@ public static void main(String[] args){Outline o=new Outline();ShadowProbe p=new
         self.assertIn('floatingPhoneSurface ? Color.TRANSPARENT : statusBarColor',text)
         self.assertNotIn('setStatusBarColor(Color.TRANSPARENT, false)',text)  # no opaque-then-transparent second write
         self.assertIn('setStatusBarIconContrastColorOverride(',text)
-        self.assertIn('mArcPhoneFloatingSurface ? Integer.valueOf(statusBarColor) : null',text)
+        # Contrast may use the native editor backing when the actual bar is transparent.
+        # The existing status-polish probes execute light/dark/focus/Desktop behavior.
+        self.assertIn('int iconContrastColor = getArcPhoneIconContrastColor(statusBarColor)',text)
+        self.assertIn('mArcPhoneFloatingSurface ? Integer.valueOf(iconContrastColor) : null',text)
         self.assertIn('UiUtils.setStatusBarIconColor(',text)
         for preserved in ['applyStatusBarIndicatorColor(', 'applyCurrentScrimToColor(', 'applyTabStripOverlay(']:
             self.assertIn(preserved,text)
