@@ -30,12 +30,23 @@ Evidence: `/workspace/.local/state/archium-r5-report-fixes-20261025/`.
 
 No costly full host suite was duplicated. A successful local run is not acceptance of graphics, performance, native undo/snackbar interaction or an unbuilt APK.
 
-## Physical validation remaining
+## Physical follow-up after unlock
 
-The phone became locked during the additional keyboard/fullscreen checks. Black/lock-screen captures are inconclusive, not app failures or PASS. The user was asked to unlock and leave Termux foreground. No attempt to bypass device authentication was made.
+Evidence: `/workspace/.local/state/archium-r5-physical-followup-20261025/`. Galaxy RFCY203Q5TK verified; installed APK SHA256 a894776d24308f9d6e5d156b0ae6e2b7933ee5da9512fe55d4225d25329c11ea, still baseline fc910e0. These results do not validate the unbuilt candidate.
 
-Pending: candidate physical Spaces/undo/NTP behavior; clock in both themes with IME and suggestions; neutral favicon appearance; fixed bottom composer/IME; HTML5/YouTube fullscreen and rotation; additional context-menu/window/incognito/preview paths; mouse/keyboard focus and populated-folder persistence. The broader pending matrix in the HTML report is retained. Passwords/passkeys/autofill require controlled fixtures/accounts and remain NOT RUN. No performance or measured AA claim.
+| Physical case | Actual result on installed baseline |
+| --- | --- |
+| Owned HTML5 video fullscreen | PASS: video enters landscape fullscreen without Archium pills; Back restores portrait page and both pills. Returning through Termux resumes the page. No claim for YouTube or repeated orientation cycles |
+| Fixed bottom composer | PASS: in one uninterrupted case scroll compacts controls, exposed left input accepts QA_not_sent, input and local Send test control remain visible above IME. Nothing sent externally |
+| Link preview | PASS: native context menu opens owned link in preview sheet without crash; Back dismisses it |
+| Incognito context action | PARTIAL: native incognito tab opens without crash and closes back to normal model; local fixture stays blank on two captures. Content loading remains PENDING diagnosis, not PASS or a demonstrated root cause |
+| Download | PASS: owned41-byte text file downloaded, native success banner visible; bytes match fixture, SHA25635640d8141930f895f2beecc2c7fafbf8a4ab9c292c416cddb2103728706018e. File retained as evidence in Download/Archium_QA_download.txt |
+| Permission dialog | PASS for opening/dismissal only: native location prompt visible and cancelled with Back. No location granted or obtained |
+| System theme transition | Dark editor/IME and restored auto/light editor captured on same QA tab. Clock remains legible in dark; poor/invisible clock over light editor reproduced. Overall contrast acceptance FAIL on baseline; candidate still pending APK |
+| QA cleanup/configuration | Own normal QA tab and own incognito tab closed; normal tab counter5 and overview captured. No other tabs closed. Termux foreground after every case and at end; size904x1966, density420, rotation0, autorotation0, nightauto verified. Owned fixture server21392 stopped |
 
-Temporary QA tabs may have been queued while the phone was locked; their exact count and cleanup must be checked after unlock. Only titles/URLs belonging to the owned QA origins127.0.0.1:8765/8766 may be closed. User tabs, profiles, favorites, history and settings must remain intact. Restore/verify density420, size904×1966, rotation0, autorotation0 and nightauto. Return to Termux after each completed case.
+The earlier locked-screen captures remain inconclusive; the unlock blocker is resolved. The five-tab count is verified, but earlier historical tab titles are not asserted as a current inventory because user navigation may change them.
 
-Candidate source/gates are ready for review; closing physical inspection remains blocked on device availability. A new build still requires explicit authorization, exact candidate SHA, compatible incremental source and normal preflight. No production release or main merge.
+Pending: candidate physical Spaces/undo/NTP behavior, clock correction and favicon appearance; remaining real-DeX mouse/keyboard and populated-folder persistence; additional window/share cases; YouTube and repeated rotation/fullscreen; incognito fixture loading investigation. Credentials/passkeys/autofill remain NOT RUN without controlled accounts. No measured AA or performance claim. No density simulation or speculative renderer changes.
+
+Source and local gates: READY FOR BUILD, with the above physical acceptance pending. Build still requires explicit authorization, exact final SHA, compatible checkpoint and normal preflight. No workflow, push, installation, checkpoint cleanup, main merge or production release performed.
