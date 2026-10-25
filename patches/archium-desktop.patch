@@ -3576,7 +3576,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          mFullscreenHairlineToken =
                                  setToolbarShadowVisibilityAndClearOldToken(
                                          true, mFullscreenHairlineToken);
-@@ -2524,8 +2604,341 @@
+@@ -2524,8 +2604,345 @@
          return ((LocationBarCoordinator) mLocationBar).getUrlBarViewRectProvider();
      }
 
@@ -3782,6 +3782,10 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 +                }
 +                setArcPhoneCompact(true);
 +            });
++            mArcPhonePullReveal.setOpenAddressAction(() -> {
++                setArcPhoneCompact(false);
++                focusAndSelectAllUrlBarText(OmniboxFocusReason.MENU_OR_KEYBOARD_ACTION);
++            });
 +        }
 +        SwipeRefreshHandler next = tab == null ? null : SwipeRefreshHandler.from(tab);
 +        if (mArcPhonePullHandler != next) {
@@ -3918,7 +3922,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          enableTabGroupUiControls();
          if (BottomBarConfigUtils.isBottomBarEnabled(mActivity)) {
              enableBottomBar();
-@@ -2605,26 +3018,47 @@
+@@ -2605,26 +3022,47 @@
          OneshotSupplier<String> countrySupplier =
                  mCountrySupplier != null ? mCountrySupplier : new OneshotSupplierImpl<>();
 
@@ -3986,7 +3990,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          }
 
          var bottomAppBarCoordinator =
-@@ -2639,7 +3073,8 @@
+@@ -2639,7 +3077,8 @@
                          mActivityTabProvider.asObservable(),
                          (ScrollingBottomViewResourceFrameLayout) bottomAppBarContainer,
                          LayerType.BOTTOM_APP_BAR,
@@ -3996,7 +4000,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          bottomBarContainerOneshotSupplier,
                          mTabObscuringHandler,
                          mLayoutManager.getOverlayPanelManager().getPanelStateSupplier(),
-@@ -2652,6 +3087,7 @@
+@@ -2652,6 +3091,7 @@
              bottomAppBarCoordinator.initializeWithNative();
          }
          mBottomAppBarCoordinatorSupplier.set(bottomAppBarCoordinator);
@@ -4004,7 +4008,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
      }
 
      /**
-@@ -2840,7 +3276,7 @@
+@@ -2840,7 +3280,7 @@
                  mBrowserControlsSizer,
                  mToolbarThemeColorProvider,
                  mBottomToolbarControlsOffsetSupplier,
@@ -4013,7 +4017,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                  mToolbarProgressBarLayer::onProgressBarInfoUpdate,
                  mCaptureResourceIdSupplier,
                  mTabStripTopControlLayer,
-@@ -2992,6 +3428,36 @@
+@@ -2992,6 +3432,36 @@
      public void destroy() {
          if (mIsDestroyed) return;
          mIsDestroyed = true;
@@ -4050,7 +4054,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 
          if (mAppInstalledDelegate != null) {
              mAppInstalledDelegate.destroy();
-@@ -3052,9 +3518,20 @@
+@@ -3052,9 +3522,20 @@
              mTabGroupUiBottomControlsCoordinatorSupplier = null;
          }
 
@@ -4071,7 +4075,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
              mBottomAppBarCoordinatorSupplier = null;
          }
 
-@@ -3268,6 +3745,7 @@
+@@ -3268,6 +3749,7 @@
          }
 
          mToolbar.onUrlFocusChange(hasFocus);
@@ -4079,7 +4083,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 
          if (mFindToolbarManager != null && hasFocus) mFindToolbarManager.hideToolbar();
 
-@@ -3318,6 +3796,16 @@
+@@ -3318,6 +3800,16 @@
       */
      @Override
      public void onThemeColorChanged(int color, boolean shouldAnimate) {
@@ -4096,7 +4100,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          if (!mShouldUpdateToolbarPrimaryColor) return;
 
          boolean colorChanged = mCurrentThemeColor != color;
-@@ -3658,6 +4146,8 @@
+@@ -3658,6 +4150,8 @@
 
          updateButtonStatus();
          mCurrentTabSupplier.set(tab);
@@ -4105,7 +4109,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          mFormFieldFocusedSupplier.onWebContentsChanged(tab == null ? null : tab.getWebContents());
      }
 
-@@ -3945,8 +4435,24 @@
+@@ -3945,8 +4439,24 @@
          updateToolbarSceneLayerSuppression();
      }
 
@@ -14092,7 +14096,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhonePul
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhonePullReveal.java
-@@ -0,0 +1,265 @@
+@@ -0,0 +1,304 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -14115,6 +14119,9 @@ new file mode 100644
 +import android.text.TextUtils;
 +import android.graphics.drawable.ColorDrawable;
 +import android.view.View;
++import android.widget.FrameLayout;
++import android.os.Handler;
++import android.os.Looper;
 +import android.view.ViewGroup;
 +
 +/** Phone overscroll presentation. Moves the surface and its input hierarchy without web relayout. */
@@ -14122,7 +14129,11 @@ new file mode 100644
 +    private final View mContent;
 +    private final Runnable mOnReveal;
 +    private final ColorDrawable mFill = new ColorDrawable();
-+    private final View mGap;
++    private final FrameLayout mGap;
++    private final View mIdentityButton;
++    private Runnable mOpenAddressAction;
++    private final Handler mHierarchy = new Handler(Looper.getMainLooper());
++    private boolean mAttachPending;
 +    private final float mDensity;
 +    private Bitmap mFavicon;
 +    private String mSite = "", mTitle = "";
@@ -14176,9 +14187,19 @@ new file mode 100644
 +        // Pinned SwipeRefreshLayout uses a 64dp trigger and .5 drag rate. Map only the
 +        // second stage into that unchanged native range; never scale the web content.
 +        mNativePullScale = (2 * 64 * density) / (mRefreshPull - mExtent);
-+        mGap = new View(content.getContext()) {
++        mGap = new FrameLayout(content.getContext()) {
 +            @Override protected void onDraw(Canvas canvas) { mFill.draw(canvas); drawIdentity(canvas); }
++            @Override protected void onLayout(boolean changed, int l, int t, int r, int b) {
++                super.onLayout(changed,l,t,r,b); layoutIdentityButton();
++            }
 +        };
++        mIdentityButton = new View(content.getContext());
++        mIdentityButton.setFocusable(true);
++        mIdentityButton.setVisibility(View.GONE);
++        mIdentityButton.setOnClickListener(v -> {
++            if (!mDestroyed && mEnabled && mOffset > 0 && mOpenAddressAction != null) mOpenAddressAction.run();
++        });
++        mGap.addView(mIdentityButton,new FrameLayout.LayoutParams(0,0));
 +        mGap.setWillNotDraw(false);
 +        mGap.setEnabled(false);
 +        mGap.setClickable(false);
@@ -14237,6 +14258,21 @@ new file mode 100644
 +                    TextUtils.TruncateAt.END).toString(), x, center + 14 * mDensity, mTextPaint);
 +        }
 +        canvas.restoreToCount(save);
++    }
++
++    public void setOpenAddressAction(Runnable action) { mOpenAddressAction = action; layoutIdentityButton(); }
++
++    private void layoutIdentityButton() {
++        if (mIdentityButton == null) return;
++        var bounds = mFill.getBounds();
++        boolean visible = !mDestroyed && mOffset >= mMinimumPull && mOpenAddressAction != null;
++        mIdentityButton.setVisibility(visible ? View.VISIBLE : View.GONE);
++        if (!visible) return;
++        mIdentityButton.setContentDescription(mSite.isEmpty() ? "Archium" : mSite);
++        int top = Math.max(bounds.top,Math.round(bounds.exactCenterY()-19*mDensity));
++        mIdentityButton.layout(bounds.left+Math.round(16*mDensity),top,
++                Math.max(bounds.left,bounds.right-Math.round(16*mDensity)),
++                Math.min(bounds.bottom,Math.round(bounds.exactCenterY()+5*mDensity)));
 +    }
 +
 +    public boolean isRevealed() { return mOffset > 0 || mLatched; }
@@ -14322,32 +14358,33 @@ new file mode 100644
 +            mOwnsTranslation = false;
 +            mFill.setBounds(0,0,0,0);
 +            mCorners.setBounds(0,0,0,0);
-+            if (mCornersAttached) { mContent.getOverlay().remove(mCorners); mCornersAttached = false; }
-+            detachGap();
++            mIdentityButton.setVisibility(View.GONE);
++            mGap.setVisibility(View.INVISIBLE);
 +            return;
 +        }
 +        if (!(mContent.getParent() instanceof ViewGroup parent)) { reset(false); return; }
-+        if (mGap.getParent() == null) {
-+            // Behind the surface AND controls: a parent Drawable overlay would cover the pill.
-+            parent.addView(mGap, parent.indexOfChild(mContent), new ViewGroup.LayoutParams(
-+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-+            mGap.layout(0,0,parent.getWidth(),parent.getHeight());
++        if (mGap.getParent() == null && !mAttachPending) {
++            mAttachPending = true;
++            // Message-queue boundary: never change the parent's children during layout/display-list
++            // traversal. Keep this view and its drawable attached across refresh/reset gestures.
++            mHierarchy.post(() -> {
++                mAttachPending = false;
++                if (mDestroyed || mContent.getParent() != parent || mGap.getParent() != null) return;
++                parent.addView(mGap,Math.max(0,parent.indexOfChild(mContent)),new ViewGroup.LayoutParams(
++                        ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT));
++                mGap.layout(0,0,parent.getWidth(),parent.getHeight());
++                mGap.setVisibility(mOffset > 0 ? View.VISIBLE : View.INVISIBLE);
++                if (!mCornersAttached) {mContent.getOverlay().add(mCorners);mCornersAttached = true;}
++            });
 +        }
++        mGap.setVisibility(View.VISIBLE);
 +        int left = Math.round(mContent.getX());
 +        int top = Math.round(mContent.getTop() + mOriginalTranslation);
 +        mFill.setBounds(left, top, left + mContent.getWidth(), top + Math.round(offset));
 +        int radius = Math.round(Math.min(offset, Math.min(16 * mDensity, mContent.getWidth() / 2f)));
 +        mCorners.setBounds(0, 0, mContent.getWidth(), radius);
-+        if (!mCornersAttached) { mContent.getOverlay().add(mCorners); mCornersAttached = true; }
++        layoutIdentityButton();
 +        mGap.invalidate();
-+    }
-+
-+    private void detachGap() {
-+        if (!(mGap.getParent() instanceof ViewGroup parent)) return;
-+        if (parent.isInLayout()) {
-+            // Do not mutate the parent's child list from a child's layout callback.
-+            mGap.post(() -> { if (mOffset == 0 && mGap.getParent() == parent) parent.removeView(mGap); });
-+        } else parent.removeView(mGap);
 +    }
 +
 +    public void destroy() {
@@ -14355,6 +14392,12 @@ new file mode 100644
 +        mEnabled = false;
 +        reset(false);
 +        mFavicon = null;
++        mOpenAddressAction = null;
++        mHierarchy.removeCallbacksAndMessages(null);
++        mHierarchy.post(() -> {
++            if (mGap.getParent() instanceof ViewGroup parent) parent.removeView(mGap);
++            if (mCornersAttached) {mContent.getOverlay().remove(mCorners);mCornersAttached = false;}
++        });
 +        mContent.removeOnLayoutChangeListener(mLayout);
 +    }
 +}
@@ -18815,7 +18858,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhonePu
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhonePullRevealTest.java
-@@ -0,0 +1,237 @@
+@@ -0,0 +1,279 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -18864,6 +18907,45 @@ new file mode 100644
 +        @Override public void close(){reveal.destroy();activity.pause().stop().destroy();}
 +    }
 +
++    @Test public void resetKeepsParentChildListStableUntilDeferredDestroy() {
++        try(var f=new Fixture()) {
++            f.reveal.start();f.reveal.pull(f.dp(64));
++            org.robolectric.shadows.ShadowLooper.idleMainLooper();
++            int children=f.root.getChildCount();assertEquals(2,children);
++            for(int i=0;i<3;i++) {
++                f.reveal.reset(false);
++                assertEquals("reset during render must not remove a root child",children,f.root.getChildCount());
++                f.reveal.start();f.reveal.pull(f.dp(64));
++                assertEquals(children,f.root.getChildCount());
++            }
++            f.reveal.destroy();assertEquals(children,f.root.getChildCount());
++            org.robolectric.shadows.ShadowLooper.idleMainLooper();assertEquals(1,f.root.getChildCount());
++        }
++    }
++
++    @Test public void onlyIdentityFirstLineOpensExistingAddressEditor() throws Exception {
++        try(var f=new Fixture()) {
++            f.activity.get().setContentView(f.root);
++            int[] opens={0};
++            var setter=ArcPhonePullReveal.class.getMethod("setOpenAddressAction",Runnable.class);
++            setter.invoke(f.reveal,(Runnable)()->opens[0]++);
++            f.reveal.start();f.reveal.pull(f.dp(64));
++            org.robolectric.shadows.ShadowLooper.idleMainLooper();
++            var field=ArcPhonePullReveal.class.getDeclaredField("mIdentityButton");field.setAccessible(true);
++            View button=(View)field.get(f.reveal);
++            for(int action:new int[]{MotionEvent.ACTION_DOWN,MotionEvent.ACTION_UP}) {
++                var event=MotionEvent.obtain(0,10,action,button.getLeft()+5,button.getTop()+button.getHeight()/2f,0);
++                assertTrue(f.root.dispatchTouchEvent(event));event.recycle();
++            }
++            org.robolectric.shadows.ShadowLooper.idleMainLooper();
++            assertEquals(1,opens[0]);
++            var outside=MotionEvent.obtain(0,11,MotionEvent.ACTION_DOWN,button.getLeft()+5,f.dp(58),0);
++            assertFalse(f.root.dispatchTouchEvent(outside));outside.recycle();assertEquals(1,opens[0]);
++            f.reveal.reset(false);assertEquals(View.GONE,button.getVisibility());
++            button.performClick();assertEquals(1,opens[0]);
++        }
++    }
++
 +    @Test public void contextualIdentityHasFallbackAndClearsOnReplacement() throws Exception {
 +        try(var f=new Fixture()) {
 +            var set=ArcPhonePullReveal.class.getMethod("setIdentity",android.graphics.Bitmap.class,String.class,String.class);
@@ -18895,6 +18977,7 @@ new file mode 100644
 +            var set=ArcPhonePullReveal.class.getMethod("setIdentity",android.graphics.Bitmap.class,String.class,String.class);
 +            set.invoke(f.reveal,icon,"github.com","Long page title that must fit without leaving its reveal area");
 +            f.reveal.setSurface(Color.BLUE);f.reveal.start();f.reveal.pull(f.dp(64));
++            org.robolectric.shadows.ShadowLooper.idleMainLooper();
 +            View gap=f.root.getChildAt(0);
 +            var image=android.graphics.Bitmap.createBitmap(400,800,android.graphics.Bitmap.Config.ARGB_8888);
 +            gap.draw(new android.graphics.Canvas(image));
@@ -18988,7 +19071,9 @@ new file mode 100644
 +            assertEquals(new Rect(7,11,407,11+Math.round(f.dp(40))),f.fill().getBounds());
 +            f.reveal.setSurface(0xff202124);assertEquals(0xff202124,f.fill().getColor());
 +            f.reveal.setSurface(Color.WHITE);assertEquals(Color.WHITE,f.fill().getColor());
++            org.robolectric.shadows.ShadowLooper.idleMainLooper();
 +            assertEquals(2,f.root.getChildCount());
++            org.robolectric.shadows.ShadowLooper.idleMainLooper();
 +            View gap=f.root.getChildAt(0);assertSame(f.page,f.root.getChildAt(1));
 +            assertFalse(gap.isEnabled());assertFalse(gap.isClickable());assertFalse(gap.isFocusable());
 +            assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO,gap.getImportantForAccessibility());

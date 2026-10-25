@@ -2806,6 +2806,10 @@ public class ToolbarManager
                 }
                 setArcPhoneCompact(true);
             });
+            mArcPhonePullReveal.setOpenAddressAction(() -> {
+                setArcPhoneCompact(false);
+                focusAndSelectAllUrlBarText(OmniboxFocusReason.MENU_OR_KEYBOARD_ACTION);
+            });
         }
         SwipeRefreshHandler next = tab == null ? null : SwipeRefreshHandler.from(tab);
         if (mArcPhonePullHandler != next) {

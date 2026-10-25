@@ -20,6 +20,9 @@ import android.text.TextPaint;
 import android.text.TextUtils;
 import android.graphics.drawable.ColorDrawable;
 import android.view.View;
+import android.widget.FrameLayout;
+import android.os.Handler;
+import android.os.Looper;
 import android.view.ViewGroup;
 
 /** Phone overscroll presentation. Moves the surface and its input hierarchy without web relayout. */
@@ -27,7 +30,11 @@ public final class ArcPhonePullReveal {
     private final View mContent;
     private final Runnable mOnReveal;
     private final ColorDrawable mFill = new ColorDrawable();
-    private final View mGap;
+    private final FrameLayout mGap;
+    private final View mIdentityButton;
+    private Runnable mOpenAddressAction;
+    private final Handler mHierarchy = new Handler(Looper.getMainLooper());
+    private boolean mAttachPending;
     private final float mDensity;
     private Bitmap mFavicon;
     private String mSite = "", mTitle = "";
@@ -81,9 +88,19 @@ public final class ArcPhonePullReveal {
         // Pinned SwipeRefreshLayout uses a 64dp trigger and .5 drag rate. Map only the
         // second stage into that unchanged native range; never scale the web content.
         mNativePullScale = (2 * 64 * density) / (mRefreshPull - mExtent);
-        mGap = new View(content.getContext()) {
+        mGap = new FrameLayout(content.getContext()) {
             @Override protected void onDraw(Canvas canvas) { mFill.draw(canvas); drawIdentity(canvas); }
+            @Override protected void onLayout(boolean changed, int l, int t, int r, int b) {
+                super.onLayout(changed,l,t,r,b); layoutIdentityButton();
+            }
         };
+        mIdentityButton = new View(content.getContext());
+        mIdentityButton.setFocusable(true);
+        mIdentityButton.setVisibility(View.GONE);
+        mIdentityButton.setOnClickListener(v -> {
+            if (!mDestroyed && mEnabled && mOffset > 0 && mOpenAddressAction != null) mOpenAddressAction.run();
+        });
+        mGap.addView(mIdentityButton,new FrameLayout.LayoutParams(0,0));
         mGap.setWillNotDraw(false);
         mGap.setEnabled(false);
         mGap.setClickable(false);
@@ -142,6 +159,21 @@ public final class ArcPhonePullReveal {
                     TextUtils.TruncateAt.END).toString(), x, center + 14 * mDensity, mTextPaint);
         }
         canvas.restoreToCount(save);
+    }
+
+    public void setOpenAddressAction(Runnable action) { mOpenAddressAction = action; layoutIdentityButton(); }
+
+    private void layoutIdentityButton() {
+        if (mIdentityButton == null) return;
+        var bounds = mFill.getBounds();
+        boolean visible = !mDestroyed && mOffset >= mMinimumPull && mOpenAddressAction != null;
+        mIdentityButton.setVisibility(visible ? View.VISIBLE : View.GONE);
+        if (!visible) return;
+        mIdentityButton.setContentDescription(mSite.isEmpty() ? "Archium" : mSite);
+        int top = Math.max(bounds.top,Math.round(bounds.exactCenterY()-19*mDensity));
+        mIdentityButton.layout(bounds.left+Math.round(16*mDensity),top,
+                Math.max(bounds.left,bounds.right-Math.round(16*mDensity)),
+                Math.min(bounds.bottom,Math.round(bounds.exactCenterY()+5*mDensity)));
     }
 
     public boolean isRevealed() { return mOffset > 0 || mLatched; }
@@ -227,32 +259,33 @@ public final class ArcPhonePullReveal {
             mOwnsTranslation = false;
             mFill.setBounds(0,0,0,0);
             mCorners.setBounds(0,0,0,0);
-            if (mCornersAttached) { mContent.getOverlay().remove(mCorners); mCornersAttached = false; }
-            detachGap();
+            mIdentityButton.setVisibility(View.GONE);
+            mGap.setVisibility(View.INVISIBLE);
             return;
         }
         if (!(mContent.getParent() instanceof ViewGroup parent)) { reset(false); return; }
-        if (mGap.getParent() == null) {
-            // Behind the surface AND controls: a parent Drawable overlay would cover the pill.
-            parent.addView(mGap, parent.indexOfChild(mContent), new ViewGroup.LayoutParams(
-                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-            mGap.layout(0,0,parent.getWidth(),parent.getHeight());
+        if (mGap.getParent() == null && !mAttachPending) {
+            mAttachPending = true;
+            // Message-queue boundary: never change the parent's children during layout/display-list
+            // traversal. Keep this view and its drawable attached across refresh/reset gestures.
+            mHierarchy.post(() -> {
+                mAttachPending = false;
+                if (mDestroyed || mContent.getParent() != parent || mGap.getParent() != null) return;
+                parent.addView(mGap,Math.max(0,parent.indexOfChild(mContent)),new ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.MATCH_PARENT));
+                mGap.layout(0,0,parent.getWidth(),parent.getHeight());
+                mGap.setVisibility(mOffset > 0 ? View.VISIBLE : View.INVISIBLE);
+                if (!mCornersAttached) {mContent.getOverlay().add(mCorners);mCornersAttached = true;}
+            });
         }
+        mGap.setVisibility(View.VISIBLE);
         int left = Math.round(mContent.getX());
         int top = Math.round(mContent.getTop() + mOriginalTranslation);
         mFill.setBounds(left, top, left + mContent.getWidth(), top + Math.round(offset));
         int radius = Math.round(Math.min(offset, Math.min(16 * mDensity, mContent.getWidth() / 2f)));
         mCorners.setBounds(0, 0, mContent.getWidth(), radius);
-        if (!mCornersAttached) { mContent.getOverlay().add(mCorners); mCornersAttached = true; }
+        layoutIdentityButton();
         mGap.invalidate();
-    }
-
-    private void detachGap() {
-        if (!(mGap.getParent() instanceof ViewGroup parent)) return;
-        if (parent.isInLayout()) {
-            // Do not mutate the parent's child list from a child's layout callback.
-            mGap.post(() -> { if (mOffset == 0 && mGap.getParent() == parent) parent.removeView(mGap); });
-        } else parent.removeView(mGap);
     }
 
     public void destroy() {
@@ -260,6 +293,12 @@ public final class ArcPhonePullReveal {
         mEnabled = false;
         reset(false);
         mFavicon = null;
+        mOpenAddressAction = null;
+        mHierarchy.removeCallbacksAndMessages(null);
+        mHierarchy.post(() -> {
+            if (mGap.getParent() instanceof ViewGroup parent) parent.removeView(mGap);
+            if (mCornersAttached) {mContent.getOverlay().remove(mCorners);mCornersAttached = false;}
+        });
         mContent.removeOnLayoutChangeListener(mLayout);
     }
 }

@@ -83,3 +83,16 @@ p.mArcPhonePullReveal=null;p.updateArcPhoneRevealIdentity(new Tab());}}
   # URI parsing is the explicit Android boundary; the delivered ToolbarManager body runs verbatim.
   uri='package android.net;public class Uri {java.net.URI value;Uri(String s){value=java.net.URI.create(s);}public static Uri parse(String s){return new Uri(s);}public String getHost(){return value.getHost();}}'
   run_probe(self,{'IdentityProbe.java':code,'android/net/Uri.java':uri},'IdentityProbe')
+
+ def test_identity_action_restores_controls_and_reuses_native_address_focus(self):
+  src=(ROOT/'.source-modified/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java').read_text()
+  action=method(src,'mArcPhonePullReveal.setOpenAddressAction(')
+  code='''public class AddressActionProbe {
+static class Reveal {Runnable action;void setOpenAddressAction(Runnable r){action=r;}}
+static class OmniboxFocusReason {static final int MENU_OR_KEYBOARD_ACTION=7;}
+Reveal mArcPhonePullReveal=new Reveal();boolean compact=true;int reason=-1;
+void setArcPhoneCompact(boolean c){compact=c;}void focusAndSelectAllUrlBarText(int value){reason=value;}
+void bind(){'''+action+''');}
+public static void main(String[] args){var p=new AddressActionProbe();p.bind();p.mArcPhonePullReveal.action.run();if(p.compact||p.reason!=7)throw new AssertionError("must restore controls and focus the same native editor");}}
+'''
+  run_probe(self,{'AddressActionProbe.java':code},'AddressActionProbe')

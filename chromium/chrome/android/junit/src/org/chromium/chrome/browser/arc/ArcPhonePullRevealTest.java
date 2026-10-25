@@ -46,6 +46,45 @@ public class ArcPhonePullRevealTest {
         @Override public void close(){reveal.destroy();activity.pause().stop().destroy();}
     }
 
+    @Test public void resetKeepsParentChildListStableUntilDeferredDestroy() {
+        try(var f=new Fixture()) {
+            f.reveal.start();f.reveal.pull(f.dp(64));
+            org.robolectric.shadows.ShadowLooper.idleMainLooper();
+            int children=f.root.getChildCount();assertEquals(2,children);
+            for(int i=0;i<3;i++) {
+                f.reveal.reset(false);
+                assertEquals("reset during render must not remove a root child",children,f.root.getChildCount());
+                f.reveal.start();f.reveal.pull(f.dp(64));
+                assertEquals(children,f.root.getChildCount());
+            }
+            f.reveal.destroy();assertEquals(children,f.root.getChildCount());
+            org.robolectric.shadows.ShadowLooper.idleMainLooper();assertEquals(1,f.root.getChildCount());
+        }
+    }
+
+    @Test public void onlyIdentityFirstLineOpensExistingAddressEditor() throws Exception {
+        try(var f=new Fixture()) {
+            f.activity.get().setContentView(f.root);
+            int[] opens={0};
+            var setter=ArcPhonePullReveal.class.getMethod("setOpenAddressAction",Runnable.class);
+            setter.invoke(f.reveal,(Runnable)()->opens[0]++);
+            f.reveal.start();f.reveal.pull(f.dp(64));
+            org.robolectric.shadows.ShadowLooper.idleMainLooper();
+            var field=ArcPhonePullReveal.class.getDeclaredField("mIdentityButton");field.setAccessible(true);
+            View button=(View)field.get(f.reveal);
+            for(int action:new int[]{MotionEvent.ACTION_DOWN,MotionEvent.ACTION_UP}) {
+                var event=MotionEvent.obtain(0,10,action,button.getLeft()+5,button.getTop()+button.getHeight()/2f,0);
+                assertTrue(f.root.dispatchTouchEvent(event));event.recycle();
+            }
+            org.robolectric.shadows.ShadowLooper.idleMainLooper();
+            assertEquals(1,opens[0]);
+            var outside=MotionEvent.obtain(0,11,MotionEvent.ACTION_DOWN,button.getLeft()+5,f.dp(58),0);
+            assertFalse(f.root.dispatchTouchEvent(outside));outside.recycle();assertEquals(1,opens[0]);
+            f.reveal.reset(false);assertEquals(View.GONE,button.getVisibility());
+            button.performClick();assertEquals(1,opens[0]);
+        }
+    }
+
     @Test public void contextualIdentityHasFallbackAndClearsOnReplacement() throws Exception {
         try(var f=new Fixture()) {
             var set=ArcPhonePullReveal.class.getMethod("setIdentity",android.graphics.Bitmap.class,String.class,String.class);
@@ -77,6 +116,7 @@ public class ArcPhonePullRevealTest {
             var set=ArcPhonePullReveal.class.getMethod("setIdentity",android.graphics.Bitmap.class,String.class,String.class);
             set.invoke(f.reveal,icon,"github.com","Long page title that must fit without leaving its reveal area");
             f.reveal.setSurface(Color.BLUE);f.reveal.start();f.reveal.pull(f.dp(64));
+            org.robolectric.shadows.ShadowLooper.idleMainLooper();
             View gap=f.root.getChildAt(0);
             var image=android.graphics.Bitmap.createBitmap(400,800,android.graphics.Bitmap.Config.ARGB_8888);
             gap.draw(new android.graphics.Canvas(image));
@@ -170,7 +210,9 @@ public class ArcPhonePullRevealTest {
             assertEquals(new Rect(7,11,407,11+Math.round(f.dp(40))),f.fill().getBounds());
             f.reveal.setSurface(0xff202124);assertEquals(0xff202124,f.fill().getColor());
             f.reveal.setSurface(Color.WHITE);assertEquals(Color.WHITE,f.fill().getColor());
+            org.robolectric.shadows.ShadowLooper.idleMainLooper();
             assertEquals(2,f.root.getChildCount());
+            org.robolectric.shadows.ShadowLooper.idleMainLooper();
             View gap=f.root.getChildAt(0);assertSame(f.page,f.root.getChildAt(1));
             assertFalse(gap.isEnabled());assertFalse(gap.isClickable());assertFalse(gap.isFocusable());
             assertEquals(View.IMPORTANT_FOR_ACCESSIBILITY_NO,gap.getImportantForAccessibility());

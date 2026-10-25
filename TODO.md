@@ -802,3 +802,9 @@ Verificación del checkpoint Desktop: suite host424 PASS; política Chromium61 m
 - [x] Ambos fixes preservados: Desktop54ec816 y crash3d72ea2, no incluidos en APK0f6c610.
 - [x] Identidad nativa (favicon/dominio/título) en mGap y máscara decorativa de esquinas16dp, sin clipping ni cambios de gesto64/120, colores, input o píldoras.198 Android/Robolectric y18 host PASS; SDK/preparación/parche incremental reproducible PASS.
 - [ ] APK y validación física real (incluido SurfaceView/máscaras, crash y marco Desktop). Evidencia y límites: docs/validation/R5_FINAL_REVEAL_UI.md.
+
+## 25-oct-2026 — Refresh y acceso a omnibar desde reveal
+
+- [x] Corrección local: gap/máscara estables entre gestos, alta/baja diferida en la cola UI para evitar mutaciones del árbol durante reset/render. Crash de recorrido confirmado; aceptación Samsung pendiente.
+- [x] Sólo primera fila favicon/sitio abre el editor nativo actual; restaura controles, sin cambiar diseño ni política de scroll.202 Android/Robolectric,6 host y preparación SDK PASS; parche incremental reproducible.
+- [ ] APK y refresh real repetido, teclado/foco y recuperación al scroll. Evidencia: docs/validation/R5_REFRESH_FOLLOWUP.md. Un build incremental autorizado, sin reintentos automáticos.
