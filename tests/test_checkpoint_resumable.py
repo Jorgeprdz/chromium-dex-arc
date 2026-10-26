@@ -24,6 +24,8 @@ class ResumeTests(unittest.TestCase):
     self.send_header('Content-Length',str(b-a+1));self.end_headers()
     data=DATA[a:b+1]
     if owner.mode=='corrupt':data=b'!'+data[1:]
+    if owner.mode=='drip_cut' and len(data)>65536:
+     self.wfile.write(data[:65536]);self.wfile.flush();self.connection.shutdown(socket.SHUT_RDWR);self.connection.close();return
     if owner.mode=='cut' and not owner.cut:
      owner.cut=True;self.wfile.write(data[:131072]);self.wfile.flush();self.connection.shutdown(socket.SHUT_RDWR);self.connection.close();return
     self.wfile.write(data)
@@ -57,6 +59,27 @@ class ResumeTests(unittest.TestCase):
   self.mode='503'
   with self.assertRaises(RuntimeError):self.download(recovery_limit=2)
   self.assertEqual(len(self.calls),3)
+ def test_progress_between_cuts_does_not_exhaust_no_progress_limit(self):
+  self.mode='drip_cut';self.download()
+  self.assertEqual(self.path.read_bytes(),DATA)
+  progress=json.loads(self.path.with_name(self.path.name+'.progress.json').read_text())
+  self.assertGreater(progress['recoveries'],8)
+ def test_total_recoveries_still_stop_progressive_failures(self):
+  self.mode='drip_cut'
+  with self.assertRaises(RuntimeError):self.download(max_recoveries=2)
+  self.assertEqual(len(self.calls),3)
+ def test_http_status_is_recorded_without_signed_url(self):
+  self.mode='503'
+  with self.assertRaises(RuntimeError):self.download(recovery_limit=0)
+  progress=json.loads(self.path.with_name(self.path.name+'.progress.json').read_text())
+  self.assertEqual(progress['events'][0]['http_status'],503)
+  self.assertNotIn('http://',json.dumps(progress))
+ def test_workflow_bounds_transfer_and_publishes_small_diagnostics(self):
+  text=(ROOT/'.github/workflows/archium-r5-stage.yml').read_text()
+  step=text.split('      - name: S1 download exactly the verified checkpoint groups',1)[1].split('      - name: S1 restore once',1)[0]
+  self.assertIn('timeout-minutes: 100',step)
+  self.assertIn('Publish bounded transport diagnostics',text)
+  self.assertIn('archium-checkpoint-transfers/*.progress.json',text)
  def test_corrupt_complete_download_is_not_accepted(self):
   self.mode='corrupt'
   with self.assertRaisesRegex(ValueError,'hash'):self.download()

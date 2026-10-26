@@ -18,7 +18,9 @@ def artifact_url(repository, artifact_id):
         allow_redirects=False, timeout=(15, 30))
     try:
         if response.status_code in (408, 429, 500, 502, 503, 504):
-            raise requests.ConnectionError(f'Artifact authorization HTTP {response.status_code}')
+            error = requests.ConnectionError('Artifact authorization transient failure')
+            error.http_status = response.status_code
+            raise error
         if response.status_code != 302:
             raise RuntimeError(f'Artifact authorization HTTP {response.status_code}')
         url = response.headers['Location']
@@ -30,16 +32,18 @@ def artifact_url(repository, artifact_id):
 
 
 def download_archive(group, path, repository, deadline, *, get_url=None,
-                     chunk_bytes=32 * 1024 * 1024, recovery_limit=8, pause=time.sleep):
+                     chunk_bytes=32 * 1024 * 1024, recovery_limit=8, max_recoveries=32, pause=time.sleep):
     """Resume bytes in this job/process, cap recoveries, then verify full ZIP SHA256.
 
+    At most8 consecutive no-progress recoveries and32 total recoveries per group.
     Files and immutable identity sidecar survive network failures. They are not a
     cache across ephemeral runners. No extraction is permitted before full hash PASS.
     """
     identity = {key: group[key] for key in ('id', 'name', 'size_in_bytes', 'digest')}
     size = identity['size_in_bytes']
     if (type(size) is not int or size <= 0 or not re.fullmatch(r'sha256:[0-9a-f]{64}', identity['digest'])
-            or not 0 < chunk_bytes <= 32 * 1024 * 1024 or not 0 <= recovery_limit <= 8):
+            or not 0 < chunk_bytes <= 32 * 1024 * 1024 or not 0 <= recovery_limit <= 8
+            or not 0 <= max_recoveries <= 32):
         raise ValueError('Invalid bounded artifact transfer')
     if time.monotonic() >= deadline:
         raise TimeoutError('Checkpoint transfer budget exhausted')
@@ -69,17 +73,20 @@ def download_archive(group, path, repository, deadline, *, get_url=None,
     url = None
     url_at = 0
     recoveries = 0
+    no_progress = 0
     events = []
     last_report = 0
     def record(status):
         progress.write_text(json.dumps(dict(artifact_id=identity['id'], bytes=offset,
-            expected_bytes=size, recoveries=recoveries, status=status, events=events), indent=2) + '\n')
+            expected_bytes=size, recoveries=recoveries, no_progress_failures=no_progress,
+            max_recoveries=max_recoveries, status=status, events=events), indent=2) + '\n')
     while offset < size:
         if time.monotonic() >= deadline:
             record('BUDGET_EXHAUSTED')
             raise TimeoutError('Checkpoint transfer budget exhausted')
         end = min(size - 1, offset + chunk_bytes - 1)
         response = None
+        attempt_start = offset
         try:
             if url is None or time.monotonic() - url_at >= 40:
                 url = get_url() if get_url else artifact_url(repository, identity['id'])
@@ -88,7 +95,9 @@ def download_archive(group, path, repository, deadline, *, get_url=None,
                 'Range': f'bytes={offset}-{end}', 'Accept-Encoding': 'identity'},
                 stream=True, timeout=(15, 30))
             if response.status_code in (403, 408, 429, 500, 502, 503, 504):
-                raise requests.ConnectionError(f'HTTP_{response.status_code}')
+                error = requests.ConnectionError('Artifact response transient failure')
+                error.http_status = response.status_code
+                raise error
             if (response.status_code != 206 or response.headers.get('Content-Range') != f'bytes {offset}-{end}/{size}'
                     or response.headers.get('Content-Encoding', 'identity') != 'identity'):
                 raise ValueError(f'Artifact Range rejected: HTTP {response.status_code}')
@@ -111,16 +120,23 @@ def download_archive(group, path, repository, deadline, *, get_url=None,
                 output.flush()
             if offset != end + 1:
                 raise requests.ConnectionError('TruncatedRange')
+            no_progress = 0
         except requests.RequestException as error:
             # Do not include exception text: requests can embed signed URLs in it.
-            events.append(dict(offset=offset, error=type(error).__name__))
+            advanced = offset - attempt_start
+            no_progress = 0 if advanced > 0 else no_progress + 1
+            events.append(dict(offset=offset, error=type(error).__name__,
+                               http_status=getattr(error, 'http_status', None), bytes_received=advanced))
             record('NETWORK_INTERRUPTED')
-            if recoveries >= recovery_limit:
+            if recovery_limit == 0 or no_progress > recovery_limit or recoveries >= max_recoveries:
                 raise RuntimeError(f'Checkpoint network recovery limit reached: artifact={identity["id"]} bytes={offset}') from None
             recoveries += 1
             url = None
-            print(f'CHECKPOINT_NETWORK_RESUME id={identity["id"]} offset={offset} recovery={recoveries}/{recovery_limit}', flush=True)
-            pause(min(2 ** recoveries, 10))
+            print(f'CHECKPOINT_NETWORK_RESUME id={identity["id"]} offset={offset} recovery={recoveries}/{max_recoveries} no_progress={no_progress}/{recovery_limit}', flush=True)
+            pause(min(2 ** min(no_progress + 1, 6), 60))
+        except TimeoutError:
+            record('BUDGET_EXHAUSTED')
+            raise
         finally:
             if response is not None:
                 response.close()
