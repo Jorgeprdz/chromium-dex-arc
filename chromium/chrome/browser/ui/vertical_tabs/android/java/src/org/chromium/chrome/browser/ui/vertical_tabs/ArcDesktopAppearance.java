@@ -88,17 +88,18 @@ public final class ArcDesktopAppearance {
     }
 
     public static boolean isDesktopWindow(Context context) {
+        context = visualContext(context);
         int mode = getUiMode(context);
         if (mode == ArcDesktopPolicy.MODE_ARC) return true;
         if (mode == ArcDesktopPolicy.MODE_MOBILE) return false;
         Configuration config = context.getResources().getConfiguration();
-        boolean desktop = config.smallestScreenWidthDp >= 600
-                || (config.uiMode & Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_DESK
-                || context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_PC);
+        if ((config.uiMode & Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_DESK
+                || context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_PC)) return true;
+        boolean desktop = config.smallestScreenWidthDp >= 600;
         if (context instanceof Activity activity) {
             Display display = activityDisplay(activity);
-            desktop |= activity.isInMultiWindowMode()
-                    || (display != null && display.getDisplayId() != Display.DEFAULT_DISPLAY);
+            if (display != null && display.getDisplayId() != Display.DEFAULT_DISPLAY) return true;
+            desktop |= activity.isInMultiWindowMode();
         }
         return desktop && ArcDesktopPolicy.isArcWindow(mode,
                 ArchiumWindowMetrics.currentWidthDp(context));

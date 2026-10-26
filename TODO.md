@@ -824,3 +824,11 @@ Verificación del checkpoint Desktop: suite host424 PASS; política Chromium61 m
 - [x] Causa CI:1/447 host falló por contrato textual antiguo de contraste; restore/build omitidos, sin APK ni instalación. RED local reproducido; contrato actualizado al backing derivado,6+5 pruebas relacionadas PASS, sin modificar producción/parche ni relajar gates.
 - [x] Android registró aviso de fallo pero canal anterior silencioso. Canal dedicado con sonido configurado y aviso reenviado; wrapper persistente actualizado. Entrega API no equivale a sonido/heads-up, que dependen del sistema.
 - [ ] Nuevo build requiere autorización; suite completa y aceptación de candidato físico pendientes. Evidencia: docs/validation/R5_REPORT_FIXES_20261025.md.
+
+## 26-oct-2026 — Googlebook Desktop / Android Mobile y videoconferencias
+
+- [x] Implementación candidata: identidad por modo real mediante política RDS existente y excepciones nativas; UA reducido Googlebook/CH Android, versión derivada, arquitectura real; ventana externa permanece Desktop al estrechar. Sin cambios de diseño, viewport, GPU o sesiones.
+- [x] Integración del selector público Android con el backend MediaProjection/WebRTC upstream: consentimiento por sesión, elección de pantalla/aplicación del sistema, cancelación/lifecycle y restricciones conservadas. Document PiP reutiliza Activity/ventana upstream Android17 con capacidad por documento Desktop, sin participantes simulados ni overlay SAW.
+- [x] Local:10 pruebas focalizadas,19 appearance y204 phone/Robolectric PASS; SDK/preparación/parche y pruebas de transición registradas. Suite host final457/457 PASS; estado de CI se registra en la evidencia y no equivale a una reunión real.
+- [ ] PENDING: APK/nativo y validación física de las tres modalidades, cámara/mic/pantalla simultáneos con otro participante, PiP/auto-PiP, DeX↔Phone, excepciones/redirecciones y rendimiento. Sin consentimiento silencioso, fake getDisplayMedia ni paridad afirmada. Un único build incremental autorizado; no reintentos ni limpieza de checkpoints.
+- Detalle y límites: [GOOGLEBOOK_CONFERENCING_20261026.md](docs/validation/GOOGLEBOOK_CONFERENCING_20261026.md).

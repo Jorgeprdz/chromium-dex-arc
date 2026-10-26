@@ -1,0 +1,28 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width">
+<title>Archium conferencing — physical acceptance fixture</title>
+<style>body{font:16px system-ui;background:#18212b;color:#fff;margin:24px}button{padding:12px;margin:6px}video{width:44%;max-height:320px;background:#000}pre{white-space:pre-wrap;overflow-wrap:anywhere}</style>
+<h1>Conferencing acceptance fixture</h1>
+<p>Real browser APIs. Nothing starts without a button press and native consent. Loopback frames do not establish acceptance in a real meeting with another participant.</p>
+<button id="front">Front camera + microphone</button><button id="back">Rear camera + microphone</button>
+<button id="share">Share: choose phone, external display or application</button><button id="stopShare">Stop only presentation</button>
+<button id="pip">Document PiP</button><button id="stopAll">Stop fixture tracks</button><button id="export">Export evidence</button>
+<div id="videos"><video id="camera" autoplay muted playsinline></video><video id="screen" autoplay muted playsinline></video><div id="received"></div></div>
+<pre id="log"></pre>
+<script>
+'use strict';
+let cameraStream,screenStream,pc1,pc2,pipWindow;const records=[];
+const log=(event,data={})=>{records.push({time:new Date().toISOString(),event,...data});document.querySelector('#log').textContent=JSON.stringify(records,null,2);};
+const tracks=stream=>stream?.getTracks().map(t=>({id:t.id,kind:t.kind,enabled:t.enabled,state:t.readyState,settings:t.getSettings()}))||[];
+async function identity(){const hints=await navigator.userAgentData?.getHighEntropyValues(['architecture','bitness','model','platformVersion','fullVersionList']);log('identity',{ua:navigator.userAgent,platform:navigator.platform,lowEntropy:navigator.userAgentData?.toJSON(),hints,headers:await(await fetch('/headers')).json(),documentPip:'documentPictureInPicture'in window});}
+async function relay(){pc1?.close();pc2?.close();pc1=new RTCPeerConnection();pc2=new RTCPeerConnection();const left=pc1,right=pc2;
+ left.onicecandidate=e=>{if(e.candidate)right.addIceCandidate(e.candidate).catch(e=>log('ice-error',{error:String(e)}));};right.onicecandidate=e=>{if(e.candidate)left.addIceCandidate(e.candidate).catch(e=>log('ice-error',{error:String(e)}));};
+ document.querySelector('#received').replaceChildren();right.ontrack=e=>{if(e.track.kind!=='video')return;const video=document.createElement('video');video.autoplay=true;video.muted=true;video.playsInline=true;video.srcObject=new MediaStream([e.track]);document.querySelector('#received').append(video);let count=0;const frame=()=>{count++;if(count===1||count%120===0)log('loopback-decoded-video',{track:e.track.id,frames:count,width:video.videoWidth,height:video.videoHeight,scope:'local peer only, NOT real meeting'});if(e.track.readyState==='live')video.requestVideoFrameCallback(frame);};video.requestVideoFrameCallback(frame);};
+ for(const stream of [cameraStream,screenStream])for(const track of stream?.getTracks()||[])if(track.readyState==='live')left.addTrack(track,stream);
+ await left.setLocalDescription(await left.createOffer());await right.setRemoteDescription(left.localDescription);await right.setLocalDescription(await right.createAnswer());await left.setRemoteDescription(right.localDescription);
+}
+async function startCamera(facingMode){const next=await navigator.mediaDevices.getUserMedia({video:{facingMode:{ideal:facingMode}},audio:true});cameraStream?.getTracks().forEach(t=>t.stop());cameraStream=next;document.querySelector('#camera').srcObject=next;log('camera-mic',{tracks:tracks(next)});await relay();}
+async function share(){const prior=tracks(cameraStream);try{const next=await navigator.mediaDevices.getDisplayMedia({video:true,audio:false});screenStream=next;document.querySelector('#screen').srcObject=next;next.getVideoTracks()[0].addEventListener('ended',()=>log('presentation-ended',{cameraAfter:tracks(cameraStream)}));log('presentation-started',{screen:tracks(next),cameraBefore:prior,cameraAfter:tracks(cameraStream)});await relay();}catch(e){log('presentation-rejected',{name:e.name,error:e.message,cameraBefore:prior,cameraAfter:tracks(cameraStream)});}}
+async function pip(){if(!window.documentPictureInPicture){log('document-pip-unavailable');return;}pipWindow=await documentPictureInPicture.requestWindow({width:480,height:320});const node=document.querySelector('#videos');pipWindow.document.body.append(node);pipWindow.addEventListener('pagehide',()=>{document.body.insertBefore(node,document.querySelector('#log'));log('pip-closed',{camera:tracks(cameraStream),screen:tracks(screenStream)});},{once:true});log('pip-open',{camera:tracks(cameraStream),screen:tracks(screenStream)});}
+for(const[id,fn]of Object.entries({front:()=>startCamera('user'),back:()=>startCamera('environment'),share,pip,stopShare:async()=>{screenStream?.getTracks().forEach(t=>t.stop());log('stop-presentation-only',{camera:tracks(cameraStream)});await relay();},stopAll:()=>{screenStream?.getTracks().forEach(t=>t.stop());cameraStream?.getTracks().forEach(t=>t.stop());pc1?.close();pc2?.close();pipWindow?.close();log('fixture-stopped');},export:()=>{const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(records,null,2)],{type:'application/json'}));a.download='archium-conferencing-evidence.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);}})){document.getElementById(id).onclick=()=>Promise.resolve().then(fn).catch(e=>log('error',{name:e.name,message:e.message}));}
+identity().catch(e=>log('identity-error',{error:String(e)}));
+</script>

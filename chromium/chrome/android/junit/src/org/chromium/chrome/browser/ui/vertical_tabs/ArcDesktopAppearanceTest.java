@@ -122,6 +122,19 @@ public class ArcDesktopAppearanceTest {
     }
 
     @Test
+    public void narrowExternalWindowKeepsDesktopAndExplicitMobileStillWins() {
+        Activity activity = windowActivity(Robolectric.buildActivity(Activity.class).setup().get());
+        ArcDesktopAppearance.preferences(activity).edit().remove(ArcDesktopAppearance.UI_MODE_KEY).commit();
+        activity.getResources().getConfiguration().screenWidthDp = 320;
+        doReturn(externalDisplay()).when(activity).getDisplay();
+        assertTrue(ArcDesktopAppearance.isDesktopWindow(activity));
+        ArcDesktopAppearance.setUiMode(activity, ArcDesktopPolicy.MODE_MOBILE);
+        assertFalse(ArcDesktopAppearance.isDesktopWindow(activity));
+        ArcDesktopAppearance.preferences(activity).edit().remove(ArcDesktopAppearance.UI_MODE_KEY).commit();
+        activity.finish();
+    }
+
+    @Test
     public void externalDisplayBeforeAndAfterAttach() {
         ActivityController<Activity> controller = Robolectric.buildActivity(Activity.class).create();
         Activity activity = windowActivity(controller.get());

@@ -2070,6 +2070,34 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/SwipeRefreshHan
          cancelStopRefreshingRunnable();
          if (mSwipeRefreshLayout != null) mSwipeRefreshLayout.reset();
          if (mNavigationCoordinator != null) mNavigationCoordinator.reset();
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/app/tab_activity_glue/ActivityTabWebContentsDelegateAndroid.java b/chrome/android/java/src/org/chromium/chrome/browser/app/tab_activity_glue/ActivityTabWebContentsDelegateAndroid.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/app/tab_activity_glue/ActivityTabWebContentsDelegateAndroid.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/app/tab_activity_glue/ActivityTabWebContentsDelegateAndroid.java
+@@ -281,14 +281,20 @@
+         // Skip opening a new Tab if it doesn't make sense.
+         if (mTab.isClosing()) return false;
+
+-        if (ChromeFeatureList.isEnabled(ChromeFeatureList.DOCUMENT_PICTURE_IN_PICTURE_API)
+-                && disposition == WindowOpenDisposition.NEW_PICTURE_IN_PICTURE) {
++        // Document-level capability is enabled by the owning Archium window, not
++        // DeviceInfo.isDesktop(). Never treat a rejected PiP disposition as a tab.
++        if (disposition == WindowOpenDisposition.NEW_PICTURE_IN_PICTURE) {
+             assertNonNull(pictureInPictureWindowOptions);
+-            if (!isDocumentPictureInPictureEnabled()) {
++            if (mActivity == null
++                    || !org.chromium.chrome.browser.desktop_site.DesktopSiteUtils
++                            .isArchiumDocumentPipEnabled(mActivity)
++                    || !isDocumentPictureInPictureEnabled()) {
+                 return false;
+             }
+
+-            return PopupCreatorFactory.getInstance()
++            // Reuse the upstream app implementation directly. The factory in this
++            // revision can be unregistered in non-Googlebook browser Activities.
++            return new PopupCreatorImpl()
+                     .moveWebContentsToNewDocumentPictureInPictureWindow(
+                             mActivity, webContents, pictureInPictureWindowOptions);
+         }
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/compositor/CompositorView.java b/chrome/android/java/src/org/chromium/chrome/browser/compositor/CompositorView.java
 --- a/chrome/android/java/src/org/chromium/chrome/browser/compositor/CompositorView.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/compositor/CompositorView.java
@@ -2778,6 +2806,209 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/fullscreen/Brow
          return mRendererBottomControlsMinHeightOffset;
      }
 
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/media/MediaCapturePickerHeadlessFragment.java b/chrome/android/java/src/org/chromium/chrome/browser/media/MediaCapturePickerHeadlessFragment.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/media/MediaCapturePickerHeadlessFragment.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/media/MediaCapturePickerHeadlessFragment.java
+@@ -84,23 +84,47 @@
+                 registerForActivityResult(
+                         new ActivityResultContracts.StartActivityForResult(),
+                         result -> {
+-                            assert mNextDelegate != null;
++                            Delegate delegate = mNextDelegate;
++                            mNextDelegate = null;
++                            // Activity recreation/cancellation can leave a late result with
++                            // no live native request. Never reuse its consent token.
++                            if (delegate == null) return;
+                             if (result.getResultCode() == Activity.RESULT_OK
+                                     && result.getData() != null) {
+                                 // There is currently no way to differentiate between window and
+                                 // screen sharing.
+-                                mNextDelegate.onPicked(CaptureAction.CAPTURE_WINDOW, result);
++                                delegate.onPicked(CaptureAction.CAPTURE_WINDOW, result);
+                             } else {
+-                                mNextDelegate.onPicked(CaptureAction.CAPTURE_CANCELLED, result);
++                                delegate.onPicked(CaptureAction.CAPTURE_CANCELLED, result);
+                             }
+-                            mNextDelegate = null;
+                         });
+     }
+
++    @Override
++    public void onDestroy() {
++        Delegate delegate = mNextDelegate;
++        mNextDelegate = null;
++        if (delegate != null) {
++            delegate.onPicked(CaptureAction.CAPTURE_CANCELLED,
++                    new ActivityResult(Activity.RESULT_CANCELED, null));
++        }
++        super.onDestroy();
++    }
++
+     public void startAndroidCapturePrompt(Delegate delegate, @Nullable Intent intent) {
+-        assert mNextDelegate == null;
++        if (mNextDelegate != null) {
++            delegate.onPicked(CaptureAction.CAPTURE_CANCELLED,
++                    new ActivityResult(Activity.RESULT_CANCELED, null));
++            return;
++        }
+         mNextDelegate = delegate;
+-        mLauncher.launch(
+-                intent != null ? intent : mMediaProjectionManager.createScreenCaptureIntent());
++        try {
++            mLauncher.launch(
++                    intent != null ? intent : mMediaProjectionManager.createScreenCaptureIntent());
++        } catch (RuntimeException unavailable) {
++            mNextDelegate = null;
++            delegate.onPicked(CaptureAction.CAPTURE_CANCELLED,
++                    new ActivityResult(Activity.RESULT_CANCELED, null));
++        }
+     }
+ }
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/media/MediaCapturePickerInvoker.java b/chrome/android/java/src/org/chromium/chrome/browser/media/MediaCapturePickerInvoker.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/media/MediaCapturePickerInvoker.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/media/MediaCapturePickerInvoker.java
+@@ -9,6 +9,7 @@
+ import android.app.Activity;
+ import android.content.Context;
+ import android.content.Intent;
++import android.media.projection.MediaProjectionManager;
+
+ import androidx.activity.result.ActivityResult;
+ import androidx.fragment.app.FragmentActivity;
+@@ -22,7 +23,7 @@
+ import org.chromium.content_public.browser.WebContents;
+ import org.chromium.content_public.browser.media.capture.ScreenCapture;
+
+-/** Stub for the new media capture picker UI. */
++/** Media picker bridge, with the public Android consent flow for unbranded builds. */
+ @NullMarked
+ public class MediaCapturePickerInvoker {
+     private static final String TAG = "MediaCapture";
+@@ -71,10 +72,55 @@
+             delegate.onCancel();
+             return;
+         }
+-        Log.e(TAG, "PickerInvoker: No PickerDelegate, cancel request");
+-        MediaCapturePickerManager.recordPreShowFailure(
+-                MediaCapturePickerManager.PreShowFailure.PICKER_DELEGATE_NULL_ERROR);
+-        delegate.onCancel();
++        showSystemPicker(context, params, delegate);
++    }
++
++    // The public Android chooser cannot filter individual browser tabs or guarantee
++    // a window-only choice. Fail closed for enterprise/source restrictions instead
++    // of silently offering a monitor forbidden by the request. excludeSelfBrowserSurface
++    // filters browser tabs only; the system picker does not enumerate browser tabs.
++    static boolean canUseSystemPicker(MediaCapturePickerManager.Params params) {
++        return params.allowedCaptureLevel == AllowedScreenCaptureLevel.DESKTOP
++                && !params.captureThisTab && !params.excludeMonitorTypeSurfaces;
++    }
++
++    private static void showSystemPicker(
++            Context context, MediaCapturePickerManager.Params params,
++            MediaCapturePickerManager.Delegate delegate) {
++        Activity activity = ContextUtils.activityFromContext(context);
++        MediaProjectionManager manager =
++                (MediaProjectionManager) context.getSystemService(Context.MEDIA_PROJECTION_SERVICE);
++        if (!(activity instanceof FragmentActivity fragmentActivity)
++                || activity.isFinishing() || activity.isDestroyed() || manager == null
++                || params.webContents.isDestroyed() || !canUseSystemPicker(params)) {
++            delegate.onCancel();
++            return;
++        }
++        try {
++            MediaCapturePickerHeadlessFragment.getInstance(fragmentActivity)
++                    .startAndroidCapturePrompt((action, result) -> {
++                        if (!delegate.isActive()) return;
++                        if (action == CaptureAction.CAPTURE_CANCELLED
++                                || params.webContents.isDestroyed()) {
++                            delegate.onCancel();
++                            MediaCapturePickerManager.recordResult(
++                                    MediaCapturePickerManager.Result.CANCELLED);
++                            return;
++                        }
++                        // Pass the unmodified, single-use consent token to upstream.
++                        // Android owns phone / DeX display / application selection.
++                        // TYPE_WINDOW and TYPE_SCREEN both use DesktopCapturerAndroid;
++                        // the public result does not expose which source was selected.
++                        ScreenCapture.onPick(params.webContents, result);
++                        delegate.onPickWindow();
++                        MediaCapturePickerManager.recordResult(
++                                MediaCapturePickerManager.Result.WINDOW_SELECTED);
++                    }, manager.createScreenCaptureIntent());
++        } catch (android.content.ActivityNotFoundException | IllegalStateException
++                | SecurityException unavailable) {
++            Log.e(TAG, "Cannot launch Android capture consent", unavailable);
++            delegate.onCancel();
++        }
+     }
+
+     private static void onPickAndroidCapturePrompt(
+@@ -84,6 +130,10 @@
+             WebContents webContents,
+             MediaCapturePickerManager.Delegate delegate,
+             MediaCapturePickerDelegate impl) {
++        if (!delegate.isActive()) {
++            impl.onFinish(webContents);
++            return;
++        }
+         Log.d(TAG, "PickerInvoker: AndroidCapturePrompt received user action %d", action);
+         if (action == CaptureAction.CAPTURE_CANCELLED) {
+             delegate.onCancel();
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/media/MediaCapturePickerManager.java b/chrome/android/java/src/org/chromium/chrome/browser/media/MediaCapturePickerManager.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/media/MediaCapturePickerManager.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/media/MediaCapturePickerManager.java
+@@ -64,6 +64,9 @@
+
+     /** A delegate for handling returning the picker result. */
+     public interface Delegate extends MediaCapturePickerTabObserver.FilterDelegate {
++        /** False after the native request is gone (e.g. navigation or tab closure). */
++        default boolean isActive() { return true; }
++
+         /**
+          * Called when the user has selected a tab to share.
+          *
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/media/MediaCapturePickerManagerBridge.java b/chrome/android/java/src/org/chromium/chrome/browser/media/MediaCapturePickerManagerBridge.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/media/MediaCapturePickerManagerBridge.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/media/MediaCapturePickerManagerBridge.java
+@@ -84,7 +84,13 @@
+     }
+
+     @Override
++    public boolean isActive() {
++        return mNativeMediaCapturePickerManagerBridge != 0;
++    }
++
++    @Override
+     public void onPickTab(WebContents webContents, boolean audioShare) {
++        if (!isActive()) return;
+         Log.d(TAG, "PickerManagerBridge on pick tab");
+         // We know `mNativeMediaCapturePickerManagerBridge` is non-zero because
+         // `destroy` will only be called after the dialog is dismissed.
+@@ -95,6 +101,7 @@
+
+     @Override
+     public void onPickWindow() {
++        if (!isActive()) return;
+         Log.d(TAG, "PickerManagerBridge on pick window");
+         // We know `mNativeMediaCapturePickerManagerBridge` is non-zero because
+         // `destroy` will only be called after the dialog is dismissed.
+@@ -105,6 +112,7 @@
+
+     @Override
+     public void onPickScreen() {
++        if (!isActive()) return;
+         Log.d(TAG, "PickerManagerBridge on pick screen");
+         // We know `mNativeMediaCapturePickerManagerBridge` is non-zero because
+         // `destroy` will only be called after the dialog is dismissed.
+@@ -115,6 +123,7 @@
+
+     @Override
+     public void onCancel() {
++        if (!isActive()) return;
+         Log.d(TAG, "PickerManagerBridge on cancel");
+         // We know `mNativeMediaCapturePickerManagerBridge` is non-zero because
+         // `destroy` will only be called after the dialog is dismissed.
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/modaldialog/ChromeTabModalPresenter.java b/chrome/android/java/src/org/chromium/chrome/browser/modaldialog/ChromeTabModalPresenter.java
 --- a/chrome/android/java/src/org/chromium/chrome/browser/modaldialog/ChromeTabModalPresenter.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/modaldialog/ChromeTabModalPresenter.java
@@ -4808,6 +5039,142 @@ diff --git a/chrome/browser/android/compositor/scene_layer/static_tab_scene_laye
 
    raw_ptr<TabContentManager> tab_content_manager_;
    int background_color_;
+diff --git a/chrome/browser/android/content/BUILD.gn b/chrome/browser/android/content/BUILD.gn
+--- a/chrome/browser/android/content/BUILD.gn
++++ b/chrome/browser/android/content/BUILD.gn
+@@ -15,6 +15,9 @@
+     "//base:base_java",
+     "//build/android:build_java",
+     "//chrome/browser/profiles/android:java",
++    "//chrome/browser/ui/android/desktop_site:java",
++    "//ui/android:ui_no_recycler_view_java",
++    "//url:url_java",
+     "//content/public/android:content_java",
+     "//net/android:net_java",
+     "//third_party/jni_zero:jni_zero_java",
+diff --git a/chrome/browser/android/content/content_utils.cc b/chrome/browser/android/content/content_utils.cc
+--- a/chrome/browser/android/content/content_utils.cc
++++ b/chrome/browser/android/content/content_utils.cc
+@@ -3,11 +3,13 @@
+ // found in the LICENSE file.
+
+ #include "base/android/jni_string.h"
++#include "build/build_config.h"
+ #include "components/embedder_support/user_agent_utils.h"
+ #include "components/version_info/version_info.h"
+ #include "content/public/browser/web_contents.h"
+ #include "third_party/blink/public/common/features.h"
+ #include "third_party/blink/public/common/user_agent/user_agent_metadata.h"
++#include "url/android/gurl_android.h"
+
+ // Must come after all headers that specialize FromJniType() / ToJniType().
+ #include "chrome/browser/android/content/jni_headers/ContentUtils_jni.h"
+@@ -20,43 +22,30 @@
+     JNIEnv* env,
+     const base::android::JavaRef<jobject>& jweb_contents,
+     bool j_override_in_new_tabs) {
+-  constexpr char kLinuxInfoStr[] = "X11; Linux x86_64";
+-  constexpr char kChromeOSInfoStr[] = "X11; CrOS x86_64 14541.0.0";
+-
+-  bool spoof_as_chromeos = base::FeatureList::IsEnabled(
+-      blink::features::kAndroidDesktopUASpoofAsChromeOS);
+-  bool android_desktop_ua_platform =
+-      base::FeatureList::IsEnabled(blink::features::kAndroidDesktopUAPlatform);
+-
+-  // Note: Any updates to desktop overrides here should also be applied to
+-  // DESKTOP form factor defaults in embedder_support::GetUserAgentMetadata.
++  // Google's reduced Googlebook UA intentionally retains the CrOS platform token,
++  // while Client Hints identify Android and the real CPU. This is a WebContents
++  // override only; the native Android profile remains completely untouched.
+   const blink::UserAgentMetadata metadata =
+       embedder_support::GetUserAgentMetadata();
+-
+   blink::UserAgentOverride spoofed_ua;
+   spoofed_ua.ua_string_override =
+       embedder_support::BuildUserAgentFromOSAndProduct(
+-          spoof_as_chromeos ? kChromeOSInfoStr : kLinuxInfoStr,
+-          embedder_support::GetProductAndVersion());
++          "X11; CrOS x86_64 14541.0.0",
++          "Chrome/" + version_info::GetMajorVersionNumber() + ".0.0.0");
+   spoofed_ua.ua_metadata_override = metadata;
+-  spoofed_ua.ua_metadata_override->platform =
+-      android_desktop_ua_platform ? "Android"
+-                                  : (spoof_as_chromeos ? "Chrome OS" : "Linux");
+-  if (!android_desktop_ua_platform) {
+-    // Match content::GetOSVersion(false) on Linux. When the platform is
+-    // reported honestly as "Android", keep the real platform version from
+-    // GetUserAgentMetadata() for consistency with the non-override path.
+-    spoofed_ua.ua_metadata_override->platform_version = std::string();
+-  }
+-  spoofed_ua.ua_metadata_override->model = std::string();
++  spoofed_ua.ua_metadata_override->platform = "Android";
++  spoofed_ua.ua_metadata_override->model.clear();
+   spoofed_ua.ua_metadata_override->mobile = false;
+   spoofed_ua.ua_metadata_override->form_factors =
+       embedder_support::GetFormFactorsClientHint(metadata, /*is_mobile=*/false);
+-  // Match the above "CpuInfo" string, which is also the most common Linux
+-  // CPU architecture and bitness.
+-  spoofed_ua.ua_metadata_override->architecture =
+-      embedder_support::GetAndroidDesktopCpuArchitecture();
+-  spoofed_ua.ua_metadata_override->bitness = "64";
++#if defined(ARCH_CPU_ARM_FAMILY)
++  spoofed_ua.ua_metadata_override->architecture = "arm";
++#elif defined(ARCH_CPU_X86_FAMILY)
++  spoofed_ua.ua_metadata_override->architecture = "x86";
++#else
++  spoofed_ua.ua_metadata_override->architecture = metadata.architecture;
++#endif
++  spoofed_ua.ua_metadata_override->bitness = sizeof(void*) == 8 ? "64" : "32";
+   spoofed_ua.ua_metadata_override->wow64 = false;
+
+   content::WebContents::FromJavaWebContents(jweb_contents)
+diff --git a/chrome/browser/android/content/java/src/org/chromium/chrome/browser/content/ContentUtils.java b/chrome/browser/android/content/java/src/org/chromium/chrome/browser/content/ContentUtils.java
+--- a/chrome/browser/android/content/java/src/org/chromium/chrome/browser/content/ContentUtils.java
++++ b/chrome/browser/android/content/java/src/org/chromium/chrome/browser/content/ContentUtils.java
+@@ -4,11 +4,16 @@
+
+ package org.chromium.chrome.browser.content;
+
++import org.jni_zero.CalledByNative;
+ import org.jni_zero.JniType;
+ import org.jni_zero.NativeMethods;
+
+ import org.chromium.build.annotations.NullMarked;
+ import org.chromium.content_public.browser.WebContents;
++import org.chromium.chrome.browser.desktop_site.DesktopSiteUtils;
++import org.chromium.chrome.browser.profiles.Profile;
++import org.chromium.ui.base.WindowAndroid;
++import org.chromium.url.GURL;
+
+ /** A utility class to expose content functionality. */
+ @NullMarked
+@@ -30,6 +35,26 @@
+         ContentUtilsJni.get().setUserAgentOverride(webContents, overrideInNewTabs);
+     }
+
++    /** Same per-window policy for renderer navigations as TabImpl uses for browser loads. */
++    @CalledByNative
++    private static int getArchiumUserAgentMode(WebContents webContents, @JniType("GURL") GURL url) {
++        WindowAndroid window = webContents.getTopLevelNativeWindow();
++        if (window == null) return -1;
++        android.content.Context context = window.getContext().get();
++        if (context == null) return -1;
++        Profile profile = Profile.fromWebContents(webContents);
++        if (profile == null) return -1;
++        return DesktopSiteUtils.shouldOverrideDesktopSite(profile, url, context) ? 1 : 0;
++    }
++
++    @CalledByNative
++    private static boolean isArchiumDocumentPipEnabled(WebContents webContents) {
++        WindowAndroid window = webContents.getTopLevelNativeWindow();
++        if (window == null) return false;
++        android.content.Context context = window.getContext().get();
++        return context != null && DesktopSiteUtils.isArchiumDocumentPipEnabled(context);
++    }
++
+     @NativeMethods
+     interface Natives {
+         @JniType("std::string")
 diff --git a/chrome/browser/autofill/android/BUILD.gn b/chrome/browser/autofill/android/BUILD.gn
 --- a/chrome/browser/autofill/android/BUILD.gn
 +++ b/chrome/browser/autofill/android/BUILD.gn
@@ -4907,6 +5274,107 @@ diff --git a/chrome/browser/chrome_content_browser_client.cc b/chrome/browser/ch
  }
 
  bool ChromeContentBrowserClientParts::OverrideWebPreferencesAfterNavigation(
+diff --git a/chrome/browser/content_settings/BUILD.gn b/chrome/browser/content_settings/BUILD.gn
+--- a/chrome/browser/content_settings/BUILD.gn
++++ b/chrome/browser/content_settings/BUILD.gn
+@@ -110,6 +110,7 @@
+     ]
+
+     deps += [
++      "//chrome/browser/android/content:jni_headers",
+       "//chrome/browser/notifications",
+       "//chrome/browser/notifications:notifications_java_enum_srcjar",
+     ]
+diff --git a/chrome/browser/content_settings/request_desktop_site_web_contents_observer_android.cc b/chrome/browser/content_settings/request_desktop_site_web_contents_observer_android.cc
+--- a/chrome/browser/content_settings/request_desktop_site_web_contents_observer_android.cc
++++ b/chrome/browser/content_settings/request_desktop_site_web_contents_observer_android.cc
+@@ -8,6 +8,7 @@
+
+ #include "base/android/android_info.h"
+ #include "base/android/device_info.h"
++#include "base/android/jni_android.h"
+ #include "base/command_line.h"
+ #include "base/feature_list.h"
+ #include "base/metrics/field_trial_params.h"
+@@ -24,8 +25,13 @@
+ #include "components/prefs/pref_service.h"
+ #include "content/public/browser/navigation_handle.h"
+ #include "content/public/common/content_features.h"
++#include "third_party/blink/public/common/runtime_feature_state/runtime_feature_state_context.h"
+ #include "services/metrics/public/cpp/ukm_builders.h"
+ #include "ui/display/screen.h"
++
++// JNI conversions must be available before the generated header.
++#include "url/android/gurl_android.h"
++#include "chrome/browser/android/content/jni_headers/ContentUtils_jni.h"
+
+ namespace rds_web_contents_observer {
+ // Keep in sync with UserAgentRequestType in tools/metrics/histograms/enums.xml.
+@@ -95,6 +101,17 @@
+       ShouldAllowOnExternalDisplay(is_global_setting);
+   desktop_mode |= should_allow_on_external_display;
+
++  // Keep renderer-initiated loads aligned with TabImpl's existing Java policy.
++  // Resolve the owning window, never the Split panel/container width. The override
++  // value is installed once by ContentUtils; toggling the navigation flag here
++  // does not reload the committed page or interrupt an active meeting.
++  int archium_mode = Java_ContentUtils_getArchiumUserAgentMode(
++      base::android::AttachCurrentThread(), web_contents()->GetJavaWebContents(),
++      url);
++  if (archium_mode >= 0) {
++    desktop_mode = archium_mode == 1;
++  }
++
+   // Override UA for renderer initiated navigation only. UA override for browser
+   // initiated navigation is handled on Java side. This is to workaround known
+   // issues crbug.com/40801643 and crbug.com/40799177.
+@@ -119,6 +136,23 @@
+   ukm::builders::Android_NonDefaultRdsPageLoad(source_id)
+       .SetUserAgentType(static_cast<int>(user_agent_request_type))
+       .Record(ukm::UkmRecorder::Get());
++}
++
++void RequestDesktopSiteWebContentsObserverAndroid::ReadyToCommitNavigation(
++    content::NavigationHandle* navigation_handle) {
++  if (!navigation_handle->IsInOutermostMainFrame() ||
++      navigation_handle->IsSameDocument()) {
++    return;
++  }
++  // Apply after redirects (runtime overrides are cleared on redirect). Keep the
++  // process-wide Android default untouched, so phone documents do not expose the
++  // API. The upstream Activity, origin checks, system permissions and user gesture
++  // checks remain responsible for opening a real same-origin PiP WebContents.
++  navigation_handle->GetMutableRuntimeFeatureStateContext()
++      .SetDocumentPictureInPictureAPIEnabled(
++          Java_ContentUtils_isArchiumDocumentPipEnabled(
++              base::android::AttachCurrentThread(),
++              web_contents()->GetJavaWebContents()));
+ }
+
+ WEB_CONTENTS_USER_DATA_KEY_IMPL(RequestDesktopSiteWebContentsObserverAndroid);
+diff --git a/chrome/browser/content_settings/request_desktop_site_web_contents_observer_android.h b/chrome/browser/content_settings/request_desktop_site_web_contents_observer_android.h
+--- a/chrome/browser/content_settings/request_desktop_site_web_contents_observer_android.h
++++ b/chrome/browser/content_settings/request_desktop_site_web_contents_observer_android.h
+@@ -26,6 +26,7 @@
+   ~RequestDesktopSiteWebContentsObserverAndroid() override;
+
+   // content::WebContentsObserver implementation.
++  void ReadyToCommitNavigation(content::NavigationHandle* navigation_handle) override;
+   void DidStartNavigation(
+       content::NavigationHandle* navigation_handle) override;
+
+diff --git a/chrome/browser/media/webrtc/desktop_media_picker.cc b/chrome/browser/media/webrtc/desktop_media_picker.cc
+--- a/chrome/browser/media/webrtc/desktop_media_picker.cc
++++ b/chrome/browser/media/webrtc/desktop_media_picker.cc
+@@ -6,7 +6,7 @@
+
+ #if BUILDFLAG(IS_ANDROID)
+ // Enabled by Finch depending on form factor.
+-BASE_FEATURE(kAndroidMediaPicker, base::FEATURE_DISABLED_BY_DEFAULT);
++BASE_FEATURE(kAndroidMediaPicker, base::FEATURE_ENABLED_BY_DEFAULT);
+ #endif
+
+ DesktopMediaPicker::Params::Params(RequestSource request_source)
 diff --git a/chrome/browser/password_manager/BUILD.gn b/chrome/browser/password_manager/BUILD.gn
 --- a/chrome/browser/password_manager/BUILD.gn
 +++ b/chrome/browser/password_manager/BUILD.gn
@@ -5429,6 +5897,68 @@ diff --git a/chrome/browser/ui/android/appmenu/internal/java/src/org/chromium/ch
          popup.show();
          return new AppMenuPopup(popup);
      }
+diff --git a/chrome/browser/ui/android/desktop_site/BUILD.gn b/chrome/browser/ui/android/desktop_site/BUILD.gn
+--- a/chrome/browser/ui/android/desktop_site/BUILD.gn
++++ b/chrome/browser/ui/android/desktop_site/BUILD.gn
+@@ -15,6 +15,7 @@
+     "//chrome/browser/flags:java",
+     "//chrome/browser/preferences:java",
+     "//chrome/browser/profiles/android:java",
++    "//chrome/browser/ui/vertical_tabs:java",
+     "//components/browser_ui/site_settings/android:constants_java",
+     "//components/browser_ui/site_settings/android:java",
+     "//components/browser_ui/util/android:java",
+diff --git a/chrome/browser/ui/android/desktop_site/java/src/org/chromium/chrome/browser/desktop_site/DesktopSiteUtils.java b/chrome/browser/ui/android/desktop_site/java/src/org/chromium/chrome/browser/desktop_site/DesktopSiteUtils.java
+--- a/chrome/browser/ui/android/desktop_site/java/src/org/chromium/chrome/browser/desktop_site/DesktopSiteUtils.java
++++ b/chrome/browser/ui/android/desktop_site/java/src/org/chromium/chrome/browser/desktop_site/DesktopSiteUtils.java
+@@ -27,6 +27,7 @@
+ import org.chromium.chrome.browser.preferences.ChromePreferenceKeys;
+ import org.chromium.chrome.browser.preferences.ChromeSharedPreferences;
+ import org.chromium.chrome.browser.profiles.Profile;
++import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance;
+ import org.chromium.components.browser_ui.site_settings.SingleCategorySettingsConstants;
+ import org.chromium.components.browser_ui.site_settings.WebsitePreferenceBridge;
+ import org.chromium.components.browser_ui.util.ConversionUtils;
+@@ -214,26 +215,24 @@
+      * @param context The current context.
+      * @return Whether the desktop site should be overridden for the current URL.
+      */
++    /** Reuse Chromium's interactive Document PiP Activity only on supported desktop windows. */
++    public static boolean isArchiumDocumentPipEnabled(Context context) {
++        return Build.VERSION.SDK_INT >= 37 && ArcDesktopAppearance.isDesktopWindow(context);
++    }
++
+     public static boolean shouldOverrideDesktopSite(
+             Profile profile, @Nullable GURL url, Context context) {
+-        // For --request-desktop-sites, always override the user agent.
++        // A custom command-line UA is already the native identity. Do not replace it.
++        if (CommandLine.getInstance().hasSwitch("user-agent")) return false;
+         if (CommandLine.getInstance().hasSwitch(ChromeSwitches.REQUEST_DESKTOP_SITES)) {
+             return true;
+         }
+-
+-        // If domain/global setting is enabled and window setting should not
+-        // apply, override the user agent.
+-        if (readRequestDesktopSiteContentSettings(profile, url)
+-                && !shouldApplyWindowSetting(profile, url, context)) {
+-            return true;
+-        }
+-
+-        // Enable on large connected displays only when user has not explicitly set preference.
+-        if (isOnEligibleExternalDisplayForDesktopUA(context)
+-                && !hasUserUpdatedContentSettings(url, profile)) {
+-            return true;
+-        }
+-        return false;
++        // Reuse native per-site/global choices, including an explicit request for Android.
++        // Automatic tablet/window experiments must not override the actual Archium UI mode.
++        if (hasUserUpdatedContentSettings(url, profile)) {
++            return readRequestDesktopSiteContentSettings(profile, url);
++        }
++        return ArcDesktopAppearance.isDesktopWindow(context);
+     }
+
+     /**
 diff --git a/chrome/browser/ui/android/edge_to_edge/internal/java/src/org/chromium/chrome/browser/ui/edge_to_edge/EdgeToEdgeControllerImpl.java b/chrome/browser/ui/android/edge_to_edge/internal/java/src/org/chromium/chrome/browser/ui/edge_to_edge/EdgeToEdgeControllerImpl.java
 --- a/chrome/browser/ui/android/edge_to_edge/internal/java/src/org/chromium/chrome/browser/ui/edge_to_edge/EdgeToEdgeControllerImpl.java
 +++ b/chrome/browser/ui/android/edge_to_edge/internal/java/src/org/chromium/chrome/browser/ui/edge_to_edge/EdgeToEdgeControllerImpl.java
@@ -8871,6 +9401,47 @@ diff --git a/components/signin/public/android/java/src/org/chromium/components/s
      }
 
      @Override
+diff --git a/content/public/common/content_features.cc b/content/public/common/content_features.cc
+--- a/content/public/common/content_features.cc
++++ b/content/public/common/content_features.cc
+@@ -1556,7 +1556,7 @@
+ // This should not be enabled unless ENABLE_SCREEN_CAPTURE is on, otherwise
+ // it won't work.
+ // Enabled by Finch depending on form factor.
+-BASE_FEATURE(kUserMediaScreenCapturing, base::FEATURE_DISABLED_BY_DEFAULT);
++BASE_FEATURE(kUserMediaScreenCapturing, base::FEATURE_ENABLED_BY_DEFAULT);
+
+ // Enable timeout for TextClassifier calls. The timeout is configurable with a
+ // default of 200ms.
+diff --git a/third_party/blink/renderer/core/frame/navigator_id.cc b/third_party/blink/renderer/core/frame/navigator_id.cc
+--- a/third_party/blink/renderer/core/frame/navigator_id.cc
++++ b/third_party/blink/renderer/core/frame/navigator_id.cc
+@@ -59,6 +59,14 @@
+ }
+
+ String NavigatorID::platform() const {
++#if BUILDFLAG(IS_ANDROID)
++  // Match the reduced Googlebook platform for this document/worker's effective
++  // UA, not a global device flag. Native Android and custom identities keep the
++  // existing platform. Check before the per-thread native platform cache.
++  if (userAgent().contains("X11; CrOS x86_64 14541.0.0")) {
++    return "Linux x86_64";
++  }
++#endif
+ #if BUILDFLAG(IS_MAC)
+   // Match Safari and Mozilla on Mac x86.
+   return "MacIntel";
+diff --git a/third_party/blink/renderer/platform/runtime_enabled_features.json5 b/third_party/blink/renderer/platform/runtime_enabled_features.json5
+--- a/third_party/blink/renderer/platform/runtime_enabled_features.json5
++++ b/third_party/blink/renderer/platform/runtime_enabled_features.json5
+@@ -2579,6 +2579,7 @@
+     },
+     {
+       name: "DocumentPictureInPictureAPI",
++      browser_process_read_write_access: true,
+       status: {
+         "Android": "",
+         "default": "stable",
 diff --git a/ui/android/java/res/values/ids.xml b/ui/android/java/res/values/ids.xml
 --- a/ui/android/java/res/values/ids.xml
 +++ b/ui/android/java/res/values/ids.xml
@@ -20504,7 +21075,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/ui/vertical_ta
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearanceTest.java
-@@ -0,0 +1,187 @@
+@@ -0,0 +1,200 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -20626,6 +21197,19 @@ new file mode 100644
 +            activity.finish();
 +            other.finish();
 +        }
++    }
++
++    @Test
++    public void narrowExternalWindowKeepsDesktopAndExplicitMobileStillWins() {
++        Activity activity = windowActivity(Robolectric.buildActivity(Activity.class).setup().get());
++        ArcDesktopAppearance.preferences(activity).edit().remove(ArcDesktopAppearance.UI_MODE_KEY).commit();
++        activity.getResources().getConfiguration().screenWidthDp = 320;
++        doReturn(externalDisplay()).when(activity).getDisplay();
++        assertTrue(ArcDesktopAppearance.isDesktopWindow(activity));
++        ArcDesktopAppearance.setUiMode(activity, ArcDesktopPolicy.MODE_MOBILE);
++        assertFalse(ArcDesktopAppearance.isDesktopWindow(activity));
++        ArcDesktopAppearance.preferences(activity).edit().remove(ArcDesktopAppearance.UI_MODE_KEY).commit();
++        activity.finish();
 +    }
 +
 +    @Test
@@ -24781,7 +25365,7 @@ diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrom
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java
-@@ -0,0 +1,296 @@
+@@ -0,0 +1,297 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -24872,17 +25456,18 @@ new file mode 100644
 +    }
 +
 +    public static boolean isDesktopWindow(Context context) {
++        context = visualContext(context);
 +        int mode = getUiMode(context);
 +        if (mode == ArcDesktopPolicy.MODE_ARC) return true;
 +        if (mode == ArcDesktopPolicy.MODE_MOBILE) return false;
 +        Configuration config = context.getResources().getConfiguration();
-+        boolean desktop = config.smallestScreenWidthDp >= 600
-+                || (config.uiMode & Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_DESK
-+                || context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_PC);
++        if ((config.uiMode & Configuration.UI_MODE_TYPE_MASK) == Configuration.UI_MODE_TYPE_DESK
++                || context.getPackageManager().hasSystemFeature(PackageManager.FEATURE_PC)) return true;
++        boolean desktop = config.smallestScreenWidthDp >= 600;
 +        if (context instanceof Activity activity) {
 +            Display display = activityDisplay(activity);
-+            desktop |= activity.isInMultiWindowMode()
-+                    || (display != null && display.getDisplayId() != Display.DEFAULT_DISPLAY);
++            if (display != null && display.getDisplayId() != Display.DEFAULT_DISPLAY) return true;
++            desktop |= activity.isInMultiWindowMode();
 +        }
 +        return desktop && ArcDesktopPolicy.isArcWindow(mode,
 +                ArchiumWindowMetrics.currentWidthDp(context));
