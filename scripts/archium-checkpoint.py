@@ -205,7 +205,7 @@ def restore_actions(workspace, tag, folder, *, source_commit=None):
     wanted = {'checkpoint.json'} | {part['name'] for part in receipt['parts']}
     present = {item.name for item in folder.iterdir() if item.is_file()}
     if wanted != present:
-        raise ValueError('Incomplete or unexpected checkpoint artifacts')
+        raise ValueError(f'Incomplete or unexpected checkpoint artifacts: missing={sorted(wanted-present)} unexpected={sorted(present-wanted)}')
     for part in receipt['parts']:
         target = folder / part['name']
         if target.is_symlink() or not target.is_file() or target.stat().st_size != part['bytes']:

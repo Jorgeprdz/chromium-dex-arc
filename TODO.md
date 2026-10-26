@@ -838,3 +838,10 @@ Verificación del checkpoint Desktop: suite host424 PASS; política Chromium61 m
 - [x] Run40283988917 terminó por presupuesto:1357 tareas terminadas/0 fallidas/3676 pendientes en la invocación registrada. Checkpoint40283988917-1 publicado y metadata/manifest verificados (4 grupos/25 partes); sin APK/instalación. Hashes completos de partes siguen siendo gate de restauración CI.
 - [x] Petición del usuario: job6h, deadline5h55, dos ventanas120min y work budget5h; reserva1h para checkpoint+20min para subida conservada.32 pruebas focalizadas/routing PASS. Sin cambios Chromium, parche, GN args ni clean build.
 - [ ] PENDING: autorización para una única continuación desde ebfa0c6/checkpoint40283988917-1 sobre el nuevo SHA de presupuesto. No nuevo dispatch ni relanzamiento automático.
+
+## 26-oct-2026 — Descarga incremental completa antes de restaurar
+
+- [x] Run40325757970: preflight PASS; S1 rechazó inventario descargado antes de compilar. Se seleccionaron cuatro grupos; log confirma finalización sólo de00/02/03. No se ha demostrado corrupción de la fuente. Sin APK ni instalación.
+- [x] Descargas secuenciales por nombre validado, staging por grupo y comprobación de manifest SHA256 contra preflight, inventario exacto y tamaños. Fallos de transferencia se detienen sin reintentar. Restore conserva hashes de todas las partes y ahora informa nombres faltantes/inesperados. Sin cambios al producto, parche, GN ni checkpoint fuente.
+- [x] 65 pruebas focalizadas PASS: downloader7, checkpoint8, disco5, presupuesto3, monitor13, routing29.
+- [ ] Único relanzamiento incremental autorizado por el usuario; resultado CI/APK y aceptación física pendientes. Fuente40283988917-1/ebfa0c6; fallback40049206996-1 preservado.
