@@ -22,10 +22,10 @@ budget() {
     fi
     printf '%s' "$value"
 }
-slice_minutes=$(budget "${ARCHIUM_SLICE_MINUTES:-75}" 75)
+slice_minutes=$(budget "${ARCHIUM_SLICE_MINUTES:-120}" 120)
 max_slices=$(budget "${ARCHIUM_MAX_SLICES:-2}" 2)
 prepare_seconds=$(budget "${ARCHIUM_PREPARE_SECONDS:-3600}" 3600)
-work_seconds=$(budget "${ARCHIUM_WORK_SECONDS:-9000}" 9000)
+work_seconds=$(budget "${ARCHIUM_WORK_SECONDS:-18000}" 18000)
 host_seconds=$(budget "${ARCHIUM_HOST_SECONDS:-1800}" 1800)
 checkpoint_seconds=$(budget "${ARCHIUM_CHECKPOINT_SECONDS:-3600}" 3600)
 upload_seconds=$(budget "${ARCHIUM_UPLOAD_RESERVE_SECONDS:-1200}" 1200)
@@ -34,7 +34,7 @@ readonly prepared_marker="$RUNNER_TEMP/archium-recovery-prepared"
 readonly host_python="${ARCHIUM_HOST_PYTHON:-/usr/bin/python3}"
 job_started=$(date +%s)
 script_started=$SECONDS
-deadline="${ARCHIUM_JOB_DEADLINE_EPOCH:-$((job_started + 10800))}"
+deadline="${ARCHIUM_JOB_DEADLINE_EPOCH:-$((job_started + 21600))}"
 [[ "$deadline" =~ ^[1-9][0-9]{0,10}$ ]] || die 'Invalid job deadline.'
 initial_elapsed=0
 job_elapsed() { printf '%s' "$((initial_elapsed + SECONDS - script_started))"; }

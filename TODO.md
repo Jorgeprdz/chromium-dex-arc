@@ -832,3 +832,9 @@ Verificación del checkpoint Desktop: suite host424 PASS; política Chromium61 m
 - [x] Local:10 pruebas focalizadas,19 appearance y204 phone/Robolectric PASS; SDK/preparación/parche y pruebas de transición registradas. Suite host final457/457 PASS; estado de CI se registra en la evidencia y no equivale a una reunión real.
 - [ ] PENDING: APK/nativo y validación física de las tres modalidades, cámara/mic/pantalla simultáneos con otro participante, PiP/auto-PiP, DeX↔Phone, excepciones/redirecciones y rendimiento. Sin consentimiento silencioso, fake getDisplayMedia ni paridad afirmada. Un único build incremental autorizado; no reintentos ni limpieza de checkpoints.
 - Detalle y límites: [GOOGLEBOOK_CONFERENCING_20261026.md](docs/validation/GOOGLEBOOK_CONFERENCING_20261026.md).
+
+## 26-oct-2026 — Ventanas de compilación incremental
+
+- [x] Run40283988917 terminó por presupuesto:1357 tareas terminadas/0 fallidas/3676 pendientes en la invocación registrada. Checkpoint40283988917-1 publicado y metadata/manifest verificados (4 grupos/25 partes); sin APK/instalación. Hashes completos de partes siguen siendo gate de restauración CI.
+- [x] Petición del usuario: job6h, deadline5h55, dos ventanas120min y work budget5h; reserva1h para checkpoint+20min para subida conservada.32 pruebas focalizadas/routing PASS. Sin cambios Chromium, parche, GN args ni clean build.
+- [ ] PENDING: autorización para una única continuación desde ebfa0c6/checkpoint40283988917-1 sobre el nuevo SHA de presupuesto. No nuevo dispatch ni relanzamiento automático.

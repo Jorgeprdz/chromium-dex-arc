@@ -20,7 +20,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-24.04
-    timeout-minutes: 180
+    timeout-minutes: 360
     env:
       GH_TOKEN: ${{ github.token }}
       ARCHIUM_EXPECTED_SHA: ${{ inputs.expected_sha }}
@@ -29,7 +29,7 @@ jobs:
       ARCHIUM_CHECKPOINT_STORAGE: artifact
       ARCHIUM_SOURCE_RUN_ID: ${{ inputs.source_run_id }}
       ARCHIUM_CHECKPOINT_TAG: archium-checkpoint-${{ github.run_id }}-1
-      ARCHIUM_SLICE_MINUTES: '75'
+      ARCHIUM_SLICE_MINUTES: '120'
       ARCHIUM_MAX_SLICES: '2'
       ARCHIUM_CHECKPOINT_SECONDS: '3600'
       ARCHIUM_UPLOAD_RESERVE_SECONDS: '1200'
@@ -46,7 +46,7 @@ jobs:
           test "$ARCHIUM_EXPECTED_SHA" = "$GITHUB_SHA"
           [[ "$SOURCE_RUN_ID" =~ ^[0-9]+$ ]]
           [[ "$ARCHIUM_SOURCE_TAG" =~ ^archium-checkpoint-$SOURCE_RUN_ID-[0-9]+$ ]]
-          echo "ARCHIUM_JOB_DEADLINE_EPOCH=$(( $(date +%s) + 10500 ))" >> "$GITHUB_ENV"
+          echo "ARCHIUM_JOB_DEADLINE_EPOCH=$(( $(date +%s) + 21300 ))" >> "$GITHUB_ENV"
           echo "ARCHIUM_CHECKPOINT_DIR=$RUNNER_TEMP/archium-checkpoint" >> "$GITHUB_ENV"
           timeout 300s sudo apt-get update
           timeout 300s sudo apt-get install -y python3-requests python3-pil webp
