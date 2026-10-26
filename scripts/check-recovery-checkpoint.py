@@ -44,6 +44,32 @@ def validate_inventory(items, tag, source_sha, available_bytes, free_inodes):
     return groups
 
 
+
+def certified_manifest(groups, tag, source_sha, folder=None):
+    """Reuse an audited manifest only for identical immutable artifact IDs/digests.
+
+    API inventory/expiry/source checks run first. Actual downloaded manifest and every
+    part hash are still mandatory downstream; this is not a successful restore receipt.
+    """
+    folder = folder or ROOT / 'config/checkpoint-receipts'
+    path = folder / (tag + '.json')
+    if not path.exists():
+        return None
+    receipt = json.loads(path.read_text())
+    fields = ('id', 'name', 'size_in_bytes', 'digest')
+    observed = [{key: group[key] for key in fields} for group in groups]
+    if (receipt.get('schema') != 1 or receipt.get('source_tag') != tag
+            or receipt.get('source_sha') != source_sha or receipt.get('artifacts') != observed):
+        raise ValueError('Certified checkpoint artifact identity differs')
+    payload = receipt['manifest_json'].encode('utf-8')
+    if len(payload) > 65536 or hashlib.sha256(payload).hexdigest() != receipt['manifest_sha256']:
+        raise ValueError('Certified checkpoint manifest digest differs')
+    manifest = json.loads(payload)
+    if manifest.get('tag') != tag or manifest.get('commit') != source_sha:
+        raise ValueError('Certified checkpoint manifest source differs')
+    return payload
+
+
 def remote_manifest(artifact_id, repository, token):
     # Never print/store tokens or signed URLs. No unbounded fallback if Range fails.
     import requests
@@ -75,7 +101,7 @@ def remote_manifest(artifact_id, repository, token):
                                      r.headers.get('Content-Range', ''))
                 if r.status_code != 206 or not match or tuple(map(int, match.groups()[:2])) != (
                         start, start + length - 1):
-                    raise ValueError('HTTP Range unavailable; full download forbidden')
+                    raise ValueError(f'HTTP Range unavailable: status={r.status_code}; full download forbidden')
                 try:
                     data = r.raw.read(length + 1)
                 except Exception as error:
@@ -124,8 +150,13 @@ def main():
     free = capacity.f_frsize * capacity.f_bavail
     groups = validate_inventory(json.loads(args.artifacts.read_text())['artifacts'],
                                 args.source_tag, args.source_sha, free, capacity.f_favail)
-    payload, transferred = remote_manifest(groups[0]['id'], os.environ['GITHUB_REPOSITORY'],
-                                           os.environ['GH_TOKEN'])
+    payload = certified_manifest(groups, args.source_tag, args.source_sha)
+    transferred = 0
+    manifest_source = 'CERTIFIED_IMMUTABLE_ARTIFACT_RECEIPT'
+    if payload is None:
+        payload, transferred = remote_manifest(groups[0]['id'], os.environ['GITHUB_REPOSITORY'],
+                                               os.environ['GH_TOKEN'])
+        manifest_source = 'BOUNDED_REMOTE_READ'
     manifest = json.loads(payload)
     spec = importlib.util.spec_from_file_location('checkpoint', ROOT / 'scripts/archium-checkpoint.py')
     checkpoint = importlib.util.module_from_spec(spec)
@@ -141,7 +172,7 @@ def main():
         'source_tag': args.source_tag, 'source_sha': args.source_sha,
         'available_bytes': free, 'free_inodes': capacity.f_favail,
         'manifest_sha256': hashlib.sha256(payload).hexdigest(),
-        'bounded_bytes_read': transferred}, indent=2) + '\n')
+        'bounded_bytes_read': transferred, 'manifest_source': manifest_source}, indent=2) + '\n')
     print(f'CHECKPOINT_METADATA=PASS DISK_PREFLIGHT=PASS available={free} inodes={capacity.f_favail}', flush=True)
 
 

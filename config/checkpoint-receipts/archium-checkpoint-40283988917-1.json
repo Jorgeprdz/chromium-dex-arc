@@ -1,0 +1,34 @@
+{
+  "schema": 1,
+  "source_tag": "archium-checkpoint-40283988917-1",
+  "source_sha": "ebfa0c628230f888357d8f3c1f794ea103120462",
+  "artifacts": [
+    {
+      "id": 12639431995,
+      "name": "archium-checkpoint-40283988917-1-00",
+      "size_in_bytes": 8589940572,
+      "digest": "sha256:ce282a6f2fe55dd9d7e05c04de417a80aa3ceabd76cb38476a2651fc658e897e"
+    },
+    {
+      "id": 12638509582,
+      "name": "archium-checkpoint-40283988917-1-01",
+      "size_in_bytes": 8589935970,
+      "digest": "sha256:c4f2caa7056a4f17cccc4e84897e32ff3d67845276920ee9fa7ac3c68c72028f"
+    },
+    {
+      "id": 12638594887,
+      "name": "archium-checkpoint-40283988917-1-02",
+      "size_in_bytes": 8589935970,
+      "digest": "sha256:68bd3ae0d4e1c1e3b2e69ea7f277ed8b5c59da58d27a9c3ada207bb2e0788a9d"
+    },
+    {
+      "id": 12639536661,
+      "name": "archium-checkpoint-40283988917-1-03",
+      "size_in_bytes": 759090178,
+      "digest": "sha256:aaddf76f183cd5779c0eb3bb75342a4bccd35fee3d32b111dc6bcb2f61c97ebe"
+    }
+  ],
+  "manifest_sha256": "534a6a30ceb724d98d394afce4c13600fdd8843dd2bfb45e93d646ac6357b988",
+  "manifest_json": "{\n  \"schema\": 1,\n  \"workspace\": \"/home/runner/work/_temp/chromium-archium\",\n  \"commit\": \"ebfa0c628230f888357d8f3c1f794ea103120462\",\n  \"revision\": \"cfd94726b7b5fb48aedcc32662f2f3fbdbadec35\",\n  \"tag\": \"archium-checkpoint-40283988917-1\",\n  \"parts\": [\n    {\n      \"name\": \"checkpoint-0000.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"2011406b2af511761572869832e48321a40b967b6c5ac50f80a10515e635a15e\"\n    },\n    {\n      \"name\": \"checkpoint-0001.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"1edd124112cd6e08e9692bd109503172a5abefe73007d1045b60af554d7610c7\"\n    },\n    {\n      \"name\": \"checkpoint-0002.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"321643afb4e3709e5fdbd88ac5e2e7803824eede37b700060076b21582d57ab1\"\n    },\n    {\n      \"name\": \"checkpoint-0003.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"b61114e13a52e6329143cb7034e4512aa39346a20f99abab90062c9f8311b9a2\"\n    },\n    {\n      \"name\": \"checkpoint-0004.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"5cbf1ac0504f990b2e6bc0de8b0e9f440a3e934ecb43b98f6fb31299527b29b8\"\n    },\n    {\n      \"name\": \"checkpoint-0005.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"392d997cdc5c96c61b9e66569b8be2a24db8c0a7cbc1d2a749d42a8af3731178\"\n    },\n    {\n      \"name\": \"checkpoint-0006.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"b135d72c46d410ae981f1fd583ed35d7edb880ce831f789bb77bc65be5589dfc\"\n    },\n    {\n      \"name\": \"checkpoint-0007.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"e3ed141b1256c1075f588a6074771c10008f5243a4542aa6fb3e32c8a028de2b\"\n    },\n    {\n      \"name\": \"checkpoint-0008.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"b1478d8b6d9f1dadaf5e379add676143d91aa4954ff3f8fffc25529d15448860\"\n    },\n    {\n      \"name\": \"checkpoint-0009.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"d8ac7fe1e3dd7c9e536d42344211c0e5109418f6d8c64c5387caae0df87d8bb3\"\n    },\n    {\n      \"name\": \"checkpoint-0010.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"338bbb4d0279a3a840db6cb81bfe213c083e83f9c5ad83e15b5d2112521fe651\"\n    },\n    {\n      \"name\": \"checkpoint-0011.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"4b633220e781bf4647f5283f009ecc904f3ff0644494079240598d064fcc7190\"\n    },\n    {\n      \"name\": \"checkpoint-0012.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"802f9ff3d9df48faad8383c43ce8b4345cd61394a108f3ee7f02ad924f4f2fa2\"\n    },\n    {\n      \"name\": \"checkpoint-0013.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"76ff9128115811ccb9fcdd7fa05ba342f4f11646640b3931a42179633bb12ba7\"\n    },\n    {\n      \"name\": \"checkpoint-0014.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"6874be1cdbd78619fa5fde5451236bf44592c22a89c1fa989939faf876ee09b7\"\n    },\n    {\n      \"name\": \"checkpoint-0015.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"2437ce149a48b47e69366f1278e286bb5be6fdfc653f351ea8af02a72c0b9e9f\"\n    },\n    {\n      \"name\": \"checkpoint-0016.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"976cce684709d4195e465feeea1829b1008a325266cfcdec102255f0fe715ee7\"\n    },\n    {\n      \"name\": \"checkpoint-0017.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"377cd85327de4ad1a3f8b96880a00ab6e8e4903d3f35b73934e340b014de96b1\"\n    },\n    {\n      \"name\": \"checkpoint-0018.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"5453ca416aaa2f75ee2d3d33f50ae0b69e9cd309800054baaa2976024aaaafb2\"\n    },\n    {\n      \"name\": \"checkpoint-0019.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"ffb58e5b51cdaf8cea1690b7fc12129e37494359d8fe09e242417d7c6964bd88\"\n    },\n    {\n      \"name\": \"checkpoint-0020.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"079be88d65be965ba6d28eef971ba0dcc56ff7f1d89cf5c538072a83066af30a\"\n    },\n    {\n      \"name\": \"checkpoint-0021.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"e7c93b13f93172ad1f7df0b2b576a134f94673d905ca0b591b2ddda580f378d4\"\n    },\n    {\n      \"name\": \"checkpoint-0022.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"770866b8a274220364315db3057f0677566756deb939ff271ce4871333f56e32\"\n    },\n    {\n      \"name\": \"checkpoint-0023.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"36efb9a29743243e97f23a8706c766b240d73d9ef43ef6cada6f656bdeaece9c\"\n    },\n    {\n      \"name\": \"checkpoint-0024.tar.gz.part\",\n      \"bytes\": 759090010,\n      \"sha256\": \"900d8a775f884bb3661ed91ae8b571fa6dd45c4a7ca6cbb8bf0b60c1ea973e95\"\n    }\n  ]\n}\n",
+  "verification_evidence": "Run40331495677 job121606462579: complete downloaded inventory and all part hashes/restore PASS at2026-10-26T14:45:41Z. Not an APK or native build acceptance."
+}
