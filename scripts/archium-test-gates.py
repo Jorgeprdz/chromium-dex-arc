@@ -90,6 +90,14 @@ def host_gate(android_jar: Path, out_dir: Path, *, phase: str = 'all') -> None:
         raise SystemExit('Pinned Chromium Ninja is not executable')
     sdk_root, _, tools_version, _ = resolve_pinned_android_sdk(out_dir)
     host_env = dict(os.environ)
+    # Host tests execute disposable recovery/build fixtures with their own budgets.
+    # Never leak the outer job's 120-minute slice into legacy 75-minute scenarios.
+    # This changes only child test/tool environments, not the actual build budget.
+    for key in ('ARCHIUM_SLICE_MINUTES', 'ARCHIUM_MAX_SLICES',
+                'ARCHIUM_PREPARE_SECONDS', 'ARCHIUM_WORK_SECONDS',
+                'ARCHIUM_HOST_SECONDS', 'ARCHIUM_CHECKPOINT_SECONDS',
+                'ARCHIUM_UPLOAD_RESERVE_SECONDS', 'ARCHIUM_JOB_DEADLINE_EPOCH'):
+        host_env.pop(key, None)
     host_env.update(ARCHIUM_TEST_GN=str(pinned_gn),
                     ARCHIUM_TEST_NINJA=str(pinned_ninja),
                     ARCHIUM_TEST_AAPT2=str(sdk_root / 'build-tools' / tools_version / 'aapt2'),

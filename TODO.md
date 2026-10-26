@@ -845,3 +845,9 @@ Verificación del checkpoint Desktop: suite host424 PASS; política Chromium61 m
 - [x] Descargas secuenciales por nombre validado, staging por grupo y comprobación de manifest SHA256 contra preflight, inventario exacto y tamaños. Fallos de transferencia se detienen sin reintentar. Restore conserva hashes de todas las partes y ahora informa nombres faltantes/inesperados. Sin cambios al producto, parche, GN ni checkpoint fuente.
 - [x] 65 pruebas focalizadas PASS: downloader7, checkpoint8, disco5, presupuesto3, monitor13, routing29.
 - [ ] Único relanzamiento incremental autorizado por el usuario; resultado CI/APK y aceptación física pendientes. Fuente40283988917-1/ebfa0c6; fallback40049206996-1 preservado.
+
+## 26-oct-2026 — Aislar presupuesto de CI en pruebas host
+
+- [x] Run40331495677: descarga secuencial4/4 grupos e inventario25 partes PASS; restore/hash de partes y transición PASS. S2 host falló26/467 antes de compilar: fixtures recovery heredaron ARCHIUM_SLICE_MINUTES=120 pese a límite histórico75. Sin APK ni nuevo checkpoint. La validación local anterior no había reproducido ese entorno heredado.
+- [x] host_gate elimina sólo ocho variables de presupuesto del entorno hijo de pruebas/herramientas. El job mantiene120min y sus deadlines. Regresión fuerza120/18000 incluso en preflight limpio; RED reproducido, GREEN2 pruebas. Replay host completo467/467 PASS bajo presupuesto exterior de CI; presupuesto padre conservado. GN/Ninja genuinos locales, SDK37.2/resolver local explícito; no equivale a compilación nativa.
+- [ ] Nuevo run incremental único autorizado por el usuario; CI/APK/reunión real pendientes. Fuente40283988917-1 preservada. Lectura parcial local recibió503; IDs/digests/tamaños actuales coinciden con artifacts inmutables del restore íntegro anterior; manifest validado reutilizado. CI vuelve a exigir manifest y todos los hashes sin omitir gates.

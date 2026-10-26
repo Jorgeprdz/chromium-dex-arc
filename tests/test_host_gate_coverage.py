@@ -44,6 +44,8 @@ class HostGateCoverageTests(unittest.TestCase):
                         cwd=ROOT/'tests',env=env,capture_output=True,text=True,timeout=120)
                     executions.append(result)
             ambient=dict(os.environ);ambient.pop('ARCHIUM_TEST_NINJA',None)
+            # Match the restored S2 job, not only the clean preflight environment.
+            ambient.update(ARCHIUM_SLICE_MINUTES='120', ARCHIUM_WORK_SECONDS='18000')
             with patch.dict(os.environ,ambient,clear=True), patch.object(gates,'run',side_effect=boundary), \
                  patch.object(gates,'resolve_pinned_android_sdk',return_value=(checkout,'37.0','37.0.0',jar)), \
                  contextlib.redirect_stdout(io.StringIO()):
