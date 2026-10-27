@@ -915,3 +915,10 @@ Verificación del checkpoint Desktop: suite host424 PASS; política Chromium61 m
 - [x]3 pruebas cámara y1 política PiP RED/GREEN,12 regresiones Googlebook/JNI, gate de headers y preparación SDK36 PASS locales. Fronteras JVM/C++ aisladas explícitas; sin afirmar enlace nativo/aceptación física.
 - [ ] APK/compilación nativa, comparación física del candidato en DeX, viewport/controles PiP y reunión con participante remoto PENDING. No workflow ni instalación en este seguimiento.
 - Detalle: [CONFERENCING_CAMERA_PIP_20261027.md](docs/validation/CONFERENCING_CAMERA_PIP_20261027.md).
+
+
+## 27-oct-2026 — Continuación autorizada y limpieza acotada
+
+- [x] Autorizado un nuevo build incremental y limpieza de checkpoints/APKs antiguos. Fuente elegida40545718060-1/8f312c0:4 grupos/25 partes, manifest ZIP verificado contra digest GitHub; manifest certificado y restauración íntegra previa en etapa2 SUCCESS. Fallback40447986255-2/ccf701a conservado con identidad inmutable verificada. La siguiente restauración CI vuelve a exigir todos los hashes y capacidad.
+- [x] Añadido recibo de fuente para evitar Range remoto frágil; sin cambios en producto, patch, pin, GN args o toolchain respecto a05bd9e0. Pruebas de checkpoint/recibos locales PASS; metadatos y expiración actuales comprobados.
+- [ ] Único dispatch con preflightfalse/QEMUfalse/máximo12 etapas sobre SHA final exacto. Limpieza de conjuntos obsoletos sólo tras verificar ausencia de consumidores activos; APK instalada y un respaldo compatible preservados. Resultado y bytes reales en evidencia privada, no limpieza de datos de aplicaciones ni archivos personales.
