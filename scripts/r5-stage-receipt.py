@@ -8,7 +8,16 @@ from pathlib import Path
 
 
 def progress(out):
+    ledger = out / '.archium-r5-observed-outputs.json'
     outputs = {}
+    if ledger.is_file():
+        saved = json.loads(ledger.read_text())
+        if saved.get('schema') != 1 or not isinstance(saved.get('outputs'), dict):
+            raise ValueError('Invalid observed-output ledger')
+        outputs = saved['outputs']
+        if any(not isinstance(k,str) or not isinstance(v,list) or len(v)!=2
+               or any(not isinstance(x,str) for x in v) for k,v in outputs.items()):
+            raise ValueError('Invalid observed-output record')
     log = out / '.ninja_log'
     if log.is_file():
         with log.open(errors='replace') as f:
@@ -16,6 +25,13 @@ def progress(out):
                 fields = line.rstrip('\n').split('\t')
                 if len(fields) == 5:
                     outputs[fields[3]] = [fields[2], fields[4]]
+    # Siso can rotate .ninja_log per invocation. Retain the union of output
+    # records actually observed, rather than treating log length as lost work.
+    # This ledger measures observed progress, never APK readiness/up-to-dateness.
+    if out.is_dir():
+        temporary = ledger.with_suffix('.tmp')
+        temporary.write_text(json.dumps(dict(schema=1,outputs=outputs),sort_keys=True)+'\n')
+        os.replace(temporary,ledger)
     gates = sorted(p.name for p in (out / '.archium-r5-gates').glob('*/*') if p.is_file())
     payload = json.dumps([sorted(outputs.items()), gates], separators=(',', ':')).encode()
     return {'fingerprint': hashlib.sha256(payload).hexdigest(),

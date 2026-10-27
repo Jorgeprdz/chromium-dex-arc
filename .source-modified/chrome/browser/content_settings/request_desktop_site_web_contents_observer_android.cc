@@ -31,7 +31,7 @@
 
 // JNI conversions must be available before the generated header.
 #include "url/android/gurl_android.h"
-#include "chrome/browser/android/content/jni_headers/ContentUtils_jni.h"
+#include "chrome/browser/android/content/jni_headers/ArcDesktopPolicyBridge_jni.h"
 
 namespace rds_web_contents_observer {
 // Keep in sync with UserAgentRequestType in tools/metrics/histograms/enums.xml.
@@ -105,7 +105,7 @@ void RequestDesktopSiteWebContentsObserverAndroid::DidStartNavigation(
   // Resolve the owning window, never the Split panel/container width. The override
   // value is installed once by ContentUtils; toggling the navigation flag here
   // does not reload the committed page or interrupt an active meeting.
-  int archium_mode = Java_ContentUtils_getArchiumUserAgentMode(
+  int archium_mode = Java_ArcDesktopPolicyBridge_getArchiumUserAgentMode(
       base::android::AttachCurrentThread(), web_contents()->GetJavaWebContents(),
       url);
   if (archium_mode >= 0) {
@@ -150,7 +150,7 @@ void RequestDesktopSiteWebContentsObserverAndroid::ReadyToCommitNavigation(
   // checks remain responsible for opening a real same-origin PiP WebContents.
   navigation_handle->GetMutableRuntimeFeatureStateContext()
       .SetDocumentPictureInPictureAPIEnabled(
-          Java_ContentUtils_isArchiumDocumentPipEnabled(
+          Java_ArcDesktopPolicyBridge_isArchiumDocumentPipEnabled(
               base::android::AttachCurrentThread(),
               web_contents()->GetJavaWebContents()));
 }

@@ -58,6 +58,7 @@ with tempfile.TemporaryDirectory(prefix='archium-conferencing-sdk-') as temporar
     for name in ['chrome/browser/android/content/java/src/org/chromium/chrome/browser/content/ContentUtils.java',
                  'chrome/android/java/src/org/chromium/chrome/browser/media/MediaCapturePickerInvoker.java']:
         sources.append(ROOT / '.source-modified' / name)
+    sources.append(ROOT / 'chromium/chrome/browser/android/content/java/src/org/chromium/chrome/browser/content/ArcDesktopPolicyBridge.java')
     sources.append(ROOT / '.source-reference/chrome/android/java/src/org/chromium/chrome/browser/media/MediaCapturePickerDelegate.java')
     subprocess.run(['javac', '-cp', str(a.android_jar), '-d', str(work/'classes'), *map(str, sources)], check=True)
 print('CONFERENCING_ANDROID_SDK_API=PASS; CHROME_JNI_LINK=PENDING_CI; DEVICE_STREAM=PENDING')

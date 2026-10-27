@@ -50,7 +50,6 @@
     "chrome/browser/android/compositor/scene_layer/static_tab_scene_layer.h": "15cafa6223f83953d7ac784079027accbac5e3b15173e415b3603997edeb9907",
     "chrome/browser/android/content/BUILD.gn": "2b6796d26334efbce3cf3897065ef662229e6fde492fd8a56fd798de96953f0e",
     "chrome/browser/android/content/content_utils.cc": "42b858df324b4a8b19921a94d8a3d0b874cda8317bfcf774028824a7b2b9827c",
-    "chrome/browser/android/content/java/src/org/chromium/chrome/browser/content/ContentUtils.java": "2500055b5d29c9aa90d0a132b9fc9f90957b609512e4a08d84453e15712b56f3",
     "chrome/browser/autofill/android/BUILD.gn": "185f8cc78ff078b3cbf64118f95f5aa5279db9e6a379c937e7b51174fdd6db31",
     "chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/AutofillClientProviderUtils.java": "d529bafece94a1ee9cebf8cdffb6390ecc71193f072e19c14ed2bd76bdc54dce",
     "chrome/browser/browser_process_impl.cc": "e2e9f2234b2009f0aace7834aa40907bf0440cf61b6a13e148b8c7c16006a52e",
@@ -190,6 +189,7 @@
     "chrome/android/junit/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/ArcTabSelectionTest.java": null,
     "chrome/android/junit/src/org/chromium/chrome/browser/toolbar/top/ArcToolbarReparentingTest.java": null,
     "chrome/android/junit/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearanceTest.java": null,
+    "chrome/browser/android/content/java/src/org/chromium/chrome/browser/content/ArcDesktopPolicyBridge.java": null,
     "chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/ArchiumAutofillPolicy.java": null,
     "chrome/browser/desktop_policy/android/BUILD.gn": null,
     "chrome/browser/desktop_policy/android/java/src/org/chromium/chrome/browser/desktop_policy/ArchiumWindowClass.java": null,
@@ -268,15 +268,14 @@
     "chrome/browser/android/compositor/compositor_view.h": "1352da3edef1ab13018214bd3f2e047492a8580106757e92b1395c1239500df7",
     "chrome/browser/android/compositor/scene_layer/static_tab_scene_layer.cc": "5888957d36be870e865935414ae2e32b7f997230a3e1b9509d897bd1e54e2314",
     "chrome/browser/android/compositor/scene_layer/static_tab_scene_layer.h": "958f9b1f3710647ce37ab2cd4c2c8f3a1a2bc8af7440a93e3323973826909300",
-    "chrome/browser/android/content/BUILD.gn": "5eae4099d7807d1e79d23da0ef7b05c841ccf7193d47eff44e9347fcff12ff99",
+    "chrome/browser/android/content/BUILD.gn": "10d75066f47327fe48cfe696b148f0a0664c0d42e9ec73f115538b3757fbc9e7",
     "chrome/browser/android/content/content_utils.cc": "2e664111841c7f7d829cb350149cfd64478f67c9782e8adcd7b4bfccf5780da7",
-    "chrome/browser/android/content/java/src/org/chromium/chrome/browser/content/ContentUtils.java": "c5287a47aa200a1aacb4b6cb53e7f6be25d1c754afae3559cfbdb2b20300dea6",
     "chrome/browser/autofill/android/BUILD.gn": "00e2d69719b56d99054d6f62e59fd139ac396af4248cd4aa8d9a4ee813749125",
     "chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/AutofillClientProviderUtils.java": "b14949cce15c8cf64a2cf31a202455309419c22b12539a594952ac3eed34e56a",
     "chrome/browser/browser_process_impl.cc": "94e33383b5380231041c03a8d8986435679d888a48abf6a69a0cafa8a643764e",
     "chrome/browser/chrome_content_browser_client.cc": "dd24e3f81cb6e95822770197af02206163c364105a40cdb8cca703f246b080a4",
     "chrome/browser/content_settings/BUILD.gn": "b4987d11227b68b28b8ded6a11c70c6c0391935ee5c0e8f0ad61058378b75d05",
-    "chrome/browser/content_settings/request_desktop_site_web_contents_observer_android.cc": "50d328cfa69c89e85272c8d8dd49d9c2473c78c175ecaae74590d78ac3e6bde1",
+    "chrome/browser/content_settings/request_desktop_site_web_contents_observer_android.cc": "03a68abeab428fdeb894be2d4ab4a0a40e0c240a4020eae929e429e294692180",
     "chrome/browser/content_settings/request_desktop_site_web_contents_observer_android.h": "0c58c2017003c9a60f46971266d468b7c312d7f99b938f8e1551be5b4478dad0",
     "chrome/browser/media/webrtc/desktop_media_picker.cc": "4aebe2d425cbb4e01f53accfc49da2b613d8f8e2995da45ef7af348629ccb07a",
     "chrome/browser/password_manager/BUILD.gn": "8464d5b20ad7435730a5d043da6ba863acef273a113c9070a8ee671224210b6a",
@@ -410,6 +409,7 @@
     "chrome/android/junit/src/org/chromium/chrome/browser/tasks/tab_management/vertical_tabs/ArcTabSelectionTest.java": "2b92a67066622284bb2375dab920eabefaedb35745e6a3460acb9a38143a60a8",
     "chrome/android/junit/src/org/chromium/chrome/browser/toolbar/top/ArcToolbarReparentingTest.java": "8f246366eee0c5e5a5c430d5999c7563e0894e51e7d172b17a8259a1701b36b4",
     "chrome/android/junit/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearanceTest.java": "e22f8d0e02726a20774573a14526c3914937f89efabe62941981cc4730583ee7",
+    "chrome/browser/android/content/java/src/org/chromium/chrome/browser/content/ArcDesktopPolicyBridge.java": "9c1e625386f520473e69dc36a9e5f84c9496b4a74397622c6ee9381184fd2b36",
     "chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/ArchiumAutofillPolicy.java": "8d8c47803c49da5133a19cf94f113a33081d438ac51543122476635f4100b7ef",
     "chrome/browser/desktop_policy/android/BUILD.gn": "0fb70c913943466d344c3c2726a409c66409c58fc33f75976f12968f92a55db5",
     "chrome/browser/desktop_policy/android/java/src/org/chromium/chrome/browser/desktop_policy/ArchiumWindowClass.java": "93a7e3ed1ae260b7470c8fff667a6364577bd3ef880257285a739d926873b14e",
@@ -440,5 +440,5 @@
     "components/password_manager/core/browser/password_store/password_store_backend.cc": "45764d4ad0e05acc5a216944a5a6763212f6c17e71bf689e9c973f12fb5c87d8",
     "components/password_manager/core/browser/password_store/password_store_interface.cc": "7e9dd5813ce8ece459ec66abdd3306028b7b3d6bbae048664872a34d8d097268"
   },
-  "patch_sha256": "7a7a6af11b8f8812f9009dd7164230acccf2d90947a898aab337a1c9a75c2196"
+  "patch_sha256": "a499622a9117898b9ac337b88b0f889be1966372c5ce3d3997d5466d4e01fec6"
 }

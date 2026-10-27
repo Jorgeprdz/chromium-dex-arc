@@ -43,6 +43,8 @@ stage() { printf 'FASE=%s SHA=%s RUN=%s\n' "$1" "$GITHUB_SHA" "${GITHUB_RUN_ID:-
 save_checkpoint() {
     local status="$1" pack_status=0
     printf 'BUILD_INCOMPLETE: saving quiescent output; original exit=%s\n' "$status"
+    "$host_python" "$GITHUB_WORKSPACE/scripts/r5-stage-receipt.py" \
+        --out "$build_workspace/checkout/src/out/Archium" > "$RUNNER_TEMP/stage-progress.json"
     timeout --signal=TERM --kill-after=30s "${checkpoint_seconds}s" \
         python3 "$GITHUB_WORKSPACE/scripts/archium-checkpoint.py" pack \
         "$build_workspace" "$ARCHIUM_CHECKPOINT_TAG" || pack_status=$?
@@ -156,10 +158,14 @@ compile_slice() {
             continue
         fi
         result=0
+        "$host_python" "$GITHUB_WORKSPACE/scripts/r5-stage-receipt.py" \
+            --out "$PWD/out/Archium" > "$RUNNER_TEMP/progress-before.json"
         run_work INT "$remaining" true \
             "$build_workspace/depot_tools/python-bin/python3" \
             "$GITHUB_WORKSPACE/scripts/archium-autoninja.py" \
             "$build_workspace/depot_tools/autoninja.py" -C out/Archium "$@" -j 4 || result=$?
+        "$host_python" "$GITHUB_WORKSPACE/scripts/r5-stage-receipt.py" \
+            --out "$PWD/out/Archium" > "$RUNNER_TEMP/progress-after.json"
         (( result == 124 )) || return "$result"
         (( slice_count < max_slices )) || save_checkpoint 0
         slice_count=$((slice_count + 1)); slice_started=$SECONDS
@@ -226,6 +232,9 @@ else
     (( host_preflight_status == 0 )) || exit "$host_preflight_status"
     printf '%s\n' "$GITHUB_SHA" > "$gate_dir/host_preflight"
 fi
+# Compile the navigation/JNI boundary before broad resource/JUnit/native fanout.
+# This is the real failing owner from the stage-2 compiler diagnostic, not a stub.
+compile_slice obj/chrome/browser/content_settings/impl/request_desktop_site_web_contents_observer_android.o
 compile_slice chrome_public_apk__compile_resources
 gate_once portal_resources "$host_python" "$GITHUB_WORKSPACE/scripts/check-portal-chromium-resources.py" \
     --out "$PWD/out/Archium" --aapt2 "$sdk_tools/aapt2" --report "$PWD/out/Archium/archium-real-resources.json"

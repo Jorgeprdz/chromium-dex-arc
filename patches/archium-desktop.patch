@@ -5042,7 +5042,15 @@ diff --git a/chrome/browser/android/compositor/scene_layer/static_tab_scene_laye
 diff --git a/chrome/browser/android/content/BUILD.gn b/chrome/browser/android/content/BUILD.gn
 --- a/chrome/browser/android/content/BUILD.gn
 +++ b/chrome/browser/android/content/BUILD.gn
-@@ -15,6 +15,9 @@
+@@ -8,6 +8,7 @@
+ android_library("java") {
+   srcjar_deps = [ ":jni_headers" ]
+   sources = [
++    "java/src/org/chromium/chrome/browser/content/ArcDesktopPolicyBridge.java",
+     "java/src/org/chromium/chrome/browser/content/ContentUtils.java",
+     "java/src/org/chromium/chrome/browser/content/WebContentsFactory.java",
+   ]
+@@ -15,6 +16,9 @@
      "//base:base_java",
      "//build/android:build_java",
      "//chrome/browser/profiles/android:java",
@@ -5052,6 +5060,14 @@ diff --git a/chrome/browser/android/content/BUILD.gn b/chrome/browser/android/co
      "//content/public/android:content_java",
      "//net/android:net_java",
      "//third_party/jni_zero:jni_zero_java",
+@@ -23,6 +27,7 @@
+
+ generate_jni("jni_headers") {
+   sources = [
++    "java/src/org/chromium/chrome/browser/content/ArcDesktopPolicyBridge.java",
+     "java/src/org/chromium/chrome/browser/content/ContentUtils.java",
+     "java/src/org/chromium/chrome/browser/content/WebContentsFactory.java",
+   ]
 diff --git a/chrome/browser/android/content/content_utils.cc b/chrome/browser/android/content/content_utils.cc
 --- a/chrome/browser/android/content/content_utils.cc
 +++ b/chrome/browser/android/content/content_utils.cc
@@ -5128,53 +5144,6 @@ diff --git a/chrome/browser/android/content/content_utils.cc b/chrome/browser/an
    spoofed_ua.ua_metadata_override->wow64 = false;
 
    content::WebContents::FromJavaWebContents(jweb_contents)
-diff --git a/chrome/browser/android/content/java/src/org/chromium/chrome/browser/content/ContentUtils.java b/chrome/browser/android/content/java/src/org/chromium/chrome/browser/content/ContentUtils.java
---- a/chrome/browser/android/content/java/src/org/chromium/chrome/browser/content/ContentUtils.java
-+++ b/chrome/browser/android/content/java/src/org/chromium/chrome/browser/content/ContentUtils.java
-@@ -4,11 +4,16 @@
-
- package org.chromium.chrome.browser.content;
-
-+import org.jni_zero.CalledByNative;
- import org.jni_zero.JniType;
- import org.jni_zero.NativeMethods;
-
- import org.chromium.build.annotations.NullMarked;
- import org.chromium.content_public.browser.WebContents;
-+import org.chromium.chrome.browser.desktop_site.DesktopSiteUtils;
-+import org.chromium.chrome.browser.profiles.Profile;
-+import org.chromium.ui.base.WindowAndroid;
-+import org.chromium.url.GURL;
-
- /** A utility class to expose content functionality. */
- @NullMarked
-@@ -30,6 +35,26 @@
-         ContentUtilsJni.get().setUserAgentOverride(webContents, overrideInNewTabs);
-     }
-
-+    /** Same per-window policy for renderer navigations as TabImpl uses for browser loads. */
-+    @CalledByNative
-+    private static int getArchiumUserAgentMode(WebContents webContents, @JniType("GURL") GURL url) {
-+        WindowAndroid window = webContents.getTopLevelNativeWindow();
-+        if (window == null) return -1;
-+        android.content.Context context = window.getContext().get();
-+        if (context == null) return -1;
-+        Profile profile = Profile.fromWebContents(webContents);
-+        if (profile == null) return -1;
-+        return DesktopSiteUtils.shouldOverrideDesktopSite(profile, url, context) ? 1 : 0;
-+    }
-+
-+    @CalledByNative
-+    private static boolean isArchiumDocumentPipEnabled(WebContents webContents) {
-+        WindowAndroid window = webContents.getTopLevelNativeWindow();
-+        if (window == null) return false;
-+        android.content.Context context = window.getContext().get();
-+        return context != null && DesktopSiteUtils.isArchiumDocumentPipEnabled(context);
-+    }
-+
-     @NativeMethods
-     interface Natives {
-         @JniType("std::string")
 diff --git a/chrome/browser/autofill/android/BUILD.gn b/chrome/browser/autofill/android/BUILD.gn
 --- a/chrome/browser/autofill/android/BUILD.gn
 +++ b/chrome/browser/autofill/android/BUILD.gn
@@ -5306,7 +5275,7 @@ diff --git a/chrome/browser/content_settings/request_desktop_site_web_contents_o
 +
 +// JNI conversions must be available before the generated header.
 +#include "url/android/gurl_android.h"
-+#include "chrome/browser/android/content/jni_headers/ContentUtils_jni.h"
++#include "chrome/browser/android/content/jni_headers/ArcDesktopPolicyBridge_jni.h"
 
  namespace rds_web_contents_observer {
  // Keep in sync with UserAgentRequestType in tools/metrics/histograms/enums.xml.
@@ -5318,7 +5287,7 @@ diff --git a/chrome/browser/content_settings/request_desktop_site_web_contents_o
 +  // Resolve the owning window, never the Split panel/container width. The override
 +  // value is installed once by ContentUtils; toggling the navigation flag here
 +  // does not reload the committed page or interrupt an active meeting.
-+  int archium_mode = Java_ContentUtils_getArchiumUserAgentMode(
++  int archium_mode = Java_ArcDesktopPolicyBridge_getArchiumUserAgentMode(
 +      base::android::AttachCurrentThread(), web_contents()->GetJavaWebContents(),
 +      url);
 +  if (archium_mode >= 0) {
@@ -5346,7 +5315,7 @@ diff --git a/chrome/browser/content_settings/request_desktop_site_web_contents_o
 +  // checks remain responsible for opening a real same-origin PiP WebContents.
 +  navigation_handle->GetMutableRuntimeFeatureStateContext()
 +      .SetDocumentPictureInPictureAPIEnabled(
-+          Java_ContentUtils_isArchiumDocumentPipEnabled(
++          Java_ArcDesktopPolicyBridge_isArchiumDocumentPipEnabled(
 +              base::android::AttachCurrentThread(),
 +              web_contents()->GetJavaWebContents()));
  }
@@ -21275,6 +21244,53 @@ new file mode 100644
 +        when(manager.getDefaultDisplay()).thenReturn(externalDisplay());
 +        assertNotEquals(0, ArcDesktopAppearance.activityDisplay(activity).getDisplayId());
 +    }
++}
+diff --git a/chrome/browser/android/content/java/src/org/chromium/chrome/browser/content/ArcDesktopPolicyBridge.java b/chrome/browser/android/content/java/src/org/chromium/chrome/browser/content/ArcDesktopPolicyBridge.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/browser/android/content/java/src/org/chromium/chrome/browser/content/ArcDesktopPolicyBridge.java
+@@ -0,0 +1,42 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++
++package org.chromium.chrome.browser.content;
++
++import org.jni_zero.CalledByNative;
++import org.jni_zero.JniType;
++
++import org.chromium.build.annotations.NullMarked;
++import org.chromium.chrome.browser.desktop_site.DesktopSiteUtils;
++import org.chromium.chrome.browser.profiles.Profile;
++import org.chromium.content_public.browser.WebContents;
++import org.chromium.ui.base.WindowAndroid;
++import org.chromium.url.GURL;
++
++/** Java policy queries shared with native navigation; owns no Java-to-native bindings. */
++@NullMarked
++final class ArcDesktopPolicyBridge {
++    private ArcDesktopPolicyBridge() {}
++
++    /** Same per-window policy for renderer navigations as TabImpl uses for browser loads. */
++    @CalledByNative
++    private static int getArchiumUserAgentMode(WebContents webContents, @JniType("GURL") GURL url) {
++        WindowAndroid window = webContents.getTopLevelNativeWindow();
++        if (window == null) return -1;
++        android.content.Context context = window.getContext().get();
++        if (context == null) return -1;
++        Profile profile = Profile.fromWebContents(webContents);
++        if (profile == null) return -1;
++        return DesktopSiteUtils.shouldOverrideDesktopSite(profile, url, context) ? 1 : 0;
++    }
++
++    @CalledByNative
++    private static boolean isArchiumDocumentPipEnabled(WebContents webContents) {
++        WindowAndroid window = webContents.getTopLevelNativeWindow();
++        if (window == null) return false;
++        android.content.Context context = window.getContext().get();
++        return context != null && DesktopSiteUtils.isArchiumDocumentPipEnabled(context);
++    }
++
 +}
 diff --git a/chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/ArchiumAutofillPolicy.java b/chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/ArchiumAutofillPolicy.java
 new file mode 100644
