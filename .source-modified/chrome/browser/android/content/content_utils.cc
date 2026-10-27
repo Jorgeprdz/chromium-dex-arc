@@ -3,6 +3,7 @@
 // found in the LICENSE file.
 
 #include "base/android/jni_string.h"
+#include "chrome/browser/android/content/arc_camera_orientation.h"
 #include "build/build_config.h"
 #include "components/embedder_support/user_agent_utils.h"
 #include "components/version_info/version_info.h"
@@ -52,4 +53,12 @@ static void JNI_ContentUtils_SetUserAgentOverride(
       ->SetUserAgentOverride(spoofed_ua, j_override_in_new_tabs);
 }
 
+static int32_t JNI_ContentUtils_GetArcCameraOrientation(
+    JNIEnv* env, const base::android::JavaRef<jobject>& contents) {
+  return arc_camera::Get(content::WebContents::FromJavaWebContents(contents));
+}
+static void JNI_ContentUtils_SetArcCameraOrientation(
+    JNIEnv* env, const base::android::JavaRef<jobject>& contents, int32_t turns) {
+  arc_camera::Set(content::WebContents::FromJavaWebContents(contents), turns);
+}
 DEFINE_JNI(ContentUtils)

@@ -109,4 +109,9 @@
     <string name="arc_phone_off">Desactivado</string>
     <string name="arc_desktop_material">Intensidad del acabado Desktop</string>
     <string name="arc_desktop_material_description">Ajusta la iluminación y el relieve del marco y la barra lateral.</string>
+    <string name="arc_camera_orientation">Orientación de cámara</string>
+    <string name="arc_camera_auto">Automático</string>
+    <string name="arc_camera_manual">Manual · %1$d°</string>
+    <string name="arc_camera_rotate">Girar 90°</string>
+    <string name="arc_camera_reset">Restablecer automático</string>
 </resources>

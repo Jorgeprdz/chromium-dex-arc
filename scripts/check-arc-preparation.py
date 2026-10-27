@@ -366,7 +366,8 @@ def main():
         definitions['org.chromium.chrome.browser.desktop_site.DesktopSiteUtils'] = (
             'public class DesktopSiteUtils {'
             ' public static boolean shouldOverrideDesktopSite(org.chromium.chrome.browser.profiles.Profile profile,org.chromium.url.GURL url,android.content.Context context){return false;}'
-            ' public static boolean isArchiumDocumentPipEnabled(android.content.Context context){return false;} }')
+            ' public static boolean isArchiumDocumentPipEnabled(android.content.Context context){return false;}'
+            ' public static boolean isArchiumDesktopCameraEnabled(android.content.Context context){return false;} }')
         for annotation in ['Nullable', 'NullMarked', 'NullUnmarked']:
             definitions['org.chromium.build.annotations.' + annotation] = '@java.lang.annotation.Target({java.lang.annotation.ElementType.TYPE_USE,java.lang.annotation.ElementType.TYPE,java.lang.annotation.ElementType.METHOD,java.lang.annotation.ElementType.PACKAGE}) public @interface ' + annotation + ' {}'
         # Nullable is strictly TYPE_USE in Chromium; declaration targets can mask javac errors.
@@ -374,6 +375,7 @@ def main():
             '@java.lang.annotation.Target(java.lang.annotation.ElementType.TYPE_USE) '
             '@java.lang.annotation.Retention(java.lang.annotation.RetentionPolicy.CLASS) '
             'public @interface Nullable {}')
+        definitions['org.chromium.chrome.browser.content.ContentUtilsJni'] = 'class ContentUtilsJni {static ContentUtils.Natives get(){return null;}}'
         for name, body in definitions.items():
             file = stubs / (name.replace('.', '/') + '.java')
             file.parent.mkdir(parents=True, exist_ok=True)
@@ -381,6 +383,7 @@ def main():
         # JUnit sources require Chromium's real test dependencies and belong to
         # the post-restore Robolectric gate, not isolated adapter javac.
         new_java = [p for p in (ROOT / 'chromium').rglob('*.java') if 'junit' not in p.parts]
+        new_java.append(checkout / 'chrome/browser/android/content/java/src/org/chromium/chrome/browser/content/ContentUtils.java')
         account_path = 'components/signin/public/android/java/src/org/chromium/components/signin/NullAccountManagerDelegate.java'
         account = (ROOT / '.source-reference' if args.test_original_account_delegate else checkout) / account_path
         run('javac', '-cp', str(args.android_jar) + ':' + str(window_jar), '-d', str(classes),

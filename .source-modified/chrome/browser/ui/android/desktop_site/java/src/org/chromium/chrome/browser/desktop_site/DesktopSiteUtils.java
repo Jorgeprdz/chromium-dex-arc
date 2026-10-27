@@ -216,6 +216,11 @@ public class DesktopSiteUtils {
      * @return Whether the desktop site should be overridden for the current URL.
      */
     /** Reuse Chromium's interactive Document PiP Activity only on supported desktop windows. */
+    /** Camera policy follows the real UI mode, independently of site identity overrides. */
+    public static boolean isArchiumDesktopCameraEnabled(Context context) {
+        return ArcDesktopAppearance.isDesktopWindow(context);
+    }
+
     public static boolean isArchiumDocumentPipEnabled(Context context) {
         return Build.VERSION.SDK_INT >= 37 && ArcDesktopAppearance.isDesktopWindow(context);
     }

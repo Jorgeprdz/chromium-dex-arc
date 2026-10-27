@@ -30,10 +30,25 @@ public class ContentUtils {
         ContentUtilsJni.get().setUserAgentOverride(webContents, overrideInNewTabs);
     }
 
+    /** Per-tab camera calibration. Does not grant access or restart a stream. */
+    public static int getArcCameraOrientation(WebContents contents) {
+        return contents.isDestroyed() ? -1 : ContentUtilsJni.get().getArcCameraOrientation(contents);
+    }
+
+    public static void setArcCameraOrientation(WebContents contents, int turns) {
+        if (!contents.isDestroyed()) ContentUtilsJni.get().setArcCameraOrientation(contents, turns);
+    }
+
+    public static void refreshArcCameraOrientation(WebContents contents) {
+        if (!contents.isDestroyed()) setArcCameraOrientation(contents, getArcCameraOrientation(contents));
+    }
+
     @NativeMethods
     interface Natives {
         @JniType("std::string")
         String getBrowserUserAgent();
+        int getArcCameraOrientation(WebContents contents);
+        void setArcCameraOrientation(WebContents contents, int turns);
 
         void setUserAgentOverride(WebContents webContents, boolean overrideInNewTabs);
     }

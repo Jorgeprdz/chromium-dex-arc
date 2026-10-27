@@ -380,6 +380,7 @@ public class ToolbarManager
     private final SettableMonotonicObservableSupplier<Long> mCaptureResourceIdSupplier =
             ObservableSuppliers.createMonotonic();
     private @MonotonicNonNull TabModelSelector mTabModelSelector;
+    private @Nullable Boolean mArcCameraDesktopMode;
     private final Callback<TabModel> mCurrentTabModelObserver;
     private MonotonicObservableSupplier<TabModelSelector> mTabModelSelectorSupplier;
     private ActivityTabProvider.ActivityTabTabObserver mActivityTabTabObserver;
@@ -1012,6 +1013,7 @@ public class ToolbarManager
                 new ComponentCallbacks() {
                     @Override
                     public void onConfigurationChanged(Configuration configuration) {
+                        refreshArcCameraOrientationMode();
                         if (mArcPhoneHost != null) updateArcPhoneFloatingSurfaces();
                         int newOrientation = configuration.orientation;
                         if (newOrientation == mCurrentOrientation) {
@@ -2604,6 +2606,20 @@ public class ToolbarManager
         return ((LocationBarCoordinator) mLocationBar).getUrlBarViewRectProvider();
     }
 
+    private void refreshArcCameraOrientationMode() {
+        if (mIsDestroyed || mTabModelSelector == null) return;
+        boolean desktop = org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.isDesktopWindow(mActivity);
+        if (mArcCameraDesktopMode != null && mArcCameraDesktopMode == desktop) return;
+        mArcCameraDesktopMode = desktop;
+        for (org.chromium.chrome.browser.tabmodel.TabModel model : mTabModelSelector.getModels()) {
+            for (int i = 0; i < model.getCount(); i++) {
+                Tab tab = model.getTabAt(i);
+                if (tab == null || tab.isDestroyed() || tab.getWebContents() == null) continue;
+                org.chromium.chrome.browser.content.ContentUtils.refreshArcCameraOrientation(tab.getWebContents());
+            }
+        }
+    }
+
     /** Native actions are supplied after the tabbed Activity initializes its models. */
     public void configureArcPhoneNavigation(ArcPhoneNavigation.Host host) {
         if (org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.isDesktopWindow(mActivity)) return;
@@ -3142,6 +3158,7 @@ public class ToolbarManager
         mUndoBarThrottle = undoBarThrottle;
 
         mTabModelSelector = tabModelSelector;
+        refreshArcCameraOrientationMode();
         if (mActionRegistry != null) {
             PropertyModel newTabModel = mActionRegistry.get(ActionId.NEW_TAB).get();
             assert newTabModel != null : "NEW_TAB action should be registered";

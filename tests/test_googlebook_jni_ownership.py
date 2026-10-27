@@ -24,7 +24,7 @@ class GooglebookJniOwnershipTests(unittest.TestCase):
         source=ROOT/'chromium'/JAVA/'ArcDesktopPolicyBridge.java'
         text=source.read_text()
         self.assertNotIn('@NativeMethods',text)
-        self.assertEqual(text.count('@CalledByNative'),2)
+        self.assertEqual(text.count('@CalledByNative'),3)
         for name in ('getArchiumUserAgentMode','isArchiumDocumentPipEnabled'):
             self.assertIn(name,text)
             observer=(MOD/'chrome/browser/content_settings/request_desktop_site_web_contents_observer_android.cc').read_text()

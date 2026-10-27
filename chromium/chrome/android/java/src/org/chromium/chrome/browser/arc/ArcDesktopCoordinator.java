@@ -88,6 +88,7 @@ public final class ArcDesktopCoordinator {
     private final LinearLayout mHeaderActions;
     private final LinearLayout mFooter;
     private final ImageButton mAppearanceButton;
+    private final ImageButton mCameraButton;
     private final ArcCompactOmnibox mCompactOmnibox;
     private final ArcOmniboxPlacement mOmniboxPlacement;
     private NavigationPopup mNavigationPopup;
@@ -529,6 +530,20 @@ public final class ArcDesktopCoordinator {
                             ViewGroup.LayoutParams.WRAP_CONTENT,
                             dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
         }
+        mCameraButton = new ImageButton(activity);
+        mCameraButton.setImageResource(android.R.drawable.ic_menu_camera);
+        mCameraButton.setContentDescription(activity.getString(R.string.arc_camera_orientation));
+        mCameraButton.setTooltipText(activity.getString(R.string.arc_camera_orientation));
+        mCameraButton.setMinimumWidth(0);
+        mCameraButton.setMinimumHeight(0);
+        mCameraButton.setPadding(dp(10), dp(8), dp(10), dp(8));
+        mCameraButton.setOnClickListener(view -> {
+            Tab tab = mCurrentTab.get();
+            if (!mDestroyed && tab != null && !tab.isDestroyed()) {
+                ArcCameraControls.show(view, tab.getWebContents());
+            }
+        });
+        mFooter.addView(mCameraButton, new LinearLayout.LayoutParams(dp(44), dp(44)));
         mColumn.addView(mFooter);
         ImageButton about = new ImageButton(activity);
         about.setImageResource(android.R.drawable.ic_menu_info_details);
@@ -1190,6 +1205,7 @@ public final class ArcDesktopCoordinator {
                         mRail.getWidth(),
                         mRail.getHeight(),
                         density);
+        if (!expanded) collectionBudget = Math.max(0, collectionBudget - dp(44));
         // Collection scrolling can run out of height while navigation still fits the wide rail.
         // Budget only the collection area; do not turn a wide sidebar into the compact layout.
         // Keep the real Chromium LocationBar visible even in collapsed mode so keyboard/focus
@@ -1227,7 +1243,7 @@ public final class ArcDesktopCoordinator {
                         - mRail.getPaddingLeft() - mRail.getPaddingRight()
                         - Math.max(dp(ArcDesktopPolicy.ARC_NAV_BUTTON_WIDTH_DP),
                                 mMenuButtonWrapper.getMeasuredWidth())
-                        - 2 * dp(ArcDesktopPolicy.ARC_NAV_BUTTON_WIDTH_DP)));
+                        - 3 * dp(ArcDesktopPolicy.ARC_NAV_BUTTON_WIDTH_DP)));
             }
         }
         if (mCollectionsView != null) {

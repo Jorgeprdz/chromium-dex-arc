@@ -858,6 +858,13 @@ using plugins::ChromeContentBrowserClientPluginsPart;
 using web_app::ChromeContentBrowserClientIsolatedWebAppsPart;
 #endif
 
+#if BUILDFLAG(IS_ANDROID)
+#include "base/android/jni_android.h"
+#include "chrome/browser/android/content/arc_camera_orientation.h"
+#include "url/android/gurl_android.h"
+#include "chrome/browser/android/content/jni_headers/ArcDesktopPolicyBridge_jni.h"
+#endif
+
 namespace {
 
 const char kAIManagerUserDataKey[] = "ai_manager";
@@ -4670,6 +4677,12 @@ void ChromeContentBrowserClient::OverrideWebPreferences(
     WebContents* web_contents,
     content::SiteInstance& main_frame_site,
     WebPreferences* web_prefs) {
+#if BUILDFLAG(IS_ANDROID)
+  web_prefs->arc_camera_orientation =
+      Java_ArcDesktopPolicyBridge_isArchiumDesktopCameraEnabled(
+          base::android::AttachCurrentThread(), web_contents->GetJavaWebContents())
+          ? arc_camera::Get(web_contents) : -2;
+#endif
   Profile* profile =
       Profile::FromBrowserContext(web_contents->GetBrowserContext());
   PrefService* prefs = profile->GetPrefs();

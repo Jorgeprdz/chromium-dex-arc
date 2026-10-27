@@ -22,11 +22,12 @@ diff --git a/chrome/android/chrome_java_resources.gni b/chrome/android/chrome_ja
 diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java_sources.gni
 --- a/chrome/android/chrome_java_sources.gni
 +++ b/chrome/android/chrome_java_sources.gni
-@@ -5,6 +5,41 @@
+@@ -5,6 +5,42 @@
  import("//content/public/common/features.gni")
 
  chrome_java_sources = [
 +  "java/src/org/chromium/chrome/browser/arc/ArcAboutDialog.java",
++  "java/src/org/chromium/chrome/browser/arc/ArcCameraControls.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcCollectionsController.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcNativeTabSession.java",
@@ -3668,7 +3669,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
  import org.chromium.content_public.browser.NavigationController;
  import org.chromium.content_public.browser.NavigationEntry;
  import org.chromium.content_public.browser.NavigationHandle;
-@@ -364,6 +372,11 @@
+@@ -364,9 +372,15 @@
              mBottomAppBarCoordinatorSupplier = ObservableSuppliers.createMonotonic();
      private final SettableNonNullObservableSupplier<Boolean> mSuppressToolbarSceneLayerSupplier =
              ObservableSuppliers.createNonNull(false);
@@ -3680,7 +3681,11 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
      private final SettableMonotonicObservableSupplier<Long> mCaptureResourceIdSupplier =
              ObservableSuppliers.createMonotonic();
      private @MonotonicNonNull TabModelSelector mTabModelSelector;
-@@ -407,6 +420,58 @@
++    private @Nullable Boolean mArcCameraDesktopMode;
+     private final Callback<TabModel> mCurrentTabModelObserver;
+     private MonotonicObservableSupplier<TabModelSelector> mTabModelSelectorSupplier;
+     private ActivityTabProvider.ActivityTabTabObserver mActivityTabTabObserver;
+@@ -407,6 +421,58 @@
      private final AppMenuDelegate mAppMenuDelegate;
      private final CompositorViewHolder mCompositorViewHolder;
      private final BottomControlsStacker mBottomControlsStacker;
@@ -3739,7 +3744,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
      private final TopControlsStacker mTopControlsStacker;
      private final BrowserControlsSizer mBrowserControlsSizer;
      private final FullscreenManager mFullscreenManager;
-@@ -857,6 +922,7 @@
+@@ -857,6 +923,7 @@
              boolean suppressTabStripAtStart,
              @Nullable OneshotSupplier<HubManager> hubManagerSupplier) {
          TraceEvent.begin("ToolbarManager.ToolbarManager");
@@ -3747,15 +3752,16 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          mActionRegistry = actionRegistry;
          mCountrySupplier = countrySupplier;
          mToggleGlicCallback = toggleGlicCallback;
-@@ -946,6 +1012,7 @@
+@@ -946,6 +1013,8 @@
                  new ComponentCallbacks() {
                      @Override
                      public void onConfigurationChanged(Configuration configuration) {
++                        refreshArcCameraOrientationMode();
 +                        if (mArcPhoneHost != null) updateArcPhoneFloatingSurfaces();
                          int newOrientation = configuration.orientation;
                          if (newOrientation == mCurrentOrientation) {
                              return;
-@@ -1425,6 +1492,9 @@
+@@ -1425,6 +1494,9 @@
 
                      @Override
                      public void onObservingDifferentTab(@Nullable Tab tab) {
@@ -3765,7 +3771,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          // ActivityTabProvider will null out the tab passed to
                          // onObservingDifferentTab when the tab is non-interactive (e.g. when
                          // entering the TabSwitcher).
-@@ -1477,10 +1547,15 @@
+@@ -1477,10 +1549,15 @@
                      public void onTitleUpdated(Tab tab) {
                          onBackPressStateChanged();
                          mLocationBarModel.notifyTitleChanged();
@@ -3781,7 +3787,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          // Update the SSL security state as a result of this notification as it will
                          // sometimes be the only update we receive.
                          updateTabLoadingState(true);
-@@ -1507,6 +1582,7 @@
+@@ -1507,6 +1584,7 @@
 
                      @Override
                      public void onLoadStarted(Tab tab, boolean toDifferentDocument) {
@@ -3789,7 +3795,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          onBackPressStateChanged();
                          if (!toDifferentDocument) return;
                          updateTabLoadingState(true);
-@@ -1751,6 +1827,8 @@
+@@ -1751,6 +1829,8 @@
                  new FullscreenManager.Observer() {
                      @Override
                      public void onEnterFullscreen(Tab tab, FullscreenOptions options) {
@@ -3798,7 +3804,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          if (mFindToolbarManager != null) mFindToolbarManager.hideToolbar();
                          mFullscreenHairlineToken =
                                  setToolbarShadowVisibilityAndClearOldToken(
-@@ -1759,6 +1837,8 @@
+@@ -1759,6 +1839,8 @@
 
                      @Override
                      public void onExitFullscreen(Tab tab) {
@@ -3807,10 +3813,24 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          mFullscreenHairlineToken =
                                  setToolbarShadowVisibilityAndClearOldToken(
                                          true, mFullscreenHairlineToken);
-@@ -2524,8 +2604,345 @@
+@@ -2524,8 +2606,359 @@
          return ((LocationBarCoordinator) mLocationBar).getUrlBarViewRectProvider();
      }
 
++    private void refreshArcCameraOrientationMode() {
++        if (mIsDestroyed || mTabModelSelector == null) return;
++        boolean desktop = org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.isDesktopWindow(mActivity);
++        if (mArcCameraDesktopMode != null && mArcCameraDesktopMode == desktop) return;
++        mArcCameraDesktopMode = desktop;
++        for (org.chromium.chrome.browser.tabmodel.TabModel model : mTabModelSelector.getModels()) {
++            for (int i = 0; i < model.getCount(); i++) {
++                Tab tab = model.getTabAt(i);
++                if (tab == null || tab.isDestroyed() || tab.getWebContents() == null) continue;
++                org.chromium.chrome.browser.content.ContentUtils.refreshArcCameraOrientation(tab.getWebContents());
++            }
++        }
++    }
++
 +    /** Native actions are supplied after the tabbed Activity initializes its models. */
 +    public void configureArcPhoneNavigation(ArcPhoneNavigation.Host host) {
 +        if (org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.isDesktopWindow(mActivity)) return;
@@ -4153,7 +4173,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          enableTabGroupUiControls();
          if (BottomBarConfigUtils.isBottomBarEnabled(mActivity)) {
              enableBottomBar();
-@@ -2605,26 +3022,47 @@
+@@ -2605,26 +3038,47 @@
          OneshotSupplier<String> countrySupplier =
                  mCountrySupplier != null ? mCountrySupplier : new OneshotSupplierImpl<>();
 
@@ -4221,7 +4241,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          }
 
          var bottomAppBarCoordinator =
-@@ -2639,7 +3077,8 @@
+@@ -2639,7 +3093,8 @@
                          mActivityTabProvider.asObservable(),
                          (ScrollingBottomViewResourceFrameLayout) bottomAppBarContainer,
                          LayerType.BOTTOM_APP_BAR,
@@ -4231,7 +4251,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                          bottomBarContainerOneshotSupplier,
                          mTabObscuringHandler,
                          mLayoutManager.getOverlayPanelManager().getPanelStateSupplier(),
-@@ -2652,6 +3091,7 @@
+@@ -2652,6 +3107,7 @@
              bottomAppBarCoordinator.initializeWithNative();
          }
          mBottomAppBarCoordinatorSupplier.set(bottomAppBarCoordinator);
@@ -4239,7 +4259,15 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
      }
 
      /**
-@@ -2840,7 +3280,7 @@
+@@ -2702,6 +3158,7 @@
+         mUndoBarThrottle = undoBarThrottle;
+
+         mTabModelSelector = tabModelSelector;
++        refreshArcCameraOrientationMode();
+         if (mActionRegistry != null) {
+             PropertyModel newTabModel = mActionRegistry.get(ActionId.NEW_TAB).get();
+             assert newTabModel != null : "NEW_TAB action should be registered";
+@@ -2840,7 +3297,7 @@
                  mBrowserControlsSizer,
                  mToolbarThemeColorProvider,
                  mBottomToolbarControlsOffsetSupplier,
@@ -4248,7 +4276,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
                  mToolbarProgressBarLayer::onProgressBarInfoUpdate,
                  mCaptureResourceIdSupplier,
                  mTabStripTopControlLayer,
-@@ -2992,6 +3432,36 @@
+@@ -2992,6 +3449,36 @@
      public void destroy() {
          if (mIsDestroyed) return;
          mIsDestroyed = true;
@@ -4285,7 +4313,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 
          if (mAppInstalledDelegate != null) {
              mAppInstalledDelegate.destroy();
-@@ -3052,9 +3522,20 @@
+@@ -3052,9 +3539,20 @@
              mTabGroupUiBottomControlsCoordinatorSupplier = null;
          }
 
@@ -4306,7 +4334,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
              mBottomAppBarCoordinatorSupplier = null;
          }
 
-@@ -3268,6 +3749,7 @@
+@@ -3268,6 +3766,7 @@
          }
 
          mToolbar.onUrlFocusChange(hasFocus);
@@ -4314,7 +4342,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
 
          if (mFindToolbarManager != null && hasFocus) mFindToolbarManager.hideToolbar();
 
-@@ -3318,6 +3800,16 @@
+@@ -3318,6 +3817,16 @@
       */
      @Override
      public void onThemeColorChanged(int color, boolean shouldAnimate) {
@@ -4331,7 +4359,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          if (!mShouldUpdateToolbarPrimaryColor) return;
 
          boolean colorChanged = mCurrentThemeColor != color;
-@@ -3658,6 +4150,8 @@
+@@ -3658,6 +4167,8 @@
 
          updateButtonStatus();
          mCurrentTabSupplier.set(tab);
@@ -4340,7 +4368,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/toolbar/Toolbar
          mFormFieldFocusedSupplier.onWebContentsChanged(tab == null ? null : tab.getWebContents());
      }
 
-@@ -3945,8 +4439,24 @@
+@@ -3945,8 +4456,24 @@
          updateToolbarSceneLayerSuppression();
      }
 
@@ -4675,26 +4703,28 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/tabbed_mode/Ta
 diff --git a/chrome/browser/BUILD.gn b/chrome/browser/BUILD.gn
 --- a/chrome/browser/BUILD.gn
 +++ b/chrome/browser/BUILD.gn
-@@ -2,6 +2,7 @@
- # Use of this source code is governed by a BSD-style license that can be
- # found in the LICENSE file.
-
+@@ -25,6 +25,7 @@
+ import("//components/offline_pages/buildflags/features.gni")
+ import("//components/on_device_translation/buildflags/features.gni")
+ import("//components/optimization_guide/features.gni")
 +import("//components/password_manager/core/browser/buildflags.gni")
- import("//base/allocator/allocator.gni")
- import("//build/buildflag_header.gni")
- import("//build/config/buildflags_paint_preview.gni")
-@@ -834,6 +835,10 @@
+ import("//components/spellcheck/spellcheck_build_features.gni")
+ import("//content/public/common/features.gni")
+ import("//crypto/features.gni")
+@@ -834,6 +835,12 @@
  }
 
  source_set("core") {
-+  deps = [ "//components/password_manager/core/browser:password_manager_buildflags" ]
++  deps = [
++    "//components/password_manager/core/browser:password_manager_buildflags",
++  ]
 +  if (is_android && enable_archium_local_passwords) {
 +    deps += [ "//chrome/browser/password_manager/android:archium_key_provider" ]
 +  }
    sources = [
      "about_flags.cc",
      "after_startup_task_utils.cc",
-@@ -885,7 +890,7 @@
+@@ -885,7 +892,7 @@
      defines += [ "USE_OFFICIAL_ENTERPRISE_CONNECTORS_API_KEYS=1" ]
    }
 
@@ -4703,6 +4733,28 @@ diff --git a/chrome/browser/BUILD.gn b/chrome/browser/BUILD.gn
      ":active_use_util",
      ":after_startup_task_utils",
      ":bad_message",
+@@ -1658,6 +1665,10 @@
+   }
+
+   if (is_android) {
++    deps += [
++      "//chrome/browser/android/content:camera_orientation",
++      "//chrome/browser/android/content:jni_headers",
++    ]
+     sources += [
+       "after_startup_task_utils_android.cc",
+       "browser_process_platform_part_android.cc",
+diff --git a/chrome/browser/android/BUILD.gn b/chrome/browser/android/BUILD.gn
+--- a/chrome/browser/android/BUILD.gn
++++ b/chrome/browser/android/BUILD.gn
+@@ -638,6 +638,7 @@
+       "//chrome/app:command_ids",
+       "//chrome/browser:global_features",
+       "//chrome/browser/accessibility/settings",
++      "//chrome/browser/android/content:camera_orientation",
+       "//chrome/browser/android/content:jni_headers",
+       "//chrome/browser/android/extensions:android",
+       "//chrome/browser/android/extensions:jni_headers",
 diff --git a/chrome/browser/android/compositor/compositor_view.cc b/chrome/browser/android/compositor/compositor_view.cc
 --- a/chrome/browser/android/compositor/compositor_view.cc
 +++ b/chrome/browser/android/compositor/compositor_view.cc
@@ -5050,17 +5102,18 @@ diff --git a/chrome/browser/android/content/BUILD.gn b/chrome/browser/android/co
      "java/src/org/chromium/chrome/browser/content/ContentUtils.java",
      "java/src/org/chromium/chrome/browser/content/WebContentsFactory.java",
    ]
-@@ -15,6 +16,9 @@
+@@ -15,15 +16,27 @@
      "//base:base_java",
      "//build/android:build_java",
      "//chrome/browser/profiles/android:java",
 +    "//chrome/browser/ui/android/desktop_site:java",
-+    "//ui/android:ui_no_recycler_view_java",
-+    "//url:url_java",
      "//content/public/android:content_java",
      "//net/android:net_java",
      "//third_party/jni_zero:jni_zero_java",
-@@ -23,6 +27,7 @@
++    "//ui/android:ui_no_recycler_view_java",
++    "//url:url_java",
+   ]
+ }
 
  generate_jni("jni_headers") {
    sources = [
@@ -5068,13 +5121,23 @@ diff --git a/chrome/browser/android/content/BUILD.gn b/chrome/browser/android/co
      "java/src/org/chromium/chrome/browser/content/ContentUtils.java",
      "java/src/org/chromium/chrome/browser/content/WebContentsFactory.java",
    ]
+ }
++
++source_set("camera_orientation") {
++  sources = [ "arc_camera_orientation.h" ]
++  public_deps = [
++    "//base",
++    "//content/public/browser",
++  ]
++}
 diff --git a/chrome/browser/android/content/content_utils.cc b/chrome/browser/android/content/content_utils.cc
 --- a/chrome/browser/android/content/content_utils.cc
 +++ b/chrome/browser/android/content/content_utils.cc
-@@ -3,11 +3,13 @@
+@@ -3,11 +3,14 @@
  // found in the LICENSE file.
 
  #include "base/android/jni_string.h"
++#include "chrome/browser/android/content/arc_camera_orientation.h"
 +#include "build/build_config.h"
  #include "components/embedder_support/user_agent_utils.h"
  #include "components/version_info/version_info.h"
@@ -5085,7 +5148,7 @@ diff --git a/chrome/browser/android/content/content_utils.cc b/chrome/browser/an
 
  // Must come after all headers that specialize FromJniType() / ToJniType().
  #include "chrome/browser/android/content/jni_headers/ContentUtils_jni.h"
-@@ -20,43 +22,30 @@
+@@ -20,47 +23,42 @@
      JNIEnv* env,
      const base::android::JavaRef<jobject>& jweb_contents,
      bool j_override_in_new_tabs) {
@@ -5144,6 +5207,47 @@ diff --git a/chrome/browser/android/content/content_utils.cc b/chrome/browser/an
    spoofed_ua.ua_metadata_override->wow64 = false;
 
    content::WebContents::FromJavaWebContents(jweb_contents)
+       ->SetUserAgentOverride(spoofed_ua, j_override_in_new_tabs);
+ }
+
++static int32_t JNI_ContentUtils_GetArcCameraOrientation(
++    JNIEnv* env, const base::android::JavaRef<jobject>& contents) {
++  return arc_camera::Get(content::WebContents::FromJavaWebContents(contents));
++}
++static void JNI_ContentUtils_SetArcCameraOrientation(
++    JNIEnv* env, const base::android::JavaRef<jobject>& contents, int32_t turns) {
++  arc_camera::Set(content::WebContents::FromJavaWebContents(contents), turns);
++}
+ DEFINE_JNI(ContentUtils)
+diff --git a/chrome/browser/android/content/java/src/org/chromium/chrome/browser/content/ContentUtils.java b/chrome/browser/android/content/java/src/org/chromium/chrome/browser/content/ContentUtils.java
+--- a/chrome/browser/android/content/java/src/org/chromium/chrome/browser/content/ContentUtils.java
++++ b/chrome/browser/android/content/java/src/org/chromium/chrome/browser/content/ContentUtils.java
+@@ -30,10 +30,25 @@
+         ContentUtilsJni.get().setUserAgentOverride(webContents, overrideInNewTabs);
+     }
+
++    /** Per-tab camera calibration. Does not grant access or restart a stream. */
++    public static int getArcCameraOrientation(WebContents contents) {
++        return contents.isDestroyed() ? -1 : ContentUtilsJni.get().getArcCameraOrientation(contents);
++    }
++
++    public static void setArcCameraOrientation(WebContents contents, int turns) {
++        if (!contents.isDestroyed()) ContentUtilsJni.get().setArcCameraOrientation(contents, turns);
++    }
++
++    public static void refreshArcCameraOrientation(WebContents contents) {
++        if (!contents.isDestroyed()) setArcCameraOrientation(contents, getArcCameraOrientation(contents));
++    }
++
+     @NativeMethods
+     interface Natives {
+         @JniType("std::string")
+         String getBrowserUserAgent();
++        int getArcCameraOrientation(WebContents contents);
++        void setArcCameraOrientation(WebContents contents, int turns);
+
+         void setUserAgentOverride(WebContents webContents, boolean overrideInNewTabs);
+     }
 diff --git a/chrome/browser/autofill/android/BUILD.gn b/chrome/browser/autofill/android/BUILD.gn
 --- a/chrome/browser/autofill/android/BUILD.gn
 +++ b/chrome/browser/autofill/android/BUILD.gn
@@ -5233,7 +5337,34 @@ diff --git a/chrome/browser/chrome_content_browser_client.cc b/chrome/browser/ch
  #include "chrome/browser/android/tab_android.h"  // nogncheck crbug.com/40147906
  #include "chrome/browser/android/tab_web_contents_delegate_android.h"  // nogncheck crbug.com/40147906
  #include "chrome/browser/android/web_contents_theme_client.h"  // nogncheck crbug.com/40147906
-@@ -5021,6 +5022,9 @@
+@@ -857,6 +858,13 @@
+ using web_app::ChromeContentBrowserClientIsolatedWebAppsPart;
+ #endif
+
++#if BUILDFLAG(IS_ANDROID)
++#include "base/android/jni_android.h"
++#include "chrome/browser/android/content/arc_camera_orientation.h"
++#include "url/android/gurl_android.h"
++#include "chrome/browser/android/content/jni_headers/ArcDesktopPolicyBridge_jni.h"
++#endif
++
+ namespace {
+
+ const char kAIManagerUserDataKey[] = "ai_manager";
+@@ -4669,6 +4677,12 @@
+     WebContents* web_contents,
+     content::SiteInstance& main_frame_site,
+     WebPreferences* web_prefs) {
++#if BUILDFLAG(IS_ANDROID)
++  web_prefs->arc_camera_orientation =
++      Java_ArcDesktopPolicyBridge_isArchiumDesktopCameraEnabled(
++          base::android::AttachCurrentThread(), web_contents->GetJavaWebContents())
++          ? arc_camera::Get(web_contents) : -2;
++#endif
+   Profile* profile =
+       Profile::FromBrowserContext(web_contents->GetBrowserContext());
+   PrefService* prefs = profile->GetPrefs();
+@@ -5021,6 +5035,9 @@
 
    web_prefs->is_xslt_deprecation_banner_suppressed =
        prefs->GetBoolean(prefs::kXSLTDeprecationBannerSuppressed);
@@ -5888,11 +6019,16 @@ diff --git a/chrome/browser/ui/android/desktop_site/java/src/org/chromium/chrome
  import org.chromium.components.browser_ui.site_settings.SingleCategorySettingsConstants;
  import org.chromium.components.browser_ui.site_settings.WebsitePreferenceBridge;
  import org.chromium.components.browser_ui.util.ConversionUtils;
-@@ -214,26 +215,24 @@
+@@ -214,26 +215,29 @@
       * @param context The current context.
       * @return Whether the desktop site should be overridden for the current URL.
       */
 +    /** Reuse Chromium's interactive Document PiP Activity only on supported desktop windows. */
++    /** Camera policy follows the real UI mode, independently of site identity overrides. */
++    public static boolean isArchiumDesktopCameraEnabled(Context context) {
++        return ArcDesktopAppearance.isDesktopWindow(context);
++    }
++
 +    public static boolean isArchiumDocumentPipEnabled(Context context) {
 +        return Build.VERSION.SDK_INT >= 37 && ArcDesktopAppearance.isDesktopWindow(context);
 +    }
@@ -9382,6 +9518,135 @@ diff --git a/content/public/common/content_features.cc b/content/public/common/c
 
  // Enable timeout for TextClassifier calls. The timeout is configurable with a
  // default of 200ms.
+diff --git a/third_party/blink/common/web_preferences/web_preferences_mojom_traits.cc b/third_party/blink/common/web_preferences/web_preferences_mojom_traits.cc
+--- a/third_party/blink/common/web_preferences/web_preferences_mojom_traits.cc
++++ b/third_party/blink/common/web_preferences/web_preferences_mojom_traits.cc
+@@ -52,6 +52,9 @@
+   )
+     return false;
+
++  out->arc_camera_orientation = data.arc_camera_orientation();
++  if (out->arc_camera_orientation < -2 || out->arc_camera_orientation > 3)
++    return false;
+   out->default_font_size = data.default_font_size();
+   out->default_fixed_font_size = data.default_fixed_font_size();
+   out->minimum_font_size = data.minimum_font_size();
+diff --git a/third_party/blink/public/common/web_preferences/web_preferences.h b/third_party/blink/public/common/web_preferences/web_preferences.h
+--- a/third_party/blink/public/common/web_preferences/web_preferences.h
++++ b/third_party/blink/public/common/web_preferences/web_preferences.h
+@@ -56,6 +56,8 @@
+   ScriptFontFamilyMap cursive_font_family_map;
+   ScriptFontFamilyMap fantasy_font_family_map;
+   ScriptFontFamilyMap math_font_family_map;
++  // -2 native/Mobile, -1 Desktop auto, 0..3 manual clockwise quarter-turns.
++  int arc_camera_orientation = -2;
+   int default_font_size = 16;
+   int default_fixed_font_size = 13;
+   int minimum_font_size = 0;
+diff --git a/third_party/blink/public/common/web_preferences/web_preferences_mojom_traits.h b/third_party/blink/public/common/web_preferences/web_preferences_mojom_traits.h
+--- a/third_party/blink/public/common/web_preferences/web_preferences_mojom_traits.h
++++ b/third_party/blink/public/common/web_preferences/web_preferences_mojom_traits.h
+@@ -21,6 +21,9 @@
+ template <>
+ struct BLINK_COMMON_EXPORT StructTraits<blink::mojom::WebPreferencesDataView,
+                                         blink::web_pref::WebPreferences> {
++  static int arc_camera_orientation(const blink::web_pref::WebPreferences& r) {
++    return r.arc_camera_orientation;
++  }
+   static const blink::web_pref::ScriptFontFamilyMap& standard_font_family_map(
+       const blink::web_pref::WebPreferences& r) {
+     return r.standard_font_family_map;
+diff --git a/third_party/blink/public/mojom/webpreferences/web_preferences.mojom b/third_party/blink/public/mojom/webpreferences/web_preferences.mojom
+--- a/third_party/blink/public/mojom/webpreferences/web_preferences.mojom
++++ b/third_party/blink/public/mojom/webpreferences/web_preferences.mojom
+@@ -122,6 +122,7 @@
+   map<string, mojo_base.mojom.String16> cursive_font_family_map;
+   map<string, mojo_base.mojom.String16> fantasy_font_family_map;
+   map<string, mojo_base.mojom.String16> math_font_family_map;
++  int32 arc_camera_orientation = -2;
+   int32 default_font_size;
+   int32 default_fixed_font_size;
+   int32 minimum_font_size;
+diff --git a/third_party/blink/public/web/modules/mediastream/media_stream_video_source.h b/third_party/blink/public/web/modules/mediastream/media_stream_video_source.h
+--- a/third_party/blink/public/web/modules/mediastream/media_stream_video_source.h
++++ b/third_party/blink/public/web/modules/mediastream/media_stream_video_source.h
+@@ -14,6 +14,7 @@
+ #include "base/functional/callback.h"
+ #include "base/functional/callback_forward.h"
+ #include "base/memory/raw_ptr.h"
++#include "base/memory/ref_counted.h"
+ #include "base/memory/scoped_refptr.h"
+ #include "base/memory/weak_ptr.h"
+ #include "base/threading/thread_checker.h"
+@@ -39,6 +40,7 @@
+ }
+
+ namespace blink {
++class ArcCameraOrientationPolicy;
+
+ class MediaStreamVideoTrack;
+ class VideoTrackAdapter;
+@@ -236,7 +238,7 @@
+   // Returns true if thread type for threads processing frames from this source
+   // should be raised. This is intended to be used for frames coming from
+   // content or camera capture.
+-  virtual bool AllowsVideoThreadTypeOverride() const { return false; }
++  virtual bool AllowsVideoThreadTypeOverride() const;
+
+   // Set a callback to be called when the source has seen screencast content
+   // type. The callback may be called on any thread and destroyed on any thread.
+@@ -266,6 +268,8 @@
+   virtual base::WeakPtr<MediaStreamVideoSource> GetWeakPtr() = 0;
+
+  protected:
++  void SetArcCameraOrientationPolicy(
++      scoped_refptr<base::RefCountedData<ArcCameraOrientationPolicy>> policy);
+   // MediaStreamSource implementation.
+   void DoChangeSource(const MediaStreamDevice& new_device) override;
+   void DoStopSource() override;
+diff --git a/third_party/blink/renderer/core/BUILD.gn b/third_party/blink/renderer/core/BUILD.gn
+--- a/third_party/blink/renderer/core/BUILD.gn
++++ b/third_party/blink/renderer/core/BUILD.gn
+@@ -335,6 +335,10 @@
+   sources += rebase_path(blink_core_sources_origin_trials, "", "origin_trials")
+   sources += rebase_path(blink_core_sources_overscroll, "", "overscroll")
+   sources += rebase_path(blink_core_sources_page, "", "page")
++  sources += [
++    "page/arc_camera_page_policy.cc",
++    "page/arc_camera_page_policy.h",
++  ]
+   sources += rebase_path(blink_core_sources_paint, "", "paint")
+   sources +=
+       rebase_path(blink_core_sources_resize_observer, "", "resize_observer")
+diff --git a/third_party/blink/renderer/core/exported/web_view_impl.cc b/third_party/blink/renderer/core/exported/web_view_impl.cc
+--- a/third_party/blink/renderer/core/exported/web_view_impl.cc
++++ b/third_party/blink/renderer/core/exported/web_view_impl.cc
+@@ -156,6 +156,7 @@
+ #include "third_party/blink/renderer/core/page/frame_tree.h"
+ #include "third_party/blink/renderer/core/page/link_highlight.h"
+ #include "third_party/blink/renderer/core/page/page.h"
++#include "third_party/blink/renderer/core/page/arc_camera_page_policy.h"
+ #include "third_party/blink/renderer/core/page/page_popup_client.h"
+ #include "third_party/blink/renderer/core/page/pointer_lock_controller.h"
+ #include "third_party/blink/renderer/core/page/scrolling/scrolling_coordinator.h"
+@@ -1616,6 +1617,9 @@
+                                   WebView* web_view) {
+   WebViewImpl* web_view_impl = To<WebViewImpl>(web_view);
+   WebSettings* settings = web_view->GetSettings();
++  if (web_view_impl->GetPage()) {
++    ArcCameraPagePolicy::From(*web_view_impl->GetPage()).Update(prefs.arc_camera_orientation);
++  }
+   ApplyFontsFromMap(prefs.standard_font_family_map,
+                     SetStandardFontFamilyWrapper, settings);
+   ApplyFontsFromMap(prefs.fixed_font_family_map, SetFixedFontFamilyWrapper,
+@@ -3957,6 +3961,7 @@
+     // viewport <meta> tag. Text autosizing is disabled since it is only
+     // determined by the outermost page and having the outermost page pass
+     // it into the fenced frame can create a communication channel.
++    web_preferences_.arc_camera_orientation = -2;
+     web_preferences_.viewport_enabled = false;
+     web_preferences_.viewport_meta_enabled = false;
+     web_preferences_.default_minimum_page_scale_factor = 1.f;
 diff --git a/third_party/blink/renderer/core/frame/navigator_id.cc b/third_party/blink/renderer/core/frame/navigator_id.cc
 --- a/third_party/blink/renderer/core/frame/navigator_id.cc
 +++ b/third_party/blink/renderer/core/frame/navigator_id.cc
@@ -9400,6 +9665,227 @@ diff --git a/third_party/blink/renderer/core/frame/navigator_id.cc b/third_party
  #if BUILDFLAG(IS_MAC)
    // Match Safari and Mozilla on Mac x86.
    return "MacIntel";
+diff --git a/third_party/blink/renderer/modules/mediastream/media_stream_video_capturer_source.cc b/third_party/blink/renderer/modules/mediastream/media_stream_video_capturer_source.cc
+--- a/third_party/blink/renderer/modules/mediastream/media_stream_video_capturer_source.cc
++++ b/third_party/blink/renderer/modules/mediastream/media_stream_video_capturer_source.cc
+@@ -22,6 +22,7 @@
+ #include "third_party/blink/renderer/bindings/core/v8/v8_binding_for_core.h"
+ #include "third_party/blink/renderer/core/dom/dom_exception.h"
+ #include "third_party/blink/renderer/core/frame/local_frame.h"
++#include "third_party/blink/renderer/core/page/arc_camera_page_policy.h"
+ #include "third_party/blink/renderer/modules/mediastream/media_stream_constraints_util.h"
+ #include "third_party/blink/renderer/modules/mediastream/video_track_adapter.h"
+ #include "third_party/blink/renderer/platform/scheduler/public/thread.h"
+@@ -62,6 +63,11 @@
+   DCHECK(!device.session_id().is_empty());
+   SetStopCallback(std::move(stop_callback));
+   SetDevice(device);
++  if (device.type == mojom::blink::MediaStreamType::DEVICE_VIDEO_CAPTURE &&
++      frame && frame->GetPage()) {
++    SetArcCameraOrientationPolicy(
++        ArcCameraPagePolicy::From(*frame->GetPage()).State());
++  }
+   SetDeviceRotationDetection(true /* enabled */);
+   switch (device.type) {
+     case mojom::blink::MediaStreamType::DEVICE_VIDEO_CAPTURE:
+diff --git a/third_party/blink/renderer/modules/mediastream/media_stream_video_source.cc b/third_party/blink/renderer/modules/mediastream/media_stream_video_source.cc
+--- a/third_party/blink/renderer/modules/mediastream/media_stream_video_source.cc
++++ b/third_party/blink/renderer/modules/mediastream/media_stream_video_source.cc
+@@ -377,6 +377,15 @@
+                          num_encoded_sinks == 0);
+ }
+
++bool MediaStreamVideoSource::AllowsVideoThreadTypeOverride() const {
++  return false;
++}
++
++void MediaStreamVideoSource::SetArcCameraOrientationPolicy(
++    scoped_refptr<base::RefCountedData<ArcCameraOrientationPolicy>> policy) {
++  GetTrackAdapter()->SetArcCameraOrientationPolicy(std::move(policy));
++}
++
+ void MediaStreamVideoSource::SetDeviceRotationDetection(bool enabled) {
+   DCHECK(GetTaskRunner()->BelongsToCurrentThread());
+   enable_device_rotation_detection_ = enabled;
+diff --git a/third_party/blink/renderer/modules/mediastream/video_track_adapter.cc b/third_party/blink/renderer/modules/mediastream/video_track_adapter.cc
+--- a/third_party/blink/renderer/modules/mediastream/video_track_adapter.cc
++++ b/third_party/blink/renderer/modules/mediastream/video_track_adapter.cc
+@@ -28,6 +28,7 @@
+ #include "media/base/limits.h"
+ #include "media/base/video_frame_converter.h"
+ #include "media/base/video_frame_pool.h"
++#include "media/base/video_transformation.h"
+ #include "media/base/video_types.h"
+ #include "media/base/video_util.h"
+ #include "third_party/blink/public/common/features.h"
+@@ -309,7 +310,8 @@
+   void DeliverFrame(
+       scoped_refptr<media::VideoFrame> frame,
+       const base::TimeTicks& estimated_capture_time,
+-      bool is_device_rotated);
++      bool is_device_rotated, ArcCameraOrientationPolicy::Snapshot camera_policy,
++      const gfx::Size& camera_source_size);
+   // This method is called when a frame is dropped, whether dropped by the
+   // source (via VideoTrackAdapter::OnFrameDroppedOnVideoTaskRunner) or
+   // internally (in DeliverFrame).
+@@ -336,7 +338,8 @@
+   base::expected<scoped_refptr<media::VideoFrame>,
+                  media::VideoCaptureFrameDropReason>
+   AdaptFrameResolution(scoped_refptr<media::VideoFrame> video_frame,
+-                       bool is_device_rotated);
++                       bool is_device_rotated, ArcCameraOrientationPolicy::Snapshot camera_policy,
++                       const gfx::Size& camera_source_size);
+
+   // Delivers |video_frame| to the specific track represented by |track_params|,
+   // updating track settings if the frame format has changed.
+@@ -519,8 +522,42 @@
+                media::VideoCaptureFrameDropReason>
+ VideoTrackAdapter::VideoFrameResolutionAdapter::AdaptFrameResolution(
+     scoped_refptr<media::VideoFrame> video_frame,
+-    bool is_device_rotated) {
+-  DCHECK_CALLED_ON_VALID_SEQUENCE(video_sequence_checker_);
++    bool is_device_rotated, ArcCameraOrientationPolicy::Snapshot camera_policy,
++    const gfx::Size& camera_source_size) {
++  DCHECK_CALLED_ON_VALID_SEQUENCE(video_sequence_checker_);
++  // Camera calibration is per Page/source and per track's requested format.
++  // Screen capture never receives a camera policy. Preserve the native sensor
++  // orientation and compose only an explicit user adjustment. Crop by wrapping
++  // the original buffers; no new camera, copy, GPU setting or website override.
++  if (camera_policy.enabled && !is_video_desktop_capture_type_) {
++    gfx::Size target;
++    // Keep Chromium's size limits and explicit aspect-ratio constraints. Only
++    // omit the mobile rotation heuristic when choosing the display aspect.
++    const bool valid_target = CalculateDesiredSize(
++        false, camera_source_size, settings_, &target);
++    const media::VideoTransformation original = video_frame->metadata().transformation.value_or(
++        media::VideoTransformation());
++    const media::VideoTransformation transform = original.add(
++        media::VideoTransformation(static_cast<media::VideoRotation>(camera_policy.turns * 90)));
++    const auto plan = ArcCameraOrientationPolicy::Plan(
++        camera_policy, target.width(), target.height(), static_cast<int>(transform.rotation));
++    if (valid_target && plan.valid) {
++      const gfx::Size desired(plan.width, plan.height);
++      const gfx::Rect region = ComputeLetterboxRect(video_frame->visible_rect(), desired);
++      if (desired == video_frame->natural_size() && region == video_frame->visible_rect()
++          && transform == original) {
++        return video_frame;
++      }
++      auto calibrated = media::VideoFrame::WrapVideoFrame(
++          video_frame, video_frame->format(), region, desired);
++      if (!calibrated) {
++        return base::unexpected(media::VideoCaptureFrameDropReason::
++            kResolutionAdapterWrappingFrameForCroppingFailed);
++      }
++      calibrated->metadata().transformation = transform;
++      return calibrated;
++    }
++  }
+   // If the frame holds a SharedImage that is not CPU-mappable we don't apply
+   // cropping/scaling and deliver the frame as-is, leaving it up to the
+   // destination to rescale it. Otherwise, cropping and scaling is soft-applied
+@@ -603,7 +640,8 @@
+ void VideoTrackAdapter::VideoFrameResolutionAdapter::DeliverFrame(
+     scoped_refptr<media::VideoFrame> video_frame,
+     const base::TimeTicks& estimated_capture_time,
+-    bool is_device_rotated) {
++    bool is_device_rotated, ArcCameraOrientationPolicy::Snapshot camera_policy,
++    const gfx::Size& camera_source_size) {
+   DCHECK_CALLED_ON_VALID_SEQUENCE(video_sequence_checker_);
+
+   if (!video_frame) {
+@@ -675,7 +713,7 @@
+               : video_frame;
+       if (track_frame) {
+         adapted_frame =
+-            AdaptFrameResolution(std::move(track_frame), is_device_rotated);
++            AdaptFrameResolution(std::move(track_frame), is_device_rotated, camera_policy, camera_source_size);
+       }
+       adapted_frames_cache.push_back(CachedFrame{target_token, adapted_frame});
+     }
+@@ -972,6 +1010,20 @@
+           WrapRefCounted(this)));
+ }
+
++void VideoTrackAdapter::SetArcCameraOrientationPolicy(
++    scoped_refptr<ArcCameraOrientationState> policy) {
++  DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
++  PostCrossThreadTask(*video_task_runner_, FROM_HERE,
++      CrossThreadBindOnce(&VideoTrackAdapter::SetArcCameraOrientationPolicyOnVideoTaskRunner,
++                          WrapRefCounted(this), std::move(policy)));
++}
++
++void VideoTrackAdapter::SetArcCameraOrientationPolicyOnVideoTaskRunner(
++    scoped_refptr<ArcCameraOrientationState> policy) {
++  DCHECK(video_task_runner_->RunsTasksInCurrentSequence());
++  arc_camera_orientation_ = std::move(policy);
++}
++
+ void VideoTrackAdapter::SetSourceFrameSize(const gfx::Size& source_frame_size) {
+   DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
+   PostCrossThreadTask(
+@@ -1145,9 +1197,14 @@
+       video_frame->natural_size().height() == source_frame_size_->width()) {
+     is_device_rotated = true;
+   }
++  const auto camera_policy =
++      arc_camera_orientation_ && !is_video_desktop_capture_type_
++          ? arc_camera_orientation_->data.Get()
++          : ArcCameraOrientationPolicy::Snapshot();
+   for (const auto& adapter : adapters_) {
+     adapter->DeliverFrame(video_frame, estimated_capture_time,
+-                          is_device_rotated);
++                          is_device_rotated, camera_policy,
++                          source_frame_size_.value_or(video_frame->natural_size()));
+   }
+ }
+
+diff --git a/third_party/blink/renderer/modules/mediastream/video_track_adapter.h b/third_party/blink/renderer/modules/mediastream/video_track_adapter.h
+--- a/third_party/blink/renderer/modules/mediastream/video_track_adapter.h
++++ b/third_party/blink/renderer/modules/mediastream/video_track_adapter.h
+@@ -18,6 +18,7 @@
+ #include "base/time/time.h"
+ #include "base/token.h"
+ #include "media/base/video_frame.h"
++#include "third_party/blink/renderer/platform/mediastream/arc_camera_orientation_state.h"
+ #include "third_party/blink/public/platform/modules/mediastream/media_stream_types.h"
+ #include "third_party/blink/public/web/modules/mediastream/encoded_video_frame.h"
+ #include "third_party/blink/renderer/modules/mediastream/media_stream_video_track.h"
+@@ -67,6 +68,7 @@
+   void RemoveTrack(const MediaStreamVideoTrack* track);
+   void ReconfigureTrack(const MediaStreamVideoTrack* track,
+                         const VideoTrackAdapterSettings& settings);
++  void SetArcCameraOrientationPolicy(scoped_refptr<ArcCameraOrientationState> policy);
+   void SetTrackSubCaptureTarget(const MediaStreamVideoTrack* track,
+                                 const base::Token& sub_capture_target);
+
+@@ -192,6 +194,7 @@
+       OnMutedInternalCallback on_muted_state_callback,
+       double source_frame_rate);
+   void StopFrameMonitoringOnVideoTaskRunner();
++  void SetArcCameraOrientationPolicyOnVideoTaskRunner(scoped_refptr<ArcCameraOrientationState> policy);
+   void SetSourceFrameSizeOnVideoTaskRunner(const gfx::Size& frame_size);
+
+   // Compare |old_frame_counter_snapshot_| with the current |frame_counter_|,
+@@ -213,6 +216,7 @@
+   class VideoFrameResolutionAdapter;
+   using FrameAdapters = Vector<scoped_refptr<VideoFrameResolutionAdapter>>;
+   FrameAdapters adapters_;
++  scoped_refptr<ArcCameraOrientationState> arc_camera_orientation_;
+
+   // Is non-null while frame monitoring. It is only accessed on the video task
+   // runner.
+diff --git a/third_party/blink/renderer/platform/BUILD.gn b/third_party/blink/renderer/platform/BUILD.gn
+--- a/third_party/blink/renderer/platform/BUILD.gn
++++ b/third_party/blink/renderer/platform/BUILD.gn
+@@ -1384,6 +1384,8 @@
+     "media_capabilities/web_video_configuration.h",
+     "mediastream/aec_dump_agent_impl.cc",
+     "mediastream/aec_dump_agent_impl.h",
++    "mediastream/arc_camera_orientation_policy.h",
++    "mediastream/arc_camera_orientation_state.h",
+     "mediastream/audio_service_audio_processor_proxy.cc",
+     "mediastream/audio_service_audio_processor_proxy.h",
+     "mediastream/media_stream_audio_deliverer.h",
 diff --git a/third_party/blink/renderer/platform/runtime_enabled_features.json5 b/third_party/blink/renderer/platform/runtime_enabled_features.json5
 --- a/third_party/blink/renderer/platform/runtime_enabled_features.json5
 +++ b/third_party/blink/renderer/platform/runtime_enabled_features.json5
@@ -9590,7 +10076,7 @@ diff --git a/chrome/android/java/res/values/arc_strings.xml b/chrome/android/jav
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/res/values/arc_strings.xml
-@@ -0,0 +1,112 @@
+@@ -0,0 +1,117 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<resources>
 +    <string name="arc_about">Acerca de Archium</string>
@@ -9702,6 +10188,11 @@ new file mode 100644
 +    <string name="arc_phone_off">Desactivado</string>
 +    <string name="arc_desktop_material">Intensidad del acabado Desktop</string>
 +    <string name="arc_desktop_material_description">Ajusta la iluminación y el relieve del marco y la barra lateral.</string>
++    <string name="arc_camera_orientation">Orientación de cámara</string>
++    <string name="arc_camera_auto">Automático</string>
++    <string name="arc_camera_manual">Manual · %1$d°</string>
++    <string name="arc_camera_rotate">Girar 90°</string>
++    <string name="arc_camera_reset">Restablecer automático</string>
 +</resources>
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAboutDialog.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAboutDialog.java
 new file mode 100644
@@ -9840,6 +10331,56 @@ new file mode 100644
 +                            dialog.dismiss(); onChanged.run();
 +                        })
 +                .setNegativeButton(android.R.string.cancel, null).create();
++    }
++}
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCameraControls.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCameraControls.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCameraControls.java
+@@ -0,0 +1,45 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++import android.view.View;
++import android.widget.PopupMenu;
++import org.chromium.build.annotations.NullMarked;
++import org.chromium.build.annotations.Nullable;
++import org.chromium.chrome.R;
++import org.chromium.chrome.browser.content.ContentUtils;
++import org.chromium.content_public.browser.WebContents;
++
++/** Native Desktop action beside extensions; calibration is owned by the chosen tab. */
++@NullMarked
++public final class ArcCameraControls {
++    private static final int AUTO = 1, MANUAL = 2, ROTATE = 3, RESET = 4;
++    private ArcCameraControls() {}
++
++    public static void show(View anchor, @Nullable WebContents contents) {
++        if (contents == null || contents.isDestroyed()) return;
++        final int mode = ContentUtils.getArcCameraOrientation(contents);
++        PopupMenu popup = new PopupMenu(anchor.getContext(), anchor);
++        popup.getMenu().add(1, AUTO, 0, R.string.arc_camera_auto).setCheckable(true).setChecked(mode < 0);
++        popup.getMenu().add(1, MANUAL, 1, anchor.getContext().getString(
++                R.string.arc_camera_manual, Math.max(0, mode) * 90))
++                .setCheckable(true).setChecked(mode >= 0);
++        popup.getMenu().setGroupCheckable(1, true, true);
++        popup.getMenu().add(0, ROTATE, 2, R.string.arc_camera_rotate).setEnabled(mode >= 0);
++        popup.getMenu().add(0, RESET, 3, R.string.arc_camera_reset).setEnabled(mode >= 0);
++        popup.setOnMenuItemClickListener(item -> {
++            if (contents.isDestroyed()) return false;
++            int next;
++            switch (item.getItemId()) {
++                case AUTO: case RESET: next = -1; break;
++                case MANUAL: next = Math.max(0, mode); break;
++                case ROTATE: next = (Math.max(0, mode) + 1) % 4; break;
++                default: return false;
++            }
++            ContentUtils.setArcCameraOrientation(contents, next);
++            return true;
++        });
++        popup.show();
 +    }
 +}
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsController.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsController.java
@@ -11440,7 +11981,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopC
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
-@@ -0,0 +1,1628 @@
+@@ -0,0 +1,1644 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -11531,6 +12072,7 @@ new file mode 100644
 +    private final LinearLayout mHeaderActions;
 +    private final LinearLayout mFooter;
 +    private final ImageButton mAppearanceButton;
++    private final ImageButton mCameraButton;
 +    private final ArcCompactOmnibox mCompactOmnibox;
 +    private final ArcOmniboxPlacement mOmniboxPlacement;
 +    private NavigationPopup mNavigationPopup;
@@ -11972,6 +12514,20 @@ new file mode 100644
 +                            ViewGroup.LayoutParams.WRAP_CONTENT,
 +                            dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
 +        }
++        mCameraButton = new ImageButton(activity);
++        mCameraButton.setImageResource(android.R.drawable.ic_menu_camera);
++        mCameraButton.setContentDescription(activity.getString(R.string.arc_camera_orientation));
++        mCameraButton.setTooltipText(activity.getString(R.string.arc_camera_orientation));
++        mCameraButton.setMinimumWidth(0);
++        mCameraButton.setMinimumHeight(0);
++        mCameraButton.setPadding(dp(10), dp(8), dp(10), dp(8));
++        mCameraButton.setOnClickListener(view -> {
++            Tab tab = mCurrentTab.get();
++            if (!mDestroyed && tab != null && !tab.isDestroyed()) {
++                ArcCameraControls.show(view, tab.getWebContents());
++            }
++        });
++        mFooter.addView(mCameraButton, new LinearLayout.LayoutParams(dp(44), dp(44)));
 +        mColumn.addView(mFooter);
 +        ImageButton about = new ImageButton(activity);
 +        about.setImageResource(android.R.drawable.ic_menu_info_details);
@@ -12633,6 +13189,7 @@ new file mode 100644
 +                        mRail.getWidth(),
 +                        mRail.getHeight(),
 +                        density);
++        if (!expanded) collectionBudget = Math.max(0, collectionBudget - dp(44));
 +        // Collection scrolling can run out of height while navigation still fits the wide rail.
 +        // Budget only the collection area; do not turn a wide sidebar into the compact layout.
 +        // Keep the real Chromium LocationBar visible even in collapsed mode so keyboard/focus
@@ -12670,7 +13227,7 @@ new file mode 100644
 +                        - mRail.getPaddingLeft() - mRail.getPaddingRight()
 +                        - Math.max(dp(ArcDesktopPolicy.ARC_NAV_BUTTON_WIDTH_DP),
 +                                mMenuButtonWrapper.getMeasuredWidth())
-+                        - 2 * dp(ArcDesktopPolicy.ARC_NAV_BUTTON_WIDTH_DP)));
++                        - 3 * dp(ArcDesktopPolicy.ARC_NAV_BUTTON_WIDTH_DP)));
 +            }
 +        }
 +        if (mCollectionsView != null) {
@@ -21245,11 +21802,43 @@ new file mode 100644
 +        assertNotEquals(0, ArcDesktopAppearance.activityDisplay(activity).getDisplayId());
 +    }
 +}
+diff --git a/chrome/browser/android/content/arc_camera_orientation.h b/chrome/browser/android/content/arc_camera_orientation.h
+new file mode 100644
+--- /dev/null
++++ b/chrome/browser/android/content/arc_camera_orientation.h
+@@ -0,0 +1,27 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++#ifndef CHROME_BROWSER_ANDROID_CONTENT_ARC_CAMERA_ORIENTATION_H_
++#define CHROME_BROWSER_ANDROID_CONTENT_ARC_CAMERA_ORIENTATION_H_
++#include <memory>
++#include "base/supports_user_data.h"
++#include "content/public/browser/web_contents.h"
++namespace arc_camera {
++inline constexpr char kOrientationKey[] = "archium-camera-orientation";
++struct OrientationData final : base::SupportsUserData::Data {
++  explicit OrientationData(int value) : turns(value) {}
++  int turns;
++};
++inline int Get(content::WebContents* contents) {
++  if (!contents) return -1;
++  auto* data = static_cast<OrientationData*>(contents->GetUserData(kOrientationKey));
++  return data ? data->turns : -1;
++}
++inline void Set(content::WebContents* contents, int turns) {
++  if (!contents) return;
++  if (turns < -1 || turns > 3) turns = -1;
++  contents->SetUserData(kOrientationKey, std::make_unique<OrientationData>(turns));
++  contents->OnWebPreferencesChanged();
++}
++}  // namespace arc_camera
++#endif
 diff --git a/chrome/browser/android/content/java/src/org/chromium/chrome/browser/content/ArcDesktopPolicyBridge.java b/chrome/browser/android/content/java/src/org/chromium/chrome/browser/content/ArcDesktopPolicyBridge.java
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/android/content/java/src/org/chromium/chrome/browser/content/ArcDesktopPolicyBridge.java
-@@ -0,0 +1,42 @@
+@@ -0,0 +1,50 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -21281,6 +21870,14 @@ new file mode 100644
 +        Profile profile = Profile.fromWebContents(webContents);
 +        if (profile == null) return -1;
 +        return DesktopSiteUtils.shouldOverrideDesktopSite(profile, url, context) ? 1 : 0;
++    }
++
++    @CalledByNative
++    private static boolean isArchiumDesktopCameraEnabled(WebContents webContents) {
++        WindowAndroid window = webContents.getTopLevelNativeWindow();
++        if (window == null) return false;
++        android.content.Context context = window.getContext().get();
++        return context != null && DesktopSiteUtils.isArchiumDesktopCameraEnabled(context);
 +    }
 +
 +    @CalledByNative
@@ -27019,3 +27616,135 @@ new file mode 100644
 +}
 +
 +}  // namespace password_manager
+diff --git a/third_party/blink/renderer/core/page/arc_camera_page_policy.cc b/third_party/blink/renderer/core/page/arc_camera_page_policy.cc
+new file mode 100644
+--- /dev/null
++++ b/third_party/blink/renderer/core/page/arc_camera_page_policy.cc
+@@ -0,0 +1,10 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++#include "third_party/blink/renderer/core/page/arc_camera_page_policy.h"
++
++namespace blink {
++void ArcCameraPagePolicy::Trace(Visitor* visitor) const {
++  Supplement<Page>::Trace(visitor);
++}
++}  // namespace blink
+diff --git a/third_party/blink/renderer/core/page/arc_camera_page_policy.h b/third_party/blink/renderer/core/page/arc_camera_page_policy.h
+new file mode 100644
+--- /dev/null
++++ b/third_party/blink/renderer/core/page/arc_camera_page_policy.h
+@@ -0,0 +1,34 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++#ifndef THIRD_PARTY_BLINK_RENDERER_CORE_PAGE_ARC_CAMERA_PAGE_POLICY_H_
++#define THIRD_PARTY_BLINK_RENDERER_CORE_PAGE_ARC_CAMERA_PAGE_POLICY_H_
++#include "base/memory/scoped_refptr.h"
++#include "third_party/blink/renderer/core/core_export.h"
++#include "third_party/blink/renderer/core/page/page.h"
++#include "third_party/blink/renderer/platform/heap/garbage_collected.h"
++#include "third_party/blink/renderer/platform/mediastream/arc_camera_orientation_state.h"
++#include "third_party/blink/renderer/platform/supplementable.h"
++namespace blink {
++class CORE_EXPORT ArcCameraPagePolicy final : public GarbageCollected<ArcCameraPagePolicy>,
++                                 public Supplement<Page> {
++ public:
++  inline static const char kSupplementName[] = "ArcCameraPagePolicy";
++  explicit ArcCameraPagePolicy(Page& page)
++      : Supplement<Page>(page), state_(base::MakeRefCounted<ArcCameraOrientationState>()) {}
++  static ArcCameraPagePolicy& From(Page& page) {
++    auto* policy = Supplement<Page>::From<ArcCameraPagePolicy>(page);
++    if (!policy) {
++      policy = MakeGarbageCollected<ArcCameraPagePolicy>(page);
++      Supplement<Page>::ProvideTo(page, policy);
++    }
++    return *policy;
++  }
++  scoped_refptr<ArcCameraOrientationState> State() const { return state_; }
++  void Update(int mode) { state_->data.Set(mode); }
++  void Trace(Visitor* visitor) const override;
++ private:
++  scoped_refptr<ArcCameraOrientationState> state_;
++};
++}  // namespace blink
++#endif
+diff --git a/third_party/blink/renderer/platform/mediastream/arc_camera_orientation_policy.h b/third_party/blink/renderer/platform/mediastream/arc_camera_orientation_policy.h
+new file mode 100644
+--- /dev/null
++++ b/third_party/blink/renderer/platform/mediastream/arc_camera_orientation_policy.h
+@@ -0,0 +1,57 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++#ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_MEDIASTREAM_ARC_CAMERA_ORIENTATION_POLICY_H_
++#define THIRD_PARTY_BLINK_RENDERER_PLATFORM_MEDIASTREAM_ARC_CAMERA_ORIENTATION_POLICY_H_
++
++#include <atomic>
++
++namespace blink {
++
++// One instance per Page. No sensor override and no cross-page preference.
++// -2: native/Mobile, -1: Desktop automatic, 0..3: Desktop manual quarter-turns.
++class ArcCameraOrientationPolicy {
++ public:
++  struct Snapshot {
++    bool enabled = false;
++    bool manual = false;
++    int turns = 0;
++  };
++  struct Geometry {
++    bool valid = false;
++    int width = 0;
++    int height = 0;
++    int rotation = 0;
++  };
++
++  void Set(int mode) {
++    mode_.store(mode >= -2 && mode <= 3 ? mode : -2,
++                std::memory_order_relaxed);
++  }
++  Snapshot Get() const {
++    const int mode = mode_.load(std::memory_order_relaxed);
++    return {mode >= -1, mode >= 0, mode >= 0 ? mode : 0};
++  }
++
++  // Dimensions describe the untransformed wrapped frame. Preserve upstream
++  // orientation, composed with the user adjustment by VideoTransformation.
++  // The display aspect respects explicit portrait requests as well.
++  static Geometry Plan(Snapshot policy, int width, int height, int rotation) {
++    if (!policy.enabled || width < 1 || height < 1 || width > 16384 ||
++        height > 16384 || rotation < 0 || rotation >= 360 || rotation % 90) {
++      return {};
++    }
++    if (rotation == 90 || rotation == 270) {
++      const int old_width = width;
++      width = height;
++      height = old_width;
++    }
++    return {true, width, height, rotation};
++  }
++
++ private:
++  std::atomic<int> mode_{-2};
++};
++
++}  // namespace blink
++#endif  // THIRD_PARTY_BLINK_RENDERER_PLATFORM_MEDIASTREAM_ARC_CAMERA_ORIENTATION_POLICY_H_
+diff --git a/third_party/blink/renderer/platform/mediastream/arc_camera_orientation_state.h b/third_party/blink/renderer/platform/mediastream/arc_camera_orientation_state.h
+new file mode 100644
+--- /dev/null
++++ b/third_party/blink/renderer/platform/mediastream/arc_camera_orientation_state.h
+@@ -0,0 +1,11 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++#ifndef THIRD_PARTY_BLINK_RENDERER_PLATFORM_MEDIASTREAM_ARC_CAMERA_ORIENTATION_STATE_H_
++#define THIRD_PARTY_BLINK_RENDERER_PLATFORM_MEDIASTREAM_ARC_CAMERA_ORIENTATION_STATE_H_
++#include "base/memory/ref_counted.h"
++#include "third_party/blink/renderer/platform/mediastream/arc_camera_orientation_policy.h"
++namespace blink {
++using ArcCameraOrientationState = base::RefCountedData<ArcCameraOrientationPolicy>;
++}  // namespace blink
++#endif

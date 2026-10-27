@@ -17,11 +17,11 @@ android_library("java") {
     "//build/android:build_java",
     "//chrome/browser/profiles/android:java",
     "//chrome/browser/ui/android/desktop_site:java",
-    "//ui/android:ui_no_recycler_view_java",
-    "//url:url_java",
     "//content/public/android:content_java",
     "//net/android:net_java",
     "//third_party/jni_zero:jni_zero_java",
+    "//ui/android:ui_no_recycler_view_java",
+    "//url:url_java",
   ]
 }
 
@@ -30,5 +30,13 @@ generate_jni("jni_headers") {
     "java/src/org/chromium/chrome/browser/content/ArcDesktopPolicyBridge.java",
     "java/src/org/chromium/chrome/browser/content/ContentUtils.java",
     "java/src/org/chromium/chrome/browser/content/WebContentsFactory.java",
+  ]
+}
+
+source_set("camera_orientation") {
+  sources = [ "arc_camera_orientation.h" ]
+  public_deps = [
+    "//base",
+    "//content/public/browser",
   ]
 }

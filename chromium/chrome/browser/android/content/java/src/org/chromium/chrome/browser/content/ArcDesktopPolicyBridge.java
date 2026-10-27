@@ -32,6 +32,14 @@ final class ArcDesktopPolicyBridge {
     }
 
     @CalledByNative
+    private static boolean isArchiumDesktopCameraEnabled(WebContents webContents) {
+        WindowAndroid window = webContents.getTopLevelNativeWindow();
+        if (window == null) return false;
+        android.content.Context context = window.getContext().get();
+        return context != null && DesktopSiteUtils.isArchiumDesktopCameraEnabled(context);
+    }
+
+    @CalledByNative
     private static boolean isArchiumDocumentPipEnabled(WebContents webContents) {
         WindowAndroid window = webContents.getTopLevelNativeWindow();
         if (window == null) return false;

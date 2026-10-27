@@ -2,7 +2,6 @@
 # Use of this source code is governed by a BSD-style license that can be
 # found in the LICENSE file.
 
-import("//components/password_manager/core/browser/buildflags.gni")
 import("//base/allocator/allocator.gni")
 import("//build/buildflag_header.gni")
 import("//build/config/buildflags_paint_preview.gni")
@@ -26,6 +25,7 @@ import("//components/lens/features.gni")
 import("//components/offline_pages/buildflags/features.gni")
 import("//components/on_device_translation/buildflags/features.gni")
 import("//components/optimization_guide/features.gni")
+import("//components/password_manager/core/browser/buildflags.gni")
 import("//components/spellcheck/spellcheck_build_features.gni")
 import("//content/public/common/features.gni")
 import("//crypto/features.gni")
@@ -835,7 +835,9 @@ source_set("process_singleton_internal") {
 }
 
 source_set("core") {
-  deps = [ "//components/password_manager/core/browser:password_manager_buildflags" ]
+  deps = [
+    "//components/password_manager/core/browser:password_manager_buildflags",
+  ]
   if (is_android && enable_archium_local_passwords) {
     deps += [ "//chrome/browser/password_manager/android:archium_key_provider" ]
   }
@@ -1663,6 +1665,10 @@ source_set("core") {
   }
 
   if (is_android) {
+    deps += [
+      "//chrome/browser/android/content:camera_orientation",
+      "//chrome/browser/android/content:jni_headers",
+    ]
     sources += [
       "after_startup_task_utils_android.cc",
       "browser_process_platform_part_android.cc",
