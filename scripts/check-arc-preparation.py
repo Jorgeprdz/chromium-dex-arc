@@ -353,6 +353,20 @@ def main():
         phone_definitions = phone_module.definitions()
         phone_definitions.pop('org.chromium.chrome.browser.profiles.Profile')
         definitions.update(phone_definitions)
+        # The new policy bridge is included by the all-delivered-adapters probe.
+        # Add its genuine Chromium signatures after the phone fixtures merge so
+        # they cannot be overwritten. Bodies are type-check boundaries only;
+        # identity behavior and Android API use have their own executable probes.
+        extend('org.chromium.content_public.browser.WebContents',
+            ' org.chromium.ui.base.WindowAndroid getTopLevelNativeWindow();')
+        extend('org.chromium.ui.base.WindowAndroid',
+            ' public java.lang.ref.WeakReference<android.content.Context> getContext(){return null;}')
+        extend('org.chromium.chrome.browser.profiles.Profile',
+            ' public static Profile fromWebContents(org.chromium.content_public.browser.WebContents contents){return null;}')
+        definitions['org.chromium.chrome.browser.desktop_site.DesktopSiteUtils'] = (
+            'public class DesktopSiteUtils {'
+            ' public static boolean shouldOverrideDesktopSite(org.chromium.chrome.browser.profiles.Profile profile,org.chromium.url.GURL url,android.content.Context context){return false;}'
+            ' public static boolean isArchiumDocumentPipEnabled(android.content.Context context){return false;} }')
         for annotation in ['Nullable', 'NullMarked', 'NullUnmarked']:
             definitions['org.chromium.build.annotations.' + annotation] = '@java.lang.annotation.Target({java.lang.annotation.ElementType.TYPE_USE,java.lang.annotation.ElementType.TYPE,java.lang.annotation.ElementType.METHOD,java.lang.annotation.ElementType.PACKAGE}) public @interface ' + annotation + ' {}'
         # Nullable is strictly TYPE_USE in Chromium; declaration targets can mask javac errors.
