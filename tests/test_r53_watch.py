@@ -17,6 +17,14 @@ class WatchTests(unittest.TestCase):
     def state(self):return dict(run_id='123',expected_sha='a'*40,source_checkpoint='archium-checkpoint-100-1',source_commit='b'*40,source_run_id='100',stage=6)
     def github_run(self,conclusion=None):
         return dict(id=123,head_sha='a'*40,head_branch='assistant/archium-r5-arc-experience',path='.github/workflows/baseline-build.yml',status='completed' if conclusion else 'in_progress',conclusion=conclusion,html_url='https://github.com/example/run/123')
+    def test_chain_stage_number_tracks_running_job_without_changing_root_source(self):
+        s=self.state();s.update(stage=1,max_stages=12)
+        call=Mock(side_effect=[self.github_run(),{'jobs':[dict(name='stage_4 / build',status='in_progress',conclusion=None,steps=[])]}])
+        w.refresh(s,call=call)
+        self.assertEqual(s['stage'],4)
+        self.assertEqual(s['active_source_checkpoint'],'archium-checkpoint-123-3')
+        self.assertEqual(s['source_checkpoint'],'archium-checkpoint-100-1')
+
     def test_clear_before_ascii_frame_and_color_status(self):
         output=io.StringIO();s=self.state();s.update(status='BUILD_SUCCESS',github_status='completed/success',terminal=True)
         w.render(s,output=output,color=True,clear=True,width=80)

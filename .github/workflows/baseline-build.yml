@@ -8,6 +8,12 @@ on:
         required: false
         default: manual
         type: string
+      max_stages:
+        description: Bounded automatic continuation, 120 useful work minutes per stage
+        required: false
+        default: '1'
+        type: choice
+        options: ['1', '2', '4', '6', '8', '12']
       run_qemu:
         description: Optional Android QEMU validation; disabled by user request
         required: false
@@ -36,7 +42,7 @@ on:
         type: string
 permissions:
   contents: read
-  actions: read
+  actions: write
 concurrency:
   group: archium-native-Jorgeprdz-chromium-dex-arc
   cancel-in-progress: false
@@ -48,11 +54,13 @@ jobs:
       - name: Reject wrong branch or moving SHA
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
+          MAX_STAGES: ${{ inputs.max_stages }}
         run: |
           set -euo pipefail
           test "$GITHUB_REF_NAME" = assistant/archium-r5-desktop-native-mobile
           test "$EXPECTED_SHA" = "$GITHUB_SHA"
           [[ "$EXPECTED_SHA" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$MAX_STAGES" =~ ^(1|2|4|6|8|12)$ ]]
       - name: Reject concurrent native workflow from historical branches
         env:
           GH_TOKEN: ${{ github.token }}
@@ -98,9 +106,191 @@ jobs:
       source_checkpoint: ${{ inputs.source_checkpoint }}
       source_commit: ${{ inputs.source_commit }}
       source_run_id: ${{ inputs.source_run_id }}
-  qemu:
+      chain_mode: ${{ inputs.max_stages != '1' }}
+      stage_number: 1
+  stage_2:
     needs: build
-    if: ${{ needs.build.result == 'success' && inputs.run_qemu }}
+    if: ${{ needs.build.result == 'success' && needs.build.outputs.outcome == 'BUILD_INCOMPLETE' && fromJSON(inputs.max_stages) >= 2 }}
+    uses: ./.github/workflows/archium-r5-stage.yml
+    with:
+      expected_sha: ${{ inputs.expected_sha }}
+      source_checkpoint: ${{ needs.build.outputs.new_checkpoint }}
+      source_commit: ${{ inputs.expected_sha }}
+      source_run_id: ${{ github.run_id }}
+      chain_mode: true
+      stage_number: 2
+      source_manifest_artifact: Archium-R5-checkpoint-manifest-1
+      source_manifest_sha256: ${{ needs.build.outputs.manifest_sha256 }}
+  stage_3:
+    needs: stage_2
+    if: ${{ needs.stage_2.result == 'success' && needs.stage_2.outputs.outcome == 'BUILD_INCOMPLETE' && fromJSON(inputs.max_stages) >= 3 }}
+    uses: ./.github/workflows/archium-r5-stage.yml
+    with:
+      expected_sha: ${{ inputs.expected_sha }}
+      source_checkpoint: ${{ needs.stage_2.outputs.new_checkpoint }}
+      source_commit: ${{ inputs.expected_sha }}
+      source_run_id: ${{ github.run_id }}
+      chain_mode: true
+      stage_number: 3
+      source_manifest_artifact: Archium-R5-checkpoint-manifest-2
+      source_manifest_sha256: ${{ needs.stage_2.outputs.manifest_sha256 }}
+  stage_4:
+    needs: stage_3
+    if: ${{ needs.stage_3.result == 'success' && needs.stage_3.outputs.outcome == 'BUILD_INCOMPLETE' && fromJSON(inputs.max_stages) >= 4 }}
+    uses: ./.github/workflows/archium-r5-stage.yml
+    with:
+      expected_sha: ${{ inputs.expected_sha }}
+      source_checkpoint: ${{ needs.stage_3.outputs.new_checkpoint }}
+      source_commit: ${{ inputs.expected_sha }}
+      source_run_id: ${{ github.run_id }}
+      chain_mode: true
+      stage_number: 4
+      source_manifest_artifact: Archium-R5-checkpoint-manifest-3
+      source_manifest_sha256: ${{ needs.stage_3.outputs.manifest_sha256 }}
+  stage_5:
+    needs: stage_4
+    if: ${{ needs.stage_4.result == 'success' && needs.stage_4.outputs.outcome == 'BUILD_INCOMPLETE' && fromJSON(inputs.max_stages) >= 5 }}
+    uses: ./.github/workflows/archium-r5-stage.yml
+    with:
+      expected_sha: ${{ inputs.expected_sha }}
+      source_checkpoint: ${{ needs.stage_4.outputs.new_checkpoint }}
+      source_commit: ${{ inputs.expected_sha }}
+      source_run_id: ${{ github.run_id }}
+      chain_mode: true
+      stage_number: 5
+      source_manifest_artifact: Archium-R5-checkpoint-manifest-4
+      source_manifest_sha256: ${{ needs.stage_4.outputs.manifest_sha256 }}
+  stage_6:
+    needs: stage_5
+    if: ${{ needs.stage_5.result == 'success' && needs.stage_5.outputs.outcome == 'BUILD_INCOMPLETE' && fromJSON(inputs.max_stages) >= 6 }}
+    uses: ./.github/workflows/archium-r5-stage.yml
+    with:
+      expected_sha: ${{ inputs.expected_sha }}
+      source_checkpoint: ${{ needs.stage_5.outputs.new_checkpoint }}
+      source_commit: ${{ inputs.expected_sha }}
+      source_run_id: ${{ github.run_id }}
+      chain_mode: true
+      stage_number: 6
+      source_manifest_artifact: Archium-R5-checkpoint-manifest-5
+      source_manifest_sha256: ${{ needs.stage_5.outputs.manifest_sha256 }}
+  stage_7:
+    needs: stage_6
+    if: ${{ needs.stage_6.result == 'success' && needs.stage_6.outputs.outcome == 'BUILD_INCOMPLETE' && fromJSON(inputs.max_stages) >= 7 }}
+    uses: ./.github/workflows/archium-r5-stage.yml
+    with:
+      expected_sha: ${{ inputs.expected_sha }}
+      source_checkpoint: ${{ needs.stage_6.outputs.new_checkpoint }}
+      source_commit: ${{ inputs.expected_sha }}
+      source_run_id: ${{ github.run_id }}
+      chain_mode: true
+      stage_number: 7
+      source_manifest_artifact: Archium-R5-checkpoint-manifest-6
+      source_manifest_sha256: ${{ needs.stage_6.outputs.manifest_sha256 }}
+  stage_8:
+    needs: stage_7
+    if: ${{ needs.stage_7.result == 'success' && needs.stage_7.outputs.outcome == 'BUILD_INCOMPLETE' && fromJSON(inputs.max_stages) >= 8 }}
+    uses: ./.github/workflows/archium-r5-stage.yml
+    with:
+      expected_sha: ${{ inputs.expected_sha }}
+      source_checkpoint: ${{ needs.stage_7.outputs.new_checkpoint }}
+      source_commit: ${{ inputs.expected_sha }}
+      source_run_id: ${{ github.run_id }}
+      chain_mode: true
+      stage_number: 8
+      source_manifest_artifact: Archium-R5-checkpoint-manifest-7
+      source_manifest_sha256: ${{ needs.stage_7.outputs.manifest_sha256 }}
+  stage_9:
+    needs: stage_8
+    if: ${{ needs.stage_8.result == 'success' && needs.stage_8.outputs.outcome == 'BUILD_INCOMPLETE' && fromJSON(inputs.max_stages) >= 9 }}
+    uses: ./.github/workflows/archium-r5-stage.yml
+    with:
+      expected_sha: ${{ inputs.expected_sha }}
+      source_checkpoint: ${{ needs.stage_8.outputs.new_checkpoint }}
+      source_commit: ${{ inputs.expected_sha }}
+      source_run_id: ${{ github.run_id }}
+      chain_mode: true
+      stage_number: 9
+      source_manifest_artifact: Archium-R5-checkpoint-manifest-8
+      source_manifest_sha256: ${{ needs.stage_8.outputs.manifest_sha256 }}
+  stage_10:
+    needs: stage_9
+    if: ${{ needs.stage_9.result == 'success' && needs.stage_9.outputs.outcome == 'BUILD_INCOMPLETE' && fromJSON(inputs.max_stages) >= 10 }}
+    uses: ./.github/workflows/archium-r5-stage.yml
+    with:
+      expected_sha: ${{ inputs.expected_sha }}
+      source_checkpoint: ${{ needs.stage_9.outputs.new_checkpoint }}
+      source_commit: ${{ inputs.expected_sha }}
+      source_run_id: ${{ github.run_id }}
+      chain_mode: true
+      stage_number: 10
+      source_manifest_artifact: Archium-R5-checkpoint-manifest-9
+      source_manifest_sha256: ${{ needs.stage_9.outputs.manifest_sha256 }}
+  stage_11:
+    needs: stage_10
+    if: ${{ needs.stage_10.result == 'success' && needs.stage_10.outputs.outcome == 'BUILD_INCOMPLETE' && fromJSON(inputs.max_stages) >= 11 }}
+    uses: ./.github/workflows/archium-r5-stage.yml
+    with:
+      expected_sha: ${{ inputs.expected_sha }}
+      source_checkpoint: ${{ needs.stage_10.outputs.new_checkpoint }}
+      source_commit: ${{ inputs.expected_sha }}
+      source_run_id: ${{ github.run_id }}
+      chain_mode: true
+      stage_number: 11
+      source_manifest_artifact: Archium-R5-checkpoint-manifest-10
+      source_manifest_sha256: ${{ needs.stage_10.outputs.manifest_sha256 }}
+  stage_12:
+    needs: stage_11
+    if: ${{ needs.stage_11.result == 'success' && needs.stage_11.outputs.outcome == 'BUILD_INCOMPLETE' && fromJSON(inputs.max_stages) >= 12 }}
+    uses: ./.github/workflows/archium-r5-stage.yml
+    with:
+      expected_sha: ${{ inputs.expected_sha }}
+      source_checkpoint: ${{ needs.stage_11.outputs.new_checkpoint }}
+      source_commit: ${{ inputs.expected_sha }}
+      source_run_id: ${{ github.run_id }}
+      chain_mode: true
+      stage_number: 12
+      source_manifest_artifact: Archium-R5-checkpoint-manifest-11
+      source_manifest_sha256: ${{ needs.stage_11.outputs.manifest_sha256 }}
+  finish:
+    needs: [authorize, preflight, build, stage_2, stage_3, stage_4, stage_5, stage_6, stage_7, stage_8, stage_9, stage_10, stage_11, stage_12]
+    if: ${{ always() && inputs.max_stages != '1' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ARCHIUM_SOURCE_TAG: ${{ inputs.source_checkpoint }}
+      ARCHIUM_SOURCE_COMMIT: ${{ inputs.source_commit }}
+      ARCHIUM_SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+      CHAIN_JOB_RESULTS: ${{ toJSON(needs) }}
+      MAX_STAGES: ${{ inputs.max_stages }}
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - name: Aggregate exact chain receipts and mandatory job results
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/stages"
+          # Failure to fetch is recorded as BUILD_FAILED, never a successful APK.
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --pattern 'Archium-R5-stage-receipt-*' --dir "$RUNNER_TEMP/stages" || true
+          python3 scripts/r5-chain.py summarize --directory "$RUNNER_TEMP/stages" --maximum "$MAX_STAGES" --receipt "$RUNNER_TEMP/stage-receipt.json"
+      - name: Publish exact chain receipt
+        uses: actions/upload-artifact@v4
+        with:
+          name: Archium-R5-stage-receipt
+          path: ${{ runner.temp }}/stage-receipt.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Require verified APK, retain checkpoint on stage limit
+        run: |
+          python3 - "$RUNNER_TEMP/stage-receipt.json" <<'PYJSON'
+          import json,sys
+          r=json.load(open(sys.argv[1]));print(r['outcome'])
+          if r['outcome']!='BUILD_SUCCESS':raise SystemExit(1)
+          PYJSON
+  qemu:
+    needs: [build, finish]
+    if: ${{ always() && inputs.run_qemu && (needs.finish.result == 'success' || (inputs.max_stages == '1' && needs.build.result == 'success')) }}
     uses: ./.github/workflows/archium-r5-qemu.yml
     with:
       expected_sha: ${{ inputs.expected_sha }}

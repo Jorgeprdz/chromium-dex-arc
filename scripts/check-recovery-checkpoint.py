@@ -145,14 +145,24 @@ def main():
     p.add_argument('--source-tag', required=True)
     p.add_argument('--source-sha', required=True)
     p.add_argument('--report', type=Path, required=True)
+    p.add_argument('--manifest', type=Path)
+    p.add_argument('--manifest-sha256')
     args = p.parse_args()
     capacity = os.statvfs(os.environ['RUNNER_TEMP'])
     free = capacity.f_frsize * capacity.f_bavail
     groups = validate_inventory(json.loads(args.artifacts.read_text())['artifacts'],
                                 args.source_tag, args.source_sha, free, capacity.f_favail)
-    payload = certified_manifest(groups, args.source_tag, args.source_sha)
     transferred = 0
     manifest_source = 'CERTIFIED_IMMUTABLE_ARTIFACT_RECEIPT'
+    if args.manifest:
+        payload = args.manifest.read_bytes()
+        if (len(payload)>65536 or not re.fullmatch('[a-f0-9]{64}',args.manifest_sha256 or '')
+                or hashlib.sha256(payload).hexdigest()!=args.manifest_sha256):
+            raise ValueError('Previous stage manifest digest differs')
+        manifest_source = 'PREVIOUS_STAGE_HASH_BOUND_ARTIFACT'
+    else:
+        if args.manifest_sha256:raise ValueError('Manifest path absent')
+        payload = certified_manifest(groups, args.source_tag, args.source_sha)
     if payload is None:
         payload, transferred = remote_manifest(groups[0]['id'], os.environ['GITHUB_REPOSITORY'],
                                                os.environ['GH_TOKEN'])

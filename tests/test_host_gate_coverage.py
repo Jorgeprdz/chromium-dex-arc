@@ -34,6 +34,7 @@ class HostGateCoverageTests(unittest.TestCase):
                 if '-m' in argv and 'unittest' in argv:
                     # Only the two real Ninja/routing tests that failed in CI.
                     # Compilation/SDK/Robo boundaries remain mocked and earn no PASS.
+                    self.assertNotIn('ARCHIUM_STAGE_WORK_SECONDS',kwargs['env'])
                     env=dict(kwargs['env']);env.pop('ARCHIUM_TEST_NINJA',None)
                     env['PATH']=str(wrapper.parent)+':'+env['PATH']
                     if 'ARCHIUM_TEST_NINJA' in kwargs['env']:
@@ -45,7 +46,7 @@ class HostGateCoverageTests(unittest.TestCase):
                     executions.append(result)
             ambient=dict(os.environ);ambient.pop('ARCHIUM_TEST_NINJA',None)
             # Match the restored S2 job, not only the clean preflight environment.
-            ambient.update(ARCHIUM_SLICE_MINUTES='120', ARCHIUM_WORK_SECONDS='18000')
+            ambient.update(ARCHIUM_SLICE_MINUTES='120', ARCHIUM_WORK_SECONDS='18000', ARCHIUM_STAGE_WORK_SECONDS='7200')
             with patch.dict(os.environ,ambient,clear=True), patch.object(gates,'run',side_effect=boundary), \
                  patch.object(gates,'resolve_pinned_android_sdk',return_value=(checkout,'37.0','37.0.0',jar)), \
                  contextlib.redirect_stdout(io.StringIO()):

@@ -37,7 +37,8 @@ class MonitorTests(unittest.TestCase):
             with self.assertRaises(ValueError): m.validate_receipt(r,self.state())
 
     def test_bounds_and_stall(self):
-        for value in [0,9]:
+        s=self.state();s['stage']=12;m.validate_state(s,12)
+        for value in [0,13]:
             with self.assertRaises(ValueError): m.validate_state(self.state(),value)
         r=self.receipt(); s=self.state(); s['progress_fingerprint']='new'
         with self.assertRaisesRegex(ValueError,'STALLED'): m.validate_receipt(r,s)

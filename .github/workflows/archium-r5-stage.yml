@@ -14,13 +14,36 @@ on:
       source_run_id:
         required: true
         type: string
+      chain_mode:
+        type: boolean
+        default: false
+      stage_number:
+        type: number
+        default: 1
+      source_manifest_artifact:
+        type: string
+        default: ''
+      source_manifest_sha256:
+        type: string
+        default: ''
+    outputs:
+      outcome:
+        value: ${{ jobs.build.outputs.outcome }}
+      new_checkpoint:
+        value: ${{ jobs.build.outputs.new_checkpoint }}
+      manifest_sha256:
+        value: ${{ jobs.build.outputs.manifest_sha256 }}
 permissions:
   contents: read
-  actions: read
+  actions: write
 jobs:
   build:
     runs-on: ubuntu-24.04
     timeout-minutes: 360
+    outputs:
+      outcome: ${{ steps.qualify.outputs.outcome }}
+      new_checkpoint: ${{ steps.qualify.outputs.new_checkpoint }}
+      manifest_sha256: ${{ steps.qualify.outputs.manifest_sha256 }}
     env:
       GH_TOKEN: ${{ github.token }}
       ARCHIUM_EXPECTED_SHA: ${{ inputs.expected_sha }}
@@ -28,9 +51,10 @@ jobs:
       ARCHIUM_SOURCE_COMMIT: ${{ inputs.source_commit }}
       ARCHIUM_CHECKPOINT_STORAGE: artifact
       ARCHIUM_SOURCE_RUN_ID: ${{ inputs.source_run_id }}
-      ARCHIUM_CHECKPOINT_TAG: archium-checkpoint-${{ github.run_id }}-1
+      ARCHIUM_CHECKPOINT_TAG: archium-checkpoint-${{ github.run_id }}-${{ inputs.stage_number }}
       ARCHIUM_SLICE_MINUTES: '120'
-      ARCHIUM_MAX_SLICES: '2'
+      ARCHIUM_MAX_SLICES: ${{ inputs.chain_mode && '1' || '2' }}
+      ARCHIUM_STAGE_WORK_SECONDS: ${{ inputs.chain_mode && '7200' || '' }}
       ARCHIUM_CHECKPOINT_SECONDS: '3600'
       ARCHIUM_UPLOAD_RESERVE_SECONDS: '1200'
     steps:
@@ -40,6 +64,8 @@ jobs:
       - name: S0 source, capacity and bounded checkpoint manifest
         env:
           SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+          SOURCE_MANIFEST_ARTIFACT: ${{ inputs.source_manifest_artifact }}
+          SOURCE_MANIFEST_SHA256: ${{ inputs.source_manifest_sha256 }}
         run: |
           set -euo pipefail
           test "$GITHUB_REF_NAME" = assistant/archium-r5-desktop-native-mobile
@@ -59,8 +85,21 @@ jobs:
           import json, os, sys
           assert json.load(open(sys.argv[1]))['head_sha'] == os.environ['ARCHIUM_SOURCE_COMMIT'], 'Source run SHA differs'
           PY
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/artifacts?per_page=100" > "$RUNNER_TEMP/checkpoint-artifacts.json"
-          python3 scripts/check-recovery-checkpoint.py --artifacts "$RUNNER_TEMP/checkpoint-artifacts.json" --source-tag "$ARCHIUM_SOURCE_TAG" --source-sha "$ARCHIUM_SOURCE_COMMIT" --report "$RUNNER_TEMP/checkpoint-preflight.json"
+          gh api --paginate --slurp "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN_ID/artifacts?per_page=100" > "$RUNNER_TEMP/checkpoint-pages.json"
+          python3 - "$RUNNER_TEMP" <<'PYJSON'
+          import json,sys
+          from pathlib import Path
+          d=Path(sys.argv[1]);pages=json.loads((d/'checkpoint-pages.json').read_text())
+          (d/'checkpoint-artifacts.json').write_text(json.dumps({'artifacts':[a for page in pages for a in page['artifacts']]}))
+          PYJSON
+          manifest_args=()
+          if [[ -n "$SOURCE_MANIFEST_ARTIFACT" ]]; then
+            [[ "$SOURCE_MANIFEST_ARTIFACT" =~ ^Archium-R5-checkpoint-manifest-[0-9]+$ ]]
+            [[ "$SOURCE_MANIFEST_SHA256" =~ ^[a-f0-9]{64}$ ]]
+            gh run download "$SOURCE_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "$SOURCE_MANIFEST_ARTIFACT" --dir "$RUNNER_TEMP/source-manifest"
+            manifest_args=(--manifest "$RUNNER_TEMP/source-manifest/checkpoint.json" --manifest-sha256 "$SOURCE_MANIFEST_SHA256")
+          fi
+          python3 scripts/check-recovery-checkpoint.py --artifacts "$RUNNER_TEMP/checkpoint-artifacts.json" --source-tag "$ARCHIUM_SOURCE_TAG" --source-sha "$ARCHIUM_SOURCE_COMMIT" --report "$RUNNER_TEMP/checkpoint-preflight.json" "${manifest_args[@]}"
       - name: S1 download exactly the verified checkpoint groups
         timeout-minutes: 100
         run: |
@@ -68,6 +107,11 @@ jobs:
       - name: S1 restore once and transition patches
         timeout-minutes: 62
         run: bash scripts/build-archium-r5.sh --prepare
+      - name: Retire redundant chain checkpoints after verified restore
+        if: inputs.chain_mode && inputs.stage_number > 3
+        env:
+          NUMBER: ${{ inputs.stage_number }}
+        run: python3 scripts/r5-chain.py prune --number "$NUMBER" --directory "$RUNNER_TEMP"
       - name: S2-S4 blocking gates and incremental build
         id: compile
         run: bash scripts/build-archium-r5.sh --work
@@ -79,8 +123,9 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Archium-R5-transport-diagnostics
+          name: Archium-R5-transport-diagnostics-${{ inputs.stage_number }}
           path: |
+            ${{ runner.temp }}/checkpoint-cleanup.json
             ${{ runner.temp }}/checkpoint-preflight.json
             ${{ runner.temp }}/archium-checkpoint-transfers/*.progress.json
             ${{ runner.temp }}/archium-checkpoint-transfers/*.identity.json
@@ -90,7 +135,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: Archium-R5-stage-receipt
+          name: ${{ inputs.chain_mode && format('Archium-R5-stage-receipt-{0}', inputs.stage_number) || 'Archium-R5-stage-receipt' }}
           path: ${{ runner.temp }}/stage-receipt.json
           if-no-files-found: error
           retention-days: 14
@@ -98,7 +143,7 @@ jobs:
         if: always() && steps.compile.outputs.saved_group_00 == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: archium-checkpoint-${{ github.run_id }}-1-00
+          name: archium-checkpoint-${{ github.run_id }}-${{ inputs.stage_number }}-00
           path: ${{ runner.temp }}/archium-checkpoint/group-00/
           if-no-files-found: error
           retention-days: 14
@@ -107,7 +152,7 @@ jobs:
         if: always() && steps.compile.outputs.saved_group_01 == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: archium-checkpoint-${{ github.run_id }}-1-01
+          name: archium-checkpoint-${{ github.run_id }}-${{ inputs.stage_number }}-01
           path: ${{ runner.temp }}/archium-checkpoint/group-01/
           if-no-files-found: error
           retention-days: 14
@@ -116,7 +161,7 @@ jobs:
         if: always() && steps.compile.outputs.saved_group_02 == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: archium-checkpoint-${{ github.run_id }}-1-02
+          name: archium-checkpoint-${{ github.run_id }}-${{ inputs.stage_number }}-02
           path: ${{ runner.temp }}/archium-checkpoint/group-02/
           if-no-files-found: error
           retention-days: 14
@@ -125,7 +170,7 @@ jobs:
         if: always() && steps.compile.outputs.saved_group_03 == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: archium-checkpoint-${{ github.run_id }}-1-03
+          name: archium-checkpoint-${{ github.run_id }}-${{ inputs.stage_number }}-03
           path: ${{ runner.temp }}/archium-checkpoint/group-03/
           if-no-files-found: error
           retention-days: 14
@@ -134,7 +179,7 @@ jobs:
         if: always() && steps.compile.outputs.saved_group_04 == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: archium-checkpoint-${{ github.run_id }}-1-04
+          name: archium-checkpoint-${{ github.run_id }}-${{ inputs.stage_number }}-04
           path: ${{ runner.temp }}/archium-checkpoint/group-04/
           if-no-files-found: error
           retention-days: 14
@@ -143,7 +188,7 @@ jobs:
         if: always() && steps.compile.outputs.saved_group_05 == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: archium-checkpoint-${{ github.run_id }}-1-05
+          name: archium-checkpoint-${{ github.run_id }}-${{ inputs.stage_number }}-05
           path: ${{ runner.temp }}/archium-checkpoint/group-05/
           if-no-files-found: error
           retention-days: 14
@@ -152,7 +197,7 @@ jobs:
         if: always() && steps.compile.outputs.saved_group_06 == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: archium-checkpoint-${{ github.run_id }}-1-06
+          name: archium-checkpoint-${{ github.run_id }}-${{ inputs.stage_number }}-06
           path: ${{ runner.temp }}/archium-checkpoint/group-06/
           if-no-files-found: error
           retention-days: 14
@@ -161,11 +206,32 @@ jobs:
         if: always() && steps.compile.outputs.saved_group_07 == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: archium-checkpoint-${{ github.run_id }}-1-07
+          name: archium-checkpoint-${{ github.run_id }}-${{ inputs.stage_number }}-07
           path: ${{ runner.temp }}/archium-checkpoint/group-07/
           if-no-files-found: error
           retention-days: 14
           compression-level: 0
+      - name: Publish small manifest for the next stage
+        if: inputs.chain_mode && steps.compile.outputs.complete == 'false' && steps.compile.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: Archium-R5-checkpoint-manifest-${{ inputs.stage_number }}
+          path: ${{ runner.temp }}/archium-checkpoint/group-00/checkpoint.json
+          if-no-files-found: error
+          retention-days: 14
+      - name: Qualify checkpoint and measurable progress before continuation
+        id: qualify
+        if: inputs.chain_mode
+        env:
+          NUMBER: ${{ inputs.stage_number }}
+        run: |
+          set -euo pipefail
+          previous_args=()
+          if (( NUMBER > 1 )); then
+            gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name "Archium-R5-stage-receipt-$((NUMBER-1))" --dir "$RUNNER_TEMP/previous-stage"
+            previous_args=(--previous "$RUNNER_TEMP/previous-stage/stage-receipt.json")
+          fi
+          python3 scripts/r5-chain.py qualify --receipt "$RUNNER_TEMP/stage-receipt.json" --number "$NUMBER" "${previous_args[@]}" --manifest "$ARCHIUM_CHECKPOINT_DIR/group-00/checkpoint.json" --output "$GITHUB_OUTPUT"
       - name: S5 publish verified APK
         id: publish
         if: steps.compile.outputs.complete == 'true'
@@ -176,7 +242,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
       - name: Reject incomplete budget as a successful build
-        if: steps.compile.outputs.complete == 'false'
+        if: ${{ !inputs.chain_mode && steps.compile.outputs.complete == 'false' }}
         run: |
           echo 'BUILD_INCOMPLETE: checkpoint preserved; APK gates remain pending.' >&2
           exit 1

@@ -48,7 +48,7 @@ def render(state, output=None, color=None, clear=None, width=None):
     border();row('ARCHIUM R5  /  PROGRESSIVE BUILD',cyan)
     row(('RUN MONITOR + VERIFIED ADB' if state.get('auto_install')=='ADB_VERIFIED_UPDATE' else 'WATCH ONLY')+'  |  CHECKPOINT REUSE  |  ARM64',dim);border()
     fields=[('RUN ACTUAL',state['run_id']),('SHA',state['expected_sha']),('WORKFLOW',monitor.WORKFLOW),
-            ('STAGE',state['stage']),('CHECKPOINT ORIGEN',state['source_checkpoint']),
+            ('STAGE',str(state['stage'])+('/'+str(state['max_stages']) if state.get('max_stages',1)>1 else '')),('CHECKPOINT ORIGEN',state.get('active_source_checkpoint',state['source_checkpoint'])),
             ('RESTAURACION',state.get('restore_status','PENDING_CI')),
             ('CHECKPOINT NUEVO',state.get('new_checkpoint','--')),
             ('ESTADO GITHUB',state.get('github_status','PENDING')),
@@ -60,7 +60,7 @@ def render(state, output=None, color=None, clear=None, width=None):
     border();row('[ '+status+' ]',accent)
     if state.get('last_error'):row(state['last_error'],accent)
     row('Refresco: 600s  |  Ctrl+C: cerrar monitor',dim)
-    row('Sin relanzamientos ni reparaciones automaticas.',dim)
+    row('Hasta '+str(state['max_stages'])+' etapas CI; sin reparaciones automaticas.' if state.get('max_stages',1)>1 else 'Sin relanzamientos ni reparaciones automaticas.',dim)
     row('ADB: actualizar solo APK verificada.' if state.get('auto_install')=='ADB_VERIFIED_UPDATE' else 'Instalacion manual.',dim)
     if state.get('terminal'):row('Run finalizado. Esta ventana permanece abierta.',accent)
     border()
@@ -90,6 +90,15 @@ def refresh(state,call=None,read_receipt=None):
     relevant=running or failed
     state['job_step']='; '.join(j['name']+' / '+', '.join(s['name'] for s in j.get('steps',[])
         if s.get('status')=='in_progress' or s.get('conclusion') in ('failure','cancelled','timed_out')) for j in relevant) or '--'
+    if state.get('max_stages',1)>1:
+        stage_numbers=[int(match[1]) for job in jobs
+                       if job.get('status')=='in_progress'
+                       for match in [re.match(r'^stage_(\d+) /',job['name'])] if match]
+        completed=[int(match[1]) for job in jobs if job.get('conclusion')=='success'
+                   for match in [re.match(r'^stage_(\d+) /',job['name'])] if match]
+        if stage_numbers or completed:state['stage']=max(stage_numbers+completed)
+        state['active_source_checkpoint']=(state['source_checkpoint'] if state['stage']==1 else
+            f'archium-checkpoint-{state["run_id"]}-{state["stage"]-1}')
     restored=any(s['name']=='S1 restore once and transition patches' and s.get('conclusion')=='success'
                  for j in jobs for s in j.get('steps',[]))
     state['restore_status']='VERIFIED_BY_CI' if restored else 'PENDING_CI'

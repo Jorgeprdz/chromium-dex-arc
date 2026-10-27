@@ -74,6 +74,9 @@ run_work() {
     local signal="$1" limit="$2" checkpoint_failure="$3" result=0 remaining wall
     shift 3
     remaining=$((work_seconds - $(job_elapsed)))
+    if [[ -n "${ARCHIUM_STAGE_WORK_SECONDS:-}" ]]; then
+        remaining=$((stage_work_seconds - (SECONDS - work_started)))
+    fi
     wall=$(wall_remaining)
     (( remaining > wall )) && remaining=$wall
     (( remaining > 0 )) || save_checkpoint 0
@@ -137,6 +140,10 @@ else
     export DEPOT_TOOLS_UPDATE=0
     cd "$build_workspace/checkout/src"
 fi
+# Optional chained stages count useful work separately from download/restore.
+# The wall deadline still reserves full checkpoint and upload time.
+stage_work_seconds=$(budget "${ARCHIUM_STAGE_WORK_SECONDS:-7200}" 7200)
+work_started=$SECONDS
 slice_count=1
 slice_started=$SECONDS
 compile_slice() {

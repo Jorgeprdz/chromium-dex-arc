@@ -82,8 +82,8 @@ def acquire_lock(folder):
 
 
 def validate_state(state, maximum):
-    if not 1 <= maximum <= 8 or not 1 <= int(state['stage']) <= maximum:
-        raise ValueError('Invalid stage bound (1..8)')
+    if not 1 <= maximum <= 12 or not 1 <= int(state['stage']) <= maximum:
+        raise ValueError('Invalid stage bound (1..12)')
     for name in ['expected_sha', 'source_commit']:
         if not re.fullmatch('[a-f0-9]{40}', str(state.get(name, ''))):
             raise ValueError('Invalid ' + name)

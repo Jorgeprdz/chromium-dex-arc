@@ -1,0 +1,33 @@
+{
+  "schema": 1,
+  "source_tag": "archium-checkpoint-40416174482-1",
+  "source_sha": "e256358c3907e0692949c85db037d46d810c387a",
+  "artifacts": [
+    {
+      "id": 12708246419,
+      "name": "archium-checkpoint-40416174482-1-00",
+      "size_in_bytes": 8589940572,
+      "digest": "sha256:c9b16b462a7c0822d08d5b50f96cdd5ebd5ba97cf96c2b1496b89342062135b9"
+    },
+    {
+      "id": 12708337014,
+      "name": "archium-checkpoint-40416174482-1-01",
+      "size_in_bytes": 8589935970,
+      "digest": "sha256:7e2023c72fac1996d92e7715f4f84edc198e2d3285fc11c5a2c29411fdece4d4"
+    },
+    {
+      "id": 12707972894,
+      "name": "archium-checkpoint-40416174482-1-02",
+      "size_in_bytes": 8589935970,
+      "digest": "sha256:35dd6b1cdcd1b57d5b1d4b81655a93c49eb8a90f754a7607c8c51e64d7309c1e"
+    },
+    {
+      "id": 12707848422,
+      "name": "archium-checkpoint-40416174482-1-03",
+      "size_in_bytes": 772259804,
+      "digest": "sha256:339baf9e82349b980b83cf247e7c07355eab84b8d3483ff000d6d3fba147e24b"
+    }
+  ],
+  "manifest_json": "{\n  \"schema\": 1,\n  \"workspace\": \"/home/runner/work/_temp/chromium-archium\",\n  \"commit\": \"e256358c3907e0692949c85db037d46d810c387a\",\n  \"revision\": \"cfd94726b7b5fb48aedcc32662f2f3fbdbadec35\",\n  \"tag\": \"archium-checkpoint-40416174482-1\",\n  \"parts\": [\n    {\n      \"name\": \"checkpoint-0000.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"9e04e36caf7d6902424614d8ab684675988e8546e75476fb93a0caa52d849f89\"\n    },\n    {\n      \"name\": \"checkpoint-0001.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"6f15c6e1435d263790515ba668366e3321ecee5f4934e8543186bb064a5256de\"\n    },\n    {\n      \"name\": \"checkpoint-0002.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"2c3650712724ec89822291fb28c9a74acb9d64519ba68abdebb20390a74db744\"\n    },\n    {\n      \"name\": \"checkpoint-0003.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"2cd9f36b27136b6a6c52cd47f45fa689785fa04d56044677aede9d874ba2903b\"\n    },\n    {\n      \"name\": \"checkpoint-0004.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"90f73b7b5c822c585a16fcacaecc761b5a3ac534610798831b46d33ad65a9653\"\n    },\n    {\n      \"name\": \"checkpoint-0005.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"77ef294bf332a709c72f6ba0f23002f3267fb1341b080f464973d1614a2fb4b2\"\n    },\n    {\n      \"name\": \"checkpoint-0006.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"0afe063e65c48309772121b4a6cda595c5bbd6c1aa4f575c401aceeb8abf6537\"\n    },\n    {\n      \"name\": \"checkpoint-0007.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"cdb760f3b7e0abf7b3fdf3ba7ddbb286915fdc13afe333042c2e6223ed05dad1\"\n    },\n    {\n      \"name\": \"checkpoint-0008.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"411ed8b6ba657e3e609f1ee139ad7a9a54e211145f7592f8704fbd2b9312ac06\"\n    },\n    {\n      \"name\": \"checkpoint-0009.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"3cd6d20de2c6fe11b4e4cc9bb473b7ee363074c270027db283ad51295b4776d4\"\n    },\n    {\n      \"name\": \"checkpoint-0010.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"2cf7776fa9d099cc24fa4804b4c31b0cab9a79f83e143a7acb2e78af167062a6\"\n    },\n    {\n      \"name\": \"checkpoint-0011.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"6baa7a7c54a50a22b4a946e005aef09e46bb4d7e01c6d6dfb774f7345c358b51\"\n    },\n    {\n      \"name\": \"checkpoint-0012.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"26ec6f1211611a646e76f5f3f016e0a8093ca0e01997cdc7c63a9b90dd9828a7\"\n    },\n    {\n      \"name\": \"checkpoint-0013.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"4105f8b4a20015b18c572e8f2c06b99aa489efd1ccfd4a0d81e42d9adb09b49c\"\n    },\n    {\n      \"name\": \"checkpoint-0014.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"f57165cdcf6aed18e83a662865cb4b8f708c8eca56b8bf22c83bf3b43b7f1d9e\"\n    },\n    {\n      \"name\": \"checkpoint-0015.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"fe6d204dbb40bbac88a6f7e80ddb21816970934d696b61c446a05f4e4c800fe6\"\n    },\n    {\n      \"name\": \"checkpoint-0016.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"687bef592a70c79bbf4304734da690dd54ec9254a668dcf3ae0925e5b9e8f871\"\n    },\n    {\n      \"name\": \"checkpoint-0017.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"c8233cdb653ac2de038aae0e397c98f3d180fb40aaaeed95cc3b957388390968\"\n    },\n    {\n      \"name\": \"checkpoint-0018.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"b2788530a170b12a59d17e64bc795887262a51daf31bb38492fb0376e4cc707a\"\n    },\n    {\n      \"name\": \"checkpoint-0019.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"c5a97a5d3e2c83a9a1a1003e001ea19136e54480e355dd7987434370d4beb231\"\n    },\n    {\n      \"name\": \"checkpoint-0020.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"8e8fef163a4b8e666c9d034396190b136b3084cd0ced3182f3a79341cf929994\"\n    },\n    {\n      \"name\": \"checkpoint-0021.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"a87a65aba0aec7fa17ba5c9a0381409a52a5ff24c1ca9ef38aa7dd7996711e77\"\n    },\n    {\n      \"name\": \"checkpoint-0022.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"7cf6e059212581d4f1c91d4943ec82560f84b02cfe42a75e6a8e5ed17694ac7e\"\n    },\n    {\n      \"name\": \"checkpoint-0023.tar.gz.part\",\n      \"bytes\": 1073741824,\n      \"sha256\": \"92781a570ccac079b286dbabb71ee6832976751859a3563057b43e0cbc8cf373\"\n    },\n    {\n      \"name\": \"checkpoint-0024.tar.gz.part\",\n      \"bytes\": 772259636,\n      \"sha256\": \"fdddcc40fa918e2b7f39589388c9fc1beb5721c261cc80a595f6c0c75b7e9fc5\"\n    }\n  ]\n}\n",
+  "manifest_sha256": "73c7e8ba31fca9f004929219279e4754a8f43ef4f2e167b8d39008039160bb25"
+}

@@ -94,7 +94,7 @@ def host_gate(android_jar: Path, out_dir: Path, *, phase: str = 'all') -> None:
     # Never leak the outer job's 120-minute slice into legacy 75-minute scenarios.
     # This changes only child test/tool environments, not the actual build budget.
     for key in ('ARCHIUM_SLICE_MINUTES', 'ARCHIUM_MAX_SLICES',
-                'ARCHIUM_PREPARE_SECONDS', 'ARCHIUM_WORK_SECONDS',
+                'ARCHIUM_PREPARE_SECONDS', 'ARCHIUM_WORK_SECONDS', 'ARCHIUM_STAGE_WORK_SECONDS',
                 'ARCHIUM_HOST_SECONDS', 'ARCHIUM_CHECKPOINT_SECONDS',
                 'ARCHIUM_UPLOAD_RESERVE_SECONDS', 'ARCHIUM_JOB_DEADLINE_EPOCH'):
         host_env.pop(key, None)

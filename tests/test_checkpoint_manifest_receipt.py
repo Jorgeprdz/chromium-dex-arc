@@ -48,6 +48,25 @@ class CertifiedManifestTests(unittest.TestCase):
         self.assertEqual(result['manifest_source'],'CERTIFIED_IMMUTABLE_ARTIFACT_RECEIPT')
         self.assertEqual(result['CHECKPOINT_ALL_BYTES'],'PENDING_POST_DOWNLOAD')
         self.assertEqual(result['bounded_bytes_read'],0)
+    def test_hash_bound_manifest_avoids_range_and_rejects_tampering(self):
+        receipt=json.loads((ROOT/'config/checkpoint-receipts/archium-checkpoint-40283988917-1.json').read_text())
+        artifacts=[dict(a,expires_at='2099-01-01T00:00:00Z',expired=False,
+                        workflow_run={'head_sha':receipt['source_sha']}) for a in receipt['artifacts']]
+        inventory=self.folder/'inventory.json';inventory.write_text(json.dumps({'artifacts':artifacts}))
+        manifest=self.folder/'checkpoint.json';manifest.write_text(receipt['manifest_json'])
+        report=self.folder/'report.json'
+        argv=['checker','--artifacts',str(inventory),'--source-tag',receipt['source_tag'],
+              '--source-sha',receipt['source_sha'],'--report',str(report),
+              '--manifest',str(manifest),'--manifest-sha256',receipt['manifest_sha256']]
+        capacity=types.SimpleNamespace(f_frsize=1,f_bavail=200_000_000_000,f_favail=3_000_000)
+        with patch.object(sys,'argv',argv),patch.dict(os.environ,{'RUNNER_TEMP':'/home/runner/work/_temp'},clear=True), \
+             patch.object(checker.os,'statvfs',return_value=capacity), \
+             patch.object(checker,'remote_manifest',side_effect=AssertionError('Range must not be called')):
+            checker.main()
+            self.assertEqual(json.loads(report.read_text())['manifest_source'],'PREVIOUS_STAGE_HASH_BOUND_ARTIFACT')
+            manifest.write_text(receipt['manifest_json']+' ')
+            with self.assertRaisesRegex(ValueError,'digest differs'):checker.main()
+
     def test_checked_in_receipt_manifest_matches_pinned_identity(self):
         receipt=json.loads((ROOT/'config/checkpoint-receipts/archium-checkpoint-40283988917-1.json').read_text())
         payload=checker.certified_manifest(receipt['artifacts'],receipt['source_tag'],receipt['source_sha'])
