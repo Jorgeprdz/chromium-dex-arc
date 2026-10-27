@@ -295,7 +295,7 @@
     "chrome/browser/autofill/android/BUILD.gn": "00e2d69719b56d99054d6f62e59fd139ac396af4248cd4aa8d9a4ee813749125",
     "chrome/browser/autofill/android/java/src/org/chromium/chrome/browser/autofill/AutofillClientProviderUtils.java": "b14949cce15c8cf64a2cf31a202455309419c22b12539a594952ac3eed34e56a",
     "chrome/browser/browser_process_impl.cc": "94e33383b5380231041c03a8d8986435679d888a48abf6a69a0cafa8a643764e",
-    "chrome/browser/chrome_content_browser_client.cc": "45738acfc7d2f67373b82958c9ecd184b13c06d4f87e6de4d46210155f54ae94",
+    "chrome/browser/chrome_content_browser_client.cc": "87b3e9b040887e177bb579f1547c5367902d14307d718d43bd939c183434b713",
     "chrome/browser/content_settings/BUILD.gn": "b4987d11227b68b28b8ded6a11c70c6c0391935ee5c0e8f0ad61058378b75d05",
     "chrome/browser/content_settings/request_desktop_site_web_contents_observer_android.cc": "03a68abeab428fdeb894be2d4ab4a0a40e0c240a4020eae929e429e294692180",
     "chrome/browser/content_settings/request_desktop_site_web_contents_observer_android.h": "0c58c2017003c9a60f46971266d468b7c312d7f99b938f8e1551be5b4478dad0",
@@ -376,7 +376,7 @@
     "third_party/blink/renderer/core/frame/navigator_id.cc": "bde14e420e5a967d596e01f236b19d28e277f308fb2e172d83cfbb9c39288945",
     "third_party/blink/renderer/modules/mediastream/media_stream_video_capturer_source.cc": "14c2099e5c71357e38b60dc4042043925bfde78edd6710003e2189d9fe71fc1d",
     "third_party/blink/renderer/modules/mediastream/media_stream_video_source.cc": "a02d019842740fc202f7710f88c95d7db229c0d76660d8946f5b5eec24a8657a",
-    "third_party/blink/renderer/modules/mediastream/video_track_adapter.cc": "86c5111b59a4f577d72aeadc15b61cf8b36e1f65cf150325fb382633a402f86c",
+    "third_party/blink/renderer/modules/mediastream/video_track_adapter.cc": "60dee28e4cbe62f1e83e8239219670d90eb83967e95ce1b46495c37ccbed61bc",
     "third_party/blink/renderer/modules/mediastream/video_track_adapter.h": "f53fc5c72dea823489ed4081cbb8c50026e9d361e1b0d787f8cf7ccecc03b037",
     "third_party/blink/renderer/platform/BUILD.gn": "8493ab6c7024889e109b7829e1bb7ca150306daa61876244c723057a86e0d6e2",
     "third_party/blink/renderer/platform/runtime_enabled_features.json5": "2ef097090de83531932db76d25c36504887288050d5b5ab76e1a650efe6daf3b",
@@ -477,8 +477,8 @@
     "components/password_manager/core/browser/password_store/password_store_interface.cc": "7e9dd5813ce8ece459ec66abdd3306028b7b3d6bbae048664872a34d8d097268",
     "third_party/blink/renderer/core/page/arc_camera_page_policy.cc": "4265c206986c9edf9f9ec55ce01dc82d9bb664f0e78152ebe79b4cf5e4304133",
     "third_party/blink/renderer/core/page/arc_camera_page_policy.h": "f8c3a153921c5f2ffafeabaf39f08666dd0c4509f00bdc60a6afdd6c5091b441",
-    "third_party/blink/renderer/platform/mediastream/arc_camera_orientation_policy.h": "b034c1fa0ed2690b9fe1710a85bd855fafa9c0d62cc4161d83448ef204c982c1",
+    "third_party/blink/renderer/platform/mediastream/arc_camera_orientation_policy.h": "0166da7e26dd086305a76fe9037ef2ebe8e212375f979aaa29ea904986e97a0f",
     "third_party/blink/renderer/platform/mediastream/arc_camera_orientation_state.h": "d428cbfaf8f05e9ec97452c1a5b33cd750df705c3e289ef978a688031e356777"
   },
-  "patch_sha256": "e6f01a115201a90fce6db120b9246eac18e46b7c2dd387ea3cbb0d662ebb2455"
+  "patch_sha256": "08379fbb51a5f5f18479deba9cc642a388177bc5c188bf777dc963226ad9d7f2"
 }

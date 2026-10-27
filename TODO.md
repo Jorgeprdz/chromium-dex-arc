@@ -907,3 +907,11 @@ Verificación del checkpoint Desktop: suite host424 PASS; política Chromium61 m
 - [x] Transición de los parches entregados desde APK anterior y fuente40447986255-2 PASS en checkout reconstruido;208/207 entradas intactas conservan mtime. Frontera Git HEAD simulada y originals fijados por hash, no se declara checkout completo nativo.
 - [ ] Compilación/link nativo y APK PENDING. DeX desconectado por el usuario: orientación frontal/trasera, ajuste manual, pantalla+mic+cámara con participante remoto, GPU/rendimiento y transición real Mobile↔DeX PENDING.
 - Evidencia y límites: [DESKTOP_CAMERA_ORIENTATION_20261027.md](docs/validation/DESKTOP_CAMERA_ORIENTATION_20261027.md). No cambios de diseño Mobile, sensores, GPU, permisos, pin, dependencias ni ajustes de red.
+
+## 27-oct-2026 — Seguimiento cámara/PiP tras APK8f312c0
+
+- [x] Usuario confirma Auto FAIL (vertical ampliado/recortado), Manual90 efectivo. Meet físico: captura monitor y Samsung Notes con cámara local viva; PiP outer361×220 frente a inner1503×766 y escala0.527 al agrandar. No se confirma rebote continuo ni transmisión remota. Datos Notes intactos, captura detenida, Termux restaurado; sin cambios de red/DPI. Segunda reunión detectada; control de foco posterior no fiable, sin declarar pruebas no ejecutadas.
+- [x] Candidato: restaurado exactamente el adaptador nativo de resolución; sólo delta manual de rotación tras adaptar, sin recorte propio ni doble giro por clones. Auto vuelve a la ruta original; giro automático real sigue PENDING. Document PiP obtiene preferencias Desktop sólo en su WebContents hijo; sin modificar páginas normales, Mobile, Split, captura o UI.
+- [x]3 pruebas cámara y1 política PiP RED/GREEN,12 regresiones Googlebook/JNI, gate de headers y preparación SDK36 PASS locales. Fronteras JVM/C++ aisladas explícitas; sin afirmar enlace nativo/aceptación física.
+- [ ] APK/compilación nativa, comparación física del candidato en DeX, viewport/controles PiP y reunión con participante remoto PENDING. No workflow ni instalación en este seguimiento.
+- Detalle: [CONFERENCING_CAMERA_PIP_20261027.md](docs/validation/CONFERENCING_CAMERA_PIP_20261027.md).

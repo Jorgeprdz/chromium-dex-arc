@@ -310,8 +310,7 @@ class VideoTrackAdapter::VideoFrameResolutionAdapter
   void DeliverFrame(
       scoped_refptr<media::VideoFrame> frame,
       const base::TimeTicks& estimated_capture_time,
-      bool is_device_rotated, ArcCameraOrientationPolicy::Snapshot camera_policy,
-      const gfx::Size& camera_source_size);
+      bool is_device_rotated, ArcCameraOrientationPolicy::Snapshot camera_policy);
   // This method is called when a frame is dropped, whether dropped by the
   // source (via VideoTrackAdapter::OnFrameDroppedOnVideoTaskRunner) or
   // internally (in DeliverFrame).
@@ -338,8 +337,7 @@ class VideoTrackAdapter::VideoFrameResolutionAdapter
   base::expected<scoped_refptr<media::VideoFrame>,
                  media::VideoCaptureFrameDropReason>
   AdaptFrameResolution(scoped_refptr<media::VideoFrame> video_frame,
-                       bool is_device_rotated, ArcCameraOrientationPolicy::Snapshot camera_policy,
-                       const gfx::Size& camera_source_size);
+                       bool is_device_rotated);
 
   // Delivers |video_frame| to the specific track represented by |track_params|,
   // updating track settings if the frame format has changed.
@@ -522,42 +520,8 @@ base::expected<scoped_refptr<media::VideoFrame>,
                media::VideoCaptureFrameDropReason>
 VideoTrackAdapter::VideoFrameResolutionAdapter::AdaptFrameResolution(
     scoped_refptr<media::VideoFrame> video_frame,
-    bool is_device_rotated, ArcCameraOrientationPolicy::Snapshot camera_policy,
-    const gfx::Size& camera_source_size) {
+    bool is_device_rotated) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(video_sequence_checker_);
-  // Camera calibration is per Page/source and per track's requested format.
-  // Screen capture never receives a camera policy. Preserve the native sensor
-  // orientation and compose only an explicit user adjustment. Crop by wrapping
-  // the original buffers; no new camera, copy, GPU setting or website override.
-  if (camera_policy.enabled && !is_video_desktop_capture_type_) {
-    gfx::Size target;
-    // Keep Chromium's size limits and explicit aspect-ratio constraints. Only
-    // omit the mobile rotation heuristic when choosing the display aspect.
-    const bool valid_target = CalculateDesiredSize(
-        false, camera_source_size, settings_, &target);
-    const media::VideoTransformation original = video_frame->metadata().transformation.value_or(
-        media::VideoTransformation());
-    const media::VideoTransformation transform = original.add(
-        media::VideoTransformation(static_cast<media::VideoRotation>(camera_policy.turns * 90)));
-    const auto plan = ArcCameraOrientationPolicy::Plan(
-        camera_policy, target.width(), target.height(), static_cast<int>(transform.rotation));
-    if (valid_target && plan.valid) {
-      const gfx::Size desired(plan.width, plan.height);
-      const gfx::Rect region = ComputeLetterboxRect(video_frame->visible_rect(), desired);
-      if (desired == video_frame->natural_size() && region == video_frame->visible_rect()
-          && transform == original) {
-        return video_frame;
-      }
-      auto calibrated = media::VideoFrame::WrapVideoFrame(
-          video_frame, video_frame->format(), region, desired);
-      if (!calibrated) {
-        return base::unexpected(media::VideoCaptureFrameDropReason::
-            kResolutionAdapterWrappingFrameForCroppingFailed);
-      }
-      calibrated->metadata().transformation = transform;
-      return calibrated;
-    }
-  }
   // If the frame holds a SharedImage that is not CPU-mappable we don't apply
   // cropping/scaling and deliver the frame as-is, leaving it up to the
   // destination to rescale it. Otherwise, cropping and scaling is soft-applied
@@ -640,8 +604,7 @@ VideoTrackAdapter::VideoFrameResolutionAdapter::AdaptFrameResolution(
 void VideoTrackAdapter::VideoFrameResolutionAdapter::DeliverFrame(
     scoped_refptr<media::VideoFrame> video_frame,
     const base::TimeTicks& estimated_capture_time,
-    bool is_device_rotated, ArcCameraOrientationPolicy::Snapshot camera_policy,
-    const gfx::Size& camera_source_size) {
+    bool is_device_rotated, ArcCameraOrientationPolicy::Snapshot camera_policy) {
   DCHECK_CALLED_ON_VALID_SEQUENCE(video_sequence_checker_);
 
   if (!video_frame) {
@@ -713,7 +676,25 @@ void VideoTrackAdapter::VideoFrameResolutionAdapter::DeliverFrame(
               : video_frame;
       if (track_frame) {
         adapted_frame =
-            AdaptFrameResolution(std::move(track_frame), is_device_rotated, camera_policy, camera_source_size);
+            AdaptFrameResolution(std::move(track_frame), is_device_rotated);
+        const int rotation = ArcCameraOrientationPolicy::RotationDegrees(camera_policy);
+        if (rotation != 0 && !is_video_desktop_capture_type_ &&
+            adapted_frame.has_value() && adapted_frame.value()) {
+          // Preserve native constraints, visible rect, natural size and buffers.
+          // Apply one user rotation per cached result, never once per clone.
+          auto frame = adapted_frame.value();
+          auto rotated = media::VideoFrame::WrapVideoFrame(
+              frame, frame->format(), frame->visible_rect(), frame->natural_size());
+          if (rotated) {
+            rotated->metadata().transformation =
+                frame->metadata().transformation.value_or(media::VideoTransformation()).add(
+                    media::VideoTransformation(static_cast<media::VideoRotation>(rotation)));
+            adapted_frame = std::move(rotated);
+          } else {
+            adapted_frame = base::unexpected(media::VideoCaptureFrameDropReason::
+                kResolutionAdapterWrappingFrameForCroppingFailed);
+          }
+        }
       }
       adapted_frames_cache.push_back(CachedFrame{target_token, adapted_frame});
     }
@@ -1203,8 +1184,7 @@ void VideoTrackAdapter::DeliverFrameOnVideoTaskRunner(
           : ArcCameraOrientationPolicy::Snapshot();
   for (const auto& adapter : adapters_) {
     adapter->DeliverFrame(video_frame, estimated_capture_time,
-                          is_device_rotated, camera_policy,
-                          source_frame_size_.value_or(video_frame->natural_size()));
+                          is_device_rotated, camera_policy);
   }
 }
 

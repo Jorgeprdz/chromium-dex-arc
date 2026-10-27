@@ -5351,7 +5351,7 @@ diff --git a/chrome/browser/chrome_content_browser_client.cc b/chrome/browser/ch
  namespace {
 
  const char kAIManagerUserDataKey[] = "ai_manager";
-@@ -4669,6 +4677,12 @@
+@@ -4669,6 +4677,13 @@
      WebContents* web_contents,
      content::SiteInstance& main_frame_site,
      WebPreferences* web_prefs) {
@@ -5360,16 +5360,32 @@ diff --git a/chrome/browser/chrome_content_browser_client.cc b/chrome/browser/ch
 +      Java_ArcDesktopPolicyBridge_isArchiumDesktopCameraEnabled(
 +          base::android::AttachCurrentThread(), web_contents->GetJavaWebContents())
 +          ? arc_camera::Get(web_contents) : -2;
++
 +#endif
    Profile* profile =
        Profile::FromBrowserContext(web_contents->GetBrowserContext());
    PrefService* prefs = profile->GetPrefs();
-@@ -5021,6 +5035,9 @@
+@@ -5021,6 +5036,24 @@
 
    web_prefs->is_xslt_deprecation_banner_suppressed =
        prefs->GetBoolean(prefs::kXSLTDeprecationBannerSuppressed);
 +#if BUILDFLAG(IS_ANDROID)
 +  android::ApplyArcSplitViewportPreferences(web_contents, web_prefs);
++  // A Document PiP child has desktop window semantics even on phone-class
++  // Android hardware. The generic Android form-factor gate otherwise leaves
++  // shrink-to-fit active in a child with no viewport meta tag; layout/resize
++  // then operate on a different scale from its small native window.
++  // Creation options identify the child before its Java window is attached.
++  // Never apply this policy to the opener, ordinary tabs, or Mobile pages.
++  if (web_contents->GetPictureInPictureOptions().has_value()) {
++    web_prefs->viewport_enabled = false;
++    web_prefs->viewport_meta_enabled = false;
++    web_prefs->viewport_style = blink::mojom::ViewportStyle::kDefault;
++    web_prefs->shrinks_viewport_contents_to_fit = false;
++    web_prefs->main_frame_resizes_are_orientation_changes = false;
++    web_prefs->default_minimum_page_scale_factor = 1.f;
++    web_prefs->default_maximum_page_scale_factor = 4.f;
++  }
 +#endif
  }
 
@@ -9718,91 +9734,50 @@ diff --git a/third_party/blink/renderer/modules/mediastream/video_track_adapter.
  #include "media/base/video_types.h"
  #include "media/base/video_util.h"
  #include "third_party/blink/public/common/features.h"
-@@ -309,7 +310,8 @@
+@@ -309,7 +310,7 @@
    void DeliverFrame(
        scoped_refptr<media::VideoFrame> frame,
        const base::TimeTicks& estimated_capture_time,
 -      bool is_device_rotated);
-+      bool is_device_rotated, ArcCameraOrientationPolicy::Snapshot camera_policy,
-+      const gfx::Size& camera_source_size);
++      bool is_device_rotated, ArcCameraOrientationPolicy::Snapshot camera_policy);
    // This method is called when a frame is dropped, whether dropped by the
    // source (via VideoTrackAdapter::OnFrameDroppedOnVideoTaskRunner) or
    // internally (in DeliverFrame).
-@@ -336,7 +338,8 @@
-   base::expected<scoped_refptr<media::VideoFrame>,
-                  media::VideoCaptureFrameDropReason>
-   AdaptFrameResolution(scoped_refptr<media::VideoFrame> video_frame,
--                       bool is_device_rotated);
-+                       bool is_device_rotated, ArcCameraOrientationPolicy::Snapshot camera_policy,
-+                       const gfx::Size& camera_source_size);
-
-   // Delivers |video_frame| to the specific track represented by |track_params|,
-   // updating track settings if the frame format has changed.
-@@ -519,8 +522,42 @@
-                media::VideoCaptureFrameDropReason>
- VideoTrackAdapter::VideoFrameResolutionAdapter::AdaptFrameResolution(
-     scoped_refptr<media::VideoFrame> video_frame,
--    bool is_device_rotated) {
--  DCHECK_CALLED_ON_VALID_SEQUENCE(video_sequence_checker_);
-+    bool is_device_rotated, ArcCameraOrientationPolicy::Snapshot camera_policy,
-+    const gfx::Size& camera_source_size) {
-+  DCHECK_CALLED_ON_VALID_SEQUENCE(video_sequence_checker_);
-+  // Camera calibration is per Page/source and per track's requested format.
-+  // Screen capture never receives a camera policy. Preserve the native sensor
-+  // orientation and compose only an explicit user adjustment. Crop by wrapping
-+  // the original buffers; no new camera, copy, GPU setting or website override.
-+  if (camera_policy.enabled && !is_video_desktop_capture_type_) {
-+    gfx::Size target;
-+    // Keep Chromium's size limits and explicit aspect-ratio constraints. Only
-+    // omit the mobile rotation heuristic when choosing the display aspect.
-+    const bool valid_target = CalculateDesiredSize(
-+        false, camera_source_size, settings_, &target);
-+    const media::VideoTransformation original = video_frame->metadata().transformation.value_or(
-+        media::VideoTransformation());
-+    const media::VideoTransformation transform = original.add(
-+        media::VideoTransformation(static_cast<media::VideoRotation>(camera_policy.turns * 90)));
-+    const auto plan = ArcCameraOrientationPolicy::Plan(
-+        camera_policy, target.width(), target.height(), static_cast<int>(transform.rotation));
-+    if (valid_target && plan.valid) {
-+      const gfx::Size desired(plan.width, plan.height);
-+      const gfx::Rect region = ComputeLetterboxRect(video_frame->visible_rect(), desired);
-+      if (desired == video_frame->natural_size() && region == video_frame->visible_rect()
-+          && transform == original) {
-+        return video_frame;
-+      }
-+      auto calibrated = media::VideoFrame::WrapVideoFrame(
-+          video_frame, video_frame->format(), region, desired);
-+      if (!calibrated) {
-+        return base::unexpected(media::VideoCaptureFrameDropReason::
-+            kResolutionAdapterWrappingFrameForCroppingFailed);
-+      }
-+      calibrated->metadata().transformation = transform;
-+      return calibrated;
-+    }
-+  }
-   // If the frame holds a SharedImage that is not CPU-mappable we don't apply
-   // cropping/scaling and deliver the frame as-is, leaving it up to the
-   // destination to rescale it. Otherwise, cropping and scaling is soft-applied
-@@ -603,7 +640,8 @@
+@@ -603,7 +604,7 @@
  void VideoTrackAdapter::VideoFrameResolutionAdapter::DeliverFrame(
      scoped_refptr<media::VideoFrame> video_frame,
      const base::TimeTicks& estimated_capture_time,
 -    bool is_device_rotated) {
-+    bool is_device_rotated, ArcCameraOrientationPolicy::Snapshot camera_policy,
-+    const gfx::Size& camera_source_size) {
++    bool is_device_rotated, ArcCameraOrientationPolicy::Snapshot camera_policy) {
    DCHECK_CALLED_ON_VALID_SEQUENCE(video_sequence_checker_);
 
    if (!video_frame) {
-@@ -675,7 +713,7 @@
-               : video_frame;
+@@ -676,6 +677,24 @@
        if (track_frame) {
          adapted_frame =
--            AdaptFrameResolution(std::move(track_frame), is_device_rotated);
-+            AdaptFrameResolution(std::move(track_frame), is_device_rotated, camera_policy, camera_source_size);
+             AdaptFrameResolution(std::move(track_frame), is_device_rotated);
++        const int rotation = ArcCameraOrientationPolicy::RotationDegrees(camera_policy);
++        if (rotation != 0 && !is_video_desktop_capture_type_ &&
++            adapted_frame.has_value() && adapted_frame.value()) {
++          // Preserve native constraints, visible rect, natural size and buffers.
++          // Apply one user rotation per cached result, never once per clone.
++          auto frame = adapted_frame.value();
++          auto rotated = media::VideoFrame::WrapVideoFrame(
++              frame, frame->format(), frame->visible_rect(), frame->natural_size());
++          if (rotated) {
++            rotated->metadata().transformation =
++                frame->metadata().transformation.value_or(media::VideoTransformation()).add(
++                    media::VideoTransformation(static_cast<media::VideoRotation>(rotation)));
++            adapted_frame = std::move(rotated);
++          } else {
++            adapted_frame = base::unexpected(media::VideoCaptureFrameDropReason::
++                kResolutionAdapterWrappingFrameForCroppingFailed);
++          }
++        }
        }
        adapted_frames_cache.push_back(CachedFrame{target_token, adapted_frame});
      }
-@@ -972,6 +1010,20 @@
+@@ -972,6 +991,20 @@
            WrapRefCounted(this)));
  }
 
@@ -9823,7 +9798,7 @@ diff --git a/third_party/blink/renderer/modules/mediastream/video_track_adapter.
  void VideoTrackAdapter::SetSourceFrameSize(const gfx::Size& source_frame_size) {
    DCHECK_CALLED_ON_VALID_SEQUENCE(sequence_checker_);
    PostCrossThreadTask(
-@@ -1145,9 +1197,14 @@
+@@ -1145,9 +1178,13 @@
        video_frame->natural_size().height() == source_frame_size_->width()) {
      is_device_rotated = true;
    }
@@ -9834,8 +9809,7 @@ diff --git a/third_party/blink/renderer/modules/mediastream/video_track_adapter.
    for (const auto& adapter : adapters_) {
      adapter->DeliverFrame(video_frame, estimated_capture_time,
 -                          is_device_rotated);
-+                          is_device_rotated, camera_policy,
-+                          source_frame_size_.value_or(video_frame->natural_size()));
++                          is_device_rotated, camera_policy);
    }
  }
 
@@ -27674,7 +27648,7 @@ diff --git a/third_party/blink/renderer/platform/mediastream/arc_camera_orientat
 new file mode 100644
 --- /dev/null
 +++ b/third_party/blink/renderer/platform/mediastream/arc_camera_orientation_policy.h
-@@ -0,0 +1,57 @@
+@@ -0,0 +1,40 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -27694,36 +27668,19 @@ new file mode 100644
 +    bool manual = false;
 +    int turns = 0;
 +  };
-+  struct Geometry {
-+    bool valid = false;
-+    int width = 0;
-+    int height = 0;
-+    int rotation = 0;
-+  };
-+
 +  void Set(int mode) {
 +    mode_.store(mode >= -2 && mode <= 3 ? mode : -2,
 +                std::memory_order_relaxed);
 +  }
 +  Snapshot Get() const {
 +    const int mode = mode_.load(std::memory_order_relaxed);
-+    return {mode >= -1, mode >= 0, mode >= 0 ? mode : 0};
++    return {mode >= 0, mode >= 0, mode >= 0 ? mode : 0};
 +  }
 +
-+  // Dimensions describe the untransformed wrapped frame. Preserve upstream
-+  // orientation, composed with the user adjustment by VideoTransformation.
-+  // The display aspect respects explicit portrait requests as well.
-+  static Geometry Plan(Snapshot policy, int width, int height, int rotation) {
-+    if (!policy.enabled || width < 1 || height < 1 || width > 16384 ||
-+        height > 16384 || rotation < 0 || rotation >= 360 || rotation % 90) {
-+      return {};
-+    }
-+    if (rotation == 90 || rotation == 270) {
-+      const int old_width = width;
-+      width = height;
-+      height = old_width;
-+    }
-+    return {true, width, height, rotation};
++  // Auto uses the native pipeline unchanged. Only a user-selected manual
++  // delta is composed with the existing frame transformation.
++  static int RotationDegrees(Snapshot policy) {
++    return policy.enabled && policy.manual ? policy.turns * 90 : 0;
 +  }
 +
 + private:

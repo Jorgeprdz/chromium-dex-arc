@@ -53,36 +53,17 @@ int main(){
    subprocess.run(['g++','-std=c++20','-Wall','-Wextra','-Werror',str(p),'-o',d+'/size'],check=True,capture_output=True)
    subprocess.run([d+'/size'],check=True)
 
- def test_real_policy_orientation_dimensions_and_isolation(self):
+ def test_native_resolution_adapter_is_preserved(self):
+  name='third_party/blink/renderer/modules/mediastream/video_track_adapter.cc'
+  actual=(ROOT/'.source-modified'/name).read_text()
+  native=(ROOT/'.source-reference'/name).read_text()
+  start='VideoTrackAdapter::VideoFrameResolutionAdapter::AdaptFrameResolution('
+  stop='void VideoTrackAdapter::VideoFrameResolutionAdapter::DeliverFrame('
+  self.assertEqual(actual[actual.index(start):actual.index(stop)],native[native.index(start):native.index(stop)],'Manual rotation must not replace the native size/aspect adapter')
+
+ def test_camera_mode_isolation_and_manual_delta(self):
   header=ROOT/'chromium/third_party/blink/renderer/platform/mediastream/arc_camera_orientation_policy.h'
-  self.assertTrue(header.is_file(),'Camera calibration policy must be implemented')
-  code='''#include "'''+str(header)+'''"
-#include <cassert>
-using blink::ArcCameraOrientationPolicy;
-int main(){
- ArcCameraOrientationPolicy a,b;
- assert(!a.Get().enabled);
- a.Set(-1);assert(a.Get().enabled&&a.Get().turns==0&&!a.Get().manual);
- assert(!b.Get().enabled);
- auto p=ArcCameraOrientationPolicy::Plan(a.Get(),640,480,0);
- assert(p.valid&&p.width==640&&p.height==480&&p.rotation==0);
- a.Set(1);p=ArcCameraOrientationPolicy::Plan(a.Get(),1280,720,90);
- assert(p.width==720&&p.height==1280&&p.rotation==90);
- a.Set(2);p=ArcCameraOrientationPolicy::Plan(a.Get(),1280,720,180);
- assert(p.width==1280&&p.height==720&&p.rotation==180);
- a.Set(3);p=ArcCameraOrientationPolicy::Plan(a.Get(),640,480,0);
- assert(p.rotation==0&&p.width==640&&p.height==480);
- a.Set(-1);p=ArcCameraOrientationPolicy::Plan(a.Get(),720,1280,0);
- assert(p.width==720&&p.height==1280); // explicit portrait survives.
- p=ArcCameraOrientationPolicy::Plan(a.Get(),1280,720,270);
- assert(p.width==720&&p.height==1280&&p.rotation==270);
- assert(!ArcCameraOrientationPolicy::Plan(a.Get(),0,720,0).valid);
- assert(!ArcCameraOrientationPolicy::Plan(a.Get(),1280,720,45).valid);
- a.Set(99);assert(!a.Get().enabled);
- a.Set(-2);assert(!a.Get().enabled);
- b.Set(0);assert(b.Get().enabled&&b.Get().manual&&!a.Get().enabled);
-}
-'''
+  code='#include \"'+str(header)+'\"\n'+'#include <cassert>\nusing blink::ArcCameraOrientationPolicy;\nint main(){\n ArcCameraOrientationPolicy a,b;\n assert(!a.Get().enabled);\n a.Set(-1);assert(!a.Get().enabled&&!a.Get().manual);\n assert(ArcCameraOrientationPolicy::RotationDegrees(a.Get())==0);\n a.Set(0);assert(a.Get().enabled&&a.Get().manual);\n assert(ArcCameraOrientationPolicy::RotationDegrees(a.Get())==0);\n for(int turns=1;turns<=3;turns++){\n  a.Set(turns);assert(ArcCameraOrientationPolicy::RotationDegrees(a.Get())==turns*90);\n  assert(!b.Get().enabled);\n }\n a.Set(-2);assert(ArcCameraOrientationPolicy::RotationDegrees(a.Get())==0);\n a.Set(99);assert(!a.Get().enabled);\n b.Set(1);assert(ArcCameraOrientationPolicy::RotationDegrees(b.Get())==90&&!a.Get().enabled);\n a.Set(-1);assert(!a.Get().enabled&&b.Get().enabled);\n}'
   with tempfile.TemporaryDirectory() as d:
    p=Path(d)/'case.cc';p.write_text(code)
    subprocess.run(['g++','-std=c++20','-Wall','-Wextra','-Werror',str(p),'-o',d+'/case'],check=True,capture_output=True)

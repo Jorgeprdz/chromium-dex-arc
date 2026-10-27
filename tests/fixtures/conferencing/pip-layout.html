@@ -1,0 +1,14 @@
+<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Archium QA — Document PiP layout</title>
+<style>body{font:18px system-ui;margin:24px;background:#18212b;color:white}button{padding:16px;margin:8px}pre{white-space:pre-wrap}</style>
+<h1>Document PiP layout fixture</h1>
+<p>Layout only. No camera, microphone or screen capture. Each button requires a user action. Neither case resizes itself in response to resize events.</p>
+<button id="plain">PiP without viewport meta</button><button id="meta">PiP with viewport meta (control)</button><button id="close">Close fixture PiP</button>
+<pre id="log"></pre>
+<script>
+let qaWindow;const records=[];
+function snapshot(){if(!qaWindow||qaWindow.closed)return null;const w=qaWindow,v=w.visualViewport,f=w.document.querySelector('footer');return {outer:[w.outerWidth,w.outerHeight],inner:[w.innerWidth,w.innerHeight],visual:[v.width,v.height,v.scale],dpr:w.devicePixelRatio,footer:f?{top:f.getBoundingClientRect().top,bottom:f.getBoundingClientRect().bottom}:null};}
+function record(event){records.push({event,time:Date.now(),metrics:snapshot()});if(records.length>80)records.shift();document.querySelector('#log').textContent=JSON.stringify(records,null,2);}
+async function openFixture(meta){qaWindow?.close();qaWindow=await documentPictureInPicture.requestWindow({width:480,height:320});const d=qaWindow.document;if(meta){const m=d.createElement('meta');m.name='viewport';m.content='width=device-width,initial-scale=1';d.head.append(m);}const s=d.createElement('style');s.textContent='html,body{margin:0;height:100%;overflow:hidden}body{font:18px system-ui;display:grid;grid-template-rows:44px 1fr 44px;background:#18212b;color:white}header,footer{display:flex;align-items:center;justify-content:space-between;padding:0 8px;background:#295f83}main{display:grid;place-items:center;background:linear-gradient(135deg,#3a725b,#72533a)}';d.head.append(s);d.body.innerHTML='<header><span>TOP LEFT</span><span>TOP RIGHT</span></header><main>LAYOUT FIXTURE — NO VIDEO</main><footer><span>BOTTOM LEFT</span><span>BOTTOM RIGHT</span></footer>';qaWindow.addEventListener('resize',()=>record('resize'));qaWindow.addEventListener('pagehide',()=>record('closed'),{once:true});setTimeout(()=>record(meta?'with-meta':'without-meta'),800);}
+document.getElementById('plain').onclick=()=>openFixture(false).catch(e=>record(String(e)));document.getElementById('meta').onclick=()=>openFixture(true).catch(e=>record(String(e)));document.getElementById('close').onclick=()=>qaWindow?.close();
+</script>

@@ -4682,6 +4682,7 @@ void ChromeContentBrowserClient::OverrideWebPreferences(
       Java_ArcDesktopPolicyBridge_isArchiumDesktopCameraEnabled(
           base::android::AttachCurrentThread(), web_contents->GetJavaWebContents())
           ? arc_camera::Get(web_contents) : -2;
+
 #endif
   Profile* profile =
       Profile::FromBrowserContext(web_contents->GetBrowserContext());
@@ -5037,6 +5038,21 @@ void ChromeContentBrowserClient::OverrideWebPreferences(
       prefs->GetBoolean(prefs::kXSLTDeprecationBannerSuppressed);
 #if BUILDFLAG(IS_ANDROID)
   android::ApplyArcSplitViewportPreferences(web_contents, web_prefs);
+  // A Document PiP child has desktop window semantics even on phone-class
+  // Android hardware. The generic Android form-factor gate otherwise leaves
+  // shrink-to-fit active in a child with no viewport meta tag; layout/resize
+  // then operate on a different scale from its small native window.
+  // Creation options identify the child before its Java window is attached.
+  // Never apply this policy to the opener, ordinary tabs, or Mobile pages.
+  if (web_contents->GetPictureInPictureOptions().has_value()) {
+    web_prefs->viewport_enabled = false;
+    web_prefs->viewport_meta_enabled = false;
+    web_prefs->viewport_style = blink::mojom::ViewportStyle::kDefault;
+    web_prefs->shrinks_viewport_contents_to_fit = false;
+    web_prefs->main_frame_resizes_are_orientation_changes = false;
+    web_prefs->default_minimum_page_scale_factor = 1.f;
+    web_prefs->default_maximum_page_scale_factor = 4.f;
+  }
 #endif
 }
 

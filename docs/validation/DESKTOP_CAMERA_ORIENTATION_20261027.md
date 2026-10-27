@@ -36,3 +36,7 @@ A successful SDK/host check does not establish camera output or meeting acceptan
 Local full-suite log: `full-host.log` (842.320s, preserved RED); `header-style-green.log`, `policy-green.log`, `googlebook-regression.log`, `preparation-final.log` in `/workspace/.local/state/archium-desktop-camera-fix-20261027/`. No assertion was removed or gate relaxed. The original `AllowsVideoThreadTypeOverride` body was moved unchanged to its existing `.cc` because the delivered-header gate now covers that newly patched header. Trace is out of line in its actual core GN owner.
 
 Transition evidence: `actual-transition-proof.json` and `checkpoint-transition-proof.json`; upstream originals newly touched by this candidate were seeded by their certified pinned hashes into the reconstructed checkout. CI repeats the transition on the actual full restored source tree.
+
+## Physical follow-up
+
+User rejected Auto (portrait enlarged/cropped); Manual90 works. The next candidate removes automatic aspect calibration and keeps native geometry plus explicit manual rotation. Automatic sensor/display correction is not claimed. See [camera/PiP follow-up](CONFERENCING_CAMERA_PIP_20261027.md).

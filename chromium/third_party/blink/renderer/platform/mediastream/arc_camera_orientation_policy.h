@@ -17,36 +17,19 @@ class ArcCameraOrientationPolicy {
     bool manual = false;
     int turns = 0;
   };
-  struct Geometry {
-    bool valid = false;
-    int width = 0;
-    int height = 0;
-    int rotation = 0;
-  };
-
   void Set(int mode) {
     mode_.store(mode >= -2 && mode <= 3 ? mode : -2,
                 std::memory_order_relaxed);
   }
   Snapshot Get() const {
     const int mode = mode_.load(std::memory_order_relaxed);
-    return {mode >= -1, mode >= 0, mode >= 0 ? mode : 0};
+    return {mode >= 0, mode >= 0, mode >= 0 ? mode : 0};
   }
 
-  // Dimensions describe the untransformed wrapped frame. Preserve upstream
-  // orientation, composed with the user adjustment by VideoTransformation.
-  // The display aspect respects explicit portrait requests as well.
-  static Geometry Plan(Snapshot policy, int width, int height, int rotation) {
-    if (!policy.enabled || width < 1 || height < 1 || width > 16384 ||
-        height > 16384 || rotation < 0 || rotation >= 360 || rotation % 90) {
-      return {};
-    }
-    if (rotation == 90 || rotation == 270) {
-      const int old_width = width;
-      width = height;
-      height = old_width;
-    }
-    return {true, width, height, rotation};
+  // Auto uses the native pipeline unchanged. Only a user-selected manual
+  // delta is composed with the existing frame transformation.
+  static int RotationDegrees(Snapshot policy) {
+    return policy.enabled && policy.manual ? policy.turns * 90 : 0;
   }
 
  private:
