@@ -171,9 +171,10 @@ public class ArcCollectionsFocusTest {
         for (int i = 0; i < 20; i++) f.controller.createFolder(null, "Folder " + i);
         f.view.refresh(); f.view.setCollectionHeight(240); f.measure();
         View scroll = (View) f.view.findViewWithTag("arc-new-folder:" + f.controller.state().selectedSpace()).getParent().getParent();
-        assertEquals(240, scroll.getMeasuredHeight());
+        int chrome = Math.round(88 * f.activity.getResources().getDisplayMetrics().density);
+        assertEquals(Math.max(0, 240 - chrome), scroll.getMeasuredHeight());
         f.view.setCollectionHeight(100); f.measure();
-        assertEquals(100, scroll.getMeasuredHeight());
+        assertEquals(Math.max(0, 100 - chrome), scroll.getMeasuredHeight());
     }
 
     @Test
@@ -185,6 +186,23 @@ public class ArcCollectionsFocusTest {
         assertFalse(scroll.isLayoutRequested());
         f.view.setCollectionHeight(100);
         assertTrue(scroll.isLayoutRequested());
+    }
+
+    @Test public void faviconOpticalBoxIsStableAcrossBitmapDensitiesAndRefresh() {
+        Fixture f = new Fixture();
+        String id = f.controller.rememberTab(7, "https://example.test", "Saved", true);
+        for (int bitmapSize : new int[] {8, 24, 128}) {
+            f.view.refresh();
+            android.widget.ImageButton tile = f.view.findViewWithTag("arc-entry:" + id);
+            var bitmap = android.graphics.Bitmap.createBitmap(bitmapSize, bitmapSize, android.graphics.Bitmap.Config.ARGB_8888);
+            bitmap.setDensity(bitmapSize == 8 ? 640 : 160);
+            tile.setImageBitmap(bitmap); f.measure();
+            var optical = new android.graphics.RectF(tile.getDrawable().getBounds());
+            tile.getImageMatrix().mapRect(optical);
+            assertEquals(24 * f.activity.getResources().getDisplayMetrics().density, optical.width(), 1f);
+            assertEquals(optical.width(), optical.height(), .01f);
+            assertNull(tile.getColorFilter());
+        }
     }
 
     @Test

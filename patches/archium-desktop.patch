@@ -1818,6 +1818,26 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
      }
 
      @Test
+diff --git a/chrome/android/java/AndroidManifest.xml b/chrome/android/java/AndroidManifest.xml
+--- a/chrome/android/java/AndroidManifest.xml
++++ b/chrome/android/java/AndroidManifest.xml
+@@ -784,14 +784,14 @@
+         </activity>
+         <activity android:name="org.chromium.chrome.browser.app.bookmarks.BookmarkEditActivity"
+             android:theme="@style/Theme.Chromium.DialogWhenLarge"
+-            android:windowSoftInputMode="stateHidden"
++            android:windowSoftInputMode="stateHidden|adjustResize"
+             android:exported="false"
+             android:label="@string/edit_bookmark"
+             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|mcc|mnc|screenLayout|smallestScreenSize|uiMode">
+         </activity>
+         <activity android:name="org.chromium.chrome.browser.app.bookmarks.BookmarkFolderPickerActivity"
+             android:theme="@style/Theme.Chromium.DialogWhenLarge"
+-            android:windowSoftInputMode="stateAlwaysHidden"
++            android:windowSoftInputMode="stateAlwaysHidden|adjustResize"
+             android:label="@string/bookmark_choose_folder"
+             android:exported="false"
+             android:configChanges="orientation|keyboardHidden|keyboard|screenSize|mcc|mnc|screenLayout|smallestScreenSize|uiMode">
 diff --git a/chrome/android/java/res_chromium_base/values/channel_constants.xml b/chrome/android/java/res_chromium_base/values/channel_constants.xml
 --- a/chrome/android/java/res_chromium_base/values/channel_constants.xml
 +++ b/chrome/android/java/res_chromium_base/values/channel_constants.xml
@@ -2071,6 +2091,75 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/SwipeRefreshHan
          cancelStopRefreshingRunnable();
          if (mSwipeRefreshLayout != null) mSwipeRefreshLayout.reset();
          if (mNavigationCoordinator != null) mNavigationCoordinator.reset();
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/app/bookmarks/BookmarkEditActivity.java b/chrome/android/java/src/org/chromium/chrome/browser/app/bookmarks/BookmarkEditActivity.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/app/bookmarks/BookmarkEditActivity.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/app/bookmarks/BookmarkEditActivity.java
+@@ -116,6 +116,24 @@
+                 }
+             };
+
++    private boolean mArcKeepsHostVisible;
++
++    private void updateArcHostVisibility() {
++        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) return;
++        boolean desktop = org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance
++                .isDesktopWindow(this);
++        if (desktop || mArcKeepsHostVisible) {
++            // Public Android API: retain the live browser behind the native floating activity.
++            // No opaque replacement, snapshot or compositor reparenting.
++            if (setTranslucent(desktop)) mArcKeepsHostVisible = desktop;
++        }
++    }
++
++    @Override public void onConfigurationChanged(android.content.res.Configuration config) {
++        super.onConfigurationChanged(config);
++        updateArcHostVisibility();
++    }
++
+     @Override
+     @Initializer
+     protected void onProfileAvailable(Profile profile) {
+@@ -427,6 +445,7 @@
+     @Override
+     protected void onResume() {
+         super.onResume();
++        updateArcHostVisibility();
+         if (!mFolderPickerActive) {
+             setDialogContentVisible(true);
+         }
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/app/bookmarks/BookmarkFolderPickerActivity.java b/chrome/android/java/src/org/chromium/chrome/browser/app/bookmarks/BookmarkFolderPickerActivity.java
+--- a/chrome/android/java/src/org/chromium/chrome/browser/app/bookmarks/BookmarkFolderPickerActivity.java
++++ b/chrome/android/java/src/org/chromium/chrome/browser/app/bookmarks/BookmarkFolderPickerActivity.java
+@@ -72,6 +72,29 @@
+     private @Nullable BookmarkFolderPickerCoordinator mCoordinator;
+     private @Nullable BookmarkUiPrefs mBookmarkUiPrefs;
+     private boolean mOutcomeRecorded;
++
++    @Override protected void onResume() {
++        super.onResume();
++        updateArcHostVisibility();
++    }
++
++    private boolean mArcKeepsHostVisible;
++
++    private void updateArcHostVisibility() {
++        if (android.os.Build.VERSION.SDK_INT < android.os.Build.VERSION_CODES.R) return;
++        boolean desktop = org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance
++                .isDesktopWindow(this);
++        if (desktop || mArcKeepsHostVisible) {
++            // Public Android API: retain the live browser behind the native floating activity.
++            // No opaque replacement, snapshot or compositor reparenting.
++            if (setTranslucent(desktop)) mArcKeepsHostVisible = desktop;
++        }
++    }
++
++    @Override public void onConfigurationChanged(android.content.res.Configuration config) {
++        super.onConfigurationChanged(config);
++        updateArcHostVisibility();
++    }
+
+     @Override
+     @Initializer
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/app/tab_activity_glue/ActivityTabWebContentsDelegateAndroid.java b/chrome/android/java/src/org/chromium/chrome/browser/app/tab_activity_glue/ActivityTabWebContentsDelegateAndroid.java
 --- a/chrome/android/java/src/org/chromium/chrome/browser/app/tab_activity_glue/ActivityTabWebContentsDelegateAndroid.java
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/app/tab_activity_glue/ActivityTabWebContentsDelegateAndroid.java
@@ -3454,7 +3543,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
      }
 
      private void updateTopControlsHeight() {
-@@ -2473,35 +2537,101 @@
+@@ -2473,35 +2537,106 @@
          }
 
          if (VerticalTabUtils.isVerticalTabsEligible(mActivity)) {
@@ -3576,10 +3665,15 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
 +                                org.chromium.components.omnibox.OmniboxFocusReason.MENU_OR_KEYBOARD_ACTION),
 +                        () -> SettingsNavigationFactory.createSettingsNavigation().startSettings(
 +                                mActivity, org.chromium.chrome.browser.settings.MainSettings.class));
++                mTabBookmarkerSupplier.onAvailable(bookmarker -> {
++                    if (mArcDesktopCoordinator != null) {
++                        mArcDesktopCoordinator.configureNativeBookmarks(bookmarker);
++                    }
++                });
                  mToolbarManager.setVerticalTabsAutoHiddenSupplier(
                          mVerticalTabsSideUiCoordinator.getIsAutoHiddenSupplier());
              }
-@@ -2600,7 +2730,14 @@
+@@ -2600,7 +2735,14 @@
                              var transitionCoord =
                                      assumeNonNull(mToolbarManager)
                                              .getTabStripTransitionCoordinator();
@@ -3595,7 +3689,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
                          } else {
                              assumeNonNull(mVerticalTabsSideUiCoordinator)
                                      .setVisible(/* show= */ false, /* suppressAnimations= */ false);
-@@ -2679,9 +2816,11 @@
+@@ -2679,9 +2821,11 @@
      private void onVerticalTabsActiveChanged(boolean active) {
          var transitionCoordinator =
                  assumeNonNull(mToolbarManager).getTabStripTransitionCoordinator();
@@ -3608,7 +3702,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
          if (active) {
              transitionCoordinator.suppressTabStrip(true);
          } else {
-@@ -3177,6 +3316,14 @@
+@@ -3177,6 +3321,14 @@
          createBookmarkBarIfNecessary();
      }
 
@@ -3623,7 +3717,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
      // MenuOrKeyboardActionHandler implementation
      @Override
      public boolean handleMenuOrKeyboardAction(int id, boolean fromMenu) {
-@@ -3429,8 +3576,12 @@
+@@ -3429,8 +3581,12 @@
       * activated.
       */
      public BooleanSupplier canActivateTabLayoutToggleMenu() {
@@ -5286,6 +5380,53 @@ diff --git a/chrome/browser/autofill/android/java/src/org/chromium/chrome/browse
          }
          prefs.setString(
                  Pref.AUTOFILL_THIRD_PARTY_PACKAGE_USED_FOR_PLATFORM_AUTOFILL,
+diff --git a/chrome/browser/bookmarks/android/java/src/org/chromium/chrome/browser/bookmarks/TabBookmarker.java b/chrome/browser/bookmarks/android/java/src/org/chromium/chrome/browser/bookmarks/TabBookmarker.java
+--- a/chrome/browser/bookmarks/android/java/src/org/chromium/chrome/browser/bookmarks/TabBookmarker.java
++++ b/chrome/browser/bookmarks/android/java/src/org/chromium/chrome/browser/bookmarks/TabBookmarker.java
+@@ -33,6 +33,18 @@
+  */
+ @NullMarked
+ public class TabBookmarker {
++    // Optional projection owned by the browser UI; bookmarking itself remains native.
++    private java.util.function.@Nullable BiConsumer<Tab, BookmarkItem> mBookmarkSavedListener;
++
++    public void setBookmarkSavedListener(
++            java.util.function.@Nullable BiConsumer<Tab, BookmarkItem> listener) {
++        mBookmarkSavedListener = listener;
++    }
++
++    private void notifyBookmarkSaved(Tab tab, BookmarkItem item) {
++        if (mBookmarkSavedListener != null) mBookmarkSavedListener.accept(tab, item);
++    }
++
+     private final Activity mActivity;
+     private final Supplier<@Nullable BookmarkModel> mBookmarkModelSupplier;
+     private final Supplier<BottomSheetController> mBottomSheetControllerSupplier;
+@@ -185,6 +197,12 @@
+             final BookmarkModel bookmarkModel,
+             @BookmarkType int bookmarkType,
+             boolean fromExplicitTrackUi) {
++        if (bookmarkType == BookmarkType.NORMAL && !fromExplicitTrackUi) {
++            for (int i = 0; i < tabsToBookmark.size(); i++) {
++                BookmarkItem item = currentBookmarkItems.get(i);
++                if (item != null) notifyBookmarkSaved(tabsToBookmark.get(i), item);
++            }
++        }
+         BookmarkUtils.addOrEditBookmark(
+                 currentBookmarkItems,
+                 bookmarkModel,
+@@ -201,6 +219,11 @@
+                         BookmarkItem currentBookmarkItem = currentBookmarkItems.get(i);
+                         BookmarkId currentBookmarkId =
+                                 (currentBookmarkItem == null) ? null : currentBookmarkItem.getId();
++                        if (newBookmarkId != null && currentBookmarkId == null
++                                && bookmarkType == BookmarkType.NORMAL && !fromExplicitTrackUi) {
++                            BookmarkItem saved = bookmarkModel.getBookmarkById(newBookmarkId);
++                            if (saved != null) notifyBookmarkSaved(tabsToBookmark.get(i), saved);
++                        }
+                         // Add offline page for a new bookmark.
+                         if (newBookmarkId != null
+                                 && !Objects.equals(newBookmarkId, currentBookmarkId)) {
 diff --git a/chrome/browser/browser_process_impl.cc b/chrome/browser/browser_process_impl.cc
 --- a/chrome/browser/browser_process_impl.cc
 +++ b/chrome/browser/browser_process_impl.cc
@@ -7374,10 +7515,24 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
  import android.content.res.Configuration;
  import android.util.AttributeSet;
  import android.view.KeyEvent;
-@@ -40,6 +41,25 @@
+@@ -40,6 +41,39 @@
   */
  @NullMarked
  public class OmniboxSuggestionsContainer extends FrameLayout {
++    private android.graphics.@Nullable Rect mArcCommandBounds;
++
++    /** Window coordinates are converted once against this container, never the old editor anchor. */
++    public void setArcCommandBounds(android.graphics.@Nullable Rect bounds) {
++        if (java.util.Objects.equals(mArcCommandBounds, bounds)) return;
++        mArcCommandBounds = bounds == null ? null : new android.graphics.Rect(bounds);
++        requestLayout();
++    }
++
++    @Override protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
++        super.onLayout(changed, left, top, right, bottom);
++        adjustHorizontalPosition();
++    }
++
 +    private @Nullable Drawable mArcPhoneGlassBackground;
 +    private int mArcNativeBackgroundColor;
 +
@@ -7400,6 +7555,39 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
      private OmniboxSuggestionsDropdown mDropdown;
      private @Nullable OmniboxSuggestionsDropdownEmbedder mEmbedder;
      private @Nullable Callback<Integer> mHeightChangeListener;
+@@ -68,9 +102,16 @@
+         try (TraceEvent tracing = TraceEvent.scoped("OmniboxSuggestionsList.Measure");
+                 TimingMetric metric = OmniboxMetrics.recordSuggestionListMeasureTime();
+                 TimingMetric metric2 = OmniboxMetrics.recordSuggestionListMeasureWallTime()) {
+-            maybeUpdateLayoutParams(mOmniboxAlignment.top);
++            int top = mOmniboxAlignment.top;
+             int availableViewportHeight = mOmniboxAlignment.height;
+             int desiredWidth = mOmniboxAlignment.width;
++            if (mArcCommandBounds != null && getParent() instanceof View parent) {
++                int[] parentWindow = new int[2]; parent.getLocationInWindow(parentWindow);
++                top = mArcCommandBounds.top - parentWindow[1] - parent.getPaddingTop();
++                availableViewportHeight = Math.max(0, mArcCommandBounds.height());
++                desiredWidth = Math.max(0, mArcCommandBounds.width());
++            }
++            maybeUpdateLayoutParams(top);
+             adjustHorizontalPosition();
+             notifyObserversIfViewportHeightChanged(availableViewportHeight);
+
+@@ -186,7 +227,13 @@
+         // Set our left edge using translation x. This avoids needing to relayout (like setting
+         // a left margin would) and is less risky than calling View#setLeft(), which is intended
+         // for use by the layout system.
+-        setTranslationX(mOmniboxAlignment.left);
++        if (mArcCommandBounds == null) {
++            setTranslationX(mOmniboxAlignment.left);
++        } else {
++            int[] window = new int[2]; getLocationInWindow(window);
++            float layoutWindowX = window[0] - getTranslationX();
++            setTranslationX(mArcCommandBounds.left - layoutWindowX);
++        }
+     }
+
+     private void setRoundingCorners(boolean roundTopCorners, boolean roundBottomCorners) {
 diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/suggestions/OmniboxSuggestionsDropdown.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/suggestions/OmniboxSuggestionsDropdown.java
 --- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/suggestions/OmniboxSuggestionsDropdown.java
 +++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/suggestions/OmniboxSuggestionsDropdown.java
@@ -10361,7 +10549,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollecti
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsController.java
-@@ -0,0 +1,134 @@
+@@ -0,0 +1,153 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -10435,12 +10623,20 @@ new file mode 100644
 +        ArcSidebarState draft = state();
 +        String existingId = null;
 +        for (ArcSidebarState.Entry entry : draft.favorites()) {
-+            if (Integer.valueOf(tabId).equals(entry.tabId)) existingId = entry.id;
++            if (favorite ? url.equals(entry.url) : Integer.valueOf(tabId).equals(entry.tabId)) {
++                existingId = entry.id;
++            }
 +        }
 +        for (ArcSidebarState.Space space : draft.spaces()) {
 +            for (ArcSidebarState.Entry entry : draft.entries(space.id)) {
-+                if (Integer.valueOf(tabId).equals(entry.tabId)) existingId = entry.id;
++                if (existingId == null && Integer.valueOf(tabId).equals(entry.tabId)
++                        && (!favorite || url.equals(entry.url))) existingId = entry.id;
 +            }
++        }
++        if (favorite && (existingId == null || draft.entry(existingId).tabId == null)) {
++            // A tab may navigate away from its saved URL. Release only its live association;
++            // preserve the old favorite and its canonical URL/title.
++            draft.tabClosed(tabId);
 +        }
 +        if (existingId == null) {
 +            existingId = favorite ? draft.favorite(url, title, tabId)
@@ -10455,11 +10651,22 @@ new file mode 100644
 +                draft.move(existingId, draft.selectedSpace(), folderId, end);
 +            }
 +        }
++        draft.updateMetadata(existingId, url, title);
++        if (draft.entry(existingId).tabId == null) draft.bindTab(existingId, tabId);
 +        // Publish metadata before changing the native tab; a failed write leaves it untouched.
 +        mStore.save(draft);
-+        mTabs.pin(tabId);
++        mTabs.pin(draft.entry(existingId).tabId);
 +        mTabs.onArcStateChanged(draft);
 +        return existingId;
++    }
++
++    /** Project native title/URL edits without changing identity, order, Space or live tabs. */
++    public void updateFavorite(String id, String url, String title) {
++        ArcSidebarState draft = state();
++        if (!draft.entry(id).favorite) return;
++        draft.updateMetadata(id, url, title);
++        mStore.save(draft);
++        mTabs.onArcStateChanged(draft);
 +    }
 +
 +    public ArcTabActions.Result open(String id) {
@@ -10500,7 +10707,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollecti
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java
-@@ -0,0 +1,546 @@
+@@ -0,0 +1,577 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -10576,6 +10783,8 @@ new file mode 100644
 +            super.onMeasure(widthSpec, MeasureSpec.makeMeasureSpec(cap, MeasureSpec.AT_MOST));
 +        }
 +    }
++    private Runnable mSaveNativeFavorite;
++    public void setNativeFavoriteAction(Runnable action) { mSaveNativeFavorite = action; }
 +    private String mOpenFolder;
 +    private String mRenderedSpace;
 +    private AlertDialog mDialog;
@@ -10728,7 +10937,11 @@ new file mode 100644
 +    }
 +
 +    public void setCollectionHeight(int height) {
-+        mScroll.setBudget(height);
++        // One shared budget, rather than independent 216dp + 240dp panels starving native tabs.
++        int rows = Math.max(0, height - dp(88));
++        int favorites = mFavorites.getChildCount() == 0 ? 0 : Math.min(dp(96), rows / 2);
++        mFavoritesScroll.setBudget(favorites);
++        mScroll.setBudget(Math.max(0, rows - favorites));
 +    }
 +
 +    /** Owns collection styling so site favicons retain their original colors and rounded tiles. */
@@ -10776,7 +10989,32 @@ new file mode 100644
 +        }
 +    }
 +
++    /** Neutral domain initial; the optical box is identical before and after native icon loading. */
++    private android.graphics.drawable.Drawable fallbackIcon(String url, int color) {
++        String domain;
++        try { domain = android.net.Uri.parse(url).getHost(); }
++        catch (RuntimeException invalid) { domain = null; }
++        if (domain != null && domain.startsWith("www.")) domain = domain.substring(4);
++        final String initial = domain == null || domain.isEmpty() ? "•"
++                : domain.substring(0, 1).toUpperCase(java.util.Locale.ROOT);
++        return new android.graphics.drawable.Drawable() {
++            final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
++            @Override public void draw(android.graphics.Canvas canvas) {
++                var bounds = getBounds(); paint.setColor(color); paint.setTextAlign(android.graphics.Paint.Align.CENTER);
++                paint.setTextSize(Math.min(bounds.width(), bounds.height()) * .72f);
++                canvas.drawText(initial, bounds.exactCenterX(), bounds.exactCenterY()
++                        - (paint.ascent() + paint.descent()) / 2, paint);
++            }
++            @Override public int getIntrinsicWidth() { return dp(24); }
++            @Override public int getIntrinsicHeight() { return dp(24); }
++            @Override public void setAlpha(int alpha) { paint.setAlpha(alpha); invalidateSelf(); }
++            @Override public void setColorFilter(android.graphics.ColorFilter filter) { paint.setColorFilter(filter); }
++            @Override public int getOpacity() { return android.graphics.PixelFormat.TRANSLUCENT; }
++        };
++    }
++
 +    private void remember(boolean favorite) {
++        if (favorite && mSaveNativeFavorite != null) { mSaveNativeFavorite.run(); return; }
 +        CurrentTab tab = mCurrentTab.get();
 +        if (tab == null) throw new IllegalStateException("No active tab");
 +        String title = tab.title == null || tab.title.isEmpty() ? tab.url : tab.title;
@@ -10813,9 +11051,9 @@ new file mode 100644
 +        mFavoritesScroll.setVisibility(state.favorites().isEmpty() ? GONE : VISIBLE);
 +        for (ArcSidebarState.Entry entry : state.favorites()) {
 +            ImageButton favorite = new ImageButton(mActivity);
-+            favorite.setImageResource(android.R.drawable.ic_menu_view);
-+            favorite.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
-+            favorite.setPadding(dp(16), dp(16), dp(16), dp(16));
++            favorite.setImageDrawable(fallbackIcon(entry.url, mForeground));
++            favorite.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
++            favorite.setPadding(dp(20), dp(20), dp(20), dp(20));
 +            favorite.setContentDescription(entry.title);
 +            favorite.setTooltipText(entry.title);
 +            favorite.setTag("arc-entry:" + entry.id);
@@ -11345,7 +11583,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCommandB
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCommandBar.java
-@@ -0,0 +1,391 @@
+@@ -0,0 +1,411 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -11439,6 +11677,8 @@ new file mode 100644
 +    private ValueAnimator mAnimator;
 +    private TextView mProxy;
 +    private Rect mOrigin = new Rect();
++    private long mOpenedAt;
++    private boolean mConsumeOriginGesture;
 +    private Rect mLastVisibleFrame = new Rect();
 +    private Rect mLastViewport = new Rect();
 +    private CharSequence mOriginalHint;
@@ -11453,7 +11693,23 @@ new file mode 100644
 +        mPlacement = placement; mViewport = viewport; mBeginInput = beginInput;
 +        mEndInput = endInput; mRestore = restore; mResults = results;
 +        mPlaceholder = placeholder; mActionsLabel = actionsLabel;
-+        mOverlay = new FrameLayout(activity);
++        mOverlay = new FrameLayout(activity) {
++            @Override public boolean dispatchTouchEvent(android.view.MotionEvent event) {
++                int action = event.getActionMasked();
++                if (action == android.view.MotionEvent.ACTION_DOWN) {
++                    mConsumeOriginGesture = !mActions && mState != State.CLOSING
++                            && event.getEventTime() - mOpenedAt <= android.view.ViewConfiguration.getDoubleTapTimeout()
++                            && mOrigin.contains((int) event.getX(), (int) event.getY());
++                    if (mConsumeOriginGesture) mEditor.requestFocus();
++                }
++                if (mConsumeOriginGesture) {
++                    if (action == android.view.MotionEvent.ACTION_UP
++                            || action == android.view.MotionEvent.ACTION_CANCEL) mConsumeOriginGesture = false;
++                    return true;
++                }
++                return super.dispatchTouchEvent(event);
++            }
++        };
 +        mOverlay.setBackgroundColor(0x22000000);
 +        mOverlay.setOnClickListener(v -> close(true, null));
 +        mPanel = new LinearLayout(activity); mPanel.setOrientation(LinearLayout.VERTICAL);
@@ -11516,6 +11772,8 @@ new file mode 100644
 +        mActions = actions; mEditingAddress = editingAddress; mState = State.OPENING;
 +        mPreviousFocus = mRoot.findFocus(); mOriginalHint = mEditor.getHint();
 +        mOrigin = boundsInRoot(mHolder);
++        mOpenedAt = android.os.SystemClock.uptimeMillis();
++        mConsumeOriginGesture = false;
 +        mRoot.addView(mOverlay, new ViewGroup.LayoutParams(-1, -1));
 +        mRoot.addOnLayoutChangeListener(mLayoutListener);
 +        mOverlay.getViewTreeObserver().addOnGlobalLayoutListener(mGlobalLayout);
@@ -11955,7 +12213,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopC
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
-@@ -0,0 +1,1644 @@
+@@ -0,0 +1,1734 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -12120,7 +12378,10 @@ new file mode 100644
 +            node = node.getParent() instanceof View ? (View) node.getParent() : null;
 +        }
 +        if (mDesktopSuggestions != node) {
-+            if (mDesktopSuggestions != null) mDesktopSuggestions.setArcPhoneGlassBackground(null);
++            if (mDesktopSuggestions != null) {
++                mDesktopSuggestions.setArcCommandBounds(null);
++                mDesktopSuggestions.setArcPhoneGlassBackground(null);
++            }
 +            if (mDesktopSuggestionGlass != null && mDesktopGlass != null) mDesktopGlass.remove(mDesktopSuggestionGlass);
 +            mDesktopSuggestions = node instanceof OmniboxSuggestionsContainer ? (OmniboxSuggestionsContainer) node : null;
 +            mDesktopSuggestionGlass = null;
@@ -12530,7 +12791,7 @@ new file mode 100644
 +                                Math.min((view.getWidth() - left) / 2f, view.getHeight() / 2f));
 +                        // SurfaceControl supports a round rect, not asymmetric Path corners.
 +                        // Crop below the visible bottom to make the sidebar junction square.
-+                        outline.setRoundRect(left, 0, view.getWidth(), view.getHeight() + Math.round(radius), radius);
++                        outline.setRoundRect(left, 0, view.getWidth(), view.getHeight(), radius);
 +                    }
 +                };
 +        mArcTouchEventObserver =
@@ -12681,6 +12942,9 @@ new file mode 100644
 +        View location = mLocationBarHost.findViewById(R.id.location_bar);
 +        mCommandBar.setBoundsChangedListener(() -> {
 +            updateDesktopSuggestions(!mDestroyed && ArcDesktopAppearance.isDesktopWindow(mActivity) && mCommandBar.isShowing());
++            if (mDesktopSuggestions != null) mDesktopSuggestions.setArcCommandBounds(
++                    mCommandBar.isShowing() ? mCommandBar.resultsBoundsInWindow() : null);
++            if (mCommandBar.isShowing()) mSetToolbarSuppressed.accept(true);
 +            if (location instanceof LocationBarLayout bar) {
 +                bar.setArcCommandBar(mCommandBar.isShowing() ? mCommandBar.resultsBoundsInWindow() : null,
 +                        mCommandBar.isActions(), mCommandBar::commitNativeNavigation,
@@ -12913,7 +13177,78 @@ new file mode 100644
 +        return button;
 +    }
 +
++    private org.chromium.chrome.browser.bookmarks.TabBookmarker mNativeBookmarker;
++    private org.chromium.chrome.browser.bookmarks.BookmarkModel mNativeBookmarks;
++    private final java.util.Map<org.chromium.components.bookmarks.BookmarkId, String>
++            mFavoriteBookmarks = new java.util.HashMap<>();
++    private final org.chromium.chrome.browser.bookmarks.BookmarkModelObserver mFavoriteObserver =
++            new org.chromium.chrome.browser.bookmarks.BookmarkModelObserver() {
++        @Override public void bookmarkModelChanged() { syncFavoriteEdits(); }
++    };
++
++    public void configureNativeBookmarks(org.chromium.chrome.browser.bookmarks.TabBookmarker bookmarker) {
++        if (mDestroyed) return;
++        mNativeBookmarker = bookmarker;
++        bookmarker.setBookmarkSavedListener((tab, item) -> {
++            if (mDestroyed || mCollections == null || mSessionModel == null
++                    || mSessionModel.getProfile().isOffTheRecord()
++                    || !ArcDesktopAppearance.isDesktopWindow(mActivity)
++                    || !mTabSession.exists(tab.getId())) return;
++            try {
++                String title = item.getTitle();
++                if (title.length() > 256) title = title.substring(0, 256);
++                String id = mCollections.rememberTab(tab.getId(), item.getUrl().getSpec(), title, true);
++                mFavoriteBookmarks.put(item.getId(), id);
++                if (mCollectionsView != null) mCollectionsView.refresh();
++            } catch (RuntimeException unavailable) {
++                android.widget.Toast.makeText(mActivity, R.string.arc_collection_error,
++                        android.widget.Toast.LENGTH_SHORT).show();
++            }
++        });
++        bindFavoriteAction();
++    }
++
++    private void bindFavoriteAction() {
++        if (mCollectionsView != null && mNativeBookmarker != null) {
++            mCollectionsView.setNativeFavoriteAction(() -> {
++                Tab tab = mCurrentTab.get();
++                if (tab != null) mNativeBookmarker.addOrEditBookmark(tab);
++            });
++        }
++    }
++
++    private void syncFavoriteEdits() {
++        if (mDestroyed || mNativeBookmarks == null || !mNativeBookmarks.isBookmarkModelLoaded()
++                || mCollections == null) return;
++        try {
++            // Associate only existing Arc favorites. Never import/delete the user's native library.
++            for (ArcSidebarState.Entry entry : mCollections.state().favorites()) {
++                if (mFavoriteBookmarks.containsValue(entry.id)) continue;
++                var id = mNativeBookmarks.getMostRecentlyAddedUserBookmarkIdForUrl(
++                        new org.chromium.url.GURL(entry.url));
++                if (id != null) mFavoriteBookmarks.put(id, entry.id);
++            }
++            for (var association : mFavoriteBookmarks.entrySet()) {
++                var item = mNativeBookmarks.getBookmarkById(association.getKey());
++                if (item == null || item.isFolder()) continue;
++                ArcSidebarState.Entry entry;
++                try { entry = mCollections.state().entry(association.getValue()); }
++                catch (IllegalArgumentException removed) { continue; }
++                String title = item.getTitle();
++                if (title.length() > 256) title = title.substring(0, 256);
++                if (!entry.url.equals(item.getUrl().getSpec()) || !entry.title.equals(title)) {
++                    mCollections.updateFavorite(entry.id, item.getUrl().getSpec(), title);
++                }
++            }
++            if (mCollectionsView != null) mCollectionsView.refresh();
++        } catch (RuntimeException unavailable) {
++            // Preserve original persisted bytes on storage/model failure; native save still succeeds.
++        }
++    }
++
 +    private void clearCollections() {
++        if (mNativeBookmarks != null) mNativeBookmarks.removeObserver(mFavoriteObserver);
++        mNativeBookmarks = null; mFavoriteBookmarks.clear();
 +        // Remove the old profile/Space predicate before changing models. This restores the native
 +        // global presentation and prevents one profile's Arc metadata from filtering another.
 +        mNativeTabListCoordinator.setArcSplitPairs(java.util.List.of());
@@ -12964,6 +13299,15 @@ new file mode 100644
 +                        if (!mDestroyed && mTabSession == session && icon != null) button.setImageBitmap(icon);
 +                    });
 +        });
++        bindFavoriteAction();
++        if (!model.getProfile().isOffTheRecord()) {
++            mNativeBookmarks = org.chromium.chrome.browser.bookmarks.BookmarkModel.getForProfile(model.getProfile());
++            var bookmarkModel = mNativeBookmarks;
++            bookmarkModel.addObserver(mFavoriteObserver);
++            bookmarkModel.finishLoadingBookmarkModel(() -> {
++                if (mNativeBookmarks == bookmarkModel) syncFavoriteEdits();
++            });
++        }
 +        // Navigation/address stay at the top; collections follow the Arc header actions.
 +        mHeader.addView(mCollectionsView);
 +        refreshSplitPairRows();
@@ -13170,7 +13514,8 @@ new file mode 100644
 +        // paths never target a GONE omnibox. Secondary Arc controls are restored on expansion.
 +        mHeader.setVisibility(View.VISIBLE);
 +        mNavigationRow.setVisibility(View.VISIBLE);
-+        mNavigationControls.setVisibility(View.VISIBLE);
++        mNavigationControls.setVisibility(ArcDesktopAppearance.getAddressBarPosition(mActivity)
++                == ArcDesktopAppearance.ADDRESS_TOP ? View.GONE : View.VISIBLE);
 +        mNavigationState.setExpanded(expanded);
 +        mNavigationRow.setOrientation(expanded ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
 +        mNavigationRow.setGravity(expanded ? Gravity.START : Gravity.CENTER_HORIZONTAL);
@@ -13575,6 +13920,9 @@ new file mode 100644
 +        mFrameDispatch.destroy();
 +        mCompactOmnibox.destroy();
 +        ArcDesktopAppearance.setPreviewColor(mActivity, null);
++        if (mNativeBookmarker != null) {
++            mNativeBookmarker.setBookmarkSavedListener(null); mNativeBookmarker = null;
++        }
 +        mNavigationState.destroy();
 +        mNativeNewTabButton.setVisibility(mNativeNewTabVisibility);
 +        mIncognitoStateProvider.removeObserver(mIncognitoObserver);
@@ -15770,7 +16118,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarS
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSidebarState.java
-@@ -0,0 +1,414 @@
+@@ -0,0 +1,422 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -15949,6 +16297,14 @@ new file mode 100644
 +        if (tabId != null && !favorite) associateTab(tabId, spaceId);
 +        return id;
 +    }
++    /** Native bookmark edits update metadata without replacing collection/tab identity. */
++    public void updateMetadata(String id, String url, String title) {
++        bounded(url, 8192); bounded(title, 256);
++        Entry e = entry(id);
++        mEntries.set(mEntries.indexOf(e), new Entry(e.id, e.spaceId, e.folderId,
++                url, title, e.tabId, e.favorite));
++    }
++
 +    public void bindTab(String id, int tabId) {
 +        Entry entry = entry(id); requireFreeTab(tabId, id);
 +        mEntries.set(mEntries.indexOf(entry), entry.withTab(tabId));
@@ -17875,7 +18231,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCollect
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCollectionsFocusTest.java
-@@ -0,0 +1,342 @@
+@@ -0,0 +1,360 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -18049,9 +18405,10 @@ new file mode 100644
 +        for (int i = 0; i < 20; i++) f.controller.createFolder(null, "Folder " + i);
 +        f.view.refresh(); f.view.setCollectionHeight(240); f.measure();
 +        View scroll = (View) f.view.findViewWithTag("arc-new-folder:" + f.controller.state().selectedSpace()).getParent().getParent();
-+        assertEquals(240, scroll.getMeasuredHeight());
++        int chrome = Math.round(88 * f.activity.getResources().getDisplayMetrics().density);
++        assertEquals(Math.max(0, 240 - chrome), scroll.getMeasuredHeight());
 +        f.view.setCollectionHeight(100); f.measure();
-+        assertEquals(100, scroll.getMeasuredHeight());
++        assertEquals(Math.max(0, 100 - chrome), scroll.getMeasuredHeight());
 +    }
 +
 +    @Test
@@ -18063,6 +18420,23 @@ new file mode 100644
 +        assertFalse(scroll.isLayoutRequested());
 +        f.view.setCollectionHeight(100);
 +        assertTrue(scroll.isLayoutRequested());
++    }
++
++    @Test public void faviconOpticalBoxIsStableAcrossBitmapDensitiesAndRefresh() {
++        Fixture f = new Fixture();
++        String id = f.controller.rememberTab(7, "https://example.test", "Saved", true);
++        for (int bitmapSize : new int[] {8, 24, 128}) {
++            f.view.refresh();
++            android.widget.ImageButton tile = f.view.findViewWithTag("arc-entry:" + id);
++            var bitmap = android.graphics.Bitmap.createBitmap(bitmapSize, bitmapSize, android.graphics.Bitmap.Config.ARGB_8888);
++            bitmap.setDensity(bitmapSize == 8 ? 640 : 160);
++            tile.setImageBitmap(bitmap); f.measure();
++            var optical = new android.graphics.RectF(tile.getDrawable().getBounds());
++            tile.getImageMatrix().mapRect(optical);
++            assertEquals(24 * f.activity.getResources().getDisplayMetrics().density, optical.width(), 1f);
++            assertEquals(optical.width(), optical.height(), .01f);
++            assertNull(tile.getColorFilter());
++        }
 +    }
 +
 +    @Test
@@ -18364,7 +18738,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCommand
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCommandBarTest.java
-@@ -0,0 +1,172 @@
+@@ -0,0 +1,198 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -18413,6 +18787,32 @@ new file mode 100644
 +            bar.setAppearance(0xffeeeeee, 0xff111111, 0xffbbccdd);
 +        }
 +        void finish() {bar.destroy(); activity.finish();}
++    }
++    @Test public void secondOriginClickKeepsEditorAndLaterOutsideClickCloses() {
++        Fixture f = new Fixture();
++        f.bar.open(false); f.bar.finishAnimationForTesting();
++        android.view.View overlay = (android.view.View) f.bar.panelForTesting().getParent();
++        long now = android.os.SystemClock.uptimeMillis();
++        for (int action : new int[] {0, 1}) {
++            var event = android.view.MotionEvent.obtain(now, now, action, 100, 24, 0);
++            overlay.dispatchTouchEvent(event); event.recycle();
++        }
++        f.bar.finishAnimationForTesting();
++        assertTrue("Second click at moved origin must not dismiss the editor", f.bar.isShowing());
++        assertEquals(1, f.sessions.get()); assertTrue(f.editor.hasFocus());
++        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(
++                java.time.Duration.ofMillis(android.view.ViewConfiguration.getDoubleTapTimeout() + 1));
++        overlay.measure(android.view.View.MeasureSpec.makeMeasureSpec(1000, 1073741824),
++                android.view.View.MeasureSpec.makeMeasureSpec(800, 1073741824));
++        overlay.layout(0, 0, 1000, 800);
++        now = android.os.SystemClock.uptimeMillis();
++        for (int action : new int[] {0, 1}) {
++            var event = android.view.MotionEvent.obtain(now, now, action, 4, 780, 0);
++            overlay.dispatchTouchEvent(event); event.recycle();
++        }
++        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
++        f.bar.finishAnimationForTesting(); assertFalse(f.bar.isShowing());
++        assertEquals(0, f.sessions.get()); f.finish();
 +    }
 +    @Test public void milkyCommandPanelRetainsGeometryAndUniqueNativeEditor() {
 +        Fixture f = new Fixture();
@@ -26254,7 +26654,7 @@ diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrom
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java
-@@ -0,0 +1,144 @@
+@@ -0,0 +1,143 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -26337,7 +26737,7 @@ new file mode 100644
 +        return (int) Math.min(Math.round(240 * density), Math.max(0L, remaining));
 +    }
 +
-+    /** Match the rounded top and square lower crop used by SurfaceView. */
++    /** Match all four compositor/SurfaceView outline corners. */
 +    public static boolean containsArcContentPoint(float x, float y,
 +            int left, int top, int right, int bottom, float radius) {
 +        if (right <= left || bottom <= top || x < left || x >= right || y < top || y >= bottom) {
@@ -26345,7 +26745,6 @@ new file mode 100644
 +        }
 +        float r = Math.max(0f, Math.min(radius,
 +                Math.min((right - left) / 2f, (bottom - top) / 2f)));
-+        if (y >= bottom - r) return true;
 +        return containsRoundedRectPoint(x, y, left, top, right, bottom, r);
 +    }
 +

@@ -3,7 +3,7 @@ import importlib.util,shutil,subprocess,tempfile,unittest
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[1]
 class RecoveryGeometryTests(unittest.TestCase):
- def test_native_tab_reserve_and_square_bottom_left_hit_region(self):
+ def test_native_tab_reserve_and_four_rounded_hit_regions(self):
   spec=importlib.util.spec_from_file_location('window_core',ROOT/'scripts/fetch-window-core.py')
   module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
   jar=module.ensure_jar()
@@ -17,8 +17,8 @@ public class GeometryProbe {
   eq(ArcDesktopPolicy.collectionScrollBudgetPx(600,1f,20),72);
   eq(ArcDesktopPolicy.collectionScrollBudgetPx(400,1f,0),0);
   eq(ArcDesktopPolicy.collectionScrollBudgetPx(800,0f,0),0);
-  if(!ArcDesktopPolicy.containsArcContentPoint(0,99,0,0,100,100,16))throw new AssertionError("bottom left corner must be square");
-  if(!ArcDesktopPolicy.containsArcContentPoint(99,99,0,0,100,100,16))throw new AssertionError("lower crop has square corners and accepts input");
+  if(ArcDesktopPolicy.containsArcContentPoint(0,99,0,0,100,100,16))throw new AssertionError("bottom left corner must be round");
+  if(ArcDesktopPolicy.containsArcContentPoint(99,99,0,0,100,100,16))throw new AssertionError("bottom right corner must reject outside-arc input");
   if(ArcDesktopPolicy.containsArcContentPoint(0,0,0,0,100,100,16))throw new AssertionError("top left corner must remain round");
   if(ArcDesktopPolicy.containsArcContentPoint(99,0,0,0,100,100,16))throw new AssertionError("right corner must be round");
   if(ArcDesktopPolicy.containsArcContentPoint(100,50,0,0,100,100,16))throw new AssertionError("outside must reject");

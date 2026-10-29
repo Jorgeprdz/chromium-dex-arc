@@ -2632,6 +2632,11 @@ public class TabbedRootUiCoordinator extends RootUiCoordinator {
                                 org.chromium.components.omnibox.OmniboxFocusReason.MENU_OR_KEYBOARD_ACTION),
                         () -> SettingsNavigationFactory.createSettingsNavigation().startSettings(
                                 mActivity, org.chromium.chrome.browser.settings.MainSettings.class));
+                mTabBookmarkerSupplier.onAvailable(bookmarker -> {
+                    if (mArcDesktopCoordinator != null) {
+                        mArcDesktopCoordinator.configureNativeBookmarks(bookmarker);
+                    }
+                });
                 mToolbarManager.setVerticalTabsAutoHiddenSupplier(
                         mVerticalTabsSideUiCoordinator.getIsAutoHiddenSupplier());
             }

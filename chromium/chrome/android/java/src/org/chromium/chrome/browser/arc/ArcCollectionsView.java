@@ -73,6 +73,8 @@ public final class ArcCollectionsView extends LinearLayout {
             super.onMeasure(widthSpec, MeasureSpec.makeMeasureSpec(cap, MeasureSpec.AT_MOST));
         }
     }
+    private Runnable mSaveNativeFavorite;
+    public void setNativeFavoriteAction(Runnable action) { mSaveNativeFavorite = action; }
     private String mOpenFolder;
     private String mRenderedSpace;
     private AlertDialog mDialog;
@@ -225,7 +227,11 @@ public final class ArcCollectionsView extends LinearLayout {
     }
 
     public void setCollectionHeight(int height) {
-        mScroll.setBudget(height);
+        // One shared budget, rather than independent 216dp + 240dp panels starving native tabs.
+        int rows = Math.max(0, height - dp(88));
+        int favorites = mFavorites.getChildCount() == 0 ? 0 : Math.min(dp(96), rows / 2);
+        mFavoritesScroll.setBudget(favorites);
+        mScroll.setBudget(Math.max(0, rows - favorites));
     }
 
     /** Owns collection styling so site favicons retain their original colors and rounded tiles. */
@@ -273,7 +279,32 @@ public final class ArcCollectionsView extends LinearLayout {
         }
     }
 
+    /** Neutral domain initial; the optical box is identical before and after native icon loading. */
+    private android.graphics.drawable.Drawable fallbackIcon(String url, int color) {
+        String domain;
+        try { domain = android.net.Uri.parse(url).getHost(); }
+        catch (RuntimeException invalid) { domain = null; }
+        if (domain != null && domain.startsWith("www.")) domain = domain.substring(4);
+        final String initial = domain == null || domain.isEmpty() ? "•"
+                : domain.substring(0, 1).toUpperCase(java.util.Locale.ROOT);
+        return new android.graphics.drawable.Drawable() {
+            final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
+            @Override public void draw(android.graphics.Canvas canvas) {
+                var bounds = getBounds(); paint.setColor(color); paint.setTextAlign(android.graphics.Paint.Align.CENTER);
+                paint.setTextSize(Math.min(bounds.width(), bounds.height()) * .72f);
+                canvas.drawText(initial, bounds.exactCenterX(), bounds.exactCenterY()
+                        - (paint.ascent() + paint.descent()) / 2, paint);
+            }
+            @Override public int getIntrinsicWidth() { return dp(24); }
+            @Override public int getIntrinsicHeight() { return dp(24); }
+            @Override public void setAlpha(int alpha) { paint.setAlpha(alpha); invalidateSelf(); }
+            @Override public void setColorFilter(android.graphics.ColorFilter filter) { paint.setColorFilter(filter); }
+            @Override public int getOpacity() { return android.graphics.PixelFormat.TRANSLUCENT; }
+        };
+    }
+
     private void remember(boolean favorite) {
+        if (favorite && mSaveNativeFavorite != null) { mSaveNativeFavorite.run(); return; }
         CurrentTab tab = mCurrentTab.get();
         if (tab == null) throw new IllegalStateException("No active tab");
         String title = tab.title == null || tab.title.isEmpty() ? tab.url : tab.title;
@@ -310,9 +341,9 @@ public final class ArcCollectionsView extends LinearLayout {
         mFavoritesScroll.setVisibility(state.favorites().isEmpty() ? GONE : VISIBLE);
         for (ArcSidebarState.Entry entry : state.favorites()) {
             ImageButton favorite = new ImageButton(mActivity);
-            favorite.setImageResource(android.R.drawable.ic_menu_view);
-            favorite.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
-            favorite.setPadding(dp(16), dp(16), dp(16), dp(16));
+            favorite.setImageDrawable(fallbackIcon(entry.url, mForeground));
+            favorite.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+            favorite.setPadding(dp(20), dp(20), dp(20), dp(20));
             favorite.setContentDescription(entry.title);
             favorite.setTooltipText(entry.title);
             favorite.setTag("arc-entry:" + entry.id);

@@ -162,7 +162,10 @@ public final class ArcDesktopCoordinator {
             node = node.getParent() instanceof View ? (View) node.getParent() : null;
         }
         if (mDesktopSuggestions != node) {
-            if (mDesktopSuggestions != null) mDesktopSuggestions.setArcPhoneGlassBackground(null);
+            if (mDesktopSuggestions != null) {
+                mDesktopSuggestions.setArcCommandBounds(null);
+                mDesktopSuggestions.setArcPhoneGlassBackground(null);
+            }
             if (mDesktopSuggestionGlass != null && mDesktopGlass != null) mDesktopGlass.remove(mDesktopSuggestionGlass);
             mDesktopSuggestions = node instanceof OmniboxSuggestionsContainer ? (OmniboxSuggestionsContainer) node : null;
             mDesktopSuggestionGlass = null;
@@ -572,7 +575,7 @@ public final class ArcDesktopCoordinator {
                                 Math.min((view.getWidth() - left) / 2f, view.getHeight() / 2f));
                         // SurfaceControl supports a round rect, not asymmetric Path corners.
                         // Crop below the visible bottom to make the sidebar junction square.
-                        outline.setRoundRect(left, 0, view.getWidth(), view.getHeight() + Math.round(radius), radius);
+                        outline.setRoundRect(left, 0, view.getWidth(), view.getHeight(), radius);
                     }
                 };
         mArcTouchEventObserver =
@@ -723,6 +726,9 @@ public final class ArcDesktopCoordinator {
         View location = mLocationBarHost.findViewById(R.id.location_bar);
         mCommandBar.setBoundsChangedListener(() -> {
             updateDesktopSuggestions(!mDestroyed && ArcDesktopAppearance.isDesktopWindow(mActivity) && mCommandBar.isShowing());
+            if (mDesktopSuggestions != null) mDesktopSuggestions.setArcCommandBounds(
+                    mCommandBar.isShowing() ? mCommandBar.resultsBoundsInWindow() : null);
+            if (mCommandBar.isShowing()) mSetToolbarSuppressed.accept(true);
             if (location instanceof LocationBarLayout bar) {
                 bar.setArcCommandBar(mCommandBar.isShowing() ? mCommandBar.resultsBoundsInWindow() : null,
                         mCommandBar.isActions(), mCommandBar::commitNativeNavigation,
@@ -955,7 +961,78 @@ public final class ArcDesktopCoordinator {
         return button;
     }
 
+    private org.chromium.chrome.browser.bookmarks.TabBookmarker mNativeBookmarker;
+    private org.chromium.chrome.browser.bookmarks.BookmarkModel mNativeBookmarks;
+    private final java.util.Map<org.chromium.components.bookmarks.BookmarkId, String>
+            mFavoriteBookmarks = new java.util.HashMap<>();
+    private final org.chromium.chrome.browser.bookmarks.BookmarkModelObserver mFavoriteObserver =
+            new org.chromium.chrome.browser.bookmarks.BookmarkModelObserver() {
+        @Override public void bookmarkModelChanged() { syncFavoriteEdits(); }
+    };
+
+    public void configureNativeBookmarks(org.chromium.chrome.browser.bookmarks.TabBookmarker bookmarker) {
+        if (mDestroyed) return;
+        mNativeBookmarker = bookmarker;
+        bookmarker.setBookmarkSavedListener((tab, item) -> {
+            if (mDestroyed || mCollections == null || mSessionModel == null
+                    || mSessionModel.getProfile().isOffTheRecord()
+                    || !ArcDesktopAppearance.isDesktopWindow(mActivity)
+                    || !mTabSession.exists(tab.getId())) return;
+            try {
+                String title = item.getTitle();
+                if (title.length() > 256) title = title.substring(0, 256);
+                String id = mCollections.rememberTab(tab.getId(), item.getUrl().getSpec(), title, true);
+                mFavoriteBookmarks.put(item.getId(), id);
+                if (mCollectionsView != null) mCollectionsView.refresh();
+            } catch (RuntimeException unavailable) {
+                android.widget.Toast.makeText(mActivity, R.string.arc_collection_error,
+                        android.widget.Toast.LENGTH_SHORT).show();
+            }
+        });
+        bindFavoriteAction();
+    }
+
+    private void bindFavoriteAction() {
+        if (mCollectionsView != null && mNativeBookmarker != null) {
+            mCollectionsView.setNativeFavoriteAction(() -> {
+                Tab tab = mCurrentTab.get();
+                if (tab != null) mNativeBookmarker.addOrEditBookmark(tab);
+            });
+        }
+    }
+
+    private void syncFavoriteEdits() {
+        if (mDestroyed || mNativeBookmarks == null || !mNativeBookmarks.isBookmarkModelLoaded()
+                || mCollections == null) return;
+        try {
+            // Associate only existing Arc favorites. Never import/delete the user's native library.
+            for (ArcSidebarState.Entry entry : mCollections.state().favorites()) {
+                if (mFavoriteBookmarks.containsValue(entry.id)) continue;
+                var id = mNativeBookmarks.getMostRecentlyAddedUserBookmarkIdForUrl(
+                        new org.chromium.url.GURL(entry.url));
+                if (id != null) mFavoriteBookmarks.put(id, entry.id);
+            }
+            for (var association : mFavoriteBookmarks.entrySet()) {
+                var item = mNativeBookmarks.getBookmarkById(association.getKey());
+                if (item == null || item.isFolder()) continue;
+                ArcSidebarState.Entry entry;
+                try { entry = mCollections.state().entry(association.getValue()); }
+                catch (IllegalArgumentException removed) { continue; }
+                String title = item.getTitle();
+                if (title.length() > 256) title = title.substring(0, 256);
+                if (!entry.url.equals(item.getUrl().getSpec()) || !entry.title.equals(title)) {
+                    mCollections.updateFavorite(entry.id, item.getUrl().getSpec(), title);
+                }
+            }
+            if (mCollectionsView != null) mCollectionsView.refresh();
+        } catch (RuntimeException unavailable) {
+            // Preserve original persisted bytes on storage/model failure; native save still succeeds.
+        }
+    }
+
     private void clearCollections() {
+        if (mNativeBookmarks != null) mNativeBookmarks.removeObserver(mFavoriteObserver);
+        mNativeBookmarks = null; mFavoriteBookmarks.clear();
         // Remove the old profile/Space predicate before changing models. This restores the native
         // global presentation and prevents one profile's Arc metadata from filtering another.
         mNativeTabListCoordinator.setArcSplitPairs(java.util.List.of());
@@ -1006,6 +1083,15 @@ public final class ArcDesktopCoordinator {
                         if (!mDestroyed && mTabSession == session && icon != null) button.setImageBitmap(icon);
                     });
         });
+        bindFavoriteAction();
+        if (!model.getProfile().isOffTheRecord()) {
+            mNativeBookmarks = org.chromium.chrome.browser.bookmarks.BookmarkModel.getForProfile(model.getProfile());
+            var bookmarkModel = mNativeBookmarks;
+            bookmarkModel.addObserver(mFavoriteObserver);
+            bookmarkModel.finishLoadingBookmarkModel(() -> {
+                if (mNativeBookmarks == bookmarkModel) syncFavoriteEdits();
+            });
+        }
         // Navigation/address stay at the top; collections follow the Arc header actions.
         mHeader.addView(mCollectionsView);
         refreshSplitPairRows();
@@ -1212,7 +1298,8 @@ public final class ArcDesktopCoordinator {
         // paths never target a GONE omnibox. Secondary Arc controls are restored on expansion.
         mHeader.setVisibility(View.VISIBLE);
         mNavigationRow.setVisibility(View.VISIBLE);
-        mNavigationControls.setVisibility(View.VISIBLE);
+        mNavigationControls.setVisibility(ArcDesktopAppearance.getAddressBarPosition(mActivity)
+                == ArcDesktopAppearance.ADDRESS_TOP ? View.GONE : View.VISIBLE);
         mNavigationState.setExpanded(expanded);
         mNavigationRow.setOrientation(expanded ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
         mNavigationRow.setGravity(expanded ? Gravity.START : Gravity.CENTER_HORIZONTAL);
@@ -1617,6 +1704,9 @@ public final class ArcDesktopCoordinator {
         mFrameDispatch.destroy();
         mCompactOmnibox.destroy();
         ArcDesktopAppearance.setPreviewColor(mActivity, null);
+        if (mNativeBookmarker != null) {
+            mNativeBookmarker.setBookmarkSavedListener(null); mNativeBookmarker = null;
+        }
         mNavigationState.destroy();
         mNativeNewTabButton.setVisibility(mNativeNewTabVisibility);
         mIncognitoStateProvider.removeObserver(mIncognitoObserver);

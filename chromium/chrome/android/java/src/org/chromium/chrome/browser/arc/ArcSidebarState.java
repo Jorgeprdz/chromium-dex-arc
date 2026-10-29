@@ -176,6 +176,14 @@ public final class ArcSidebarState {
         if (tabId != null && !favorite) associateTab(tabId, spaceId);
         return id;
     }
+    /** Native bookmark edits update metadata without replacing collection/tab identity. */
+    public void updateMetadata(String id, String url, String title) {
+        bounded(url, 8192); bounded(title, 256);
+        Entry e = entry(id);
+        mEntries.set(mEntries.indexOf(e), new Entry(e.id, e.spaceId, e.folderId,
+                url, title, e.tabId, e.favorite));
+    }
+
     public void bindTab(String id, int tabId) {
         Entry entry = entry(id); requireFreeTab(tabId, id);
         mEntries.set(mEntries.indexOf(entry), entry.withTab(tabId));

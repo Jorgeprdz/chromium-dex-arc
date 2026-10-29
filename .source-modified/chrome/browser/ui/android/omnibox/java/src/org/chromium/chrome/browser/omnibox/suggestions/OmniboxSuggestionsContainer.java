@@ -41,6 +41,20 @@ import org.chromium.ui.base.ViewUtils;
  */
 @NullMarked
 public class OmniboxSuggestionsContainer extends FrameLayout {
+    private android.graphics.@Nullable Rect mArcCommandBounds;
+
+    /** Window coordinates are converted once against this container, never the old editor anchor. */
+    public void setArcCommandBounds(android.graphics.@Nullable Rect bounds) {
+        if (java.util.Objects.equals(mArcCommandBounds, bounds)) return;
+        mArcCommandBounds = bounds == null ? null : new android.graphics.Rect(bounds);
+        requestLayout();
+    }
+
+    @Override protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+        super.onLayout(changed, left, top, right, bottom);
+        adjustHorizontalPosition();
+    }
+
     private @Nullable Drawable mArcPhoneGlassBackground;
     private int mArcNativeBackgroundColor;
 
@@ -88,9 +102,16 @@ public class OmniboxSuggestionsContainer extends FrameLayout {
         try (TraceEvent tracing = TraceEvent.scoped("OmniboxSuggestionsList.Measure");
                 TimingMetric metric = OmniboxMetrics.recordSuggestionListMeasureTime();
                 TimingMetric metric2 = OmniboxMetrics.recordSuggestionListMeasureWallTime()) {
-            maybeUpdateLayoutParams(mOmniboxAlignment.top);
+            int top = mOmniboxAlignment.top;
             int availableViewportHeight = mOmniboxAlignment.height;
             int desiredWidth = mOmniboxAlignment.width;
+            if (mArcCommandBounds != null && getParent() instanceof View parent) {
+                int[] parentWindow = new int[2]; parent.getLocationInWindow(parentWindow);
+                top = mArcCommandBounds.top - parentWindow[1] - parent.getPaddingTop();
+                availableViewportHeight = Math.max(0, mArcCommandBounds.height());
+                desiredWidth = Math.max(0, mArcCommandBounds.width());
+            }
+            maybeUpdateLayoutParams(top);
             adjustHorizontalPosition();
             notifyObserversIfViewportHeightChanged(availableViewportHeight);
 
@@ -206,7 +227,13 @@ public class OmniboxSuggestionsContainer extends FrameLayout {
         // Set our left edge using translation x. This avoids needing to relayout (like setting
         // a left margin would) and is less risky than calling View#setLeft(), which is intended
         // for use by the layout system.
-        setTranslationX(mOmniboxAlignment.left);
+        if (mArcCommandBounds == null) {
+            setTranslationX(mOmniboxAlignment.left);
+        } else {
+            int[] window = new int[2]; getLocationInWindow(window);
+            float layoutWindowX = window[0] - getTranslationX();
+            setTranslationX(mArcCommandBounds.left - layoutWindowX);
+        }
     }
 
     private void setRoundingCorners(boolean roundTopCorners, boolean roundBottomCorners) {

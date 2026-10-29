@@ -71,12 +71,20 @@ public final class ArcCollectionsController {
         ArcSidebarState draft = state();
         String existingId = null;
         for (ArcSidebarState.Entry entry : draft.favorites()) {
-            if (Integer.valueOf(tabId).equals(entry.tabId)) existingId = entry.id;
+            if (favorite ? url.equals(entry.url) : Integer.valueOf(tabId).equals(entry.tabId)) {
+                existingId = entry.id;
+            }
         }
         for (ArcSidebarState.Space space : draft.spaces()) {
             for (ArcSidebarState.Entry entry : draft.entries(space.id)) {
-                if (Integer.valueOf(tabId).equals(entry.tabId)) existingId = entry.id;
+                if (existingId == null && Integer.valueOf(tabId).equals(entry.tabId)
+                        && (!favorite || url.equals(entry.url))) existingId = entry.id;
             }
+        }
+        if (favorite && (existingId == null || draft.entry(existingId).tabId == null)) {
+            // A tab may navigate away from its saved URL. Release only its live association;
+            // preserve the old favorite and its canonical URL/title.
+            draft.tabClosed(tabId);
         }
         if (existingId == null) {
             existingId = favorite ? draft.favorite(url, title, tabId)
@@ -91,11 +99,22 @@ public final class ArcCollectionsController {
                 draft.move(existingId, draft.selectedSpace(), folderId, end);
             }
         }
+        draft.updateMetadata(existingId, url, title);
+        if (draft.entry(existingId).tabId == null) draft.bindTab(existingId, tabId);
         // Publish metadata before changing the native tab; a failed write leaves it untouched.
         mStore.save(draft);
-        mTabs.pin(tabId);
+        mTabs.pin(draft.entry(existingId).tabId);
         mTabs.onArcStateChanged(draft);
         return existingId;
+    }
+
+    /** Project native title/URL edits without changing identity, order, Space or live tabs. */
+    public void updateFavorite(String id, String url, String title) {
+        ArcSidebarState draft = state();
+        if (!draft.entry(id).favorite) return;
+        draft.updateMetadata(id, url, title);
+        mStore.save(draft);
+        mTabs.onArcStateChanged(draft);
     }
 
     public ArcTabActions.Result open(String id) {

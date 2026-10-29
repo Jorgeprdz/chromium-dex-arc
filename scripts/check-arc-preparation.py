@@ -129,7 +129,16 @@ def main():
                 overlay = ROOT / '.source-modified' / name
             assert overlay.is_file(), 'Missing delivery source: ' + name
             assert overlay.read_bytes() == (checkout / name).read_bytes(), 'Stale patch: ' + name
-            if name.endswith('.xml'):
+            if name == 'chrome/android/java/AndroidManifest.xml':
+                # Upstream manifest is a Jinja template, not parseable XML. Validate changed
+                # activities as XML; native Jinja/manifest compilation remains a separate gate.
+                text = (checkout / name).read_text()
+                for activity in ('BookmarkEditActivity', 'BookmarkFolderPickerActivity'):
+                    fragment = re.search(r'<activity android:name="org.chromium.chrome.browser.app.bookmarks.'
+                                         + activity + r'".*?</activity>', text, re.S).group()
+                    ET.fromstring('<manifest xmlns:android="http://schemas.android.com/apk/res/android">'
+                                  + fragment + '</manifest>')
+            elif name.endswith('.xml'):
                 ET.parse(checkout / name)
         print(f'Pinned patch: all {len(manifest["originals"])} files applied and hashes matched', flush=True)
         classes = work / 'classes'
@@ -161,9 +170,9 @@ def main():
             'org.chromium.chrome.browser.profiles.Profile': 'public class Profile { public boolean isOffTheRecord(){return false;} public boolean shutdownStarted(){return false;} public Profile getOriginalProfile(){return this;} }',
             'org.chromium.components.bookmarks.BookmarkId': 'public class BookmarkId {}',
             'org.chromium.url.GURL': 'public class GURL { public GURL(){} public GURL(String url){} public String getSpec() { return ""; } public boolean isValid(){return true;} public String getScheme(){return "https";} }',
-            'org.chromium.components.bookmarks.BookmarkItem': 'public class BookmarkItem { public String getTitle(){return "";} public boolean isFolder(){return false;} public org.chromium.url.GURL getUrl(){return null;} }',
+            'org.chromium.components.bookmarks.BookmarkItem': 'public class BookmarkItem { public org.chromium.components.bookmarks.BookmarkId getId(){return null;} public String getTitle(){return "";} public boolean isFolder(){return false;} public org.chromium.url.GURL getUrl(){return null;} }',
             'org.chromium.chrome.browser.bookmarks.BookmarkModelObserver': 'public abstract class BookmarkModelObserver { public abstract void bookmarkModelChanged(); }',
-            'org.chromium.chrome.browser.bookmarks.BookmarkModel': 'public class BookmarkModel { public void addObserver(BookmarkModelObserver o){} public void removeObserver(BookmarkModelObserver o){} public boolean isBookmarkModelLoaded(){return true;} public boolean finishLoadingBookmarkModel(Runnable r){return false;} public org.chromium.components.bookmarks.BookmarkId getDesktopFolderId(){return null;} public java.util.List<org.chromium.components.bookmarks.BookmarkId> getChildIds(org.chromium.components.bookmarks.BookmarkId id){return null;} public java.util.List<org.chromium.components.bookmarks.BookmarkId> getTopLevelFolderIds(){return null;} public org.chromium.components.bookmarks.BookmarkItem getBookmarkById(org.chromium.components.bookmarks.BookmarkId id){return null;} }',
+            'org.chromium.chrome.browser.bookmarks.BookmarkModel': 'public class BookmarkModel { public static BookmarkModel getForProfile(org.chromium.chrome.browser.profiles.Profile p){return null;} public org.chromium.components.bookmarks.BookmarkId getMostRecentlyAddedUserBookmarkIdForUrl(org.chromium.url.GURL u){return null;} public void addObserver(BookmarkModelObserver o){} public void removeObserver(BookmarkModelObserver o){} public boolean isBookmarkModelLoaded(){return true;} public boolean finishLoadingBookmarkModel(Runnable r){return false;} public org.chromium.components.bookmarks.BookmarkId getDesktopFolderId(){return null;} public java.util.List<org.chromium.components.bookmarks.BookmarkId> getChildIds(org.chromium.components.bookmarks.BookmarkId id){return null;} public java.util.List<org.chromium.components.bookmarks.BookmarkId> getTopLevelFolderIds(){return null;} public org.chromium.components.bookmarks.BookmarkItem getBookmarkById(org.chromium.components.bookmarks.BookmarkId id){return null;} }',
             'org.chromium.chrome.browser.tabmodel.IncognitoStateProvider': 'public class IncognitoStateProvider { public interface IncognitoStateObserver { void onIncognitoStateChanged(boolean i); } public boolean isIncognitoSelected(){return false;} public void addIncognitoStateObserverAndTrigger(IncognitoStateObserver o){o.onIncognitoStateChanged(false);} public void removeObserver(IncognitoStateObserver o){} }',
             'org.chromium.components.favicon.LargeIconBridge': 'public class LargeIconBridge { public interface LargeIconCallback { void onLargeIconAvailable(android.graphics.Bitmap icon, int color, boolean fallback, int type); } public LargeIconBridge(org.chromium.chrome.browser.profiles.Profile p){} public boolean getLargeIconForUrl(org.chromium.url.GURL url,int size,LargeIconCallback cb){return true;} public void destroy(){} }',
             'org.chromium.chrome.browser.tasks.tab_management.vertical_tabs.VerticalTabRailLayout': 'public class VerticalTabRailLayout extends android.view.View { public VerticalTabRailLayout(android.content.Context c){super(c);} public void setDesktopWindowSpacerHost(android.view.View v){} }',
@@ -303,7 +312,8 @@ def main():
             definitions[name] = arc_module.DEFINITIONS[name]
         suggestions_source = (ROOT / '.source-modified/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/suggestions/OmniboxSuggestionsContainer.java').read_text()
         if 'public void setArcPhoneGlassBackground(@Nullable Drawable background)' not in suggestions_source: raise RuntimeError('Missing native suggestions backdrop hook')
-        definitions['org.chromium.chrome.browser.omnibox.suggestions.OmniboxSuggestionsContainer'] = 'public class OmniboxSuggestionsContainer extends android.widget.FrameLayout {public OmniboxSuggestionsContainer(android.content.Context c){super(c);} public void setArcPhoneGlassBackground(android.graphics.drawable.Drawable background){}}'
+        definitions['org.chromium.chrome.browser.bookmarks.TabBookmarker'] = 'public class TabBookmarker { public void setBookmarkSavedListener(java.util.function.BiConsumer<org.chromium.chrome.browser.tab.Tab,org.chromium.components.bookmarks.BookmarkItem> c){} public void addOrEditBookmark(org.chromium.chrome.browser.tab.Tab t){} }'
+        definitions['org.chromium.chrome.browser.omnibox.suggestions.OmniboxSuggestionsContainer'] = 'public class OmniboxSuggestionsContainer extends android.widget.FrameLayout {public OmniboxSuggestionsContainer(android.content.Context c){super(c);} public void setArcCommandBounds(android.graphics.Rect r){} public void setArcPhoneGlassBackground(android.graphics.drawable.Drawable background){}}'
         compositor_source = (ROOT / '.source-modified/chrome/android/java/src/org/chromium/chrome/browser/compositor/CompositorView.java').read_text()
         if 'public void copyArcPhoneBackdrop(' not in compositor_source: raise RuntimeError('Missing delivered compositor readback API')
         definitions['org.chromium.chrome.browser.compositor.CompositorView'] = 'public class CompositorView {public void copyArcPhoneBackdrop(org.chromium.content_public.browser.WebContents w,android.graphics.Rect r,int width,int height,org.chromium.base.Callback<android.graphics.Bitmap> callback){}}'

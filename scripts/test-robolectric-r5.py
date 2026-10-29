@@ -30,6 +30,7 @@ def main():
         sources.append(str(path))
     names = ['ArcNavigationControls']
     if not a.navigation_only:
+        sources.append(str(ROOT / 'chromium' / ARC / 'ArcPhoneGlass.java'))
         names += ['ArcOmniboxPlacement', 'ArcCommandBar', 'ArcSplitState']
     for name in names:
         production = ROOT / 'chromium' / ARC / (name + '.java')
@@ -46,13 +47,53 @@ def main():
             production = a.work / (name + '.java')
             production.write_text(contents)
         sources += [str(production), str(ROOT / 'chromium' / JUNIT / (name + 'Test.java'))]
+    test_classes = ['org.chromium.chrome.browser.arc.' + n + 'Test' for n in names]
+    if not a.navigation_only:
+        # Use the delivered method body on real Android Views. No native autocomplete claims.
+        import sys
+        sys.path.insert(0, str(ROOT / 'tests'))
+        from arc_toolbar_probe import method_body
+        container = (ROOT / '.source-modified/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/suggestions/OmniboxSuggestionsContainer.java').read_text()
+        body = method_body(container, r'private void adjustHorizontalPosition\(')
+        probe = a.work / 'ArcSuggestionBoundsProbe.java'
+        probe.write_text('''package org.chromium.chrome.browser.arc;
+import static org.junit.Assert.*;
+import android.app.Activity; import android.graphics.Rect; import android.view.View;
+import android.widget.FrameLayout;
+import org.junit.Test; import org.junit.runner.RunWith; import org.robolectric.*;
+import org.robolectric.annotation.*;
+@RunWith(RobolectricTestRunner.class) @Config(manifest=Config.NONE,sdk={30,36})
+@GraphicsMode(GraphicsMode.Mode.LEGACY) @SQLiteMode(SQLiteMode.Mode.LEGACY)
+public class ArcSuggestionBoundsProbe {
+ static class Container extends FrameLayout {
+  Rect mArcCommandBounds; static class Alignment {int left;} Alignment mOmniboxAlignment=new Alignment();
+  Container(Activity a){super(a);} void adjustHorizontalPosition() BODY
+ }
+ @Test public void windowTargetSurvivesParentRailOffsetsAndRepeatedUpdates(){
+  var controller=Robolectric.buildActivity(Activity.class).setup();Activity a=controller.get();
+  FrameLayout root=new FrameLayout(a), rail=new FrameLayout(a);Container c=new Container(a);
+  root.addView(rail);rail.addView(c);a.setContentView(root);
+  root.layout(0,0,1000,800);c.mArcCommandBounds=new Rect(320,140,900,500);
+  for(int offset:new int[]{216,52,280,52,216}) {
+   rail.layout(offset,0,1000,800);c.layout(12,0,500,360);
+   c.adjustHorizontalPosition();c.adjustHorizontalPosition();
+   int[] location=new int[2];c.getLocationInWindow(location);assertEquals(320,location[0]);
+  }
+  c.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);c.adjustHorizontalPosition();
+  int[] location=new int[2];c.getLocationInWindow(location);assertEquals(320,location[0]);
+  c.mArcCommandBounds=null;c.mOmniboxAlignment.left=8;c.adjustHorizontalPosition();
+  assertEquals(8f,c.getTranslationX(),0f);controller.pause().stop().destroy();
+ }
+}'''.replace('BODY', body))
+        sources.append(str(probe))
+        test_classes.append('org.chromium.chrome.browser.arc.ArcSuggestionBoundsProbe')
     cp = a.classpath_file.read_text().strip()
     subprocess.run([str(a.java_home / 'bin/javac'), '-cp', cp, '-d', str(classes), *sources], check=True)
     result = subprocess.run([str(a.java_home / 'bin/java'), '-ea',
         '-Drobolectric.conscryptMode=OFF',
         '-Drobolectric.dependency.repo.url=https://repo.maven.apache.org/maven2',
         '-cp', str(classes) + ':' + cp, 'org.junit.runner.JUnitCore',
-        *['org.chromium.chrome.browser.arc.' + n + 'Test' for n in names]])
+        *test_classes])
     print('SCOPE=complete_R5_Android_helpers_Tab_adapter_NOT_APK_RUNTIME', flush=True)
     raise SystemExit(result.returncode)
 

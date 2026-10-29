@@ -12,6 +12,9 @@ names=sorted(set(re.findall(r'R.string.(\w+)',source)))
 r=a.work/'R.java';r.write_text('package org.chromium.chrome; public class R {public static class string {'+'\n'.join('public static final int '+n+'=android.R.string.ok;' for n in names)+'}}')
 sources=[arc/(n+'.java') for n in ['ArcSidebarState','ArcSidebarStore','ArcTabActions','ArcCollectionsController','ArcCollectionsView']]
 sources += [ROOT/'chromium/chrome/browser/desktop_policy/android/java/src/org/chromium/chrome/browser/desktop_policy/ArchiumWindowClass.java',ROOT/'chromium/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java',ROOT/'chromium/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCollectionsFocusTest.java',r]
-cp=a.classpath_file.read_text().strip()
+import importlib.util
+spec=importlib.util.spec_from_file_location('window_core',ROOT/'scripts/fetch-window-core.py')
+window=importlib.util.module_from_spec(spec);spec.loader.exec_module(window)
+cp=a.classpath_file.read_text().strip()+':'+str(window.ensure_jar())
 subprocess.run([str(a.java_home/'bin/javac'),'-cp',cp,'-d',str(classes),*map(str,sources)],check=True)
 raise SystemExit(subprocess.run([str(a.java_home/'bin/java'),'-ea','-Drobolectric.conscryptMode=OFF','-Drobolectric.dependency.repo.url=https://repo.maven.apache.org/maven2','-cp',str(classes)+':'+cp,'org.junit.runner.JUnitCore','org.chromium.chrome.browser.arc.ArcCollectionsFocusTest']).returncode)
