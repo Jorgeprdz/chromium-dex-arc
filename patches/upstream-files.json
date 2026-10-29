@@ -286,7 +286,7 @@
     "chrome/android/java/src/org/chromium/chrome/browser/modaldialog/ChromeTabModalPresenter.java": "0fa6c86f5cd6358af0cc70aa856673492a25386392085e7c24e6ece0a75b4af1",
     "chrome/android/java/src/org/chromium/chrome/browser/settings/MainSettings.java": "fc27bad7451ca8da011c828efb4239759b26f584f6e0523773fce9c2f8b2e62b",
     "chrome/android/java/src/org/chromium/chrome/browser/tab/TabWebContentsDelegateAndroidImpl.java": "67d47aefea359f133a57e39a8c0a90d921905e09e2157a3bd00460f90a95cbc0",
-    "chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java": "a5d8f6ca8de5e95e4f359c25d6aec63fc96ed6a2bb29211576c9b9c4f80dd224",
+    "chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/TabbedRootUiCoordinator.java": "335c7ed0c91ede12f232fcbfd4d7d4dd983f0036be0080519cca3ce7fb911774",
     "chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java": "ade59c0b704c2304aa4d9e471d0194a8b3f731783168d70e628524b6b7bcc754",
     "chrome/android/java/src/org/chromium/chrome/browser/ui/system/StatusBarColorController.java": "185889e070e7dc96463f5945b02bde886589b5871d28c0e5c5deaa25c469874f",
     "chrome/android/junit/BUILD.gn": "003fec7b04c88dbce557103f12ef0e6b79ab46865d09553396d76e070c78e7b6",
@@ -492,5 +492,5 @@
     "third_party/blink/renderer/platform/mediastream/arc_camera_orientation_policy.h": "0166da7e26dd086305a76fe9037ef2ebe8e212375f979aaa29ea904986e97a0f",
     "third_party/blink/renderer/platform/mediastream/arc_camera_orientation_state.h": "d428cbfaf8f05e9ec97452c1a5b33cd750df705c3e289ef978a688031e356777"
   },
-  "patch_sha256": "4ca959b4e9ac39f7075afbb81f48f4a625654fb3d5f591753e213324e21bf289"
+  "patch_sha256": "0824e5e95c8bdca244b01286d7e05f13104f5fb360e7585f21ff56991eb756cb"
 }

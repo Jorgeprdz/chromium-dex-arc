@@ -3550,7 +3550,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
      }
 
      private void updateTopControlsHeight() {
-@@ -2473,35 +2537,106 @@
+@@ -2473,35 +2537,107 @@
          }
 
          if (VerticalTabUtils.isVerticalTabsEligible(mActivity)) {
@@ -3672,15 +3672,16 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
 +                                org.chromium.components.omnibox.OmniboxFocusReason.MENU_OR_KEYBOARD_ACTION),
 +                        () -> SettingsNavigationFactory.createSettingsNavigation().startSettings(
 +                                mActivity, org.chromium.chrome.browser.settings.MainSettings.class));
-+                mTabBookmarkerSupplier.onAvailable(bookmarker -> {
-+                    if (mArcDesktopCoordinator != null) {
-+                        mArcDesktopCoordinator.configureNativeBookmarks(bookmarker);
-+                    }
-+                });
++                mTabBookmarkerSupplier.addSyncObserverAndCallIfNonNull(
++                        mCallbackController.makeCancelable(bookmarker -> {
++                            if (mArcDesktopCoordinator != null) {
++                                mArcDesktopCoordinator.configureNativeBookmarks(bookmarker);
++                            }
++                        }));
                  mToolbarManager.setVerticalTabsAutoHiddenSupplier(
                          mVerticalTabsSideUiCoordinator.getIsAutoHiddenSupplier());
              }
-@@ -2600,7 +2735,14 @@
+@@ -2600,7 +2736,14 @@
                              var transitionCoord =
                                      assumeNonNull(mToolbarManager)
                                              .getTabStripTransitionCoordinator();
@@ -3696,7 +3697,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
                          } else {
                              assumeNonNull(mVerticalTabsSideUiCoordinator)
                                      .setVisible(/* show= */ false, /* suppressAnimations= */ false);
-@@ -2679,9 +2821,11 @@
+@@ -2679,9 +2822,11 @@
      private void onVerticalTabsActiveChanged(boolean active) {
          var transitionCoordinator =
                  assumeNonNull(mToolbarManager).getTabStripTransitionCoordinator();
@@ -3709,7 +3710,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
          if (active) {
              transitionCoordinator.suppressTabStrip(true);
          } else {
-@@ -3177,6 +3321,14 @@
+@@ -3177,6 +3322,14 @@
          createBookmarkBarIfNecessary();
      }
 
@@ -3724,7 +3725,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/tabbed_mode/Tab
      // MenuOrKeyboardActionHandler implementation
      @Override
      public boolean handleMenuOrKeyboardAction(int id, boolean fromMenu) {
-@@ -3429,8 +3581,12 @@
+@@ -3429,8 +3582,12 @@
       * activated.
       */
      public BooleanSupplier canActivateTabLayoutToggleMenu() {
