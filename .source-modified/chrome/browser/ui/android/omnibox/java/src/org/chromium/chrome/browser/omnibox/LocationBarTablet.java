@@ -121,9 +121,18 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
     /** Arc owns only the fill; Chromium retains its native focus/hover border and editor. */
     @Override
     public void setArcGlassBackground(@Nullable Drawable surface) {
-        if (mArcGlassBackground == surface) return;
+        boolean integrated = mArcTopBar || getArcCommandResults() != null;
+        if (!integrated && mArcGlassBackground == surface
+                && (surface == null || mArcGlassLayers != null)) return;
         mArcGlassBackground = surface;
         mArcGlassLayers = null;
+        if (integrated) {
+            // The toolbar/panel owns one continuous surface. Palette refreshes must not
+            // reinstall the sidebar's rounded glass capsule or its lower highlight here.
+            setBackgroundColor(android.graphics.Color.TRANSPARENT);
+            updateBackgroundColor();
+            return;
+        }
         if (surface != null) {
             LayerDrawable layers = new LayerDrawable(new Drawable[] {surface, mLocationBarBackground}) {
                 @Override public boolean getPadding(Rect padding) {
@@ -575,6 +584,7 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
     public void setArcTopBar(boolean active) {
         if (mArcTopBar == active) return;
         mArcTopBar = active;
+        setArcGlassBackground(mArcGlassBackground);
         updateLayoutAndBackground();
         updateForegroundAndGlifAnimation();
     }
@@ -591,6 +601,10 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
         }
         super.setArcCommandBar(results, actions, beforeNavigation, inputEnd);
         if (wasCommand && results == null) {
+            // An appearance refresh inside the panel deliberately removed the nested pill.
+            // Rebuild it when the native editor returns to the sidebar, without waiting
+            // for another theme/layout notification. Top mode remains integrated.
+            setArcGlassBackground(mArcGlassBackground);
             if (mArcCommandOriginalChildParams != null) {
                 setLayoutParams(mArcCommandOriginalChildParams);
                 mArcCommandOriginalChildParams = null;

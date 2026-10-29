@@ -90,6 +90,10 @@ public final class ArcDesktopPolicyTest {
                         && ArcDesktopPolicy.ARC_FULL_CONTROLS_MIN_HEIGHT_DP > 0,
                 "Arc frame dimensions remain semantic and fit collapse plus native navigation");
 
+        check(ArcDesktopPolicy.ARC_WINDOW_RADIUS_DP == 24
+                        && ArcDesktopPolicy.ARC_WINDOW_RADIUS_DP - ArcDesktopPolicy.ARC_FRAME_GAP_DP
+                                == ArcDesktopPolicy.ARC_CONTENT_RADIUS_DP,
+                "Outer decor and inset content corners remain concentric");
         System.out.println("ArcDesktopPolicy: policy, palette and rounded-content contract cases defined");
     }
 }

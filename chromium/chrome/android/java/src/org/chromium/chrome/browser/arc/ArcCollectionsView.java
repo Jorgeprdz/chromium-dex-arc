@@ -51,6 +51,7 @@ public final class ArcCollectionsView extends LinearLayout {
     private final Button mSpace;
     private final BoundedScrollView mScroll;
     private final BoundedScrollView mFavoritesScroll;
+    private int mCollectionHeight = -1;
     private android.graphics.drawable.Drawable mPinGlyph, mFavoriteGlyph, mFavoriteFilledGlyph;
     private void updateGlyphs() {
         mPinGlyph = new ArcDesktopIcons(ArcDesktopIcons.Kind.PIN, mForeground);
@@ -152,8 +153,9 @@ public final class ArcCollectionsView extends LinearLayout {
     protected void onMeasure(int widthSpec, int heightSpec) {
         int available = Math.max(0, MeasureSpec.getSize(widthSpec) - getPaddingLeft() - getPaddingRight());
         int columns = favoriteColumns(available, dp(54));
+        updateCollectionBudgets(columns);
         boolean empty = mFavorites.getChildCount() == 0;
-        boolean menuOnly = columns == 0 || mFavoritesScroll.mBudget < dp(44);
+        boolean menuOnly = columns == 0 || mFavoritesScroll.mBudget < dp(54);
         mFavoritesScroll.setVisibility(!empty && !menuOnly ? VISIBLE : GONE);
         mFavoritesMenu.setVisibility(!empty && menuOnly ? VISIBLE : GONE);
         if (columns >= 2 && columns != mFavorites.getColumnCount()) {
@@ -215,7 +217,7 @@ public final class ArcCollectionsView extends LinearLayout {
         result.setContentDescription(text);
         result.setTooltipText(text);
         result.setAllCaps(false);
-        result.setTextSize(12);
+        result.setTextSize(13);
         result.setMinWidth(0); result.setMinimumWidth(0);
         result.setPadding(dp(8), 0, dp(8), 0);
         result.setSingleLine(true);
@@ -241,11 +243,24 @@ public final class ArcCollectionsView extends LinearLayout {
     }
 
     public void setCollectionHeight(int height) {
-        // One shared budget, rather than independent 216dp + 240dp panels starving native tabs.
-        int rows = Math.max(0, height - dp(88));
-        int favorites = mFavorites.getChildCount() == 0 ? 0 : Math.min(dp(96), rows / 2);
+        mCollectionHeight = height;
+        updateCollectionBudgets(mFavorites.getColumnCount());
+    }
+
+    private void updateCollectionBudgets(int columns) {
+        if (mCollectionHeight < 0) return;
+        // Allocate whole 48dp tiles plus their 3dp top/bottom margins. The previous
+        // half-budget (at most 96dp) exposed only part of a second 54dp grid row.
+        int rows = Math.max(0, mCollectionHeight - dp(88) - getPaddingTop() - getPaddingBottom());
+        int slot = dp(54);
+        int count = mFavorites.getChildCount();
+        int wantedRows = columns < 2 ? 0 : (count + columns - 1) / columns;
+        int visibleRows = Math.min(wantedRows, Math.min(dp(216), rows) / slot);
+        int favorites = visibleRows * slot;
         mFavoritesScroll.setBudget(favorites);
-        mScroll.setBudget(Math.max(0, rows - favorites));
+        // A menu fallback still consumes a 44dp row inside the same shared budget.
+        int occupied = count > 0 && favorites == 0 ? Math.min(dp(44), rows) : favorites;
+        mScroll.setBudget(Math.max(0, rows - occupied));
     }
 
     /** Owns collection styling so site favicons retain their original colors and rounded tiles. */

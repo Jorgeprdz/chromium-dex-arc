@@ -21,6 +21,7 @@ chrome_java_sources = [
   "java/src/org/chromium/chrome/browser/arc/ArcCommandBar.java",
   "java/src/org/chromium/chrome/browser/arc/ArcDesktopMaterial.java",
   "java/src/org/chromium/chrome/browser/arc/ArcDesktopIcons.java",
+  "java/src/org/chromium/chrome/browser/arc/ArcDesktopWindowFrame.java",
   "java/src/org/chromium/chrome/browser/arc/ArcPhoneStatusFade.java",
   "java/src/org/chromium/chrome/browser/arc/ArcPhonePullReveal.java",
   "java/src/org/chromium/chrome/browser/arc/ArcDesktopMaterialDialog.java",

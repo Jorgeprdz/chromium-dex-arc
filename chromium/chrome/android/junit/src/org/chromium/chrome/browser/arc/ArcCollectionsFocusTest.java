@@ -171,7 +171,8 @@ public class ArcCollectionsFocusTest {
         for (int i = 0; i < 20; i++) f.controller.createFolder(null, "Folder " + i);
         f.view.refresh(); f.view.setCollectionHeight(240); f.measure();
         View scroll = (View) f.view.findViewWithTag("arc-new-folder:" + f.controller.state().selectedSpace()).getParent().getParent();
-        int chrome = Math.round(88 * f.activity.getResources().getDisplayMetrics().density);
+        int chrome = Math.round(88 * f.activity.getResources().getDisplayMetrics().density)
+                + f.view.getPaddingTop() + f.view.getPaddingBottom();
         assertEquals(Math.max(0, 240 - chrome), scroll.getMeasuredHeight());
         f.view.setCollectionHeight(100); f.measure();
         assertEquals(Math.max(0, 100 - chrome), scroll.getMeasuredHeight());
@@ -186,6 +187,20 @@ public class ArcCollectionsFocusTest {
         assertFalse(scroll.isLayoutRequested());
         f.view.setCollectionHeight(100);
         assertTrue(scroll.isLayoutRequested());
+    }
+
+    @Test public void favoritesBudgetShowsWholeRowsAndRecomputesAfterWidthChange() {
+        Fixture f=new Fixture();
+        for(int i=0;i<8;i++)f.controller.rememberTab(70+i,"https://rows.test/"+i,"Favorite "+i,true);
+        f.view.refresh();f.view.setCollectionHeight(240);f.measure();
+        View mosaic=f.view.findViewWithTag("arc-favorites-mosaic");
+        float density=f.activity.getResources().getDisplayMetrics().density;
+        int slot=Math.round(54*density);
+        assertEquals("Two favorite rows must be fully visible",2*slot,mosaic.getMeasuredHeight());
+        f.view.measure(View.MeasureSpec.makeMeasureSpec(Math.round(220*density),View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(1200,View.MeasureSpec.AT_MOST));
+        f.view.layout(0,0,f.view.getMeasuredWidth(),f.view.getMeasuredHeight());
+        assertEquals("Resize may scroll rows but never expose a sliced row",0,mosaic.getMeasuredHeight()%slot);
+        assertTrue(f.view.getMeasuredHeight()<=Math.round(240*density));
     }
 
     @Test public void shortWindowKeepsAllFavoritesInAnAccessibleCompactMenu() {

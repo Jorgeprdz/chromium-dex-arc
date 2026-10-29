@@ -16,6 +16,7 @@ public final class ArcDesktopPolicy {
     public static final int ARC_OUTER_PADDING_DP = 8;
     public static final int ARC_FRAME_GAP_DP = 8;
     public static final int ARC_CONTENT_RADIUS_DP = 16;
+    public static final int ARC_WINDOW_RADIUS_DP = ARC_CONTENT_RADIUS_DP + ARC_FRAME_GAP_DP;
     public static final int ARC_NAV_ROW_HEIGHT_DP = 44;
     public static final int ARC_NAV_BUTTON_WIDTH_DP = 44;
     public static final int ARC_LOCATION_BAR_SIDE_MARGIN_DP = 4;

@@ -21,6 +21,24 @@ import org.robolectric.annotation.SQLiteMode;
 public class ArcDesktopMaterialTest {
     private static void idle(){org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();}
     private static int depth(int[] ramp){int max=0;for(int c:ramp)for(int d:ramp)for(int shift:new int[]{0,8,16})max=Math.max(max,Math.abs(((c>>shift)&255)-((d>>shift)&255)));return max;}
+    @Test public void ownedWindowContourRestoresTheNativeDecorAfterDesktop() throws Exception {
+        var activity=Robolectric.buildActivity(Activity.class).setup();
+        try {
+            var decor=activity.get().getWindow().getDecorView();decor.layout(0,0,800,600);
+            var original=decor.getOutlineProvider();boolean clipped=decor.getClipToOutline();
+            var type=Class.forName("org.chromium.chrome.browser.arc.ArcDesktopWindowFrame");
+            var frame=type.getConstructor(android.view.Window.class).newInstance(activity.get().getWindow());
+            type.getMethod("applyRadius",int.class).invoke(frame,24);
+            assertTrue(decor.getClipToOutline());
+            var outline=new android.graphics.Outline();decor.getOutlineProvider().getOutline(decor,outline);
+            assertEquals(24f,outline.getRadius(),0f);
+            var bounds=new android.graphics.Rect();assertTrue(outline.getRect(bounds));
+            assertEquals(new android.graphics.Rect(0,0,800,600),bounds);
+            decor.layout(0,0,300,200);decor.getOutlineProvider().getOutline(decor,outline);
+            assertTrue(outline.getRect(bounds));assertEquals(new android.graphics.Rect(0,0,300,200),bounds);
+            type.getMethod("clear").invoke(frame);assertSame(original,decor.getOutlineProvider());assertEquals(clipped,decor.getClipToOutline());
+        } finally {activity.pause().stop().destroy();idle();}
+    }
     @Test public void framePreservesRectangularClipAndSubtleNativeShadow(){
         var material=new ArcDesktopMaterial();material.setAppearance(0xffe6e8eb,60);material.setBounds(0,0,202,1294);
         var outline=new android.graphics.Outline();material.getOutline(outline);var rect=new android.graphics.Rect();

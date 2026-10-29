@@ -414,6 +414,15 @@ class TabVerticalViewBinder {
             faviconWanted = faviconView != null;
         }
 
+        if (faviconView instanceof ImageView icon) {
+            if (ArcDesktopAppearance.isDesktopWindow(view.getContext())) {
+                ArcDesktopAppearance.sizeSidebarFavicon(icon,
+                        model.get(TabProperties.ARC_SPLIT_PAIR) != null, showIconOnly);
+            } else {
+                ArcDesktopAppearance.restoreSidebarFaviconSize(icon);
+            }
+        }
+
         // 3. Apply to views, handle animations/bindings and view constraints
         @ColorInt
         int spinnerColor =
@@ -684,6 +693,9 @@ class TabVerticalViewBinder {
 
         int width = isRailCollapsed ? getCollapsedTabItemWidth(context) : expandedWidth;
         int height = usesCollapsedPositioning ? getCollapsedTabItemHeight(context) : expandedHeight;
+        if (!usesCollapsedPositioning && ArcDesktopAppearance.isDesktopWindow(context)) {
+            height += Math.round(4 * context.getResources().getDisplayMetrics().density);
+        }
 
         if (params.width != width || params.height != height) {
             params.width = width;
@@ -711,6 +723,7 @@ class TabVerticalViewBinder {
     private static void updateTitle(int titleViewId, PropertyModel model, ViewGroup view) {
         TextView titleView = view.findViewById(titleViewId);
         if (titleView == null) return;
+        ArcDesktopAppearance.styleSidebarTitle(titleView);
 
         TabProperties.ArcSplitPair pair = model.get(TabProperties.ARC_SPLIT_PAIR);
         if (pair != null) {

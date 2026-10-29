@@ -12,7 +12,7 @@ import android.graphics.drawable.Drawable;
 
 /** Small shared vector glyphs. Geometry is in a 24-unit optical box, independent of density. */
 public final class ArcDesktopIcons extends Drawable {
-    public enum Kind { PIN, FAVORITE, FAVORITE_FILLED, CAMERA_ORIENTATION, INFO }
+    public enum Kind { PIN, FAVORITE, FAVORITE_FILLED, CAMERA_ORIENTATION, INFO, PALETTE }
     private final Kind mKind;
     private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path mPath = new Path();
@@ -38,6 +38,17 @@ public final class ArcDesktopIcons extends Drawable {
             mPath.moveTo(16, 11); mPath.lineTo(21, 8); mPath.lineTo(21, 18); mPath.lineTo(16, 15);
             mPath.moveTo(5, 5); mPath.cubicTo(8, 1, 14, 1, 17, 5);
             mPath.moveTo(17, 2); mPath.lineTo(17, 5); mPath.lineTo(14, 5);
+        } else if (kind == Kind.PALETTE) {
+            mPath.moveTo(12, 3);
+            mPath.cubicTo(6, 3, 3, 7, 3, 12);
+            mPath.cubicTo(3, 18, 7, 21, 12, 21);
+            mPath.cubicTo(15, 21, 15, 18, 13, 17);
+            mPath.cubicTo(11, 15, 13, 13, 16, 14);
+            mPath.cubicTo(22, 16, 23, 3, 12, 3);
+            mPath.close();
+            for (float[] dot : new float[][] {{7, 10}, {10, 6.5f}, {15, 7}, {18, 10}}) {
+                mPath.addCircle(dot[0], dot[1], .75f, Path.Direction.CW);
+            }
         } else {
             mPath.addCircle(12, 12, 9, Path.Direction.CW);
             mPath.moveTo(12, 11); mPath.lineTo(12, 17);

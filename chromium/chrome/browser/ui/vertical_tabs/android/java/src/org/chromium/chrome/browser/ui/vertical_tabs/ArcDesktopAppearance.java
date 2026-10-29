@@ -166,6 +166,51 @@ public final class ArcDesktopAppearance {
         return ArcDesktopPolicy.selection(surface(context, incognito));
     }
 
+    private static final WeakHashMap<android.widget.TextView, Float> SIDEBAR_TEXT_SP = new WeakHashMap<>();
+    private static final WeakHashMap<android.widget.ImageView, int[]> SIDEBAR_ICON_SIZE = new WeakHashMap<>();
+
+    /** One sp above the native sidebar title; repeated binding never accumulates size. */
+    public static void styleSidebarTitle(android.widget.TextView text) {
+        if (isDesktopWindow(text.getContext())) {
+            Float original = SIDEBAR_TEXT_SP.get(text);
+            if (original == null) {
+                original = text.getTextSize() / text.getResources().getDisplayMetrics().scaledDensity;
+                SIDEBAR_TEXT_SP.put(text, original);
+            }
+            text.setTextSize(original + 1f);
+        } else {
+            Float original = SIDEBAR_TEXT_SP.remove(text);
+            if (original != null) text.setTextSize(original);
+        }
+    }
+
+    /** Give two favicons separate optical space; do not squeeze both into one 16dp slot. */
+    public static void sizeSidebarFavicon(android.widget.ImageView icon, boolean pair, boolean compact) {
+        android.view.ViewGroup.LayoutParams params = icon.getLayoutParams();
+        if (params == null) return;
+        int[] original = SIDEBAR_ICON_SIZE.get(icon);
+        if (original == null) {
+            original = new int[] {params.width, params.height};
+            SIDEBAR_ICON_SIZE.put(icon, original);
+        }
+        float density = icon.getResources().getDisplayMetrics().density;
+        int height = Math.max(original[1], Math.round(20 * density));
+        int width = pair ? Math.round((compact ? 32 : 41) * density)
+                : Math.max(original[0], Math.round(20 * density));
+        if (params.width != width || params.height != height) {
+            params.width = width; params.height = height; icon.setLayoutParams(params);
+        }
+    }
+
+    public static void restoreSidebarFaviconSize(android.widget.ImageView icon) {
+        int[] original = SIDEBAR_ICON_SIZE.remove(icon);
+        android.view.ViewGroup.LayoutParams params = icon.getLayoutParams();
+        if (original == null || params == null) return;
+        if (params.width != original[0] || params.height != original[1]) {
+            params.width = original[0]; params.height = original[1]; icon.setLayoutParams(params);
+        }
+    }
+
     /** Retains native favicon/fallback artwork and its existing box, including asynchronous results. */
     public static void normalizeSidebarFavicon(android.widget.ImageView favicon) {
         favicon.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
@@ -201,12 +246,14 @@ public final class ArcDesktopAppearance {
         }
     }
 
-    /** One physical pixel, drawn inside the native capsule; no padding, size or radius changes. */
+    /** One physical pixel inside the native capsule; a modest radius is restored on release. */
     private static final class SidebarRowOutline extends android.graphics.drawable.Drawable
             implements android.view.View.OnAttachStateChangeListener {
         final android.view.View row;
         final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
         final android.graphics.RectF bounds = new android.graphics.RectF();
+        android.graphics.drawable.GradientDrawable roundedShape;
+        float originalRadius;
         boolean active;
         boolean initialized;
         int color;
@@ -218,6 +265,23 @@ public final class ArcDesktopAppearance {
             paint.setStyle(android.graphics.Paint.Style.STROKE);
             paint.setStrokeWidth(1f);
             row.addOnAttachStateChangeListener(this);
+            android.graphics.drawable.Drawable shape = row.getBackground();
+            while (shape != null) {
+                var current = shape.getCurrent();
+                if (current != shape) { shape = current; continue; }
+                if (shape instanceof android.graphics.drawable.InsetDrawable inset) {
+                    shape = inset.getDrawable();
+                } else break;
+            }
+            if (shape instanceof android.graphics.drawable.GradientDrawable gradient) {
+                float radius = gradient.getCornerRadius();
+                float wanted = Math.max(radius, 10 * row.getResources().getDisplayMetrics().density);
+                if (wanted != radius) {
+                    roundedShape = (android.graphics.drawable.GradientDrawable) gradient.mutate();
+                    originalRadius = radius;
+                    roundedShape.setCornerRadius(wanted);
+                }
+            }
         }
 
         void update(boolean active, int color) {
@@ -254,6 +318,7 @@ public final class ArcDesktopAppearance {
 
         void dispose() {
             cancelAnimation();
+            if (roundedShape != null) roundedShape.setCornerRadius(originalRadius);
             row.removeOnAttachStateChangeListener(this);
         }
 

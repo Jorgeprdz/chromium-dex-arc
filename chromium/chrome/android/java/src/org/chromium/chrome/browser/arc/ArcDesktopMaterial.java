@@ -23,9 +23,18 @@ public final class ArcDesktopMaterial extends Drawable {
     private int mSurface, mIntensity = -1, mAlpha = 255;
     private int[] mColors;
     private int mViewportHeight, mOffsetY;
+    private final int[] mPosition = new int[2];
     public void setViewport(int height, int offsetY) {
         if (mViewportHeight == height && mOffsetY == offsetY) return;
         mViewportHeight = height; mOffsetY = offsetY; updateShader(); invalidateSelf();
+    }
+
+    /** All frame regions sample the same vertical ramp, including the native top toolbar. */
+    public void alignWithFrame(android.view.View target, android.view.View frame) {
+        if (target == null || frame == null) return;
+        frame.getLocationInWindow(mPosition); int top = mPosition[1];
+        target.getLocationInWindow(mPosition);
+        setViewport(frame.getHeight(), mPosition[1] - top);
     }
 
     public static int clamp(int value) { return Math.max(0, Math.min(100, value)); }

@@ -80,6 +80,9 @@ public class SplitPairBindingProbe {
   static boolean isDesktopWindow(Context context){return true;}
   static int foreground(Context context,boolean incognito){return incognito?Color.WHITE:Color.BLACK;}
   static void normalizeSidebarFavicon(ImageView view){view.setScaleType(ImageView.ScaleType.FIT_CENTER);view.setImageTintList(null);}
+  private static final java.util.WeakHashMap<ImageView,int[]> SIDEBAR_ICON_SIZE=new java.util.WeakHashMap<>();
+  static void sizeSidebarFavicon(ImageView icon,boolean pair,boolean compact) ARC_PAIR_SIZE_HOOK
+  static void restoreSidebarFaviconSize(ImageView icon) ARC_PAIR_RESET_HOOK
  }
  static class TabListViewBinderUtils {
   static final Drawable ordinary=new ColorDrawable(Color.GRAY);
@@ -186,6 +189,9 @@ public class SplitPairBindingProbe {
 java = java.replace('PAIR_BODY', method_body(properties, r'public static final class ArcSplitPair'))
 java = java.replace('FAVICON_BODY', method_body(binder, r'private static void updateFaviconImage\('))
 java = java.replace('PAIR_ICONS_BODY', method_body(binder, r'private static void bindArcSplitPairIcons\('))
+appearance=next(ROOT.glob('chromium/**/ArcDesktopAppearance.java')).read_text()
+java=java.replace('ARC_PAIR_SIZE_HOOK',method_body(appearance,r'public static void sizeSidebarFavicon\('))
+java=java.replace('ARC_PAIR_RESET_HOOK',method_body(appearance,r'public static void restoreSidebarFaviconSize\('))
 java = java.replace('ICON_POLICY_BODY', method_body(binder, r'private static void updateIcons\(\s*PropertyModel model, VerticalTabItemLayout view, boolean isHovered\)'))
 sources = []
 for name, content in {

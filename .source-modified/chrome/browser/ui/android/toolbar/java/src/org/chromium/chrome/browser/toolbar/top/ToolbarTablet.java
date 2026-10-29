@@ -12,6 +12,7 @@ import android.animation.AnimatorSet;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.res.ColorStateList;
+import android.graphics.drawable.Drawable;
 import android.graphics.Color;
 import android.util.AttributeSet;
 import android.view.View;
@@ -90,6 +91,7 @@ public class ToolbarTablet extends ToolbarLayout {
     private ImageButton mReloadButton;
     private ImageButton mBookmarkButton;
     private View mFixedHeightBackground;
+    private @Nullable Drawable mArcFrameBackground;
 
     /**
      * The inner layout containing toolbar components, used to apply horizontal padding to. The
@@ -319,6 +321,24 @@ public class ToolbarTablet extends ToolbarLayout {
         }
     }
 
+    /** Arc supplies a frame-aligned drawable; Chromium retains the toolbar hierarchy and input. */
+    public void setArcFrameBackground(@Nullable Drawable background) {
+        mArcFrameBackground = background;
+        if (!applyArcFrameBackground()) {
+            onThemeColorChanged(mThemeColorProvider == null
+                    ? SemanticColorUtils.getDefaultBgColor(getContext())
+                    : mThemeColorProvider.getThemeColor(), false);
+        }
+    }
+
+    private boolean applyArcFrameBackground() {
+        if (mArcFrameBackground == null) return false;
+        setBackground(mArcFrameBackground);
+        mFixedHeightBackground.setBackgroundColor(Color.TRANSPARENT);
+        setToolbarHairlineColor(Color.TRANSPARENT);
+        return true;
+    }
+
     @Override
     public void onThemeColorChanged(@ColorInt int color, boolean shouldAnimate) {
         if (ArcDesktopAppearance.isDesktopWindow(getContext())) {
@@ -332,10 +352,12 @@ public class ToolbarTablet extends ToolbarLayout {
                 ImageViewCompat.setImageTintList(mForwardButtonCoordinator.getButton(), tint);
             }
         }
-        setBackgroundColor(color);
-        mFixedHeightBackground.setBackgroundColor(color);
+        if (!applyArcFrameBackground()) {
+            setBackgroundColor(color);
+            mFixedHeightBackground.setBackgroundColor(color);
+            setToolbarHairlineColor(color);
+        }
         mLocationBar.updateVisualsForState();
-        setToolbarHairlineColor(color);
 
         // Notify the StatusBarColorController of the toolbar color change. This is to match the
         // status bar's color with the toolbar color when the tab strip is hidden on a tablet.
@@ -1332,6 +1354,7 @@ public class ToolbarTablet extends ToolbarLayout {
             layoutParams.height =
                     getResources().getDimensionPixelSize(R.dimen.toolbar_height_no_shadow);
         }
+        applyArcFrameBackground();
         setLayoutParams(layoutParams);
     }
 }

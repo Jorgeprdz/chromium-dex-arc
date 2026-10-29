@@ -14,7 +14,7 @@ r=a.work/'R.java';r.write_text('package org.chromium.chrome; public class R {pub
 sources=[arc/(n+'.java') for n in ['ArcSidebarState','ArcSidebarStore','ArcTabActions','ArcCollectionsController','ArcCollectionsView','ArcDesktopIcons']]
 sources += [ROOT/'chromium/chrome/browser/desktop_policy/android/java/src/org/chromium/chrome/browser/desktop_policy/ArchiumWindowClass.java',ROOT/'chromium/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java',ROOT/'chromium/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCollectionsFocusTest.java',r]
 if a.material_only:
- sources=[arc/'ArcDesktopMaterial.java',arc/'ArcDesktopMaterialDialog.java',ROOT/'chromium/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcDesktopMaterialTest.java',r]
+ sources=[arc/'ArcDesktopWindowFrame.java',arc/'ArcDesktopMaterial.java',arc/'ArcDesktopMaterialDialog.java',ROOT/'chromium/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcDesktopMaterialTest.java',r]
 import importlib.util
 spec=importlib.util.spec_from_file_location('window_core',ROOT/'scripts/fetch-window-core.py')
 window=importlib.util.module_from_spec(spec);spec.loader.exec_module(window)

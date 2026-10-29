@@ -91,7 +91,6 @@ public final class ArcCommandBar {
     private ValueAnimator mAnimator;
     private TextView mProxy;
     private Rect mOrigin = new Rect();
-    private long mOpenedAt;
     private boolean mConsumeOriginGesture;
     private Rect mLastVisibleFrame = new Rect();
     private Rect mLastViewport = new Rect();
@@ -112,7 +111,6 @@ public final class ArcCommandBar {
                 int action = event.getActionMasked();
                 if (action == android.view.MotionEvent.ACTION_DOWN) {
                     mConsumeOriginGesture = !mActions && mState != State.CLOSING
-                            && event.getEventTime() - mOpenedAt <= android.view.ViewConfiguration.getDoubleTapTimeout()
                             && mOrigin.contains((int) event.getX(), (int) event.getY());
                     if (mConsumeOriginGesture) mEditor.requestFocus();
                 }
@@ -186,7 +184,6 @@ public final class ArcCommandBar {
         mActions = actions; mEditingAddress = editingAddress; mState = State.OPENING;
         mPreviousFocus = mRoot.findFocus(); mOriginalHint = mEditor.getHint();
         mOrigin = boundsInRoot(mHolder);
-        mOpenedAt = android.os.SystemClock.uptimeMillis();
         mConsumeOriginGesture = false;
         mRoot.addView(mOverlay, new ViewGroup.LayoutParams(-1, -1));
         mRoot.addOnLayoutChangeListener(mLayoutListener);

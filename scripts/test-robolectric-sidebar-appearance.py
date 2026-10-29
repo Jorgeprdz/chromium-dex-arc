@@ -66,6 +66,23 @@ public class SidebarAppearanceProbe {
    .invoke(null,v,active,multi,false,hover);
  }
  int fill(View v){return v.getBackgroundTintList().getDefaultColor();}
+ @Test public void sidebarTitleGrowsOnceAndRestoresWhenLeavingDesktop() throws Exception {
+  TextView text=new TextView(a);text.setTextSize(12);
+  var method=ArcDesktopAppearance.class.getMethod("styleSidebarTitle",TextView.class);
+  method.invoke(null,text);method.invoke(null,text);
+  assertEquals(13,text.getTextSize()/a.getResources().getDisplayMetrics().scaledDensity,.01f);
+  ArcDesktopAppearance.setUiMode(a,ArcDesktopPolicy.MODE_MOBILE);method.invoke(null,text);
+  assertEquals(12,text.getTextSize()/a.getResources().getDisplayMetrics().scaledDensity,.01f);
+ }
+ @Test public void pairedFaviconsHaveIndependentOpticalSpaceAndRestoreNativeBox() throws Exception {
+  ImageView icon=new ImageView(a);icon.setLayoutParams(new LinearLayout.LayoutParams(16,16));
+  var size=ArcDesktopAppearance.class.getMethod("sizeSidebarFavicon",ImageView.class,boolean.class,boolean.class);
+  size.invoke(null,icon,true,false);assertEquals(41,icon.getLayoutParams().width);assertEquals(20,icon.getLayoutParams().height);
+  size.invoke(null,icon,true,true);assertEquals(32,icon.getLayoutParams().width);assertEquals(20,icon.getLayoutParams().height);
+  size.invoke(null,icon,false,false);assertEquals(20,icon.getLayoutParams().width);
+  ArcDesktopAppearance.class.getMethod("restoreSidebarFaviconSize",ImageView.class).invoke(null,icon);
+  assertEquals(16,icon.getLayoutParams().width);assertEquals(16,icon.getLayoutParams().height);
+ }
  @Test public void defaultLavenderAndVioletSelectionHaveReadableForegroundAndCustomColorsPersist(){
   var prefs=ArcDesktopAppearance.preferences(a);prefs.edit().remove(ArcDesktopAppearance.COLOR_KEY).commit();
   assertEquals(0xffdccdf7,ArcDesktopAppearance.surface(a,false));

@@ -77,6 +77,26 @@ public class ArcCommandBarTest {
         f.bar.finishAnimationForTesting(); assertFalse(f.bar.isShowing());
         assertEquals(0, f.sessions.get()); f.finish();
     }
+    @Test public void delayedOriginClicksKeepTheVisibleEditorAfterDesktopDispatchLatency() {
+        Fixture f=new Fixture();f.bar.openAddress(()->{f.sessions.incrementAndGet();f.editor.requestFocus();f.editor.setText("https://example.com/");f.editor.selectAll();});
+        f.bar.finishAnimationForTesting();
+        android.view.View overlay=(android.view.View)f.bar.panelForTesting().getParent();
+        overlay.measure(android.view.View.MeasureSpec.makeMeasureSpec(1000,1073741824),android.view.View.MeasureSpec.makeMeasureSpec(800,1073741824));
+        overlay.layout(0,0,1000,800);
+        for(int i=0;i<12;i++){
+            org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(android.view.ViewConfiguration.getDoubleTapTimeout()+100));
+            long now=android.os.SystemClock.uptimeMillis();
+            for(int action:new int[]{0,1}){
+                var event=android.view.MotionEvent.obtain(now,now,action,100,24,0);overlay.dispatchTouchEvent(event);event.recycle();
+            }
+            f.bar.finishAnimationForTesting();
+            assertTrue("Origin click dismissed address editor at iteration "+i,f.bar.isShowing());
+            assertTrue(f.editor.hasFocus());assertEquals(1,f.sessions.get());
+        }
+        f.editor.setText("typed-after-origin-click");assertEquals("typed-after-origin-click",f.editor.getText().toString());
+        f.bar.close(false,null);assertEquals(0,f.sessions.get());f.finish();
+    }
+
     @Test public void milkyCommandPanelRetainsGeometryAndUniqueNativeEditor() {
         Fixture f = new Fixture();
         var panel=f.bar.panelForTesting();int padding=panel.getPaddingLeft();float elevation=panel.getElevation();

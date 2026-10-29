@@ -58,6 +58,8 @@ class LocationBarLayout extends android.widget.FrameLayout {
 }
 public class LocationBarTablet extends LocationBarLayout {
     LocationBarTablet(android.content.Context c){super(c);}
+    android.graphics.drawable.Drawable mArcGlassBackground;
+    public void setArcGlassBackground(android.graphics.drawable.Drawable surface){}
     void updateLayoutAndBackground(){}
 ''' + fields + '\npublic void setArcCommandBar(@Nullable android.graphics.Rect results,boolean actions,Runnable beforeNavigation,Runnable inputEnd) '.replace('@Nullable android.graphics.Rect', '@Nullable Rect') + body + '\n}'
         android = os.environ.get('ARCHIUM_TEST_ANDROID_JAR', '/opt/android-sdk/platforms/android-36/android.jar')

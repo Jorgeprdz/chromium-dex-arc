@@ -104,6 +104,7 @@ public final class ArcDesktopCoordinator {
     private final ViewGroup.LayoutParams mLocationBarOriginalLayoutParams;
     private final CompositorViewHolder mCompositorViewHolder;
     private final View mFrameRoot;
+    private final ArcDesktopWindowFrame mWindowFrame;
     private final Drawable mOriginalFrameBackground;
     private final Drawable mOriginalRailBackground;
     private final ColorStateList mOriginalRailBackgroundTint;
@@ -151,7 +152,6 @@ public final class ArcDesktopCoordinator {
     private AlertDialog mAboutDialog;
     private AlertDialog mMaterialDialog;
     private int mMaterialPreview = -1;
-    private final int[] mMaterialPosition = new int[2];
     private ArcPhoneGlass mDesktopGlass;
     private ArcPhoneGlass.Backdrop mDesktopOmniboxGlass;
     private OmniboxSuggestionsContainer mDesktopSuggestions;
@@ -178,6 +178,7 @@ public final class ArcDesktopCoordinator {
         if (mDesktopSuggestionGlass != null) mDesktopSuggestionGlass.setSurface(frameSurface(mIncognitoStateProvider.isIncognitoSelected()));
         mDesktopSuggestions.setArcPhoneGlassBackground(enabled ? mDesktopSuggestionGlass : null);
     }
+    private final ArcDesktopMaterial mDesktopToolbarMaterial = new ArcDesktopMaterial();
     private final ArcDesktopMaterial mDesktopFrameMaterial = new ArcDesktopMaterial();
     private final ArcDesktopMaterial mDesktopRailMaterial = new ArcDesktopMaterial();
     private final ArcDesktopMaterial mDesktopColumnMaterial = new ArcDesktopMaterial();
@@ -186,11 +187,7 @@ public final class ArcDesktopCoordinator {
     private void updateMaterial(View target, ArcDesktopMaterial material, int surface) {
         int intensity = mMaterialPreview >= 0 ? mMaterialPreview : ArcDesktopMaterial.savedIntensity(mPreferences);
         material.setAppearance(surface, intensity);
-        if (target != null && mFrameRoot != null) {
-            mFrameRoot.getLocationInWindow(mMaterialPosition); int rootTop = mMaterialPosition[1];
-            target.getLocationInWindow(mMaterialPosition);
-            material.setViewport(mFrameRoot.getHeight(), mMaterialPosition[1] - rootTop);
-        }
+        material.alignWithFrame(target, mFrameRoot);
     }
 
     private void updateDesktopGlass(boolean desktop, int surface) {
@@ -233,6 +230,11 @@ public final class ArcDesktopCoordinator {
         }
         if (mCommandBar != null) mCommandBar.setGlassSampler(desktop ? mDesktopGlass : null);
         updateDesktopSuggestions(desktop && mCommandBar != null && mCommandBar.isShowing());
+        View toolbar = mActivity.findViewById(R.id.toolbar);
+        if (toolbar instanceof ToolbarTablet tablet) {
+            updateMaterial(toolbar, mDesktopToolbarMaterial, surface);
+            tablet.setArcFrameBackground(desktop ? mDesktopToolbarMaterial : null);
+        }
         updateMaterial(mFrameRoot, mDesktopFrameMaterial, surface);
         updateMaterial(mRail, mDesktopRailMaterial, surface);
         updateMaterial(mColumn, mDesktopColumnMaterial, surface);
@@ -330,6 +332,7 @@ public final class ArcDesktopCoordinator {
         }
 
         mFrameRoot = activity.findViewById(R.id.coordinator);
+        mWindowFrame = new ArcDesktopWindowFrame(activity.getWindow());
         mOriginalFrameBackground = mFrameRoot == null ? null : mFrameRoot.getBackground();
         mOriginalContentOutlineProvider = compositorViewHolder.getOutlineProvider();
         mOriginalContentClipToOutline = compositorViewHolder.getClipToOutline();
@@ -465,14 +468,8 @@ public final class ArcDesktopCoordinator {
         googleButton.setOnClickListener(v -> showGoogleMenu(v));
         ImageButton appearanceButton = new ImageButton(activity);
         mAppearanceButton = appearanceButton;
-        GradientDrawable wheel = new GradientDrawable();
-        wheel.setShape(GradientDrawable.OVAL);
-        wheel.setGradientType(GradientDrawable.SWEEP_GRADIENT);
-        wheel.setColors(new int[] {0xffef5350, 0xffffca28, 0xff66bb6a, 0xff26c6da,
-                0xff42a5f5, 0xffab47bc, 0xffef5350});
-        wheel.setSize(dp(14), dp(14));
-        appearanceButton.setImageDrawable(wheel);
-        appearanceButton.setScaleType(android.widget.ImageView.ScaleType.CENTER_INSIDE);
+        appearanceButton.setImageDrawable(new ArcDesktopIcons(ArcDesktopIcons.Kind.PALETTE, Color.BLACK));
+        appearanceButton.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
         appearanceButton.setPadding(dp(10), dp(10), dp(10), dp(10));
         appearanceButton.setOnClickListener(this::showAppearanceMenu);
         appearanceButton.setOnLongClickListener(v -> {
@@ -481,7 +478,7 @@ public final class ArcDesktopCoordinator {
         });
         appearanceButton.setTooltipText(activity.getString(R.string.arc_interface));
         bookmarksButton.setText(activity.getString(R.string.arc_bookmarks));
-        bookmarksButton.setTextSize(12);
+        bookmarksButton.setTextSize(13);
         bookmarksButton.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
         googleButton.setText("G");
         googleButton.setContentDescription("Google"); googleButton.setTooltipText("Google");
@@ -555,7 +552,7 @@ public final class ArcDesktopCoordinator {
         ImageButton about = new ImageButton(activity);
         about.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
         about.setImageDrawable(new ArcDesktopIcons(ArcDesktopIcons.Kind.INFO, Color.BLACK));
-        about.setPadding(dp(12), dp(12), dp(12), dp(12));
+        about.setPadding(dp(10), dp(10), dp(10), dp(10));
         about.setContentDescription(activity.getString(R.string.arc_about));
         about.setTooltipText(activity.getString(R.string.arc_about));
         about.setOnClickListener(v -> {
@@ -875,7 +872,7 @@ public final class ArcDesktopCoordinator {
         Button button = new Button(mActivity);
         button.setText(text);
         button.setAllCaps(false);
-        button.setTextSize(12);
+        button.setTextSize(13);
         button.setMinWidth(0);
         button.setMinimumWidth(0);
         button.setPadding(dp(4), 0, dp(4), 0);
@@ -1473,6 +1470,8 @@ public final class ArcDesktopCoordinator {
     private void applyFrameGeometry() {
         if (mDestroyed || !ArcDesktopAppearance.isDesktopWindow(mActivity)) return;
         mArcFrameActive = true;
+        mWindowFrame.applyRadius(dp(ArcDesktopPolicy.ARC_WINDOW_RADIUS_DP));
+        mDesktopToolbarMaterial.alignWithFrame(mActivity.findViewById(R.id.toolbar), mFrameRoot);
         mCompositorViewHolder.setOutlineProvider(mArcContentOutlineProvider);
         mCompositorViewHolder.setClipToOutline(true);
         int outer = dp(ArcDesktopPolicy.ARC_OUTER_PADDING_DP);
@@ -1533,6 +1532,7 @@ public final class ArcDesktopCoordinator {
         mFrameDispatch.cancel();
         if (!mArcFrameActive) return;
         mArcFrameActive = false;
+        mWindowFrame.clear();
         mRejectingRoundedCornerGesture = false;
         restoreClippedSurface();
         mCompositorViewHolder.setOutlineProvider(mOriginalContentOutlineProvider);
@@ -1625,7 +1625,7 @@ public final class ArcDesktopCoordinator {
         if (view instanceof TextView) ((TextView) view).setTextColor(foreground);
         if (view instanceof Button || view instanceof ImageButton) {
             styleInteraction(view, foreground, selection);
-            if (view instanceof ImageButton && view != mAppearanceButton) {
+            if (view instanceof ImageButton) {
                 ((ImageButton) view).setColorFilter(foreground);
             }
         }
