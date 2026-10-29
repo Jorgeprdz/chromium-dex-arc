@@ -1,31 +1,38 @@
 """Exact ownership/color source contracts. No Samsung visual acceptance is inferred."""
-import pathlib, subprocess, unittest
+import hashlib, json, pathlib, subprocess, unittest
 from arc_toolbar_probe import method_body
 ROOT=pathlib.Path(__file__).resolve().parents[1]
 BASE='677c73fcebd14d37b52ec68e2dffba627282c0bf'
 class MobilePremiumContracts(unittest.TestCase):
- def original(self,path):return subprocess.check_output(['git','show',BASE+':'+path],cwd=ROOT)
+ @classmethod
+ def setUpClass(cls):
+  cls.baseline=json.loads((ROOT/'tests/pinned/mobile-premium-baseline.json').read_text())
+  if cls.baseline['schema']!=1 or cls.baseline['source_commit']!=BASE or cls.baseline['algorithm']!='sha256':
+   raise AssertionError('Unexpected immutable mobile baseline')
+ def assert_original_method(self,path,pattern):
+  actual=method_body((ROOT/path).read_text(),pattern).encode()
+  self.assertEqual(self.baseline['methods'][path][pattern],hashlib.sha256(actual).hexdigest())
  def test_approved_pull_and_native_owners_are_byte_identical(self):
   paths=['chromium/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhonePullReveal.java',
    '.source-modified/chrome/android/java/src/org/chromium/chrome/browser/SwipeRefreshHandler.java',
    '.source-modified/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarPhone.java',
    'chromium/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCameraControls.java']
   for path in paths:
-   with self.subTest(path=path):self.assertEqual(self.original(path),(ROOT/path).read_bytes())
+   with self.subTest(path=path):self.assertEqual(self.baseline['files'][path],hashlib.sha256((ROOT/path).read_bytes()).hexdigest())
  def test_color_resolver_and_reveal_binding_are_unchanged(self):
   path='.source-modified/chrome/browser/ui/android/theme/java/src/org/chromium/chrome/browser/theme/ToolbarThemeColorProvider.java'
   pattern=r'public @ColorInt int getArcPhonePageColor\('
-  self.assertEqual(method_body(self.original(path).decode(),pattern),method_body((ROOT/path).read_text(),pattern))
+  self.assert_original_method(path,pattern)
   path='.source-modified/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java'
   for pattern in [r'private void bindArcPhonePullReveal\(',r'private void updateArcPhoneRevealIdentity\(',r'private void bindArcPhoneGestures\(',r'private void updateArcPhoneTopInset\(']:
-   self.assertEqual(method_body(self.original(path).decode(),pattern),method_body((ROOT/path).read_text(),pattern))
+   self.assert_original_method(path,pattern)
  def test_status_visibility_and_capture_schedule_are_unchanged(self):
   path='chromium/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneStatusFade.java'
   pattern=r'public void update\(boolean compact, boolean nativeFullscreen\)'
-  self.assertEqual(method_body(self.original(path).decode(),pattern),method_body((ROOT/path).read_text(),pattern))
+  self.assert_original_method(path,pattern)
   path='chromium/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneGlass.java'
   for pattern in [r'public void setInMotion\(',r'void sampleNow\(',r'private void schedule\(',r'public static Capture contentSource\(']:
-   self.assertEqual(method_body(self.original(path).decode(),pattern),method_body((ROOT/path).read_text(),pattern))
+   self.assert_original_method(path,pattern)
  def test_external_homepage_no_longer_implies_archium_home(self):
   path='.source-modified/chrome/android/java/src/org/chromium/chrome/browser/ChromeTabbedActivity.java'
   body=method_body((ROOT/path).read_text(),r'public boolean homePage\(')

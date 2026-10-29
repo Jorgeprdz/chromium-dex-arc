@@ -1,0 +1,31 @@
+{
+  "schema": 1,
+  "source_commit": "677c73fcebd14d37b52ec68e2dffba627282c0bf",
+  "algorithm": "sha256",
+  "files": {
+    "chromium/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhonePullReveal.java": "004db58789f0556d998c135617d446b59c11bdd2e5ccda3a70309429b95c846d",
+    ".source-modified/chrome/android/java/src/org/chromium/chrome/browser/SwipeRefreshHandler.java": "c648e82069ef5fae52a6340018026fa1baaf3f28d566dee4e2e6d715cf0eeea8",
+    ".source-modified/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarPhone.java": "2fd69c3b627c49a8ca6a03c338f3c311af724546a3646c952a86e66dc9c4843c",
+    "chromium/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCameraControls.java": "f56ec838c8268fc1d4587cc9e736a131e64f30a23563690dd6af3a56490268b3"
+  },
+  "methods": {
+    ".source-modified/chrome/browser/ui/android/theme/java/src/org/chromium/chrome/browser/theme/ToolbarThemeColorProvider.java": {
+      "public @ColorInt int getArcPhonePageColor\\(": "4c2dcc8e6eba22389ff2643306882cbc7cabf7cf4e271bb2d2502260056bd63f"
+    },
+    ".source-modified/chrome/android/java/src/org/chromium/chrome/browser/toolbar/ToolbarManager.java": {
+      "private void bindArcPhonePullReveal\\(": "eaa41801016b6b9dcbcdcb511387a390e39fd3584a7bc825f4a1c709e2339b61",
+      "private void updateArcPhoneRevealIdentity\\(": "0c4c52b2963579fdedd81453b86eaf99a4adfd3965bfad43aeaef75414e917d9",
+      "private void bindArcPhoneGestures\\(": "26cc6b547c053380583f8127e3e4b6bcb40abf424259b705eb83d30f79ff8390",
+      "private void updateArcPhoneTopInset\\(": "af194494306792bdb2a4c88a2ba76592a33892f143a26fb624159e226c69b0ee"
+    },
+    "chromium/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneStatusFade.java": {
+      "public void update\\(boolean compact, boolean nativeFullscreen\\)": "575c2760f49731b99a7c298c81d403eacd06967dda1368c38aeca066fc3368ff"
+    },
+    "chromium/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneGlass.java": {
+      "public void setInMotion\\(": "1dd99dbe9e342287a5586ebf11f20552ae4249f951d3e18ca7a5d3f570cc747c",
+      "void sampleNow\\(": "b1d0e54e762b9c00c81225f4bfdc76487818cfca8aac39cf57cd4db9a551650e",
+      "private void schedule\\(": "f5bb99e1145d26098475ce3ebdf089a8441d978a056eaa3bdd1662858a953f26",
+      "public static Capture contentSource\\(": "1b47aef29e137c32cbf77da56ee5d9c9ab9e884a99fbd5bd7ecb55b862175f19"
+    }
+  }
+}
