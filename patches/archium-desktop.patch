@@ -542,20 +542,27 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
              }
          }
 
-@@ -486,6 +557,12 @@
+@@ -481,10 +552,19 @@
+             tintList = defaultBgColor;
+         }
+
++        if (!ArcDesktopAppearance.isDesktopWindow(context)) {
++            ArcDesktopAppearance.clearSidebarRowState(view);
++        }
+         @Nullable Drawable bg = view.getBackground();
+         if (bg != null) {
              bg.mutate();
              ViewCompat.setBackgroundTintList(view, tintList);
-         }
++        }
 +        if (ArcDesktopAppearance.isDesktopWindow(context)) {
 +            ArcDesktopAppearance.applySidebarRowState(view, isSelected, isMultiSelected,
 +                    isIncognito, view.isHovered() || view.hasFocus());
 +        } else {
 +            ArcDesktopAppearance.clearSidebarRowState(view);
-+        }
+         }
          updateFaviconImage(model, view);
          updateTabAlertIndicatorTint(model, view);
-         setupTabHoverListener(model, view, /* defaultBackgroundColor= */ tintList);
-@@ -537,6 +614,10 @@
+@@ -537,6 +617,10 @@
                                          .getColor(R.color.gm3_baseline_surface_container_high_dark))
                          : null;
          updateSelectionAndBackground(model, view, defaultBackgroundColor);
@@ -566,7 +573,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
      }
 
      /**
-@@ -612,6 +693,9 @@
+@@ -612,6 +696,9 @@
 
          int width = isRailCollapsed ? getCollapsedTabItemWidth(context) : expandedWidth;
          int height = usesCollapsedPositioning ? getCollapsedTabItemHeight(context) : expandedHeight;
@@ -576,7 +583,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
 
          if (params.width != width || params.height != height) {
              params.width = width;
-@@ -639,14 +723,61 @@
+@@ -639,14 +726,61 @@
      private static void updateTitle(int titleViewId, PropertyModel model, ViewGroup view) {
          TextView titleView = view.findViewById(titleViewId);
          if (titleView == null) return;
@@ -644,7 +651,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
      }
 
      /**
-@@ -655,6 +786,12 @@
+@@ -655,6 +789,12 @@
       * {@code "<Title> [ - Gemini is working...], [Pinned] [Media] Tab"}.
       */
      private static void updateContentDescription(PropertyModel model, View view) {
@@ -657,7 +664,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          Context context = view.getContext();
          @Nullable TextResolver contentDescriptionTextResolver =
                  model.get(TabProperties.CONTENT_DESCRIPTION_TEXT_RESOLVER);
-@@ -825,6 +962,14 @@
+@@ -825,6 +965,14 @@
       */
      private static ColorStateList getBackgroundTintList(
              Context context, boolean isSelected, boolean isMultiSelected, boolean isIncognito) {
@@ -672,7 +679,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          if (!isSelected && !isMultiSelected) {
              return ColorStateList.valueOf(Color.TRANSPARENT);
          }
-@@ -850,6 +995,11 @@
+@@ -850,6 +998,11 @@
       */
      private static @ColorInt int getTextColor(
              Context context, boolean isSelected, boolean isIncognito) {
@@ -684,7 +691,7 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          if (isSelected) {
              return isIncognito
                      ? context.getColor(R.color.default_text_color_light)
-@@ -871,6 +1021,9 @@
+@@ -871,6 +1024,9 @@
       */
      private static ColorStateList getActionButtonTintList(
              Context context, boolean isSelected, boolean isIncognito) {
@@ -694,19 +701,22 @@ diff --git a/chrome/android/features/tab_ui/java/src/org/chromium/chrome/browser
          if (isIncognito) {
              return isSelected
                      ? ChromeColors.getPrimaryIconTint(context, /* isIncognito= */ true)
-@@ -891,6 +1044,11 @@
+@@ -891,7 +1047,13 @@
              @Nullable ColorStateList defaultBackgroundColor) {
          boolean isSelected = model.get(TabProperties.IS_SELECTED);
          boolean isMultiSelected = model.get(TabProperties.IS_MULTI_SELECTED);
+-
 +        if (ArcDesktopAppearance.isDesktopWindow(view.getContext())) {
 +            ArcDesktopAppearance.applySidebarRowState(view, isSelected, isMultiSelected,
 +                    isIncognito(model), isHovered);
 +            return;
 +        }
-
++
++        ArcDesktopAppearance.clearSidebarRowState(view);
          @Nullable Drawable bg = view.getBackground();
          if (bg != null) {
-@@ -994,6 +1152,7 @@
+             bg.mutate();
+@@ -994,6 +1156,7 @@
      /** See {@link VerticalTabRailCollapseController#shouldShowIconOnly}. */
      private static boolean shouldShowIconOnly(PropertyModel model, View view) {
          return VerticalTabRailCollapseController.shouldShowIconOnly(
@@ -6698,20 +6708,24 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
 diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java
 --- a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java
 +++ b/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/browser/omnibox/LocationBarTablet.java
-@@ -10,6 +10,7 @@
+@@ -9,7 +9,9 @@
+ import android.annotation.SuppressLint;
  import android.content.Context;
  import android.content.res.Resources;
++import android.content.res.ColorStateList;
  import android.graphics.Rect;
 +import android.graphics.drawable.Drawable;
  import android.graphics.drawable.GradientDrawable;
  import android.graphics.drawable.LayerDrawable;
  import android.os.Handler;
-@@ -112,6 +113,49 @@
+@@ -112,6 +114,51 @@
      private int mTargetPopoverLeftOffset;
      private @BrandedColorScheme int mBrandedColorScheme = BrandedColorScheme.APP_DEFAULT;
      private boolean mShowFocusRing;
 +    private boolean mArcTopBar;
 +    private @Nullable Integer mArcSurfaceColor;
++    private @Nullable ColorStateList mArcNativeHintColors;
++    private @Nullable ColorStateList mArcAppliedHintColors;
 +    private @Nullable Drawable mArcGlassBackground;
 +    private @Nullable Drawable mArcGlassLayers;
 +
@@ -6756,7 +6770,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
      private boolean mIsHovered;
      private boolean mIsGlifActive;
      private boolean mStartGlifOnNextLayout;
-@@ -178,7 +222,7 @@
+@@ -178,7 +225,7 @@
      @Override
      protected void onFinishInflate() {
          super.onFinishInflate();
@@ -6765,7 +6779,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
 
          mLocationBarIcon = findViewById(R.id.location_bar_status_icon);
          mBookmarkButton = findViewById(R.id.bookmark_button);
-@@ -512,28 +556,70 @@
+@@ -512,28 +559,102 @@
          if (mLayoutMode == FuseboxLayoutMode.SUGGESTIONS_POPOVER) {
              @ColorInt
              int popoverColor =
@@ -6789,6 +6803,38 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
          }
 
          updateBackgroundColor();
++        updateArcHintContrast();
++    }
++
++    /** Style only the desktop placeholder; native URL spans, selection and editor metrics remain owned. */
++    private void updateArcHintContrast() {
++        if (mUrlBar == null || getArcCommandResults() != null) return;
++        ColorStateList current = mUrlBar.getHintTextColors();
++        if (mArcSurfaceColor == null) {
++            if (mArcNativeHintColors != null && current == mArcAppliedHintColors) {
++                mUrlBar.setHintTextColor(mArcNativeHintColors);
++            }
++            mArcNativeHintColors = null; mArcAppliedHintColors = null;
++            return;
++        }
++        if (current != mArcAppliedHintColors) mArcNativeHintColors = current;
++        int surface = mArcSurfaceColor;
++        double luminance = android.graphics.Color.luminance(surface);
++        int foreground = luminance >= .179 ? 0 : 255;
++        int hint = 0xff000000;
++        for (int shift = 0; shift <= 16; shift += 8) {
++            int channel = (surface >> shift) & 255;
++            hint |= Math.round(foreground * .78f + channel * .22f) << shift;
++        }
++        double hintLuminance = android.graphics.Color.luminance(hint);
++        if ((Math.max(luminance, hintLuminance) + .05)
++                / (Math.min(luminance, hintLuminance) + .05) < 4.5) {
++            hint = foreground == 0 ? android.graphics.Color.BLACK : android.graphics.Color.WHITE;
++        }
++        if (mArcAppliedHintColors == null || mArcAppliedHintColors.getDefaultColor() != hint) {
++            mArcAppliedHintColors = ColorStateList.valueOf(hint);
++        }
++        mUrlBar.setHintTextColor(mArcAppliedHintColors);
 +    }
 +
 +    /** Keep native focus/hover drawables while sharing the Arc window palette. */
@@ -6844,7 +6890,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
              @ColorInt
              int standbyBorderColor =
                      OmniboxResourceProvider.getColorPrimary(context, mBrandedColorScheme);
-@@ -547,8 +633,21 @@
+@@ -547,8 +668,21 @@
                              color,
                              mBrandedColorScheme == BrandedColorScheme.INCOGNITO,
                              /* isCustomTab= */ false);
@@ -6868,7 +6914,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
      }
 
      @Override
-@@ -607,6 +706,7 @@
+@@ -607,6 +741,7 @@
              mGlifBorderDrawable.setCornerRadius(mOmniboxSuggestionDropdownRoundCornerRadius);
              updateLayoutAndBackground();
          }
@@ -6876,7 +6922,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
      }
 
      @Override
-@@ -649,6 +749,8 @@
+@@ -649,6 +784,8 @@
              mGlifForegroundTarget.setForeground(null);
              mGlifForegroundTarget = null;
          }
@@ -6885,7 +6931,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
 
          if (mLayoutMode == FuseboxLayoutMode.SUGGESTIONS_POPOVER
                  && (mUrlCoordinator == null || !mUrlCoordinator.hasFocus())) {
-@@ -676,7 +778,7 @@
+@@ -676,7 +813,7 @@
                  mGlifBorderDrawable.reset();
              }
 
@@ -6894,7 +6940,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
                      && (mLayoutMode != FuseboxLayoutMode.SUGGESTIONS_POPOVER
                              || !mUrlCoordinator.hasFocus())) {
                  setForeground(mHoverDrawable);
-@@ -709,12 +811,35 @@
+@@ -709,12 +846,35 @@
                              + (mHolder == null ? null : mHolder.getLayoutParams());
              return;
          }
@@ -6932,7 +6978,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
          boolean isPopoverMode = mLayoutMode == FuseboxLayoutMode.SUGGESTIONS_POPOVER;
          boolean isFuseboxActive =
                  (mFuseboxState == FuseboxState.COMPACT || mFuseboxState == FuseboxState.EXPANDED);
-@@ -727,9 +852,13 @@
+@@ -727,9 +887,13 @@
              int additionalWidth =
                      isPopoverMode ? mPopoverAdditionalWidth : mLocationBarTabletFuseboxPopupInset;
              // Determine available headroom above toolbar (stored in mPositionArray[1]).
@@ -6949,7 +6995,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
                  availableTopHeadroomPx = Math.max(0, mPositionArray[1]);
              }
              int topMarginExpansion = Math.min(expansionPx, availableTopHeadroomPx);
-@@ -766,7 +895,7 @@
+@@ -766,7 +930,7 @@
              ViewUtils.setAncestorsShouldClipChildren(this, true, View.NO_ID);
              // Reset our background to reflect non-zero suggestion count, which is the typical
              // state. Not setting this risks visual glitches when returning to the fusebox.
@@ -6958,7 +7004,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
          }
 
          // Put the focused foreground back into its starting state before swapping it out;
-@@ -845,18 +974,44 @@
+@@ -845,18 +1009,44 @@
          }
      }
 
@@ -7008,7 +7054,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
          int unexpandedWidth =
                  mHolder.getMeasuredWidth() + layoutParams.leftMargin + layoutParams.rightMargin;
          int unexpandedLeft = mPositionArray[0] - layoutParams.leftMargin;
-@@ -996,9 +1151,8 @@
+@@ -996,9 +1186,8 @@
       * falling back to the window width before the container has been laid out.
       */
      private @Px int getAvailableContainerWidth() {
@@ -10894,7 +10940,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollecti
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java
-@@ -0,0 +1,610 @@
+@@ -0,0 +1,619 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -10949,8 +10995,10 @@ new file mode 100644
 +    private final BoundedScrollView mScroll;
 +    private final BoundedScrollView mFavoritesScroll;
 +    private int mCollectionHeight = -1;
-+    private android.graphics.drawable.Drawable mPinGlyph, mFavoriteGlyph, mFavoriteFilledGlyph;
++    private android.graphics.drawable.Drawable mPinGlyph, mFavoriteGlyph, mFavoriteFilledGlyph, mSpaceChevron;
 +    private void updateGlyphs() {
++        mSpaceChevron = new ArcDesktopIcons(ArcDesktopIcons.Kind.CHEVRON_DOWN, mForeground);
++        mSpaceChevron.setBounds(0, 0, dp(16), dp(16));
 +        mPinGlyph = new ArcDesktopIcons(ArcDesktopIcons.Kind.PIN, mForeground);
 +        mFavoriteGlyph = new ArcDesktopIcons(ArcDesktopIcons.Kind.FAVORITE, mForeground);
 +        mFavoriteFilledGlyph = new ArcDesktopIcons(ArcDesktopIcons.Kind.FAVORITE_FILLED, mForeground);
@@ -11019,7 +11067,13 @@ new file mode 100644
 +        mSpace.setTag("arc-current-space");
 +        mSpace.setAccessibilityHeading(true);
 +        mSpace.setContentDescription(activity.getString(R.string.arc_spaces));
-+        addView(mSpace, new LayoutParams(-1, dp(44)));
++        mSpace.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
++        mSpace.setPadding(dp(10), 0, dp(10), 0);
++        mSpace.setCompoundDrawablePadding(dp(8));
++        mSpace.setCompoundDrawablesRelative(null, null, mSpaceChevron, null);
++        LayoutParams spaceParams = new LayoutParams(-1, dp(44));
++        spaceParams.topMargin = dp(4); spaceParams.bottomMargin = dp(2);
++        addView(mSpace, spaceParams);
 +        mEntries = new LinearLayout(activity);
 +        mEntries.setOrientation(VERTICAL);
 +        mEntries.setContentDescription(activity.getString(R.string.arc_pinned_tabs));
@@ -11148,7 +11202,7 @@ new file mode 100644
 +        if (mCollectionHeight < 0) return;
 +        // Allocate whole 50dp tiles plus their 3dp top/bottom margins. The previous
 +        // half-budget (at most 96dp) exposed only part of a second grid row.
-+        int rows = Math.max(0, mCollectionHeight - dp(88) - getPaddingTop() - getPaddingBottom());
++        int rows = Math.max(0, mCollectionHeight - dp(94) - getPaddingTop() - getPaddingBottom());
 +        int slot = dp(56);
 +        int count = mFavorites.getChildCount();
 +        int wantedRows = columns < 2 ? 0 : (count + columns - 1) / columns;
@@ -11165,6 +11219,7 @@ new file mode 100644
 +        mSurface = surface;
 +        if (mForeground != foreground) { mForeground = foreground; updateGlyphs(); }
 +        mFavoritesMenu.setCompoundDrawablesRelative(mFavoriteGlyph, null, null, null);
++        mSpace.setCompoundDrawablesRelative(null, null, mSpaceChevron, null);
 +        mInteraction = interaction;
 +        applyAppearance(this);
 +    }
@@ -11291,7 +11346,7 @@ new file mode 100644
 +        }
 +        for (ArcSidebarState.Space space : state.spaces()) {
 +            if (space.id.equals(state.selectedSpace())) {
-+                mSpace.setText(space.name + "  ▾");
++                mSpace.setText(space.name);
 +                mSpace.setSelected(true);
 +                String description = mActivity.getString(R.string.arc_current_space, space.name);
 +                mSpace.setContentDescription(description);
@@ -12456,7 +12511,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopC
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
-@@ -0,0 +1,1741 @@
+@@ -0,0 +1,1785 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -12535,17 +12590,19 @@ new file mode 100644
 +    private final ViewGroup mMenuButtonOriginalParent;
 +    private final int mMenuButtonOriginalIndex;
 +    private final ViewGroup.LayoutParams mMenuButtonOriginalLayoutParams;
++    private final int mMenuButtonOriginalMinimumWidth;
 +    private View mExtensionsToolbarHost;
 +    private ViewGroup mExtensionsToolbarOriginalParent;
 +    private int mExtensionsToolbarOriginalIndex;
 +    private ViewGroup.LayoutParams mExtensionsToolbarOriginalLayoutParams;
-+    private int mExtensionsToolbarOriginalVisibility;
 +    private final View mCollapseButton;
 +    private final ViewGroup mCollapseButtonOriginalParent;
 +    private final int mCollapseButtonOriginalIndex;
 +    private final ViewGroup.LayoutParams mCollapseButtonOriginalLayoutParams;
 +    private final LinearLayout mHeaderActions;
 +    private final LinearLayout mFooter;
++    private final LinearLayout mBrowserControlsRow;
++    private final LinearLayout mExtensionsRow;
 +    private final ImageButton mAppearanceButton;
 +    private final ImageButton mCameraButton;
 +    private final ArcCompactOmnibox mCompactOmnibox;
@@ -12820,18 +12877,17 @@ new file mode 100644
 +        mMenuButtonOriginalParent = (ViewGroup) mMenuButtonWrapper.getParent();
 +        mMenuButtonOriginalIndex = mMenuButtonOriginalParent.indexOfChild(mMenuButtonWrapper);
 +        mMenuButtonOriginalLayoutParams = mMenuButtonWrapper.getLayoutParams();
++        mMenuButtonOriginalMinimumWidth = mMenuButtonWrapper.getMinimumWidth();
 +        mExtensionsToolbarHost = extensionsToolbarHost;
 +        if (mExtensionsToolbarHost != null) {
 +            mExtensionsToolbarOriginalParent = (ViewGroup) mExtensionsToolbarHost.getParent();
 +            mExtensionsToolbarOriginalIndex =
 +                    mExtensionsToolbarOriginalParent.indexOfChild(mExtensionsToolbarHost);
 +            mExtensionsToolbarOriginalLayoutParams = mExtensionsToolbarHost.getLayoutParams();
-+            mExtensionsToolbarOriginalVisibility = mExtensionsToolbarHost.getVisibility();
 +        } else {
 +            mExtensionsToolbarOriginalParent = null;
 +            mExtensionsToolbarOriginalIndex = -1;
 +            mExtensionsToolbarOriginalLayoutParams = null;
-+            mExtensionsToolbarOriginalVisibility = View.GONE;
 +        }
 +        mCollapseButton = collapseButton;
 +        mCollapseButtonOriginalParent = (ViewGroup) mCollapseButton.getParent();
@@ -12974,25 +13030,25 @@ new file mode 100644
 +        mColumn.addView(mNewTabRow, new LinearLayout.LayoutParams(-1, dp(44)));
 +
 +        mFooter = new LinearLayout(activity);
++        mFooter.setOrientation(LinearLayout.VERTICAL);
++        mBrowserControlsRow = new LinearLayout(activity);
++        mExtensionsRow = new LinearLayout(activity);
++        mFooter.addView(mBrowserControlsRow, new LinearLayout.LayoutParams(-1, -2));
++        mFooter.addView(mExtensionsRow, new LinearLayout.LayoutParams(
++                -1, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
++        mExtensionsRow.setVisibility(View.GONE);
 +        // VerticalTabRailLayout already owns Chromium's real new-tab button and handler.
 +        // The deprecated password/Autofill shortcut is omitted from the Arc footer.
 +        // Preserve Chromium's native app menu and extension actions after ToolbarTablet itself is
 +        // removed from layout. These Views retain their existing coordinators/listeners; Arc only
 +        // changes their parent. The extension container is optional when ExtensionUi is disabled.
 +        mMenuButtonOriginalParent.removeView(mMenuButtonWrapper);
-+        mFooter.addView(
-+                mMenuButtonWrapper,
-+                new LinearLayout.LayoutParams(
-+                        ViewGroup.LayoutParams.WRAP_CONTENT,
-+                        dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
-+        if (mExtensionsToolbarHost != null) {
-+            mExtensionsToolbarOriginalParent.removeView(mExtensionsToolbarHost);
-+            mFooter.addView(
-+                    mExtensionsToolbarHost,
-+                    new LinearLayout.LayoutParams(
-+                            ViewGroup.LayoutParams.WRAP_CONTENT,
-+                            dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
-+        }
++        mMenuButtonWrapper.setMinimumWidth(Math.max(mMenuButtonOriginalMinimumWidth,
++                dp(ArcDesktopPolicy.ARC_NAV_BUTTON_WIDTH_DP)));
++        mBrowserControlsRow.addView(mMenuButtonWrapper, new LinearLayout.LayoutParams(
++                ViewGroup.LayoutParams.WRAP_CONTENT,
++                dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
++        attachExtensionsToolbarToArc();
 +        mCameraButton = new ImageButton(activity);
 +        mCameraButton.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
 +        mCameraButton.setImageDrawable(new ArcDesktopIcons(ArcDesktopIcons.Kind.CAMERA_ORIENTATION, Color.BLACK));
@@ -13007,7 +13063,7 @@ new file mode 100644
 +                ArcCameraControls.show(view, tab.getWebContents());
 +            }
 +        });
-+        mFooter.addView(mCameraButton, new LinearLayout.LayoutParams(dp(44), dp(44)));
++        mBrowserControlsRow.addView(mCameraButton, new LinearLayout.LayoutParams(dp(44), dp(44)));
 +        mColumn.addView(mFooter);
 +        ImageButton about = new ImageButton(activity);
 +        about.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
@@ -13021,8 +13077,8 @@ new file mode 100644
 +            mAboutDialog = ArcAboutDialog.show(activity, activity.getString(R.string.arc_about),
 +                    activity.getString(R.string.arc_version));
 +        });
-+        mFooter.addView(about, new LinearLayout.LayoutParams(dp(44), dp(44)));
-+        mFooter.addView(appearanceButton, new LinearLayout.LayoutParams(dp(44), dp(44)));
++        mBrowserControlsRow.addView(about, new LinearLayout.LayoutParams(dp(44), dp(44)));
++        mBrowserControlsRow.addView(appearanceButton, new LinearLayout.LayoutParams(dp(44), dp(44)));
 +        rail.addView(mColumn, new ViewGroup.LayoutParams(-1, -1));
 +
 +        mArcContentOutlineProvider =
@@ -13139,7 +13195,13 @@ new file mode 100644
 +            if (mDestroyed) return;
 +            ArcDesktopAppearance.applyUiFont(mColumn);
 +            if (mExtensionsToolbarHost == null
-+                    && mActivity.findViewById(R.id.extensions_toolbar_container) != null) scheduleAppearance();
++                    && mActivity.findViewById(R.id.extensions_toolbar_container) != null) {
++                scheduleAppearance();
++            } else if (mArcToolbarCompositionActive) {
++                boolean available = canExpandControls()
++                        && hasVisibleExtensionActions(mExtensionsToolbarHost);
++                if (available != (mExtensionsRow.getVisibility() == View.VISIBLE)) scheduleAppearance();
++            }
 +            View controls = mActivity.findViewById(R.id.control_container);
 +            if (controls != null) ArcDesktopAppearance.applyUiFont(controls);
 +        };
@@ -13633,12 +13695,78 @@ new file mode 100644
 +        mExtensionsToolbarOriginalParent = parent;
 +        mExtensionsToolbarOriginalIndex = parent.indexOfChild(host);
 +        mExtensionsToolbarOriginalLayoutParams = host.getLayoutParams();
-+        mExtensionsToolbarOriginalVisibility = host.getVisibility();
-+        if (mArcToolbarCompositionActive) {
-+            parent.removeView(host);
-+            mFooter.addView(host, 1, new LinearLayout.LayoutParams(
-+                    ViewGroup.LayoutParams.WRAP_CONTENT, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
++        if (mArcToolbarCompositionActive) attachExtensionsToolbarToArc();
++    }
++
++    private void attachExtensionsToolbarToArc() {
++        if (mExtensionsToolbarHost == null || mExtensionsToolbarHost.getParent() == mExtensionsRow) return;
++        if (mExtensionsToolbarHost.getParent() instanceof ViewGroup parent) {
++            parent.removeView(mExtensionsToolbarHost);
 +        }
++        mExtensionsRow.addView(mExtensionsToolbarHost, new LinearLayout.LayoutParams(
++                -1, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
++    }
++
++    /** Inspect native availability even while Arc's containing row is hidden. */
++    private static boolean hasVisibleExtensionActions(View view) {
++        if (view == null || view.getVisibility() != View.VISIBLE) return false;
++        if (view instanceof androidx.recyclerview.widget.RecyclerView list) {
++            // Hidden rows have no attached RecyclerView children yet. The native adapter remains
++            // the availability owner while layout is suspended by Arc's containing row.
++            androidx.recyclerview.widget.RecyclerView.Adapter<?> adapter = list.getAdapter();
++            return adapter != null && adapter.getItemCount() > 0;
++        }
++        if (view instanceof ViewGroup group) {
++            for (int i = 0; i < group.getChildCount(); i++) {
++                if (hasVisibleExtensionActions(group.getChildAt(i))) return true;
++            }
++            return false;
++        }
++        return true;
++    }
++
++    private boolean canExpandControls() {
++        float density = mActivity.getResources().getDisplayMetrics().density;
++        int usableWidth = Math.max(0, mRail.getWidth()
++                - mRail.getPaddingLeft() - mRail.getPaddingRight());
++        int menuWidth = Math.max(dp(ArcDesktopPolicy.ARC_NAV_BUTTON_WIDTH_DP),
++                mMenuButtonWrapper.getMeasuredWidth());
++        return ArcDesktopPolicy.showFullControls(mRail.getWidth(), mRail.getHeight(), density)
++                && usableWidth >= menuWidth + 3 * dp(ArcDesktopPolicy.ARC_NAV_BUTTON_WIDTH_DP);
++    }
++
++    private int compactFooterExtraHeightPx() {
++        int secondaryRows = 0;
++        for (int i = 1; i < mBrowserControlsRow.getChildCount(); i++) {
++            if (mBrowserControlsRow.getChildAt(i).getVisibility() != View.GONE) secondaryRows++;
++        }
++        return secondaryRows * dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP);
++    }
++
++    private void layoutFooter(boolean expanded) {
++        mFooter.setVisibility(View.VISIBLE);
++        mBrowserControlsRow.setOrientation(expanded ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
++        mBrowserControlsRow.setGravity(expanded ? Gravity.START : Gravity.CENTER_HORIZONTAL);
++        // A short window keeps the native menu while returning secondary action space to tabs.
++        boolean secondary = expanded || mRail.getHeight()
++                >= dp(ArcDesktopPolicy.ARC_FULL_CONTROLS_MIN_HEIGHT_DP);
++        for (int i = 1; i < mBrowserControlsRow.getChildCount(); i++) {
++            mBrowserControlsRow.getChildAt(i).setVisibility(secondary ? View.VISIBLE : View.GONE);
++        }
++        View toolbar = mActivity.findViewById(R.id.toolbar);
++        if (mExtensionsToolbarHost != null && toolbar instanceof ToolbarTablet tablet) {
++            // This row owns the full usable rail width; native width consumers decide its actions.
++            tablet.updateArcExtensionsWidth(expanded ? Math.max(0, mRail.getWidth()
++                    - mRail.getPaddingLeft() - mRail.getPaddingRight()) : 0);
++        }
++        boolean showExtensions = expanded && hasVisibleExtensionActions(mExtensionsToolbarHost);
++        LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) mExtensionsRow.getLayoutParams();
++        int gap = showExtensions ? dp(ArcDesktopPolicy.ARC_FOOTER_ROW_GAP_DP) : 0;
++        if (params.topMargin != gap) {
++            params.topMargin = gap;
++            mExtensionsRow.setLayoutParams(params);
++        }
++        mExtensionsRow.setVisibility(showExtensions ? View.VISIBLE : View.GONE);
 +    }
 +
 +    private void attachToolbarControlsToArc() {
@@ -13660,23 +13788,12 @@ new file mode 100644
 +        if (mMenuButtonWrapper.getParent() instanceof ViewGroup) {
 +            ((ViewGroup) mMenuButtonWrapper.getParent()).removeView(mMenuButtonWrapper);
 +        }
-+        mFooter.addView(
-+                mMenuButtonWrapper,
-+                new LinearLayout.LayoutParams(
-+                        ViewGroup.LayoutParams.WRAP_CONTENT,
-+                        dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
-+
-+        if (mExtensionsToolbarHost != null) {
-+            if (mExtensionsToolbarHost.getParent() instanceof ViewGroup) {
-+                ((ViewGroup) mExtensionsToolbarHost.getParent()).removeView(
-+                        mExtensionsToolbarHost);
-+            }
-+            mFooter.addView(
-+                    mExtensionsToolbarHost,
-+                    new LinearLayout.LayoutParams(
-+                            ViewGroup.LayoutParams.WRAP_CONTENT,
-+                            dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
-+        }
++        mMenuButtonWrapper.setMinimumWidth(Math.max(mMenuButtonOriginalMinimumWidth,
++                dp(ArcDesktopPolicy.ARC_NAV_BUTTON_WIDTH_DP)));
++        mBrowserControlsRow.addView(mMenuButtonWrapper, 0, new LinearLayout.LayoutParams(
++                ViewGroup.LayoutParams.WRAP_CONTENT,
++                dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
++        attachExtensionsToolbarToArc();
 +    }
 +
 +    private void setArcToolbarCompositionActive(boolean active) {
@@ -13748,14 +13865,14 @@ new file mode 100644
 +        float density = mActivity.getResources().getDisplayMetrics().density;
 +        int captionHeight = Math.max(mCaptionSpacer.getHeight(),
 +                Math.max(0, mCaptionSpacer.getLayoutParams().height));
++        boolean expanded = canExpandControls();
++        layoutFooter(expanded);
 +        int collectionBudget = ArcDesktopPolicy.collectionScrollBudgetPx(
-+                mRail.getHeight(), density, captionHeight);
-+        boolean expanded =
-+                ArcDesktopPolicy.showFullControls(
-+                        mRail.getWidth(),
-+                        mRail.getHeight(),
-+                        density);
-+        if (!expanded) collectionBudget = Math.max(0, collectionBudget - dp(44));
++                mRail.getHeight(), density, captionHeight,
++                mExtensionsRow.getVisibility() == View.VISIBLE);
++        if (!expanded) collectionBudget = Math.max(0,
++                collectionBudget - dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)
++                        - compactFooterExtraHeightPx());
 +        // Collection scrolling can run out of height while navigation still fits the wide rail.
 +        // Budget only the collection area; do not turn a wide sidebar into the compact layout.
 +        // Keep the real Chromium LocationBar visible even in collapsed mode so keyboard/focus
@@ -13778,25 +13895,6 @@ new file mode 100644
 +        mCompactOmnibox.setCompact(!expanded && !commandOpen
 +                && ArcDesktopAppearance.getAddressBarPosition(mActivity) == ArcDesktopAppearance.ADDRESS_SIDEBAR);
 +        updateNewTabRow(expanded);
-+        // The native app menu remains reachable while collapsed. Secondary footer actions can
-+        // disappear so the compact rail does not retain expanded hitboxes.
-+        mFooter.setVisibility(View.VISIBLE);
-+        mFooter.setOrientation(expanded ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
-+        mFooter.setGravity(expanded ? Gravity.START : Gravity.CENTER_HORIZONTAL);
-+        if (mExtensionsToolbarHost != null) {
-+            mExtensionsToolbarHost.setVisibility(expanded ? View.VISIBLE : View.GONE);
-+            View toolbar = mActivity.findViewById(R.id.toolbar);
-+            if (expanded && toolbar instanceof ToolbarTablet tablet) {
-+                // The native menu is not guaranteed to be 44dp (theme, padding and font scale).
-+                // Reserve its measured width, both Arc buttons and rail insets before allocating
-+                // extension icons. Its layout listener refreshes this budget after first measure.
-+                tablet.updateArcExtensionsWidth(Math.max(0, mRail.getWidth()
-+                        - mRail.getPaddingLeft() - mRail.getPaddingRight()
-+                        - Math.max(dp(ArcDesktopPolicy.ARC_NAV_BUTTON_WIDTH_DP),
-+                                mMenuButtonWrapper.getMeasuredWidth())
-+                        - 3 * dp(ArcDesktopPolicy.ARC_NAV_BUTTON_WIDTH_DP)));
-+            }
-+        }
 +        if (mCollectionsView != null) {
 +            mCollectionsView.setVisibility(View.VISIBLE);
 +            mCollectionsView.setCompact(!expanded || collectionBudget < dp(80));
@@ -14035,6 +14133,7 @@ new file mode 100644
 +                        mMenuButtonOriginalParent.getChildCount());
 +        mMenuButtonOriginalParent.addView(
 +                mMenuButtonWrapper, menuIndex, mMenuButtonOriginalLayoutParams);
++        mMenuButtonWrapper.setMinimumWidth(mMenuButtonOriginalMinimumWidth);
 +
 +        if (mExtensionsToolbarHost != null && mExtensionsToolbarOriginalParent != null) {
 +            if (mExtensionsToolbarHost.getParent() instanceof ViewGroup) {
@@ -14048,7 +14147,7 @@ new file mode 100644
 +                    mExtensionsToolbarHost,
 +                    extensionIndex,
 +                    mExtensionsToolbarOriginalLayoutParams);
-+            mExtensionsToolbarHost.setVisibility(mExtensionsToolbarOriginalVisibility);
++            // Arc hides only its containing row. Preserve the coordinator's latest visibility.
 +        }
 +    }
 +
@@ -14202,7 +14301,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopI
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopIcons.java
-@@ -0,0 +1,73 @@
+@@ -0,0 +1,75 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -14217,7 +14316,7 @@ new file mode 100644
 +
 +/** Small shared vector glyphs. Geometry is in a 24-unit optical box, independent of density. */
 +public final class ArcDesktopIcons extends Drawable {
-+    public enum Kind { PIN, FAVORITE, FAVORITE_FILLED, CAMERA_ORIENTATION, INFO, PALETTE }
++    public enum Kind { PIN, FAVORITE, FAVORITE_FILLED, CAMERA_ORIENTATION, INFO, PALETTE, CHEVRON_DOWN }
 +    private final Kind mKind;
 +    private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
 +    private final Path mPath = new Path();
@@ -14254,6 +14353,8 @@ new file mode 100644
 +            for (float[] dot : new float[][] {{7, 10}, {10, 6.5f}, {15, 7}, {18, 10}}) {
 +                mPath.addCircle(dot[0], dot[1], .75f, Path.Direction.CW);
 +            }
++        } else if (kind == Kind.CHEVRON_DOWN) {
++            mPath.moveTo(6, 9); mPath.lineTo(12, 15); mPath.lineTo(18, 9);
 +        } else {
 +            mPath.addCircle(12, 12, 9, Path.Direction.CW);
 +            mPath.moveTo(12, 11); mPath.lineTo(12, 17);
@@ -18847,7 +18948,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCollect
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCollectionsFocusTest.java
-@@ -0,0 +1,411 @@
+@@ -0,0 +1,431 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -18942,6 +19043,26 @@ new file mode 100644
 +        assertTrue(row.performContextClick());verify(f.tabs,never()).close(anyInt());
 +    }
 +
++    @Test public void spaceHeadingKeepsNativeMenuAndCompactSingleLineHierarchy() {
++        Fixture f=new Fixture();f.view.setAppearance(0xffdccdf7,0xff28253b,0x227365d8);f.measure();
++        android.widget.Button space=f.view.findViewWithTag("arc-current-space");
++        float density=f.activity.getResources().getDisplayMetrics().density;
++        assertTrue(space.isAccessibilityHeading());
++        assertEquals(android.text.TextUtils.TruncateAt.END,space.getEllipsize());
++        assertEquals(1,space.getMaxLines());
++        assertFalse("Chevron is a vector, never part of the Space name",space.getText().toString().contains("▾"));
++        var arrow=space.getCompoundDrawablesRelative()[2];assertNotNull(arrow);
++        assertEquals(Math.round(16*density),arrow.getBounds().width());
++        assertEquals(Math.round(44*density),space.getMeasuredHeight());
++        var params=(android.widget.LinearLayout.LayoutParams)space.getLayoutParams();
++        assertEquals(Math.round(6*density),params.topMargin+params.bottomMargin);
++        assertTrue(space.performClick());
++        assertNotNull(org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu());
++        f.controller.createSpace("Long Space title for an end-ellipsized accessible heading");
++        f.view.refresh();f.measure();
++        assertNotNull(space.getTooltipText());assertEquals(1,space.getMaxLines());
++    }
++
 +    @Test
 +    public void pointerHoverDoesNotHideKeyboardFocus() {
 +        Fixture f=new Fixture();f.view.setAppearance(0xffeeeeee,0xff111111,0xff777777);
@@ -19021,7 +19142,7 @@ new file mode 100644
 +        for (int i = 0; i < 20; i++) f.controller.createFolder(null, "Folder " + i);
 +        f.view.refresh(); f.view.setCollectionHeight(240); f.measure();
 +        View scroll = (View) f.view.findViewWithTag("arc-new-folder:" + f.controller.state().selectedSpace()).getParent().getParent();
-+        int chrome = Math.round(88 * f.activity.getResources().getDisplayMetrics().density)
++        int chrome = Math.round(94 * f.activity.getResources().getDisplayMetrics().density)
 +                + f.view.getPaddingTop() + f.view.getPaddingBottom();
 +        assertEquals(Math.max(0, 240 - chrome), scroll.getMeasuredHeight());
 +        f.view.setCollectionHeight(100); f.measure();
@@ -27393,7 +27514,7 @@ diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrom
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopAppearance.java
-@@ -0,0 +1,386 @@
+@@ -0,0 +1,424 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -27566,12 +27687,17 @@ new file mode 100644
 +    private static final WeakHashMap<android.widget.ImageView, int[]> SIDEBAR_ICON_SIZE = new WeakHashMap<>();
 +    private static final WeakHashMap<android.view.View, int[]> SIDEBAR_ICON_CONTAINER_SIZE = new WeakHashMap<>();
 +
-+    /** Two sp above the native sidebar title; repeated binding never accumulates size. */
++    /** Retain the existing +2sp (pinned native TextMedium is 14sp); never stack an increase. */
 +    public static void styleSidebarTitle(android.widget.TextView text) {
 +        if (isDesktopWindow(text.getContext())) {
 +            Float original = SIDEBAR_TEXT_SP.get(text);
 +            if (original == null) {
-+                original = text.getTextSize() / text.getResources().getDisplayMetrics().scaledDensity;
++                android.util.DisplayMetrics metrics = text.getResources().getDisplayMetrics();
++                // Android 14+ scales fonts nonlinearly: scaledDensity is not the inverse of sp.
++                original = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
++                        ? android.util.TypedValue.deriveDimension(android.util.TypedValue.COMPLEX_UNIT_SP,
++                                text.getTextSize(), metrics)
++                        : text.getTextSize() / metrics.scaledDensity;
 +                SIDEBAR_TEXT_SP.put(text, original);
 +            }
 +            text.setTextSize(original + 2f);
@@ -27645,9 +27771,6 @@ new file mode 100644
 +                : android.graphics.Color.TRANSPARENT;
 +        int disabledFill = (fill & 0x00ffffff)
 +                | (Math.round(android.graphics.Color.alpha(fill) * .4f) << 24);
-+        row.setBackgroundTintList(new android.content.res.ColorStateList(
-+                new int[][] {{-android.R.attr.state_enabled}, {}},
-+                new int[] {disabledFill, fill}));
 +        SidebarRowOutline outline;
 +        if (row.getForeground() instanceof SidebarRowOutline existing) {
 +            outline = existing;
@@ -27655,6 +27778,9 @@ new file mode 100644
 +            outline = new SidebarRowOutline(row);
 +            row.setForeground(outline);
 +        }
++        row.setBackgroundTintList(new android.content.res.ColorStateList(
++                new int[][] {{-android.R.attr.state_enabled}, {}},
++                new int[] {disabledFill, fill}));
 +        outline.update(active, foreground(row.getContext(), incognito));
 +    }
 +
@@ -27662,7 +27788,7 @@ new file mode 100644
 +    public static void clearSidebarRowState(android.view.View row) {
 +        if (row.getForeground() instanceof SidebarRowOutline outline) {
 +            outline.dispose();
-+            row.setForeground(null);
++            row.setForeground(outline.originalForeground);
 +        }
 +    }
 +
@@ -27673,6 +27799,11 @@ new file mode 100644
 +        final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
 +        final android.graphics.RectF bounds = new android.graphics.RectF();
 +        android.graphics.drawable.GradientDrawable roundedShape;
++        final android.graphics.drawable.Drawable originalForeground;
++        final android.content.res.ColorStateList originalTint;
++        final float originalElevation;
++        final int originalAmbientShadowColor;
++        final int originalSpotShadowColor;
 +        float originalRadius;
 +        boolean active;
 +        boolean initialized;
@@ -27682,6 +27813,13 @@ new file mode 100644
 +
 +        SidebarRowOutline(android.view.View row) {
 +            this.row = row;
++            originalForeground = row.getForeground();
++            originalTint = row.getBackgroundTintList();
++            originalElevation = row.getElevation();
++            originalAmbientShadowColor = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
++                    ? row.getOutlineAmbientShadowColor() : 0;
++            originalSpotShadowColor = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
++                    ? row.getOutlineSpotShadowColor() : 0;
 +            paint.setStyle(android.graphics.Paint.Style.STROKE);
 +            paint.setStrokeWidth(1f);
 +            row.addOnAttachStateChangeListener(this);
@@ -27695,7 +27833,7 @@ new file mode 100644
 +            }
 +            if (shape instanceof android.graphics.drawable.GradientDrawable gradient) {
 +                float radius = gradient.getCornerRadius();
-+                float wanted = Math.max(radius, 11 * row.getResources().getDisplayMetrics().density);
++                float wanted = Math.max(radius, 12 * row.getResources().getDisplayMetrics().density);
 +                if (wanted != radius) {
 +                    roundedShape = (android.graphics.drawable.GradientDrawable) gradient.mutate();
 +                    originalRadius = radius;
@@ -27709,6 +27847,7 @@ new file mode 100644
 +            int target = active ? 64 : 0;
 +            boolean changed = this.active != active;
 +            this.active = active;
++            updateShadow();
 +            if (!initialized || !row.isAttachedToWindow()
 +                    || !android.animation.ValueAnimator.areAnimatorsEnabled()) {
 +                cancelAnimation();
@@ -27729,6 +27868,16 @@ new file mode 100644
 +            invalidateSelf();
 +        }
 +
++        void updateShadow() {
++            boolean selected = active && row.isEnabled();
++            row.setElevation(selected ? row.getResources().getDisplayMetrics().density
++                    : originalElevation);
++            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
++                row.setOutlineAmbientShadowColor(selected ? 0x18000000 : originalAmbientShadowColor);
++                row.setOutlineSpotShadowColor(selected ? 0x24000000 : originalSpotShadowColor);
++            }
++        }
++
 +        void cancelAnimation() {
 +            if (animator == null) return;
 +            animator.cancel();
@@ -27739,6 +27888,12 @@ new file mode 100644
 +        void dispose() {
 +            cancelAnimation();
 +            if (roundedShape != null) roundedShape.setCornerRadius(originalRadius);
++            row.setElevation(originalElevation);
++            row.setBackgroundTintList(originalTint);
++            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
++                row.setOutlineAmbientShadowColor(originalAmbientShadowColor);
++                row.setOutlineSpotShadowColor(originalSpotShadowColor);
++            }
 +            row.removeOnAttachStateChangeListener(this);
 +        }
 +
@@ -27750,7 +27905,11 @@ new file mode 100644
 +        }
 +
 +        @Override public boolean isStateful() { return true; }
-+        @Override protected boolean onStateChange(int[] state) { invalidateSelf(); return true; }
++        @Override protected boolean onStateChange(int[] state) {
++            updateShadow();
++            invalidateSelf();
++            return true;
++        }
 +        @Override public void draw(android.graphics.Canvas canvas) {
 +            boolean focused = row.hasFocus();
 +            for (int state : getState()) focused |= state == android.R.attr.state_focused;
@@ -27784,7 +27943,7 @@ diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrom
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java
-@@ -0,0 +1,144 @@
+@@ -0,0 +1,153 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -27806,6 +27965,7 @@ new file mode 100644
 +    public static final int ARC_WINDOW_RADIUS_DP = ARC_CONTENT_RADIUS_DP + ARC_FRAME_GAP_DP;
 +    public static final int ARC_NAV_ROW_HEIGHT_DP = 44;
 +    public static final int ARC_NAV_BUTTON_WIDTH_DP = 44;
++    public static final int ARC_FOOTER_ROW_GAP_DP = 4;
 +    public static final int ARC_LOCATION_BAR_SIDE_MARGIN_DP = 4;
 +    public static final int ARC_FULL_CONTROLS_MIN_WIDTH_DP = ARC_NAV_BUTTON_WIDTH_DP * 4;
 +    public static final int ARC_FULL_CONTROLS_MIN_HEIGHT_DP = 360;
@@ -27861,10 +28021,18 @@ new file mode 100644
 +
 +    /** Reserve caption, five control rows, collection chrome and native tab space. */
 +    public static int collectionScrollBudgetPx(int height, float density, int captionHeight) {
++        return collectionScrollBudgetPx(height, density, captionHeight, false);
++    }
++
++    /** Reserve the optional native extension row before assigning collection scroll space. */
++    public static int collectionScrollBudgetPx(
++            int height, float density, int captionHeight, boolean extensionsVisible) {
 +        if (!(density > 0f) || height <= 0) return 0;
 +        int reservedDp = 5 * ARC_NAV_ROW_HEIGHT_DP + 160 + 2 * ARC_OUTER_PADDING_DP + 112;
++        int extensionHeight = extensionsVisible ? Math.round(ARC_NAV_ROW_HEIGHT_DP * density)
++                + Math.round(ARC_FOOTER_ROW_GAP_DP * density) : 0;
 +        long remaining = (long) height - Math.round(reservedDp * density)
-+                - Math.max(0, captionHeight);
++                - Math.max(0, captionHeight) - extensionHeight;
 +        return (int) Math.min(Math.round(240 * density), Math.max(0L, remaining));
 +    }
 +

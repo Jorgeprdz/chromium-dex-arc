@@ -76,17 +76,19 @@ public final class ArcDesktopCoordinator {
     private final ViewGroup mMenuButtonOriginalParent;
     private final int mMenuButtonOriginalIndex;
     private final ViewGroup.LayoutParams mMenuButtonOriginalLayoutParams;
+    private final int mMenuButtonOriginalMinimumWidth;
     private View mExtensionsToolbarHost;
     private ViewGroup mExtensionsToolbarOriginalParent;
     private int mExtensionsToolbarOriginalIndex;
     private ViewGroup.LayoutParams mExtensionsToolbarOriginalLayoutParams;
-    private int mExtensionsToolbarOriginalVisibility;
     private final View mCollapseButton;
     private final ViewGroup mCollapseButtonOriginalParent;
     private final int mCollapseButtonOriginalIndex;
     private final ViewGroup.LayoutParams mCollapseButtonOriginalLayoutParams;
     private final LinearLayout mHeaderActions;
     private final LinearLayout mFooter;
+    private final LinearLayout mBrowserControlsRow;
+    private final LinearLayout mExtensionsRow;
     private final ImageButton mAppearanceButton;
     private final ImageButton mCameraButton;
     private final ArcCompactOmnibox mCompactOmnibox;
@@ -361,18 +363,17 @@ public final class ArcDesktopCoordinator {
         mMenuButtonOriginalParent = (ViewGroup) mMenuButtonWrapper.getParent();
         mMenuButtonOriginalIndex = mMenuButtonOriginalParent.indexOfChild(mMenuButtonWrapper);
         mMenuButtonOriginalLayoutParams = mMenuButtonWrapper.getLayoutParams();
+        mMenuButtonOriginalMinimumWidth = mMenuButtonWrapper.getMinimumWidth();
         mExtensionsToolbarHost = extensionsToolbarHost;
         if (mExtensionsToolbarHost != null) {
             mExtensionsToolbarOriginalParent = (ViewGroup) mExtensionsToolbarHost.getParent();
             mExtensionsToolbarOriginalIndex =
                     mExtensionsToolbarOriginalParent.indexOfChild(mExtensionsToolbarHost);
             mExtensionsToolbarOriginalLayoutParams = mExtensionsToolbarHost.getLayoutParams();
-            mExtensionsToolbarOriginalVisibility = mExtensionsToolbarHost.getVisibility();
         } else {
             mExtensionsToolbarOriginalParent = null;
             mExtensionsToolbarOriginalIndex = -1;
             mExtensionsToolbarOriginalLayoutParams = null;
-            mExtensionsToolbarOriginalVisibility = View.GONE;
         }
         mCollapseButton = collapseButton;
         mCollapseButtonOriginalParent = (ViewGroup) mCollapseButton.getParent();
@@ -515,25 +516,25 @@ public final class ArcDesktopCoordinator {
         mColumn.addView(mNewTabRow, new LinearLayout.LayoutParams(-1, dp(44)));
 
         mFooter = new LinearLayout(activity);
+        mFooter.setOrientation(LinearLayout.VERTICAL);
+        mBrowserControlsRow = new LinearLayout(activity);
+        mExtensionsRow = new LinearLayout(activity);
+        mFooter.addView(mBrowserControlsRow, new LinearLayout.LayoutParams(-1, -2));
+        mFooter.addView(mExtensionsRow, new LinearLayout.LayoutParams(
+                -1, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
+        mExtensionsRow.setVisibility(View.GONE);
         // VerticalTabRailLayout already owns Chromium's real new-tab button and handler.
         // The deprecated password/Autofill shortcut is omitted from the Arc footer.
         // Preserve Chromium's native app menu and extension actions after ToolbarTablet itself is
         // removed from layout. These Views retain their existing coordinators/listeners; Arc only
         // changes their parent. The extension container is optional when ExtensionUi is disabled.
         mMenuButtonOriginalParent.removeView(mMenuButtonWrapper);
-        mFooter.addView(
-                mMenuButtonWrapper,
-                new LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.WRAP_CONTENT,
-                        dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
-        if (mExtensionsToolbarHost != null) {
-            mExtensionsToolbarOriginalParent.removeView(mExtensionsToolbarHost);
-            mFooter.addView(
-                    mExtensionsToolbarHost,
-                    new LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.WRAP_CONTENT,
-                            dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
-        }
+        mMenuButtonWrapper.setMinimumWidth(Math.max(mMenuButtonOriginalMinimumWidth,
+                dp(ArcDesktopPolicy.ARC_NAV_BUTTON_WIDTH_DP)));
+        mBrowserControlsRow.addView(mMenuButtonWrapper, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
+        attachExtensionsToolbarToArc();
         mCameraButton = new ImageButton(activity);
         mCameraButton.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
         mCameraButton.setImageDrawable(new ArcDesktopIcons(ArcDesktopIcons.Kind.CAMERA_ORIENTATION, Color.BLACK));
@@ -548,7 +549,7 @@ public final class ArcDesktopCoordinator {
                 ArcCameraControls.show(view, tab.getWebContents());
             }
         });
-        mFooter.addView(mCameraButton, new LinearLayout.LayoutParams(dp(44), dp(44)));
+        mBrowserControlsRow.addView(mCameraButton, new LinearLayout.LayoutParams(dp(44), dp(44)));
         mColumn.addView(mFooter);
         ImageButton about = new ImageButton(activity);
         about.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
@@ -562,8 +563,8 @@ public final class ArcDesktopCoordinator {
             mAboutDialog = ArcAboutDialog.show(activity, activity.getString(R.string.arc_about),
                     activity.getString(R.string.arc_version));
         });
-        mFooter.addView(about, new LinearLayout.LayoutParams(dp(44), dp(44)));
-        mFooter.addView(appearanceButton, new LinearLayout.LayoutParams(dp(44), dp(44)));
+        mBrowserControlsRow.addView(about, new LinearLayout.LayoutParams(dp(44), dp(44)));
+        mBrowserControlsRow.addView(appearanceButton, new LinearLayout.LayoutParams(dp(44), dp(44)));
         rail.addView(mColumn, new ViewGroup.LayoutParams(-1, -1));
 
         mArcContentOutlineProvider =
@@ -680,7 +681,13 @@ public final class ArcDesktopCoordinator {
             if (mDestroyed) return;
             ArcDesktopAppearance.applyUiFont(mColumn);
             if (mExtensionsToolbarHost == null
-                    && mActivity.findViewById(R.id.extensions_toolbar_container) != null) scheduleAppearance();
+                    && mActivity.findViewById(R.id.extensions_toolbar_container) != null) {
+                scheduleAppearance();
+            } else if (mArcToolbarCompositionActive) {
+                boolean available = canExpandControls()
+                        && hasVisibleExtensionActions(mExtensionsToolbarHost);
+                if (available != (mExtensionsRow.getVisibility() == View.VISIBLE)) scheduleAppearance();
+            }
             View controls = mActivity.findViewById(R.id.control_container);
             if (controls != null) ArcDesktopAppearance.applyUiFont(controls);
         };
@@ -1174,12 +1181,78 @@ public final class ArcDesktopCoordinator {
         mExtensionsToolbarOriginalParent = parent;
         mExtensionsToolbarOriginalIndex = parent.indexOfChild(host);
         mExtensionsToolbarOriginalLayoutParams = host.getLayoutParams();
-        mExtensionsToolbarOriginalVisibility = host.getVisibility();
-        if (mArcToolbarCompositionActive) {
-            parent.removeView(host);
-            mFooter.addView(host, 1, new LinearLayout.LayoutParams(
-                    ViewGroup.LayoutParams.WRAP_CONTENT, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
+        if (mArcToolbarCompositionActive) attachExtensionsToolbarToArc();
+    }
+
+    private void attachExtensionsToolbarToArc() {
+        if (mExtensionsToolbarHost == null || mExtensionsToolbarHost.getParent() == mExtensionsRow) return;
+        if (mExtensionsToolbarHost.getParent() instanceof ViewGroup parent) {
+            parent.removeView(mExtensionsToolbarHost);
         }
+        mExtensionsRow.addView(mExtensionsToolbarHost, new LinearLayout.LayoutParams(
+                -1, dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
+    }
+
+    /** Inspect native availability even while Arc's containing row is hidden. */
+    private static boolean hasVisibleExtensionActions(View view) {
+        if (view == null || view.getVisibility() != View.VISIBLE) return false;
+        if (view instanceof androidx.recyclerview.widget.RecyclerView list) {
+            // Hidden rows have no attached RecyclerView children yet. The native adapter remains
+            // the availability owner while layout is suspended by Arc's containing row.
+            androidx.recyclerview.widget.RecyclerView.Adapter<?> adapter = list.getAdapter();
+            return adapter != null && adapter.getItemCount() > 0;
+        }
+        if (view instanceof ViewGroup group) {
+            for (int i = 0; i < group.getChildCount(); i++) {
+                if (hasVisibleExtensionActions(group.getChildAt(i))) return true;
+            }
+            return false;
+        }
+        return true;
+    }
+
+    private boolean canExpandControls() {
+        float density = mActivity.getResources().getDisplayMetrics().density;
+        int usableWidth = Math.max(0, mRail.getWidth()
+                - mRail.getPaddingLeft() - mRail.getPaddingRight());
+        int menuWidth = Math.max(dp(ArcDesktopPolicy.ARC_NAV_BUTTON_WIDTH_DP),
+                mMenuButtonWrapper.getMeasuredWidth());
+        return ArcDesktopPolicy.showFullControls(mRail.getWidth(), mRail.getHeight(), density)
+                && usableWidth >= menuWidth + 3 * dp(ArcDesktopPolicy.ARC_NAV_BUTTON_WIDTH_DP);
+    }
+
+    private int compactFooterExtraHeightPx() {
+        int secondaryRows = 0;
+        for (int i = 1; i < mBrowserControlsRow.getChildCount(); i++) {
+            if (mBrowserControlsRow.getChildAt(i).getVisibility() != View.GONE) secondaryRows++;
+        }
+        return secondaryRows * dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP);
+    }
+
+    private void layoutFooter(boolean expanded) {
+        mFooter.setVisibility(View.VISIBLE);
+        mBrowserControlsRow.setOrientation(expanded ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
+        mBrowserControlsRow.setGravity(expanded ? Gravity.START : Gravity.CENTER_HORIZONTAL);
+        // A short window keeps the native menu while returning secondary action space to tabs.
+        boolean secondary = expanded || mRail.getHeight()
+                >= dp(ArcDesktopPolicy.ARC_FULL_CONTROLS_MIN_HEIGHT_DP);
+        for (int i = 1; i < mBrowserControlsRow.getChildCount(); i++) {
+            mBrowserControlsRow.getChildAt(i).setVisibility(secondary ? View.VISIBLE : View.GONE);
+        }
+        View toolbar = mActivity.findViewById(R.id.toolbar);
+        if (mExtensionsToolbarHost != null && toolbar instanceof ToolbarTablet tablet) {
+            // This row owns the full usable rail width; native width consumers decide its actions.
+            tablet.updateArcExtensionsWidth(expanded ? Math.max(0, mRail.getWidth()
+                    - mRail.getPaddingLeft() - mRail.getPaddingRight()) : 0);
+        }
+        boolean showExtensions = expanded && hasVisibleExtensionActions(mExtensionsToolbarHost);
+        LinearLayout.LayoutParams params = (LinearLayout.LayoutParams) mExtensionsRow.getLayoutParams();
+        int gap = showExtensions ? dp(ArcDesktopPolicy.ARC_FOOTER_ROW_GAP_DP) : 0;
+        if (params.topMargin != gap) {
+            params.topMargin = gap;
+            mExtensionsRow.setLayoutParams(params);
+        }
+        mExtensionsRow.setVisibility(showExtensions ? View.VISIBLE : View.GONE);
     }
 
     private void attachToolbarControlsToArc() {
@@ -1201,23 +1274,12 @@ public final class ArcDesktopCoordinator {
         if (mMenuButtonWrapper.getParent() instanceof ViewGroup) {
             ((ViewGroup) mMenuButtonWrapper.getParent()).removeView(mMenuButtonWrapper);
         }
-        mFooter.addView(
-                mMenuButtonWrapper,
-                new LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.WRAP_CONTENT,
-                        dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
-
-        if (mExtensionsToolbarHost != null) {
-            if (mExtensionsToolbarHost.getParent() instanceof ViewGroup) {
-                ((ViewGroup) mExtensionsToolbarHost.getParent()).removeView(
-                        mExtensionsToolbarHost);
-            }
-            mFooter.addView(
-                    mExtensionsToolbarHost,
-                    new LinearLayout.LayoutParams(
-                            ViewGroup.LayoutParams.WRAP_CONTENT,
-                            dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
-        }
+        mMenuButtonWrapper.setMinimumWidth(Math.max(mMenuButtonOriginalMinimumWidth,
+                dp(ArcDesktopPolicy.ARC_NAV_BUTTON_WIDTH_DP)));
+        mBrowserControlsRow.addView(mMenuButtonWrapper, 0, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
+        attachExtensionsToolbarToArc();
     }
 
     private void setArcToolbarCompositionActive(boolean active) {
@@ -1289,14 +1351,14 @@ public final class ArcDesktopCoordinator {
         float density = mActivity.getResources().getDisplayMetrics().density;
         int captionHeight = Math.max(mCaptionSpacer.getHeight(),
                 Math.max(0, mCaptionSpacer.getLayoutParams().height));
+        boolean expanded = canExpandControls();
+        layoutFooter(expanded);
         int collectionBudget = ArcDesktopPolicy.collectionScrollBudgetPx(
-                mRail.getHeight(), density, captionHeight);
-        boolean expanded =
-                ArcDesktopPolicy.showFullControls(
-                        mRail.getWidth(),
-                        mRail.getHeight(),
-                        density);
-        if (!expanded) collectionBudget = Math.max(0, collectionBudget - dp(44));
+                mRail.getHeight(), density, captionHeight,
+                mExtensionsRow.getVisibility() == View.VISIBLE);
+        if (!expanded) collectionBudget = Math.max(0,
+                collectionBudget - dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)
+                        - compactFooterExtraHeightPx());
         // Collection scrolling can run out of height while navigation still fits the wide rail.
         // Budget only the collection area; do not turn a wide sidebar into the compact layout.
         // Keep the real Chromium LocationBar visible even in collapsed mode so keyboard/focus
@@ -1319,25 +1381,6 @@ public final class ArcDesktopCoordinator {
         mCompactOmnibox.setCompact(!expanded && !commandOpen
                 && ArcDesktopAppearance.getAddressBarPosition(mActivity) == ArcDesktopAppearance.ADDRESS_SIDEBAR);
         updateNewTabRow(expanded);
-        // The native app menu remains reachable while collapsed. Secondary footer actions can
-        // disappear so the compact rail does not retain expanded hitboxes.
-        mFooter.setVisibility(View.VISIBLE);
-        mFooter.setOrientation(expanded ? LinearLayout.HORIZONTAL : LinearLayout.VERTICAL);
-        mFooter.setGravity(expanded ? Gravity.START : Gravity.CENTER_HORIZONTAL);
-        if (mExtensionsToolbarHost != null) {
-            mExtensionsToolbarHost.setVisibility(expanded ? View.VISIBLE : View.GONE);
-            View toolbar = mActivity.findViewById(R.id.toolbar);
-            if (expanded && toolbar instanceof ToolbarTablet tablet) {
-                // The native menu is not guaranteed to be 44dp (theme, padding and font scale).
-                // Reserve its measured width, both Arc buttons and rail insets before allocating
-                // extension icons. Its layout listener refreshes this budget after first measure.
-                tablet.updateArcExtensionsWidth(Math.max(0, mRail.getWidth()
-                        - mRail.getPaddingLeft() - mRail.getPaddingRight()
-                        - Math.max(dp(ArcDesktopPolicy.ARC_NAV_BUTTON_WIDTH_DP),
-                                mMenuButtonWrapper.getMeasuredWidth())
-                        - 3 * dp(ArcDesktopPolicy.ARC_NAV_BUTTON_WIDTH_DP)));
-            }
-        }
         if (mCollectionsView != null) {
             mCollectionsView.setVisibility(View.VISIBLE);
             mCollectionsView.setCompact(!expanded || collectionBudget < dp(80));
@@ -1576,6 +1619,7 @@ public final class ArcDesktopCoordinator {
                         mMenuButtonOriginalParent.getChildCount());
         mMenuButtonOriginalParent.addView(
                 mMenuButtonWrapper, menuIndex, mMenuButtonOriginalLayoutParams);
+        mMenuButtonWrapper.setMinimumWidth(mMenuButtonOriginalMinimumWidth);
 
         if (mExtensionsToolbarHost != null && mExtensionsToolbarOriginalParent != null) {
             if (mExtensionsToolbarHost.getParent() instanceof ViewGroup) {
@@ -1589,7 +1633,7 @@ public final class ArcDesktopCoordinator {
                     mExtensionsToolbarHost,
                     extensionIndex,
                     mExtensionsToolbarOriginalLayoutParams);
-            mExtensionsToolbarHost.setVisibility(mExtensionsToolbarOriginalVisibility);
+            // Arc hides only its containing row. Preserve the coordinator's latest visibility.
         }
     }
 

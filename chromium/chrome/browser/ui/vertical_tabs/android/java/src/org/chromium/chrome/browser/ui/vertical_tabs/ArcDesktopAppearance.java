@@ -170,12 +170,17 @@ public final class ArcDesktopAppearance {
     private static final WeakHashMap<android.widget.ImageView, int[]> SIDEBAR_ICON_SIZE = new WeakHashMap<>();
     private static final WeakHashMap<android.view.View, int[]> SIDEBAR_ICON_CONTAINER_SIZE = new WeakHashMap<>();
 
-    /** Two sp above the native sidebar title; repeated binding never accumulates size. */
+    /** Retain the existing +2sp (pinned native TextMedium is 14sp); never stack an increase. */
     public static void styleSidebarTitle(android.widget.TextView text) {
         if (isDesktopWindow(text.getContext())) {
             Float original = SIDEBAR_TEXT_SP.get(text);
             if (original == null) {
-                original = text.getTextSize() / text.getResources().getDisplayMetrics().scaledDensity;
+                android.util.DisplayMetrics metrics = text.getResources().getDisplayMetrics();
+                // Android 14+ scales fonts nonlinearly: scaledDensity is not the inverse of sp.
+                original = Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE
+                        ? android.util.TypedValue.deriveDimension(android.util.TypedValue.COMPLEX_UNIT_SP,
+                                text.getTextSize(), metrics)
+                        : text.getTextSize() / metrics.scaledDensity;
                 SIDEBAR_TEXT_SP.put(text, original);
             }
             text.setTextSize(original + 2f);
@@ -249,9 +254,6 @@ public final class ArcDesktopAppearance {
                 : android.graphics.Color.TRANSPARENT;
         int disabledFill = (fill & 0x00ffffff)
                 | (Math.round(android.graphics.Color.alpha(fill) * .4f) << 24);
-        row.setBackgroundTintList(new android.content.res.ColorStateList(
-                new int[][] {{-android.R.attr.state_enabled}, {}},
-                new int[] {disabledFill, fill}));
         SidebarRowOutline outline;
         if (row.getForeground() instanceof SidebarRowOutline existing) {
             outline = existing;
@@ -259,6 +261,9 @@ public final class ArcDesktopAppearance {
             outline = new SidebarRowOutline(row);
             row.setForeground(outline);
         }
+        row.setBackgroundTintList(new android.content.res.ColorStateList(
+                new int[][] {{-android.R.attr.state_enabled}, {}},
+                new int[] {disabledFill, fill}));
         outline.update(active, foreground(row.getContext(), incognito));
     }
 
@@ -266,7 +271,7 @@ public final class ArcDesktopAppearance {
     public static void clearSidebarRowState(android.view.View row) {
         if (row.getForeground() instanceof SidebarRowOutline outline) {
             outline.dispose();
-            row.setForeground(null);
+            row.setForeground(outline.originalForeground);
         }
     }
 
@@ -277,6 +282,11 @@ public final class ArcDesktopAppearance {
         final android.graphics.Paint paint = new android.graphics.Paint(android.graphics.Paint.ANTI_ALIAS_FLAG);
         final android.graphics.RectF bounds = new android.graphics.RectF();
         android.graphics.drawable.GradientDrawable roundedShape;
+        final android.graphics.drawable.Drawable originalForeground;
+        final android.content.res.ColorStateList originalTint;
+        final float originalElevation;
+        final int originalAmbientShadowColor;
+        final int originalSpotShadowColor;
         float originalRadius;
         boolean active;
         boolean initialized;
@@ -286,6 +296,13 @@ public final class ArcDesktopAppearance {
 
         SidebarRowOutline(android.view.View row) {
             this.row = row;
+            originalForeground = row.getForeground();
+            originalTint = row.getBackgroundTintList();
+            originalElevation = row.getElevation();
+            originalAmbientShadowColor = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
+                    ? row.getOutlineAmbientShadowColor() : 0;
+            originalSpotShadowColor = Build.VERSION.SDK_INT >= Build.VERSION_CODES.P
+                    ? row.getOutlineSpotShadowColor() : 0;
             paint.setStyle(android.graphics.Paint.Style.STROKE);
             paint.setStrokeWidth(1f);
             row.addOnAttachStateChangeListener(this);
@@ -299,7 +316,7 @@ public final class ArcDesktopAppearance {
             }
             if (shape instanceof android.graphics.drawable.GradientDrawable gradient) {
                 float radius = gradient.getCornerRadius();
-                float wanted = Math.max(radius, 11 * row.getResources().getDisplayMetrics().density);
+                float wanted = Math.max(radius, 12 * row.getResources().getDisplayMetrics().density);
                 if (wanted != radius) {
                     roundedShape = (android.graphics.drawable.GradientDrawable) gradient.mutate();
                     originalRadius = radius;
@@ -313,6 +330,7 @@ public final class ArcDesktopAppearance {
             int target = active ? 64 : 0;
             boolean changed = this.active != active;
             this.active = active;
+            updateShadow();
             if (!initialized || !row.isAttachedToWindow()
                     || !android.animation.ValueAnimator.areAnimatorsEnabled()) {
                 cancelAnimation();
@@ -333,6 +351,16 @@ public final class ArcDesktopAppearance {
             invalidateSelf();
         }
 
+        void updateShadow() {
+            boolean selected = active && row.isEnabled();
+            row.setElevation(selected ? row.getResources().getDisplayMetrics().density
+                    : originalElevation);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                row.setOutlineAmbientShadowColor(selected ? 0x18000000 : originalAmbientShadowColor);
+                row.setOutlineSpotShadowColor(selected ? 0x24000000 : originalSpotShadowColor);
+            }
+        }
+
         void cancelAnimation() {
             if (animator == null) return;
             animator.cancel();
@@ -343,6 +371,12 @@ public final class ArcDesktopAppearance {
         void dispose() {
             cancelAnimation();
             if (roundedShape != null) roundedShape.setCornerRadius(originalRadius);
+            row.setElevation(originalElevation);
+            row.setBackgroundTintList(originalTint);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                row.setOutlineAmbientShadowColor(originalAmbientShadowColor);
+                row.setOutlineSpotShadowColor(originalSpotShadowColor);
+            }
             row.removeOnAttachStateChangeListener(this);
         }
 
@@ -354,7 +388,11 @@ public final class ArcDesktopAppearance {
         }
 
         @Override public boolean isStateful() { return true; }
-        @Override protected boolean onStateChange(int[] state) { invalidateSelf(); return true; }
+        @Override protected boolean onStateChange(int[] state) {
+            updateShadow();
+            invalidateSelf();
+            return true;
+        }
         @Override public void draw(android.graphics.Canvas canvas) {
             boolean focused = row.hasFocus();
             for (int state : getState()) focused |= state == android.R.attr.state_focused;

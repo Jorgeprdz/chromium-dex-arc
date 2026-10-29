@@ -9,6 +9,7 @@ import static org.chromium.build.NullUtil.assumeNonNull;
 import android.annotation.SuppressLint;
 import android.content.Context;
 import android.content.res.Resources;
+import android.content.res.ColorStateList;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
@@ -115,6 +116,8 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
     private boolean mShowFocusRing;
     private boolean mArcTopBar;
     private @Nullable Integer mArcSurfaceColor;
+    private @Nullable ColorStateList mArcNativeHintColors;
+    private @Nullable ColorStateList mArcAppliedHintColors;
     private @Nullable Drawable mArcGlassBackground;
     private @Nullable Drawable mArcGlassLayers;
 
@@ -570,6 +573,38 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
         }
 
         updateBackgroundColor();
+        updateArcHintContrast();
+    }
+
+    /** Style only the desktop placeholder; native URL spans, selection and editor metrics remain owned. */
+    private void updateArcHintContrast() {
+        if (mUrlBar == null || getArcCommandResults() != null) return;
+        ColorStateList current = mUrlBar.getHintTextColors();
+        if (mArcSurfaceColor == null) {
+            if (mArcNativeHintColors != null && current == mArcAppliedHintColors) {
+                mUrlBar.setHintTextColor(mArcNativeHintColors);
+            }
+            mArcNativeHintColors = null; mArcAppliedHintColors = null;
+            return;
+        }
+        if (current != mArcAppliedHintColors) mArcNativeHintColors = current;
+        int surface = mArcSurfaceColor;
+        double luminance = android.graphics.Color.luminance(surface);
+        int foreground = luminance >= .179 ? 0 : 255;
+        int hint = 0xff000000;
+        for (int shift = 0; shift <= 16; shift += 8) {
+            int channel = (surface >> shift) & 255;
+            hint |= Math.round(foreground * .78f + channel * .22f) << shift;
+        }
+        double hintLuminance = android.graphics.Color.luminance(hint);
+        if ((Math.max(luminance, hintLuminance) + .05)
+                / (Math.min(luminance, hintLuminance) + .05) < 4.5) {
+            hint = foreground == 0 ? android.graphics.Color.BLACK : android.graphics.Color.WHITE;
+        }
+        if (mArcAppliedHintColors == null || mArcAppliedHintColors.getDefaultColor() != hint) {
+            mArcAppliedHintColors = ColorStateList.valueOf(hint);
+        }
+        mUrlBar.setHintTextColor(mArcAppliedHintColors);
     }
 
     /** Keep native focus/hover drawables while sharing the Arc window palette. */

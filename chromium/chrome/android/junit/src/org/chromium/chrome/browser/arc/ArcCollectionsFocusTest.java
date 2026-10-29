@@ -92,6 +92,26 @@ public class ArcCollectionsFocusTest {
         assertTrue(row.performContextClick());verify(f.tabs,never()).close(anyInt());
     }
 
+    @Test public void spaceHeadingKeepsNativeMenuAndCompactSingleLineHierarchy() {
+        Fixture f=new Fixture();f.view.setAppearance(0xffdccdf7,0xff28253b,0x227365d8);f.measure();
+        android.widget.Button space=f.view.findViewWithTag("arc-current-space");
+        float density=f.activity.getResources().getDisplayMetrics().density;
+        assertTrue(space.isAccessibilityHeading());
+        assertEquals(android.text.TextUtils.TruncateAt.END,space.getEllipsize());
+        assertEquals(1,space.getMaxLines());
+        assertFalse("Chevron is a vector, never part of the Space name",space.getText().toString().contains("▾"));
+        var arrow=space.getCompoundDrawablesRelative()[2];assertNotNull(arrow);
+        assertEquals(Math.round(16*density),arrow.getBounds().width());
+        assertEquals(Math.round(44*density),space.getMeasuredHeight());
+        var params=(android.widget.LinearLayout.LayoutParams)space.getLayoutParams();
+        assertEquals(Math.round(6*density),params.topMargin+params.bottomMargin);
+        assertTrue(space.performClick());
+        assertNotNull(org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu());
+        f.controller.createSpace("Long Space title for an end-ellipsized accessible heading");
+        f.view.refresh();f.measure();
+        assertNotNull(space.getTooltipText());assertEquals(1,space.getMaxLines());
+    }
+
     @Test
     public void pointerHoverDoesNotHideKeyboardFocus() {
         Fixture f=new Fixture();f.view.setAppearance(0xffeeeeee,0xff111111,0xff777777);
@@ -171,7 +191,7 @@ public class ArcCollectionsFocusTest {
         for (int i = 0; i < 20; i++) f.controller.createFolder(null, "Folder " + i);
         f.view.refresh(); f.view.setCollectionHeight(240); f.measure();
         View scroll = (View) f.view.findViewWithTag("arc-new-folder:" + f.controller.state().selectedSpace()).getParent().getParent();
-        int chrome = Math.round(88 * f.activity.getResources().getDisplayMetrics().density)
+        int chrome = Math.round(94 * f.activity.getResources().getDisplayMetrics().density)
                 + f.view.getPaddingTop() + f.view.getPaddingBottom();
         assertEquals(Math.max(0, 240 - chrome), scroll.getMeasuredHeight());
         f.view.setCollectionHeight(100); f.measure();

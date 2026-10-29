@@ -52,8 +52,10 @@ public final class ArcCollectionsView extends LinearLayout {
     private final BoundedScrollView mScroll;
     private final BoundedScrollView mFavoritesScroll;
     private int mCollectionHeight = -1;
-    private android.graphics.drawable.Drawable mPinGlyph, mFavoriteGlyph, mFavoriteFilledGlyph;
+    private android.graphics.drawable.Drawable mPinGlyph, mFavoriteGlyph, mFavoriteFilledGlyph, mSpaceChevron;
     private void updateGlyphs() {
+        mSpaceChevron = new ArcDesktopIcons(ArcDesktopIcons.Kind.CHEVRON_DOWN, mForeground);
+        mSpaceChevron.setBounds(0, 0, dp(16), dp(16));
         mPinGlyph = new ArcDesktopIcons(ArcDesktopIcons.Kind.PIN, mForeground);
         mFavoriteGlyph = new ArcDesktopIcons(ArcDesktopIcons.Kind.FAVORITE, mForeground);
         mFavoriteFilledGlyph = new ArcDesktopIcons(ArcDesktopIcons.Kind.FAVORITE_FILLED, mForeground);
@@ -122,7 +124,13 @@ public final class ArcCollectionsView extends LinearLayout {
         mSpace.setTag("arc-current-space");
         mSpace.setAccessibilityHeading(true);
         mSpace.setContentDescription(activity.getString(R.string.arc_spaces));
-        addView(mSpace, new LayoutParams(-1, dp(44)));
+        mSpace.setTypeface(android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL));
+        mSpace.setPadding(dp(10), 0, dp(10), 0);
+        mSpace.setCompoundDrawablePadding(dp(8));
+        mSpace.setCompoundDrawablesRelative(null, null, mSpaceChevron, null);
+        LayoutParams spaceParams = new LayoutParams(-1, dp(44));
+        spaceParams.topMargin = dp(4); spaceParams.bottomMargin = dp(2);
+        addView(mSpace, spaceParams);
         mEntries = new LinearLayout(activity);
         mEntries.setOrientation(VERTICAL);
         mEntries.setContentDescription(activity.getString(R.string.arc_pinned_tabs));
@@ -251,7 +259,7 @@ public final class ArcCollectionsView extends LinearLayout {
         if (mCollectionHeight < 0) return;
         // Allocate whole 50dp tiles plus their 3dp top/bottom margins. The previous
         // half-budget (at most 96dp) exposed only part of a second grid row.
-        int rows = Math.max(0, mCollectionHeight - dp(88) - getPaddingTop() - getPaddingBottom());
+        int rows = Math.max(0, mCollectionHeight - dp(94) - getPaddingTop() - getPaddingBottom());
         int slot = dp(56);
         int count = mFavorites.getChildCount();
         int wantedRows = columns < 2 ? 0 : (count + columns - 1) / columns;
@@ -268,6 +276,7 @@ public final class ArcCollectionsView extends LinearLayout {
         mSurface = surface;
         if (mForeground != foreground) { mForeground = foreground; updateGlyphs(); }
         mFavoritesMenu.setCompoundDrawablesRelative(mFavoriteGlyph, null, null, null);
+        mSpace.setCompoundDrawablesRelative(null, null, mSpaceChevron, null);
         mInteraction = interaction;
         applyAppearance(this);
     }
@@ -394,7 +403,7 @@ public final class ArcCollectionsView extends LinearLayout {
         }
         for (ArcSidebarState.Space space : state.spaces()) {
             if (space.id.equals(state.selectedSpace())) {
-                mSpace.setText(space.name + "  ▾");
+                mSpace.setText(space.name);
                 mSpace.setSelected(true);
                 String description = mActivity.getString(R.string.arc_current_space, space.name);
                 mSpace.setContentDescription(description);

@@ -552,6 +552,9 @@ class TabVerticalViewBinder {
             tintList = defaultBgColor;
         }
 
+        if (!ArcDesktopAppearance.isDesktopWindow(context)) {
+            ArcDesktopAppearance.clearSidebarRowState(view);
+        }
         @Nullable Drawable bg = view.getBackground();
         if (bg != null) {
             bg.mutate();
@@ -1050,6 +1053,7 @@ class TabVerticalViewBinder {
             return;
         }
 
+        ArcDesktopAppearance.clearSidebarRowState(view);
         @Nullable Drawable bg = view.getBackground();
         if (bg != null) {
             bg.mutate();

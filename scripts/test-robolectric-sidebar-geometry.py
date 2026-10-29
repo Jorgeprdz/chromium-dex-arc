@@ -29,10 +29,11 @@ def main():
     source = (arc / 'ArcDesktopCoordinator.java').read_text()
     expanded = re.search(r'boolean expanded =\s*(.*?);', source, re.S).group(1)
     budget = re.search(r'tablet.updateArcExtensionsWidth\((.*?)\);', source, re.S).group(1)
-    collections = re.search(r'mCollectionsView.setVisibility\(\s*(collectionBudget.*?)\);', source, re.S).group(1)
+    collections = re.search(r'mCollectionsView.setVisibility\(\s*(.*?)\);', source[source.index('int collectionBudget ='):], re.S).group(1)
     test = r'''
 import static org.junit.Assert.*;
 import android.app.Activity;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.drawable.*;
 import android.view.*;
@@ -64,7 +65,8 @@ public class SidebarGeometryProbe {
             mNativeNewTabButton=new View(a);mNewTabRow=new TextView(a);mNewTabIcon.setBounds(0,0,24,24);}
         int dp(int n){return Math.round(n*mDensity);}
         boolean fullControls(int collectionBudget){float density=1f;return EXPANDED;}
-        int extensionWidth(){return BUDGET;}
+        int extensionWidth(){boolean expanded=true;return BUDGET;}
+        boolean canExpandControls() CAN_EXPAND
         int collectionVisibility(boolean expanded,int collectionBudget){return COLLECTIONS;}
         void updateNewTabRow(boolean expanded) NEW_TAB
         void styleInteraction(View view,int foreground,int selection) INTERACTION
@@ -78,25 +80,25 @@ public class SidebarGeometryProbe {
         s.mRail.layout(0,0,216,300);assertFalse(s.fullControls(0));
         s.mRail.layout(0,0,216,800);assertTrue(s.fullControls(240));
     }
-    @Test public void zeroCollectionBudgetDoesNotReintroduceFixedCollectionChrome(){
-        Shell s=new Shell(activity);assertEquals(View.GONE,s.collectionVisibility(true,0));
+    @Test public void zeroCollectionScrollBudgetRetainsAccessibleCollectionChrome(){
+        Shell s=new Shell(activity);// The budget controls scrolling; native collection chrome remains reachable.
+        assertEquals(View.VISIBLE,s.collectionVisibility(true,0));
         assertEquals(View.VISIBLE,s.collectionVisibility(true,120));
         assertEquals(View.VISIBLE,s.collectionVisibility(false,120));
     }
-    @Test public void extensionBudgetFitsRealMenuAndRailInsets(){
+    @Test public void extensionBudgetOwnsFullSecondRowAfterRailInsets(){
         Shell s=new Shell(activity);s.mRail.layout(0,0,216,800);s.mRail.setPadding(4,0,4,0);
         s.mMenuButtonWrapper.measure(View.MeasureSpec.makeMeasureSpec(64,View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(44,View.MeasureSpec.EXACTLY));
-        assertEquals("216 minus menu 64, other buttons 88 and padding 8",56,s.extensionWidth());
-        assertTrue(s.extensionWidth()+64+88+8<=216);
+        assertEquals("Second row receives216 minus rail insets8",208,s.extensionWidth());
     }
-    @Test public void extensionBudgetRoundsEachActualButtonAtFractionalDensity(){
+    @Test public void extensionBudgetKeepsFullUsableWidthAtFractionalDensity(){
         Shell s=new Shell(activity);s.mDensity=2.625f;s.mRail.layout(0,0,567,1000);
         s.mRail.setPadding(11,0,11,0);
         s.mMenuButtonWrapper.measure(View.MeasureSpec.makeMeasureSpec(168,View.MeasureSpec.EXACTLY),
             View.MeasureSpec.makeMeasureSpec(116,View.MeasureSpec.EXACTLY));
-        // Each 44dp button is 116px, not half of rounded 88dp (231px).
-        assertEquals("567 minus menu 168, two buttons 232 and insets 22",145,s.extensionWidth());
+        // Browser controls occupy the first row and do not reduce native extension width.
+        assertEquals("567 minus insets22",545,s.extensionWidth());
     }
     @Test public void compactPlusCentersInsideItsOwnRowAndSurvivesExpansion(){
         Shell s=new Shell(activity);s.mRail.layout(0,0,52,800);s.mRail.setPadding(8,0,8,0);
@@ -134,6 +136,7 @@ public class SidebarGeometryProbe {
 }
 '''
     for key, value in {'EXPANDED': expanded, 'BUDGET': budget, 'COLLECTIONS': collections,
+            'CAN_EXPAND': method_body(source, r'private boolean canExpandControls\('),
             'NEW_TAB': method_body(source, r'private void updateNewTabRow\('),
             'INTERACTION': method_body(source, r'private void styleInteraction\(')}.items():
         test = test.replace(key, value)

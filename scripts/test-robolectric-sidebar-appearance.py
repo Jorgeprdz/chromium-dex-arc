@@ -113,10 +113,54 @@ public class SidebarAppearanceProbe {
  }
  @Test public void sidebarMinimumRadiusGrowsOnceAndRestores() throws Exception {
   View v=new View(a);GradientDrawable shape=new GradientDrawable();shape.setCornerRadius(8);v.setBackground(shape);
-  row(v,false,false,false);row(v,false,false,false);assertEquals(11,shape.getCornerRadius(),0);
+  row(v,false,false,false);row(v,false,false,false);assertEquals(12,shape.getCornerRadius(),0);
   ArcDesktopAppearance.clearSidebarRowState(v);assertEquals(8,shape.getCornerRadius(),0);
   shape.setCornerRadius(14);row(v,false,false,false);assertEquals(14,shape.getCornerRadius(),0);
   ArcDesktopAppearance.clearSidebarRowState(v);assertEquals(14,shape.getCornerRadius(),0);
+ }
+ // LEGACY RenderNode does not retain shadow colors on this aarch64 host.
+ // Keep the Android View lifecycle real and record only this native property boundary.
+ static class ShadowColorView extends View {
+  int ambient=Color.BLACK,spot=Color.BLACK;
+  ShadowColorView(android.content.Context c){super(c);}
+  @Override public void setOutlineAmbientShadowColor(int c){ambient=c;}
+  @Override public int getOutlineAmbientShadowColor(){return ambient;}
+  @Override public void setOutlineSpotShadowColor(int c){spot=c;}
+  @Override public int getOutlineSpotShadowColor(){return spot;}
+ }
+ @Test public void selectedShadowIsSubtleAndRestoresNativeDecoration() throws Exception {
+  View v=new ShadowColorView(a);GradientDrawable bg=new GradientDrawable();bg.setCornerRadius(8);v.setBackground(bg);
+  Drawable foreground=new ColorDrawable(Color.GREEN);v.setForeground(foreground);
+  ColorStateList tint=ColorStateList.valueOf(Color.YELLOW);v.setBackgroundTintList(tint);
+  ViewOutlineProvider provider=v.getOutlineProvider();v.setTranslationZ(2);
+  v.setOutlineAmbientShadowColor(0xff123456);v.setOutlineSpotShadowColor(0xff654321);
+  row(v,true,false,false);row(v,true,false,false);
+  assertEquals(1,v.getElevation(),0);assertEquals(2,v.getTranslationZ(),0);
+  assertTrue(Color.alpha(v.getOutlineAmbientShadowColor())<=32);assertTrue(Color.alpha(v.getOutlineSpotShadowColor())<=48);
+  v.setEnabled(false);assertEquals(0,v.getElevation(),0);
+  v.setEnabled(true);assertEquals(1,v.getElevation(),0);
+  row(v,false,true,true);assertEquals(0,v.getElevation(),0);
+  row(v,true,false,false);ArcDesktopAppearance.clearSidebarRowState(v);
+  assertEquals(0,v.getElevation(),0);assertEquals(2,v.getTranslationZ(),0);
+  assertSame(provider,v.getOutlineProvider());assertSame(foreground,v.getForeground());assertSame(bg,v.getBackground());
+  assertEquals(tint,v.getBackgroundTintList());assertEquals(8,bg.getCornerRadius(),0);
+  assertEquals(0xff123456,v.getOutlineAmbientShadowColor());assertEquals(0xff654321,v.getOutlineSpotShadowColor());
+  ArcDesktopAppearance.clearSidebarRowState(v);assertSame(foreground,v.getForeground());
+ }
+ @Test public void nativeTitleAtBothFontScalesKeepsItsExistingDesktopSizeAndEllipsis() {
+  for(float scale:new float[]{1f,1.3f}) {
+   android.content.res.Configuration cfg=new android.content.res.Configuration(a.getResources().getConfiguration());cfg.fontScale=scale;
+   android.content.Context c=a.createConfigurationContext(cfg);TextView text=new TextView(c);text.setTextSize(14);
+   text.setSingleLine(true);text.setEllipsize(TextUtils.TruncateAt.END);
+   text.setText("A very long native title that must remain single line with its final characters ellipsized");
+   ArcDesktopAppearance.styleSidebarTitle(text);ArcDesktopAppearance.styleSidebarTitle(text);
+   TextView reference=new TextView(c);reference.setTextSize(16);assertEquals(reference.getTextSize(),text.getTextSize(),.01f);
+   text.measure(View.MeasureSpec.makeMeasureSpec(120,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(80,View.MeasureSpec.AT_MOST));
+   text.layout(0,0,120,text.getMeasuredHeight());assertEquals(1,text.getLineCount());assertEquals(TextUtils.TruncateAt.END,text.getEllipsize());assertEquals(120,text.getWidth());
+   ArcDesktopAppearance.setUiMode(a,ArcDesktopPolicy.MODE_MOBILE);ArcDesktopAppearance.styleSidebarTitle(text);
+   reference.setTextSize(14);assertEquals(reference.getTextSize(),text.getTextSize(),.01f);
+   ArcDesktopAppearance.setUiMode(a,ArcDesktopPolicy.MODE_ARC);
+  }
  }
  @Test public void defaultLavenderAndVioletSelectionHaveReadableForegroundAndCustomColorsPersist(){
   var prefs=ArcDesktopAppearance.preferences(a);prefs.edit().remove(ArcDesktopAppearance.COLOR_KEY).commit();

@@ -19,6 +19,7 @@ public final class ArcDesktopPolicy {
     public static final int ARC_WINDOW_RADIUS_DP = ARC_CONTENT_RADIUS_DP + ARC_FRAME_GAP_DP;
     public static final int ARC_NAV_ROW_HEIGHT_DP = 44;
     public static final int ARC_NAV_BUTTON_WIDTH_DP = 44;
+    public static final int ARC_FOOTER_ROW_GAP_DP = 4;
     public static final int ARC_LOCATION_BAR_SIDE_MARGIN_DP = 4;
     public static final int ARC_FULL_CONTROLS_MIN_WIDTH_DP = ARC_NAV_BUTTON_WIDTH_DP * 4;
     public static final int ARC_FULL_CONTROLS_MIN_HEIGHT_DP = 360;
@@ -74,10 +75,18 @@ public final class ArcDesktopPolicy {
 
     /** Reserve caption, five control rows, collection chrome and native tab space. */
     public static int collectionScrollBudgetPx(int height, float density, int captionHeight) {
+        return collectionScrollBudgetPx(height, density, captionHeight, false);
+    }
+
+    /** Reserve the optional native extension row before assigning collection scroll space. */
+    public static int collectionScrollBudgetPx(
+            int height, float density, int captionHeight, boolean extensionsVisible) {
         if (!(density > 0f) || height <= 0) return 0;
         int reservedDp = 5 * ARC_NAV_ROW_HEIGHT_DP + 160 + 2 * ARC_OUTER_PADDING_DP + 112;
+        int extensionHeight = extensionsVisible ? Math.round(ARC_NAV_ROW_HEIGHT_DP * density)
+                + Math.round(ARC_FOOTER_ROW_GAP_DP * density) : 0;
         long remaining = (long) height - Math.round(reservedDp * density)
-                - Math.max(0, captionHeight);
+                - Math.max(0, captionHeight) - extensionHeight;
         return (int) Math.min(Math.round(240 * density), Math.max(0L, remaining));
     }
 

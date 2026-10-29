@@ -12,7 +12,7 @@ import android.graphics.drawable.Drawable;
 
 /** Small shared vector glyphs. Geometry is in a 24-unit optical box, independent of density. */
 public final class ArcDesktopIcons extends Drawable {
-    public enum Kind { PIN, FAVORITE, FAVORITE_FILLED, CAMERA_ORIENTATION, INFO, PALETTE }
+    public enum Kind { PIN, FAVORITE, FAVORITE_FILLED, CAMERA_ORIENTATION, INFO, PALETTE, CHEVRON_DOWN }
     private final Kind mKind;
     private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Path mPath = new Path();
@@ -49,6 +49,8 @@ public final class ArcDesktopIcons extends Drawable {
             for (float[] dot : new float[][] {{7, 10}, {10, 6.5f}, {15, 7}, {18, 10}}) {
                 mPath.addCircle(dot[0], dot[1], .75f, Path.Direction.CW);
             }
+        } else if (kind == Kind.CHEVRON_DOWN) {
+            mPath.moveTo(6, 9); mPath.lineTo(12, 15); mPath.lineTo(18, 9);
         } else {
             mPath.addCircle(12, 12, 9, Path.Direction.CW);
             mPath.moveTo(12, 11); mPath.lineTo(12, 17);
