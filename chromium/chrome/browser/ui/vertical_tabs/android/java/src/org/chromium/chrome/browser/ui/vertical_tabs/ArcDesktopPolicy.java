@@ -39,9 +39,9 @@ public final class ArcDesktopPolicy {
         return blend(seed, dark ? 0xff141414 : 0xfffafafa, dark ? 0.50 : 0.65);
     }
 
-    /** The original neutral surface remains the default until the user selects a color. */
+    /** Luminous lavender default; explicit user colors and the dark palette retain their paths. */
     public static int defaultSurface(boolean dark) {
-        return blend(0xff53657b, dark ? 0xff141414 : 0xfffafafa, dark ? 0.22 : 0.12);
+        return dark ? blend(0xff53657b, 0xff141414, 0.22) : 0xffdccdf7;
     }
 
     /** A pale capsule preserves the active-tab shape while following a chosen frame hue. */

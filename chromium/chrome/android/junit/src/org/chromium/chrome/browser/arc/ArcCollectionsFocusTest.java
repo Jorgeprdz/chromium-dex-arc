@@ -188,6 +188,42 @@ public class ArcCollectionsFocusTest {
         assertTrue(scroll.isLayoutRequested());
     }
 
+    @Test public void shortWindowKeepsAllFavoritesInAnAccessibleCompactMenu() {
+        Fixture f = new Fixture();
+        for (int i=0;i<8;i++) f.controller.rememberTab(7+i,"https://short.test/"+i,"Favorite "+i,true);
+        f.view.refresh(); f.view.setCompact(true); f.view.setCollectionHeight(0); f.measure();
+        View menu = f.view.findViewWithTag("arc-favorites-menu");
+        assertEquals(View.VISIBLE,menu.getVisibility());
+        assertEquals(View.GONE,f.view.findViewWithTag("arc-favorites-mosaic").getVisibility());
+        assertTrue(menu.performClick());
+        assertEquals(8,org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu().getMenu().size());
+        assertTrue(f.view.getMeasuredHeight() <= Math.round(60 * f.activity.getResources().getDisplayMetrics().density));
+    }
+
+    @Test public void sharedVectorGlyphsFitTheirOpticalBox() throws Exception {
+        for (var kind : ArcDesktopIcons.Kind.values()) {
+            var glyph = new ArcDesktopIcons(kind, android.graphics.Color.BLACK);
+            var pathField = ArcDesktopIcons.class.getDeclaredField("mPath"); pathField.setAccessible(true);
+            var path = (android.graphics.Path) pathField.get(glyph);
+            var rect = new android.graphics.RectF(); path.computeBounds(rect, true);
+            assertTrue(kind.toString(), rect.left >= 1 && rect.top >= 1 && rect.right <= 23 && rect.bottom <= 23);
+            assertEquals(24, glyph.getIntrinsicWidth()); assertEquals(24, glyph.getIntrinsicHeight());
+        }
+    }
+
+    @Test public void compactMosaicRetainsComfortableTargetsAndFourResponsiveColumns() {
+        Fixture f = new Fixture();
+        String id = f.controller.rememberTab(7, "https://example.test", "Saved", true);
+        f.view.refresh(); f.measure();
+        View tile = f.view.findViewWithTag("arc-entry:" + id);
+        float density = f.activity.getResources().getDisplayMetrics().density;
+        assertEquals(Math.round(48 * density), tile.getMeasuredWidth());
+        assertTrue(tile.getMeasuredWidth() >= Math.round(44 * density));
+        assertEquals(Math.round(12 * density), tile.getPaddingLeft());
+        assertEquals(4, ArcCollectionsView.favoriteColumns(216, 54));
+        assertEquals(0, ArcCollectionsView.favoriteColumns(107, 54));
+    }
+
     @Test public void faviconOpticalBoxIsStableAcrossBitmapDensitiesAndRefresh() {
         Fixture f = new Fixture();
         String id = f.controller.rememberTab(7, "https://example.test", "Saved", true);
@@ -302,7 +338,7 @@ public class ArcCollectionsFocusTest {
             assertEquals(widthDp == 120 ? View.VISIBLE : View.GONE, menu.getVisibility());
             for (int i = 0; i < 4; i++) assertSame(original[i], f.view.findViewWithTag("arc-entry:" + ids.get(i)));
             if (widthDp != 120) {
-                assertEquals(widthDp == 304 ? original[0].getTop() : original[0].getBottom() + Math.round(8 * density),
+                assertEquals(widthDp == 304 ? original[0].getTop() : original[0].getBottom() + Math.round(6 * density),
                         original[2].getTop());
                 assertTrue(original[3].getRight() <= width);
             }

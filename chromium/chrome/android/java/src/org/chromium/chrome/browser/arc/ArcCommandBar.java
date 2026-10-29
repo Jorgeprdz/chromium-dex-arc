@@ -66,7 +66,7 @@ public final class ArcCommandBar {
         mGlass = glass; mGlassSurface = null;
         if (glass != null) {
             mGlassSurface = glass.add(mPanel, mPanel::getDrawingRect);
-            mGlassSurface.setDesktopMaterial(); mGlassSurface.setCornerRadius(dp(12));
+            mGlassSurface.setDesktopMaterial(); mGlassSurface.setCornerRadius(dp(16));
             mGlassSurface.setEdgeEnabled(true, mActivity.getResources().getDisplayMetrics().density);
             if (mSurface.getColor() != null) mGlassSurface.setSurface(mSurface.getColor().getDefaultColor());
         }
@@ -128,7 +128,7 @@ public final class ArcCommandBar {
         mOverlay.setOnClickListener(v -> close(true, null));
         mPanel = new LinearLayout(activity); mPanel.setOrientation(LinearLayout.VERTICAL);
         mPanel.setPadding(dp(8), dp(4), dp(8), dp(8));
-        mSurface.setCornerRadius(dp(12)); mPanel.setBackground(mSurface);
+        mSurface.setCornerRadius(dp(16)); mPanel.setBackground(mSurface);
         mPanel.setElevation(dp(12)); mPanel.setClickable(true);
         mPanel.setAccessibilityPaneTitle(placeholder);
         mHeader = new LinearLayout(activity); mHeader.setGravity(Gravity.CENTER_VERTICAL);

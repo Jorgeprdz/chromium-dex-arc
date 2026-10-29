@@ -155,7 +155,7 @@ public final class ArcDesktopAppearance {
         if (incognito) return selection(context, true);
         boolean custom = PREVIEW_COLORS.containsKey(visualContext(context))
                 || preferences(context).contains(COLOR_KEY);
-        return custom ? ArcDesktopPolicy.activeTabSurface(surface(context, false)) : 0xffffffff;
+        return custom ? ArcDesktopPolicy.activeTabSurface(surface(context, false)) : 0xff7365d8;
     }
 
     public static int foreground(Context context, boolean incognito) {

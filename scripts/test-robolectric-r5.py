@@ -15,6 +15,7 @@ def main():
     p.add_argument('--java-home', type=Path, required=True)
     p.add_argument('--work', type=Path, required=True)
     p.add_argument('--navigation-only', action='store_true')
+    p.add_argument('--command-source-ref', help='Countercheck current input regressions against an older command bar')
     p.add_argument('--mutation', choices=['sidebar-order', 'actions-enter', 'rtl', 'closing'])
     a = p.parse_args()
     classes = a.work / 'classes'
@@ -34,6 +35,11 @@ def main():
         names += ['ArcOmniboxPlacement', 'ArcCommandBar', 'ArcSplitState']
     for name in names:
         production = ROOT / 'chromium' / ARC / (name + '.java')
+        if a.command_source_ref and name == 'ArcCommandBar':
+            original = subprocess.check_output(['git', 'show', a.command_source_ref + ':chromium/' + str(ARC / 'ArcCommandBar.java')], cwd=ROOT, text=True)
+            production = a.work / 'countercheck' / 'ArcCommandBar.java'
+            production.parent.mkdir(parents=True, exist_ok=True)
+            production.write_text(original)
         if a.mutation:
             contents = production.read_text()
             if a.mutation == 'sidebar-order' and name == 'ArcOmniboxPlacement':

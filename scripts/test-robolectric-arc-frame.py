@@ -29,6 +29,7 @@ def main():
     body = method_body(coordinator, r'private void applyFrameGeometry\(')
     outline = method_body(coordinator, r'public void getOutline\(')
     frame = method_body(coordinator, r'private int frameSurface\(')
+    material = method_body(coordinator, r'private void updateMaterial\(')
     if args.white_rail_mutant:
         mutation = ('        if (!(mRail.getBackground() instanceof ColorDrawable railColor)\n'
                     '                || railColor.getColor() != surface) mRail.setBackground(new ColorDrawable(surface));')
@@ -57,6 +58,7 @@ import org.robolectric.RobolectricTestRunner;
 import org.robolectric.annotation.Config;
 import org.robolectric.annotation.GraphicsMode;
 import org.robolectric.annotation.SQLiteMode;
+import org.chromium.chrome.browser.arc.ArcDesktopMaterial;
 import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance;
 import org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy;
 
@@ -86,13 +88,17 @@ public class FramePaletteProbe {
         final int mOriginalContentMarginLeft=0,mOriginalContentMarginTop=0;
         final int mOriginalContentMarginRight=0,mOriginalContentMarginBottom=0;
         final Incognito mIncognitoStateProvider=new Incognito();
+        final ArcDesktopMaterial mDesktopRailMaterial=new ArcDesktopMaterial(),mDesktopFrameMaterial=new ArcDesktopMaterial();
+        final int[] mMaterialPosition=new int[2];int mMaterialPreview=-1;
+        android.content.SharedPreferences mPreferences;
+        void updateMaterial(View target,ArcDesktopMaterial material,int surface) __MATERIAL__
         final ViewOutlineProvider mArcContentOutlineProvider=new ViewOutlineProvider() {
             public void getOutline(View view,Outline outline) __OUTLINE__
         };
         boolean mDestroyed,mArcFrameActive,mRailViewportTransition;
         Integer mPreviewFrameColor;
         Frame(Activity a) {
-            mActivity=a;
+            mActivity=a;mPreferences=ArcDesktopAppearance.preferences(a);
             mFrameRoot=new FrameLayout(a);mRail=new FrameLayout(a);
             mCompositorViewHolder=new Compositor(a);
             mRail.setBackgroundColor(Color.WHITE);
@@ -107,17 +113,20 @@ public class FramePaletteProbe {
         int frameSurface(boolean incognito) __FRAME__
         void applyFrameGeometry() __BODY__
     }
-    @Test public void railPaddingUsesTheFramePalette() {
+    int materialSurface(android.graphics.drawable.Drawable material) throws Exception {
+        var field=ArcDesktopMaterial.class.getDeclaredField("mSurface");field.setAccessible(true);return field.getInt(material);
+    }
+    @Test public void railPaddingUsesTheFramePalette() throws Exception {
         Activity a=activity();
         try {
             Frame f=new Frame(a);f.applyFrameGeometry();
             assertEquals(8,f.mRail.getPaddingTop());assertEquals(8,f.mRail.getPaddingBottom());
             int expected=ArcDesktopAppearance.surface(a,false);
-            assertEquals(expected,((ColorDrawable)f.mRail.getBackground()).getColor());
-            assertEquals(expected,((ColorDrawable)f.mFrameRoot.getBackground()).getColor());
+            assertEquals(expected,materialSurface(f.mRail.getBackground()));
+            assertEquals(expected,materialSurface(f.mFrameRoot.getBackground()));
             ArcDesktopAppearance.preferences(a).edit().putInt(ArcDesktopAppearance.COLOR_KEY,0xff0044ee).commit();
             f.applyFrameGeometry();
-            assertEquals(ArcDesktopAppearance.surface(a,false),((ColorDrawable)f.mRail.getBackground()).getColor());
+            assertEquals(ArcDesktopAppearance.surface(a,false),materialSurface(f.mRail.getBackground()));
         } finally { a.finish(); }
     }
     @Test public void draftIsSharedBySameWindowAndNeverWrittenUntilApply() {
@@ -144,12 +153,16 @@ public class FramePaletteProbe {
         f.applyFrameGeometry();
         assertEquals(new Rect(52,0,320,480),f.mCompositorViewHolder.getClipBounds());
     }
-    @Test public void surfaceOutlineSupportsNativeClippingAndLowerCropIsSquare() {
+    @Test public void surfaceOutlineSupportsFourRoundedCorners() {
         Frame f=new Frame(activity());f.mCompositorViewHolder.layout(0,0,320,480);
         Outline outline=new Outline();f.mArcContentOutlineProvider.getOutline(f.mCompositorViewHolder,outline);
         Rect bounds=new Rect();assertTrue(outline.canClip());assertTrue(outline.getRect(bounds));
-        assertEquals(new Rect(52,0,320,496),bounds);
-        assertTrue(ArcDesktopPolicy.containsArcContentPoint(319,479,52,0,320,480,16));
+        assertEquals(new Rect(52,0,320,480),bounds);
+        assertFalse(ArcDesktopPolicy.containsArcContentPoint(319,479,52,0,320,480,16));
+        assertEquals(16f,outline.getRadius(),0f);
+        for (float[] corner : new float[][] {{52,0},{319,0},{52,479},{319,479}}) {
+            assertFalse(ArcDesktopPolicy.containsArcContentPoint(corner[0],corner[1],52,0,320,480,16));
+        }
     }
     @Test public void chosenPaletteKeepsVisibleHueAndContrast() {
         Activity a=activity();
@@ -161,7 +174,7 @@ public class FramePaletteProbe {
         } finally { a.finish(); }
     }
 }
-'''.replace('__BODY__', body).replace('__FRAME__', frame).replace('__OUTLINE__',outline)
+'''.replace('__BODY__', body).replace('__FRAME__', frame).replace('__OUTLINE__',outline).replace('__MATERIAL__',material)
     test = args.work / 'FramePaletteProbe.java'
     test.write_text(source)
     metrics = args.work / 'ArchiumWindowMetrics.java'
@@ -169,7 +182,7 @@ public class FramePaletteProbe {
     window = args.work / 'ArchiumWindowClass.java'
     window.write_text('package org.chromium.chrome.browser.desktop_policy; public class ArchiumWindowClass { final int w; ArchiumWindowClass(int v){w=v;} public static ArchiumWindowClass classify(int w){return new ArchiumWindowClass(w);} public boolean usesDesktopNavigation(){return w>=600;} }')
     cp = args.classpath_file.read_text().strip()
-    sources = [appearance / 'ArcDesktopAppearance.java', appearance / 'ArcDesktopPolicy.java', test, metrics, window]
+    sources = [arc / 'ArcDesktopMaterial.java', appearance / 'ArcDesktopAppearance.java', appearance / 'ArcDesktopPolicy.java', test, metrics, window]
     subprocess.run([str(args.java_home/'bin/javac'), '-cp', cp, '-d', str(classes), *map(str,sources)], check=True)
     result = subprocess.run([str(args.java_home/'bin/java'), '-ea', '-Drobolectric.conscryptMode=OFF',
         '-Drobolectric.dependency.repo.url=https://repo.maven.apache.org/maven2', '-cp', str(classes)+':'+cp,

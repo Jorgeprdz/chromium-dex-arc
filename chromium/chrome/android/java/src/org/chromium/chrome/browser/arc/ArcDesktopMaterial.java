@@ -57,7 +57,7 @@ public final class ArcDesktopMaterial extends Drawable {
     static int[] ramp(int surface, int intensity) {
         double strength = clamp(intensity) / 100.0;
         return new int[] {safeTone(surface, Color.WHITE, .40 * strength), surface,
-                safeTone(surface, Color.BLACK, .16 * strength)};
+                safeTone(surface, Color.BLACK, .09 * strength)};
     }
     public void setAppearance(int surface, int intensity) {
         intensity = clamp(intensity);

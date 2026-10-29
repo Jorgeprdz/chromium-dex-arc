@@ -66,6 +66,15 @@ public class SidebarAppearanceProbe {
    .invoke(null,v,active,multi,false,hover);
  }
  int fill(View v){return v.getBackgroundTintList().getDefaultColor();}
+ @Test public void defaultLavenderAndVioletSelectionHaveReadableForegroundAndCustomColorsPersist(){
+  var prefs=ArcDesktopAppearance.preferences(a);prefs.edit().remove(ArcDesktopAppearance.COLOR_KEY).commit();
+  assertEquals(0xffdccdf7,ArcDesktopAppearance.surface(a,false));
+  int selected=ArcDesktopAppearance.activeTabSurface(a,false);assertEquals(0xff7365d8,selected);
+  assertTrue(ArcDesktopPolicy.contrast(selected,ArcDesktopPolicy.foreground(selected))>=4.5);
+  prefs.edit().putInt(ArcDesktopAppearance.COLOR_KEY,0xffee4400).commit();
+  assertEquals(0xfffce0d5,ArcDesktopAppearance.activeTabSurface(a,false));
+  assertNotEquals(ArcDesktopAppearance.surface(a,false),ArcDesktopAppearance.surface(a,true));
+ }
  @Test public void selectedCollapsedTitleSurvivesRecycleAndClearsEmptyTooltip(){
   LinearLayout v=new LinearLayout(a);TextView title=new TextView(a);title.setId(123);v.addView(title);v.setSelected(true);
   View.OnLayoutChangeListener oldPairListener=(changed,l,t,r,b,ol,ot,or,ob)->{};
@@ -193,7 +202,10 @@ public class SidebarAppearanceProbe {
 '''.replace('TITLE_METHOD','static void updateTitle(int titleViewId, PropertyModel model, ViewGroup view) '+method_body(binder,r'private static void updateTitle\('))
 java=a.work/'SidebarAppearanceProbe.java';java.write_text(test)
 metrics=a.work/'ArchiumWindowMetrics.java';metrics.write_text('package org.chromium.chrome.browser.desktop_policy; public class ArchiumWindowMetrics {public static int currentWidthDp(android.content.Context c){return c.getResources().getConfiguration().screenWidthDp;}}')
-cp=a.classpath_file.read_text().strip()
+import importlib.util
+spec=importlib.util.spec_from_file_location('window_core',ROOT/'scripts/fetch-window-core.py')
+window=importlib.util.module_from_spec(spec);spec.loader.exec_module(window)
+cp=a.classpath_file.read_text().strip()+':'+str(window.ensure_jar())
 sources=[java,metrics,*ROOT.glob('chromium/**/ArcDesktopAppearance.java'),*ROOT.glob('chromium/**/ArcDesktopPolicy.java'),*ROOT.glob('chromium/**/ArchiumWindowClass.java')]
 subprocess.run([str(a.java_home/'bin/javac'),'-cp',cp,'-d',str(classes),*map(str,sources)],check=True)
 r=subprocess.run([str(a.java_home/'bin/java'),'-ea','-Xmx512m','-Drobolectric.conscryptMode=OFF','-Drobolectric.dependency.repo.url=https://repo.maven.apache.org/maven2','-cp',str(classes)+':'+cp,'SidebarAppearanceProbe'])

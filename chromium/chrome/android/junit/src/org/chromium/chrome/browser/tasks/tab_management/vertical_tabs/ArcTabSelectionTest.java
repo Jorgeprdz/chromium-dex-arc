@@ -28,7 +28,7 @@ public class ArcTabSelectionTest {
         Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
         ArcDesktopAppearance.setUiMode(activity, ArcDesktopPolicy.MODE_ARC);
         try {
-            assertEquals(Color.WHITE, ArcDesktopAppearance.activeTabSurface(activity, false));
+            assertEquals(0xff7365d8, ArcDesktopAppearance.activeTabSurface(activity, false));
             // Hand-derived pale capsules for the selected orange and blue frame colors.
             for (int[] colors : new int[][] {{0xffee4400, 0xfffce0d5}, {0xff0044ee, 0xffd5e0fc}}) {
                 int seed = colors[0];

@@ -51,6 +51,15 @@ public final class ArcCollectionsView extends LinearLayout {
     private final Button mSpace;
     private final BoundedScrollView mScroll;
     private final BoundedScrollView mFavoritesScroll;
+    private android.graphics.drawable.Drawable mPinGlyph, mFavoriteGlyph, mFavoriteFilledGlyph;
+    private void updateGlyphs() {
+        mPinGlyph = new ArcDesktopIcons(ArcDesktopIcons.Kind.PIN, mForeground);
+        mFavoriteGlyph = new ArcDesktopIcons(ArcDesktopIcons.Kind.FAVORITE, mForeground);
+        mFavoriteFilledGlyph = new ArcDesktopIcons(ArcDesktopIcons.Kind.FAVORITE_FILLED, mForeground);
+        for (var glyph : new android.graphics.drawable.Drawable[] {mPinGlyph, mFavoriteGlyph, mFavoriteFilledGlyph}) {
+            glyph.setBounds(0, 0, dp(20), dp(20));
+        }
+    }
     private int mSurface = Color.rgb(238, 238, 238);
     private int mForeground = Color.rgb(32, 32, 32);
     private int mInteraction = Color.rgb(204, 204, 204);
@@ -86,6 +95,7 @@ public final class ArcCollectionsView extends LinearLayout {
             BiConsumer<ArcSidebarState.Entry, ImageButton> loadIcon) {
         super(activity);
         mActivity = activity;
+        updateGlyphs();
         mController = controller;
         mCurrentTab = currentTab;
         mLoadIcon = loadIcon;
@@ -104,7 +114,7 @@ public final class ArcCollectionsView extends LinearLayout {
         mFavoritesMenu.setTag("arc-favorites-menu");
         mFavoritesMenu.setText("");
         mFavoritesMenu.setGravity(Gravity.CENTER);
-        mFavoritesMenu.setCompoundDrawablesRelativeWithIntrinsicBounds(android.R.drawable.star_big_on, 0, 0, 0);
+        mFavoritesMenu.setCompoundDrawablesRelative(mFavoriteGlyph, null, null, null);
         mFavoritesMenu.setVisibility(GONE);
         addView(mFavoritesMenu, new LayoutParams(-1, dp(44)));
         mSpace = button("", this::showSpaces);
@@ -141,10 +151,11 @@ public final class ArcCollectionsView extends LinearLayout {
     @Override
     protected void onMeasure(int widthSpec, int heightSpec) {
         int available = Math.max(0, MeasureSpec.getSize(widthSpec) - getPaddingLeft() - getPaddingRight());
-        int columns = favoriteColumns(available, dp(72));
+        int columns = favoriteColumns(available, dp(54));
         boolean empty = mFavorites.getChildCount() == 0;
-        mFavoritesScroll.setVisibility(!empty && columns >= 2 ? VISIBLE : GONE);
-        mFavoritesMenu.setVisibility(!empty && columns == 0 ? VISIBLE : GONE);
+        boolean menuOnly = columns == 0 || mFavoritesScroll.mBudget < dp(44);
+        mFavoritesScroll.setVisibility(!empty && !menuOnly ? VISIBLE : GONE);
+        mFavoritesMenu.setVisibility(!empty && menuOnly ? VISIBLE : GONE);
         if (columns >= 2 && columns != mFavorites.getColumnCount()) {
             // Clear previous explicit column constraints before shrinking the grid.
             for (int i = 0; i < mFavorites.getChildCount(); i++) {
@@ -163,18 +174,21 @@ public final class ArcCollectionsView extends LinearLayout {
             }
         }
         compactAction(findViewWithTag("arc-pin-current"), R.string.arc_pin_current,
-                android.R.drawable.ic_menu_save, available / 2 < dp(144));
+                mPinGlyph, available / 2 < dp(144));
         compactAction(findViewWithTag("arc-favorite-current"), R.string.arc_favorite_current,
-                android.R.drawable.star_big_off, available / 2 < dp(144));
+                findViewWithTag("arc-favorite-current").isSelected() ? mFavoriteFilledGlyph : mFavoriteGlyph,
+                available / 2 < dp(144));
         super.onMeasure(widthSpec, heightSpec);
     }
 
-    private void compactAction(Button action, int label, int icon, boolean compact) {
+    private void compactAction(Button action, int label, android.graphics.drawable.Drawable icon, boolean compact) {
         String text = compact ? "" : mActivity.getString(label);
         if (!text.contentEquals(action.getText())) {
             action.setText(text);
             action.setGravity((compact ? Gravity.CENTER : Gravity.START | Gravity.CENTER_VERTICAL));
-            action.setCompoundDrawablesRelativeWithIntrinsicBounds(compact ? icon : 0, 0, 0, 0);
+        }
+        if (action.getCompoundDrawablesRelative()[0] != (compact ? icon : null)) {
+            action.setCompoundDrawablesRelative(compact ? icon : null, null, null, null);
         }
     }
 
@@ -237,7 +251,8 @@ public final class ArcCollectionsView extends LinearLayout {
     /** Owns collection styling so site favicons retain their original colors and rounded tiles. */
     public void setAppearance(int surface, int foreground, int interaction) {
         mSurface = surface;
-        mForeground = foreground;
+        if (mForeground != foreground) { mForeground = foreground; updateGlyphs(); }
+        mFavoritesMenu.setCompoundDrawablesRelative(mFavoriteGlyph, null, null, null);
         mInteraction = interaction;
         applyAppearance(this);
     }
@@ -256,7 +271,7 @@ public final class ArcCollectionsView extends LinearLayout {
                 ImageButton tile = (ImageButton) child;
                 tile.clearColorFilter();
                 int tileSurface = ArcDesktopPolicy.activeTabSurface(mSurface);
-                GradientDrawable shape = background(tileSurface, 16);
+                GradientDrawable shape = background(tileSurface, 12);
                 tile.setBackground(new RippleDrawable(ColorStateList.valueOf(mInteraction), shape, null));
                 tile.setOnHoverListener((view, event) -> {
                     if (event.getAction() == android.view.MotionEvent.ACTION_HOVER_ENTER) shape.setColor(mInteraction);
@@ -335,6 +350,9 @@ public final class ArcCollectionsView extends LinearLayout {
             mOpenFolder = null;
             mRenderedSpace = state.selectedSpace();
         }
+        CurrentTab favoriteCurrent = mCurrentTab.get();
+        boolean saved = favoriteCurrent != null && state.favorites().stream().anyMatch(e -> e.url.equals(favoriteCurrent.url));
+        findViewWithTag("arc-favorite-current").setSelected(saved);
         String favoriteFocus = focusedTag(mFavorites);
         String entryFocus = focusedTag(mEntries);
         mFavorites.removeAllViews();
@@ -343,7 +361,7 @@ public final class ArcCollectionsView extends LinearLayout {
             ImageButton favorite = new ImageButton(mActivity);
             favorite.setImageDrawable(fallbackIcon(entry.url, mForeground));
             favorite.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
-            favorite.setPadding(dp(20), dp(20), dp(20), dp(20));
+            favorite.setPadding(dp(12), dp(12), dp(12), dp(12));
             favorite.setContentDescription(entry.title);
             favorite.setTooltipText(entry.title);
             favorite.setTag("arc-entry:" + entry.id);
@@ -351,11 +369,11 @@ public final class ArcCollectionsView extends LinearLayout {
             favorite.setOnLongClickListener(view -> { showEntryMenu(view, entry); return true; });
             favorite.setOnContextClickListener(view -> { showEntryMenu(view, entry); return true; });
             GridLayout.LayoutParams tileParams = new GridLayout.LayoutParams();
-            tileParams.width = dp(64); tileParams.height = dp(64);
+            tileParams.width = dp(48); tileParams.height = dp(48);
             int index = mFavorites.getChildCount(), columns = mFavorites.getColumnCount();
             tileParams.rowSpec = GridLayout.spec(index / columns);
             tileParams.columnSpec = GridLayout.spec(index % columns);
-            tileParams.setMargins(dp(4), dp(4), dp(4), dp(4));
+            tileParams.setMargins(dp(3), dp(3), dp(3), dp(3));
             mFavorites.addView(favorite, tileParams);
             mLoadIcon.accept(entry, favorite);
         }

@@ -51,11 +51,15 @@ public class ArcCommandBarTest {
         Fixture f = new Fixture();
         f.bar.open(false); f.bar.finishAnimationForTesting();
         android.view.View overlay = (android.view.View) f.bar.panelForTesting().getParent();
+        overlay.measure(android.view.View.MeasureSpec.makeMeasureSpec(1000, 1073741824),
+                android.view.View.MeasureSpec.makeMeasureSpec(800, 1073741824));
+        overlay.layout(0, 0, 1000, 800);
         long now = android.os.SystemClock.uptimeMillis();
         for (int action : new int[] {0, 1}) {
             var event = android.view.MotionEvent.obtain(now, now, action, 100, 24, 0);
             overlay.dispatchTouchEvent(event); event.recycle();
         }
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
         f.bar.finishAnimationForTesting();
         assertTrue("Second click at moved origin must not dismiss the editor", f.bar.isShowing());
         assertEquals(1, f.sessions.get()); assertTrue(f.editor.hasFocus());

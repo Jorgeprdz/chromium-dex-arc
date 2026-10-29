@@ -22,7 +22,7 @@ diff --git a/chrome/android/chrome_java_resources.gni b/chrome/android/chrome_ja
 diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java_sources.gni
 --- a/chrome/android/chrome_java_sources.gni
 +++ b/chrome/android/chrome_java_sources.gni
-@@ -5,6 +5,42 @@
+@@ -5,6 +5,43 @@
  import("//content/public/common/features.gni")
 
  chrome_java_sources = [
@@ -41,6 +41,7 @@ diff --git a/chrome/android/chrome_java_sources.gni b/chrome/android/chrome_java
 +  "java/src/org/chromium/chrome/browser/arc/ArcCompactOmnibox.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcCommandBar.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcDesktopMaterial.java",
++  "java/src/org/chromium/chrome/browser/arc/ArcDesktopIcons.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcPhoneStatusFade.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcPhonePullReveal.java",
 +  "java/src/org/chromium/chrome/browser/arc/ArcDesktopMaterialDialog.java",
@@ -10707,7 +10708,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollecti
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java
-@@ -0,0 +1,577 @@
+@@ -0,0 +1,595 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -10761,6 +10762,15 @@ new file mode 100644
 +    private final Button mSpace;
 +    private final BoundedScrollView mScroll;
 +    private final BoundedScrollView mFavoritesScroll;
++    private android.graphics.drawable.Drawable mPinGlyph, mFavoriteGlyph, mFavoriteFilledGlyph;
++    private void updateGlyphs() {
++        mPinGlyph = new ArcDesktopIcons(ArcDesktopIcons.Kind.PIN, mForeground);
++        mFavoriteGlyph = new ArcDesktopIcons(ArcDesktopIcons.Kind.FAVORITE, mForeground);
++        mFavoriteFilledGlyph = new ArcDesktopIcons(ArcDesktopIcons.Kind.FAVORITE_FILLED, mForeground);
++        for (var glyph : new android.graphics.drawable.Drawable[] {mPinGlyph, mFavoriteGlyph, mFavoriteFilledGlyph}) {
++            glyph.setBounds(0, 0, dp(20), dp(20));
++        }
++    }
 +    private int mSurface = Color.rgb(238, 238, 238);
 +    private int mForeground = Color.rgb(32, 32, 32);
 +    private int mInteraction = Color.rgb(204, 204, 204);
@@ -10796,6 +10806,7 @@ new file mode 100644
 +            BiConsumer<ArcSidebarState.Entry, ImageButton> loadIcon) {
 +        super(activity);
 +        mActivity = activity;
++        updateGlyphs();
 +        mController = controller;
 +        mCurrentTab = currentTab;
 +        mLoadIcon = loadIcon;
@@ -10814,7 +10825,7 @@ new file mode 100644
 +        mFavoritesMenu.setTag("arc-favorites-menu");
 +        mFavoritesMenu.setText("");
 +        mFavoritesMenu.setGravity(Gravity.CENTER);
-+        mFavoritesMenu.setCompoundDrawablesRelativeWithIntrinsicBounds(android.R.drawable.star_big_on, 0, 0, 0);
++        mFavoritesMenu.setCompoundDrawablesRelative(mFavoriteGlyph, null, null, null);
 +        mFavoritesMenu.setVisibility(GONE);
 +        addView(mFavoritesMenu, new LayoutParams(-1, dp(44)));
 +        mSpace = button("", this::showSpaces);
@@ -10851,10 +10862,11 @@ new file mode 100644
 +    @Override
 +    protected void onMeasure(int widthSpec, int heightSpec) {
 +        int available = Math.max(0, MeasureSpec.getSize(widthSpec) - getPaddingLeft() - getPaddingRight());
-+        int columns = favoriteColumns(available, dp(72));
++        int columns = favoriteColumns(available, dp(54));
 +        boolean empty = mFavorites.getChildCount() == 0;
-+        mFavoritesScroll.setVisibility(!empty && columns >= 2 ? VISIBLE : GONE);
-+        mFavoritesMenu.setVisibility(!empty && columns == 0 ? VISIBLE : GONE);
++        boolean menuOnly = columns == 0 || mFavoritesScroll.mBudget < dp(44);
++        mFavoritesScroll.setVisibility(!empty && !menuOnly ? VISIBLE : GONE);
++        mFavoritesMenu.setVisibility(!empty && menuOnly ? VISIBLE : GONE);
 +        if (columns >= 2 && columns != mFavorites.getColumnCount()) {
 +            // Clear previous explicit column constraints before shrinking the grid.
 +            for (int i = 0; i < mFavorites.getChildCount(); i++) {
@@ -10873,18 +10885,21 @@ new file mode 100644
 +            }
 +        }
 +        compactAction(findViewWithTag("arc-pin-current"), R.string.arc_pin_current,
-+                android.R.drawable.ic_menu_save, available / 2 < dp(144));
++                mPinGlyph, available / 2 < dp(144));
 +        compactAction(findViewWithTag("arc-favorite-current"), R.string.arc_favorite_current,
-+                android.R.drawable.star_big_off, available / 2 < dp(144));
++                findViewWithTag("arc-favorite-current").isSelected() ? mFavoriteFilledGlyph : mFavoriteGlyph,
++                available / 2 < dp(144));
 +        super.onMeasure(widthSpec, heightSpec);
 +    }
 +
-+    private void compactAction(Button action, int label, int icon, boolean compact) {
++    private void compactAction(Button action, int label, android.graphics.drawable.Drawable icon, boolean compact) {
 +        String text = compact ? "" : mActivity.getString(label);
 +        if (!text.contentEquals(action.getText())) {
 +            action.setText(text);
 +            action.setGravity((compact ? Gravity.CENTER : Gravity.START | Gravity.CENTER_VERTICAL));
-+            action.setCompoundDrawablesRelativeWithIntrinsicBounds(compact ? icon : 0, 0, 0, 0);
++        }
++        if (action.getCompoundDrawablesRelative()[0] != (compact ? icon : null)) {
++            action.setCompoundDrawablesRelative(compact ? icon : null, null, null, null);
 +        }
 +    }
 +
@@ -10947,7 +10962,8 @@ new file mode 100644
 +    /** Owns collection styling so site favicons retain their original colors and rounded tiles. */
 +    public void setAppearance(int surface, int foreground, int interaction) {
 +        mSurface = surface;
-+        mForeground = foreground;
++        if (mForeground != foreground) { mForeground = foreground; updateGlyphs(); }
++        mFavoritesMenu.setCompoundDrawablesRelative(mFavoriteGlyph, null, null, null);
 +        mInteraction = interaction;
 +        applyAppearance(this);
 +    }
@@ -10966,7 +10982,7 @@ new file mode 100644
 +                ImageButton tile = (ImageButton) child;
 +                tile.clearColorFilter();
 +                int tileSurface = ArcDesktopPolicy.activeTabSurface(mSurface);
-+                GradientDrawable shape = background(tileSurface, 16);
++                GradientDrawable shape = background(tileSurface, 12);
 +                tile.setBackground(new RippleDrawable(ColorStateList.valueOf(mInteraction), shape, null));
 +                tile.setOnHoverListener((view, event) -> {
 +                    if (event.getAction() == android.view.MotionEvent.ACTION_HOVER_ENTER) shape.setColor(mInteraction);
@@ -11045,6 +11061,9 @@ new file mode 100644
 +            mOpenFolder = null;
 +            mRenderedSpace = state.selectedSpace();
 +        }
++        CurrentTab favoriteCurrent = mCurrentTab.get();
++        boolean saved = favoriteCurrent != null && state.favorites().stream().anyMatch(e -> e.url.equals(favoriteCurrent.url));
++        findViewWithTag("arc-favorite-current").setSelected(saved);
 +        String favoriteFocus = focusedTag(mFavorites);
 +        String entryFocus = focusedTag(mEntries);
 +        mFavorites.removeAllViews();
@@ -11053,7 +11072,7 @@ new file mode 100644
 +            ImageButton favorite = new ImageButton(mActivity);
 +            favorite.setImageDrawable(fallbackIcon(entry.url, mForeground));
 +            favorite.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
-+            favorite.setPadding(dp(20), dp(20), dp(20), dp(20));
++            favorite.setPadding(dp(12), dp(12), dp(12), dp(12));
 +            favorite.setContentDescription(entry.title);
 +            favorite.setTooltipText(entry.title);
 +            favorite.setTag("arc-entry:" + entry.id);
@@ -11061,11 +11080,11 @@ new file mode 100644
 +            favorite.setOnLongClickListener(view -> { showEntryMenu(view, entry); return true; });
 +            favorite.setOnContextClickListener(view -> { showEntryMenu(view, entry); return true; });
 +            GridLayout.LayoutParams tileParams = new GridLayout.LayoutParams();
-+            tileParams.width = dp(64); tileParams.height = dp(64);
++            tileParams.width = dp(48); tileParams.height = dp(48);
 +            int index = mFavorites.getChildCount(), columns = mFavorites.getColumnCount();
 +            tileParams.rowSpec = GridLayout.spec(index / columns);
 +            tileParams.columnSpec = GridLayout.spec(index % columns);
-+            tileParams.setMargins(dp(4), dp(4), dp(4), dp(4));
++            tileParams.setMargins(dp(3), dp(3), dp(3), dp(3));
 +            mFavorites.addView(favorite, tileParams);
 +            mLoadIcon.accept(entry, favorite);
 +        }
@@ -11652,7 +11671,7 @@ new file mode 100644
 +        mGlass = glass; mGlassSurface = null;
 +        if (glass != null) {
 +            mGlassSurface = glass.add(mPanel, mPanel::getDrawingRect);
-+            mGlassSurface.setDesktopMaterial(); mGlassSurface.setCornerRadius(dp(12));
++            mGlassSurface.setDesktopMaterial(); mGlassSurface.setCornerRadius(dp(16));
 +            mGlassSurface.setEdgeEnabled(true, mActivity.getResources().getDisplayMetrics().density);
 +            if (mSurface.getColor() != null) mGlassSurface.setSurface(mSurface.getColor().getDefaultColor());
 +        }
@@ -11714,7 +11733,7 @@ new file mode 100644
 +        mOverlay.setOnClickListener(v -> close(true, null));
 +        mPanel = new LinearLayout(activity); mPanel.setOrientation(LinearLayout.VERTICAL);
 +        mPanel.setPadding(dp(8), dp(4), dp(8), dp(8));
-+        mSurface.setCornerRadius(dp(12)); mPanel.setBackground(mSurface);
++        mSurface.setCornerRadius(dp(16)); mPanel.setBackground(mSurface);
 +        mPanel.setElevation(dp(12)); mPanel.setClickable(true);
 +        mPanel.setAccessibilityPaneTitle(placeholder);
 +        mHeader = new LinearLayout(activity); mHeader.setGravity(Gravity.CENTER_VERTICAL);
@@ -12213,7 +12232,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopC
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java
-@@ -0,0 +1,1734 @@
+@@ -0,0 +1,1739 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -12696,17 +12715,20 @@ new file mode 100644
 +            return true;
 +        });
 +        appearanceButton.setTooltipText(activity.getString(R.string.arc_interface));
-+        bookmarksButton.setText("☆\n" + activity.getString(R.string.arc_bookmarks));
-+        bookmarksButton.setTextSize(10);
-+        bookmarksButton.setGravity(Gravity.CENTER);
-+        googleButton.setText("G\nGoogle");
-+        googleButton.setTextSize(10);
++        bookmarksButton.setText(activity.getString(R.string.arc_bookmarks));
++        bookmarksButton.setTextSize(12);
++        bookmarksButton.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
++        googleButton.setText("G");
++        googleButton.setContentDescription("Google"); googleButton.setTooltipText("Google");
++        googleButton.setTextSize(14);
 +        googleButton.setGravity(Gravity.CENTER);
 +        appearanceButton.setContentDescription(activity.getString(R.string.arc_interface));
 +        for (View action : new View[] {bookmarksButton, googleButton}) {
-+            action.setTag("arc-header-tile");
-+            LinearLayout.LayoutParams tile = new LinearLayout.LayoutParams(0, dp(52), 1);
-+            tile.setMargins(dp(4), dp(4), dp(4), dp(4));
++            action.setTag("arc-header-command");
++            LinearLayout.LayoutParams tile = action == bookmarksButton
++                    ? new LinearLayout.LayoutParams(0, dp(44), 1)
++                    : new LinearLayout.LayoutParams(dp(44), dp(44));
++            tile.setMargins(dp(4), 0, dp(4), 0);
 +            mHeaderActions.addView(action, tile);
 +        }
 +        mHeader.addView(mHeaderActions);
@@ -12726,8 +12748,8 @@ new file mode 100644
 +                openCommandBar();
 +            }
 +        });
-+        mColumn.addView(mNewTabRow, new LinearLayout.LayoutParams(-1, dp(44)));
 +        mColumn.addView(mNativeTabs, new LinearLayout.LayoutParams(-1, 0, 1));
++        mColumn.addView(mNewTabRow, new LinearLayout.LayoutParams(-1, dp(44)));
 +
 +        mFooter = new LinearLayout(activity);
 +        // VerticalTabRailLayout already owns Chromium's real new-tab button and handler.
@@ -12750,7 +12772,8 @@ new file mode 100644
 +                            dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
 +        }
 +        mCameraButton = new ImageButton(activity);
-+        mCameraButton.setImageResource(android.R.drawable.ic_menu_camera);
++        mCameraButton.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
++        mCameraButton.setImageDrawable(new ArcDesktopIcons(ArcDesktopIcons.Kind.CAMERA_ORIENTATION, Color.BLACK));
 +        mCameraButton.setContentDescription(activity.getString(R.string.arc_camera_orientation));
 +        mCameraButton.setTooltipText(activity.getString(R.string.arc_camera_orientation));
 +        mCameraButton.setMinimumWidth(0);
@@ -12765,7 +12788,9 @@ new file mode 100644
 +        mFooter.addView(mCameraButton, new LinearLayout.LayoutParams(dp(44), dp(44)));
 +        mColumn.addView(mFooter);
 +        ImageButton about = new ImageButton(activity);
-+        about.setImageResource(android.R.drawable.ic_menu_info_details);
++        about.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
++        about.setImageDrawable(new ArcDesktopIcons(ArcDesktopIcons.Kind.INFO, Color.BLACK));
++        about.setPadding(dp(12), dp(12), dp(12), dp(12));
 +        about.setContentDescription(activity.getString(R.string.arc_about));
 +        about.setTooltipText(activity.getString(R.string.arc_about));
 +        about.setOnClickListener(v -> {
@@ -13550,12 +13575,11 @@ new file mode 100644
 +            }
 +        }
 +        if (mCollectionsView != null) {
-+            mCollectionsView.setVisibility(
-+                    collectionBudget >= dp(80) ? View.VISIBLE : View.GONE);
-+            mCollectionsView.setCompact(!expanded);
++            mCollectionsView.setVisibility(View.VISIBLE);
++            mCollectionsView.setCompact(!expanded || collectionBudget < dp(80));
 +        }
 +        applyFrameGeometry();
-+        if (expanded && mCollectionsView != null) {
++        if (mCollectionsView != null) {
 +            mCollectionsView.setCollectionHeight(collectionBudget);
 +        }
 +        // Palette work is independent of rail width. Avoid rebuilding drawables on every
@@ -13948,6 +13972,73 @@ new file mode 100644
 +        mRail.addView(mNativeTabs, new ViewGroup.LayoutParams(-1, -1));
 +    }
 +}
+diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopIcons.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopIcons.java
+new file mode 100644
+--- /dev/null
++++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopIcons.java
+@@ -0,0 +1,62 @@
++// Copyright 2026 The Chromium Authors
++// Use of this source code is governed by a BSD-style license that can be
++// found in the LICENSE file.
++package org.chromium.chrome.browser.arc;
++
++import android.graphics.Canvas;
++import android.graphics.ColorFilter;
++import android.graphics.Paint;
++import android.graphics.Path;
++import android.graphics.PixelFormat;
++import android.graphics.drawable.Drawable;
++
++/** Small shared vector glyphs. Geometry is in a 24-unit optical box, independent of density. */
++public final class ArcDesktopIcons extends Drawable {
++    public enum Kind { PIN, FAVORITE, FAVORITE_FILLED, CAMERA_ORIENTATION, INFO }
++    private final Kind mKind;
++    private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
++    private final Path mPath = new Path();
++
++    public ArcDesktopIcons(Kind kind, int color) {
++        mKind = kind; mPaint.setColor(color); mPaint.setStrokeWidth(1.7f);
++        mPaint.setStrokeCap(Paint.Cap.ROUND); mPaint.setStrokeJoin(Paint.Join.ROUND);
++        if (kind == Kind.PIN) {
++            mPath.moveTo(8, 3); mPath.lineTo(16, 3); mPath.lineTo(15, 9);
++            mPath.lineTo(18, 13); mPath.lineTo(6, 13); mPath.lineTo(9, 9); mPath.close();
++            mPath.moveTo(12, 13); mPath.lineTo(12, 21);
++        } else if (kind == Kind.FAVORITE || kind == Kind.FAVORITE_FILLED) {
++            for (int i = 0; i < 10; i++) {
++                double angle = Math.PI * i / 5 - Math.PI / 2;
++                float radius = i % 2 == 0 ? 9 : 4.2f;
++                float x = 12 + (float) Math.cos(angle) * radius;
++                float y = 12 + (float) Math.sin(angle) * radius;
++                if (i == 0) mPath.moveTo(x, y); else mPath.lineTo(x, y);
++            }
++            mPath.close();
++        } else if (kind == Kind.CAMERA_ORIENTATION) {
++            mPath.addRoundRect(4, 8, 16, 18, 2, 2, Path.Direction.CW);
++            mPath.moveTo(16, 11); mPath.lineTo(21, 8); mPath.lineTo(21, 18); mPath.lineTo(16, 15);
++            mPath.moveTo(5, 5); mPath.cubicTo(8, 1, 14, 1, 17, 5);
++            mPath.moveTo(17, 2); mPath.lineTo(17, 5); mPath.lineTo(14, 5);
++        } else {
++            mPath.addCircle(12, 12, 9, Path.Direction.CW);
++            mPath.moveTo(12, 11); mPath.lineTo(12, 17);
++            mPath.moveTo(12, 7); mPath.lineTo(12, 7.1f);
++        }
++    }
++
++    @Override public void draw(Canvas canvas) {
++        var bounds = getBounds(); if (bounds.isEmpty()) return;
++        int saved = canvas.save();
++        float scale = Math.min(bounds.width(), bounds.height()) / 24f;
++        canvas.translate(bounds.exactCenterX() - 12 * scale, bounds.exactCenterY() - 12 * scale);
++        canvas.scale(scale, scale);
++        mPaint.setStyle(mKind == Kind.FAVORITE_FILLED ? Paint.Style.FILL : Paint.Style.STROKE);
++        canvas.drawPath(mPath, mPaint); canvas.restoreToCount(saved);
++    }
++    @Override public int getIntrinsicWidth() { return 24; }
++    @Override public int getIntrinsicHeight() { return 24; }
++    @Override public void setAlpha(int alpha) { mPaint.setAlpha(alpha); invalidateSelf(); }
++    @Override public void setColorFilter(ColorFilter filter) { mPaint.setColorFilter(filter); invalidateSelf(); }
++    @Override public int getOpacity() { return PixelFormat.TRANSLUCENT; }
++}
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopMaterial.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcDesktopMaterial.java
 new file mode 100644
 --- /dev/null
@@ -14012,7 +14103,7 @@ new file mode 100644
 +    static int[] ramp(int surface, int intensity) {
 +        double strength = clamp(intensity) / 100.0;
 +        return new int[] {safeTone(surface, Color.WHITE, .40 * strength), surface,
-+                safeTone(surface, Color.BLACK, .16 * strength)};
++                safeTone(surface, Color.BLACK, .09 * strength)};
 +    }
 +    public void setAppearance(int surface, int intensity) {
 +        intensity = clamp(intensity);
@@ -18231,7 +18322,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCollect
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCollectionsFocusTest.java
-@@ -0,0 +1,360 @@
+@@ -0,0 +1,396 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -18422,6 +18513,42 @@ new file mode 100644
 +        assertTrue(scroll.isLayoutRequested());
 +    }
 +
++    @Test public void shortWindowKeepsAllFavoritesInAnAccessibleCompactMenu() {
++        Fixture f = new Fixture();
++        for (int i=0;i<8;i++) f.controller.rememberTab(7+i,"https://short.test/"+i,"Favorite "+i,true);
++        f.view.refresh(); f.view.setCompact(true); f.view.setCollectionHeight(0); f.measure();
++        View menu = f.view.findViewWithTag("arc-favorites-menu");
++        assertEquals(View.VISIBLE,menu.getVisibility());
++        assertEquals(View.GONE,f.view.findViewWithTag("arc-favorites-mosaic").getVisibility());
++        assertTrue(menu.performClick());
++        assertEquals(8,org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu().getMenu().size());
++        assertTrue(f.view.getMeasuredHeight() <= Math.round(60 * f.activity.getResources().getDisplayMetrics().density));
++    }
++
++    @Test public void sharedVectorGlyphsFitTheirOpticalBox() throws Exception {
++        for (var kind : ArcDesktopIcons.Kind.values()) {
++            var glyph = new ArcDesktopIcons(kind, android.graphics.Color.BLACK);
++            var pathField = ArcDesktopIcons.class.getDeclaredField("mPath"); pathField.setAccessible(true);
++            var path = (android.graphics.Path) pathField.get(glyph);
++            var rect = new android.graphics.RectF(); path.computeBounds(rect, true);
++            assertTrue(kind.toString(), rect.left >= 1 && rect.top >= 1 && rect.right <= 23 && rect.bottom <= 23);
++            assertEquals(24, glyph.getIntrinsicWidth()); assertEquals(24, glyph.getIntrinsicHeight());
++        }
++    }
++
++    @Test public void compactMosaicRetainsComfortableTargetsAndFourResponsiveColumns() {
++        Fixture f = new Fixture();
++        String id = f.controller.rememberTab(7, "https://example.test", "Saved", true);
++        f.view.refresh(); f.measure();
++        View tile = f.view.findViewWithTag("arc-entry:" + id);
++        float density = f.activity.getResources().getDisplayMetrics().density;
++        assertEquals(Math.round(48 * density), tile.getMeasuredWidth());
++        assertTrue(tile.getMeasuredWidth() >= Math.round(44 * density));
++        assertEquals(Math.round(12 * density), tile.getPaddingLeft());
++        assertEquals(4, ArcCollectionsView.favoriteColumns(216, 54));
++        assertEquals(0, ArcCollectionsView.favoriteColumns(107, 54));
++    }
++
 +    @Test public void faviconOpticalBoxIsStableAcrossBitmapDensitiesAndRefresh() {
 +        Fixture f = new Fixture();
 +        String id = f.controller.rememberTab(7, "https://example.test", "Saved", true);
@@ -18536,7 +18663,7 @@ new file mode 100644
 +            assertEquals(widthDp == 120 ? View.VISIBLE : View.GONE, menu.getVisibility());
 +            for (int i = 0; i < 4; i++) assertSame(original[i], f.view.findViewWithTag("arc-entry:" + ids.get(i)));
 +            if (widthDp != 120) {
-+                assertEquals(widthDp == 304 ? original[0].getTop() : original[0].getBottom() + Math.round(8 * density),
++                assertEquals(widthDp == 304 ? original[0].getTop() : original[0].getBottom() + Math.round(6 * density),
 +                        original[2].getTop());
 +                assertTrue(original[3].getRight() <= width);
 +            }
@@ -18738,7 +18865,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCommand
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCommandBarTest.java
-@@ -0,0 +1,198 @@
+@@ -0,0 +1,202 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -18792,11 +18919,15 @@ new file mode 100644
 +        Fixture f = new Fixture();
 +        f.bar.open(false); f.bar.finishAnimationForTesting();
 +        android.view.View overlay = (android.view.View) f.bar.panelForTesting().getParent();
++        overlay.measure(android.view.View.MeasureSpec.makeMeasureSpec(1000, 1073741824),
++                android.view.View.MeasureSpec.makeMeasureSpec(800, 1073741824));
++        overlay.layout(0, 0, 1000, 800);
 +        long now = android.os.SystemClock.uptimeMillis();
 +        for (int action : new int[] {0, 1}) {
 +            var event = android.view.MotionEvent.obtain(now, now, action, 100, 24, 0);
 +            overlay.dispatchTouchEvent(event); event.recycle();
 +        }
++        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idle();
 +        f.bar.finishAnimationForTesting();
 +        assertTrue("Second click at moved origin must not dismiss the editor", f.bar.isShowing());
 +        assertEquals(1, f.sessions.get()); assertTrue(f.editor.hasFocus());
@@ -21804,7 +21935,7 @@ new file mode 100644
 +        Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
 +        ArcDesktopAppearance.setUiMode(activity, ArcDesktopPolicy.MODE_ARC);
 +        try {
-+            assertEquals(Color.WHITE, ArcDesktopAppearance.activeTabSurface(activity, false));
++            assertEquals(0xff7365d8, ArcDesktopAppearance.activeTabSurface(activity, false));
 +            // Hand-derived pale capsules for the selected orange and blue frame colors.
 +            for (int[] colors : new int[][] {{0xffee4400, 0xfffce0d5}, {0xff0044ee, 0xffd5e0fc}}) {
 +                int seed = colors[0];
@@ -26510,7 +26641,7 @@ new file mode 100644
 +        if (incognito) return selection(context, true);
 +        boolean custom = PREVIEW_COLORS.containsKey(visualContext(context))
 +                || preferences(context).contains(COLOR_KEY);
-+        return custom ? ArcDesktopPolicy.activeTabSurface(surface(context, false)) : 0xffffffff;
++        return custom ? ArcDesktopPolicy.activeTabSurface(surface(context, false)) : 0xff7365d8;
 +    }
 +
 +    public static int foreground(Context context, boolean incognito) {
@@ -26696,9 +26827,9 @@ new file mode 100644
 +        return blend(seed, dark ? 0xff141414 : 0xfffafafa, dark ? 0.50 : 0.65);
 +    }
 +
-+    /** The original neutral surface remains the default until the user selects a color. */
++    /** Luminous lavender default; explicit user colors and the dark palette retain their paths. */
 +    public static int defaultSurface(boolean dark) {
-+        return blend(0xff53657b, dark ? 0xff141414 : 0xfffafafa, dark ? 0.22 : 0.12);
++        return dark ? blend(0xff53657b, 0xff141414, 0.22) : 0xffdccdf7;
 +    }
 +
 +    /** A pale capsule preserves the active-tab shape while following a chosen frame hue. */

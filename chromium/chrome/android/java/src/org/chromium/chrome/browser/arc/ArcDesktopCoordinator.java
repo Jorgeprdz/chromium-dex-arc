@@ -480,17 +480,20 @@ public final class ArcDesktopCoordinator {
             return true;
         });
         appearanceButton.setTooltipText(activity.getString(R.string.arc_interface));
-        bookmarksButton.setText("☆\n" + activity.getString(R.string.arc_bookmarks));
-        bookmarksButton.setTextSize(10);
-        bookmarksButton.setGravity(Gravity.CENTER);
-        googleButton.setText("G\nGoogle");
-        googleButton.setTextSize(10);
+        bookmarksButton.setText(activity.getString(R.string.arc_bookmarks));
+        bookmarksButton.setTextSize(12);
+        bookmarksButton.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
+        googleButton.setText("G");
+        googleButton.setContentDescription("Google"); googleButton.setTooltipText("Google");
+        googleButton.setTextSize(14);
         googleButton.setGravity(Gravity.CENTER);
         appearanceButton.setContentDescription(activity.getString(R.string.arc_interface));
         for (View action : new View[] {bookmarksButton, googleButton}) {
-            action.setTag("arc-header-tile");
-            LinearLayout.LayoutParams tile = new LinearLayout.LayoutParams(0, dp(52), 1);
-            tile.setMargins(dp(4), dp(4), dp(4), dp(4));
+            action.setTag("arc-header-command");
+            LinearLayout.LayoutParams tile = action == bookmarksButton
+                    ? new LinearLayout.LayoutParams(0, dp(44), 1)
+                    : new LinearLayout.LayoutParams(dp(44), dp(44));
+            tile.setMargins(dp(4), 0, dp(4), 0);
             mHeaderActions.addView(action, tile);
         }
         mHeader.addView(mHeaderActions);
@@ -510,8 +513,8 @@ public final class ArcDesktopCoordinator {
                 openCommandBar();
             }
         });
-        mColumn.addView(mNewTabRow, new LinearLayout.LayoutParams(-1, dp(44)));
         mColumn.addView(mNativeTabs, new LinearLayout.LayoutParams(-1, 0, 1));
+        mColumn.addView(mNewTabRow, new LinearLayout.LayoutParams(-1, dp(44)));
 
         mFooter = new LinearLayout(activity);
         // VerticalTabRailLayout already owns Chromium's real new-tab button and handler.
@@ -534,7 +537,8 @@ public final class ArcDesktopCoordinator {
                             dp(ArcDesktopPolicy.ARC_NAV_ROW_HEIGHT_DP)));
         }
         mCameraButton = new ImageButton(activity);
-        mCameraButton.setImageResource(android.R.drawable.ic_menu_camera);
+        mCameraButton.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        mCameraButton.setImageDrawable(new ArcDesktopIcons(ArcDesktopIcons.Kind.CAMERA_ORIENTATION, Color.BLACK));
         mCameraButton.setContentDescription(activity.getString(R.string.arc_camera_orientation));
         mCameraButton.setTooltipText(activity.getString(R.string.arc_camera_orientation));
         mCameraButton.setMinimumWidth(0);
@@ -549,7 +553,9 @@ public final class ArcDesktopCoordinator {
         mFooter.addView(mCameraButton, new LinearLayout.LayoutParams(dp(44), dp(44)));
         mColumn.addView(mFooter);
         ImageButton about = new ImageButton(activity);
-        about.setImageResource(android.R.drawable.ic_menu_info_details);
+        about.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
+        about.setImageDrawable(new ArcDesktopIcons(ArcDesktopIcons.Kind.INFO, Color.BLACK));
+        about.setPadding(dp(12), dp(12), dp(12), dp(12));
         about.setContentDescription(activity.getString(R.string.arc_about));
         about.setTooltipText(activity.getString(R.string.arc_about));
         about.setOnClickListener(v -> {
@@ -1334,12 +1340,11 @@ public final class ArcDesktopCoordinator {
             }
         }
         if (mCollectionsView != null) {
-            mCollectionsView.setVisibility(
-                    collectionBudget >= dp(80) ? View.VISIBLE : View.GONE);
-            mCollectionsView.setCompact(!expanded);
+            mCollectionsView.setVisibility(View.VISIBLE);
+            mCollectionsView.setCompact(!expanded || collectionBudget < dp(80));
         }
         applyFrameGeometry();
-        if (expanded && mCollectionsView != null) {
+        if (mCollectionsView != null) {
             mCollectionsView.setCollectionHeight(collectionBudget);
         }
         // Palette work is independent of rail width. Avoid rebuilding drawables on every
