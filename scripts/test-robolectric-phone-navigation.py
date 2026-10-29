@@ -15,7 +15,7 @@ p.add_argument('--classpath-file',type=Path,required=True);p.add_argument('--jav
 a=p.parse_args();a.work.mkdir(parents=True,exist_ok=True);classes=a.work/'classes';classes.mkdir(exist_ok=True)
 arc=ROOT/'chromium/chrome/android/java/src/org/chromium/chrome/browser/arc'
 sources=[ROOT/'.source-modified/chrome/browser/ui/android/theme/java/src/org/chromium/chrome/browser/theme/ToolbarThemeColorProvider.java',arc/'ArcPhoneNavigation.java',ROOT/'chromium/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneNavigationTest.java']
-sources += [arc/'ArcPhoneGlass.java',ROOT/'chromium/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneGlassTest.java']
+sources += [arc/'ArcPhonePalette.java',arc/'ArcPhoneGlass.java',ROOT/'chromium/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneGlassTest.java']
 sources += [arc/'ArcCommandBar.java',arc/'ArcOmniboxPlacement.java',ROOT/'chromium/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCommandBarTest.java']
 # Compile the unmodified pinned refresh widget, not a reimplementation of its trigger policy.
 pinned_refresh=ROOT/'tests/pinned/swiperefresh'

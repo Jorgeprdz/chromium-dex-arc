@@ -40,6 +40,7 @@ chrome_java_sources = [
   "java/src/org/chromium/chrome/browser/arc/ArcNavigationControls.java",
   "java/src/org/chromium/chrome/browser/arc/ArcPhoneNavigation.java",
   "java/src/org/chromium/chrome/browser/arc/ArcPhoneGlass.java",
+  "java/src/org/chromium/chrome/browser/arc/ArcPhonePalette.java",
   "java/src/org/chromium/chrome/browser/arc/ArcDesktopCoordinator.java",
   "java/src/org/chromium/chrome/browser/arc/ArcDesktopWindowObserver.java",
   "java/src/com/google/android/apps/chrome/appwidget/bookmarks/BookmarkThumbnailWidgetProvider.java",

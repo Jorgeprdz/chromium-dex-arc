@@ -52,6 +52,14 @@ public final class ArcPhoneGlass {
         private int mTint=0xb3ffffff;
         private int mSurface=Color.WHITE;
         private boolean mMilky;
+        private boolean mFloating;
+        /** Phone finish on the same backdrop; neither adds a capture target nor paints a base. */
+        public void setFloatingMaterial(float density){
+            if(mFloating){if(!mEdgeEnabled||mEdgeWidth!=Math.max(.5f,.5f*density))setEdgeEnabled(true,density);return;}
+            mFloating=true;mMilky=false;mSurfaceInitialized=false;
+            mSheen=new Paint(Paint.ANTI_ALIAS_FLAG);
+            setEdgeEnabled(true,density);setSurface(mSurface);
+        }
         private boolean mSampleOnly;
         public void setSampleOnly(boolean sampleOnly){mSampleOnly=sampleOnly;invalidateSelf();}
         private boolean mDesktop;
@@ -64,7 +72,8 @@ public final class ArcPhoneGlass {
             double luminance=Color.luminance(color);
             // Mid-tone custom Spaces need an opaque fill to preserve Chromium's chosen foreground.
             int alpha=mDesktop&&luminance>=.10&&luminance<=.32?255:230;
-            mTint=mMilky?(color&0xffffff)|(alpha<<24):luminance>.45?0xb3ffffff:0xc4202124;
+            mTint=mFloating?(luminance>.45?0xd4ffffff:0xd9202124)
+                    :mMilky?(color&0xffffff)|(alpha<<24):luminance>.45?0xb3ffffff:0xc4202124;
             updateSheen();invalidateSelf();
         }
         private boolean mSurfaceInitialized;

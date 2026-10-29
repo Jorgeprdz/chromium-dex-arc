@@ -1559,9 +1559,14 @@ public class ChromeTabbedActivity extends ChromeActivity implements PreAttachInt
             }
             public boolean homePage() {
                 Tab tab=getActivityTab();
-                return tab!=null && (UrlUtilities.isNtpUrl(tab.getUrl())
-                        || tab.getUrl().equals(HomepageManager.getInstance()
-                                .getHomepageGurlForZeroTabs(getCurrentTabModel().isIncognito())));
+                return tab!=null && UrlUtilities.isNtpUrl(tab.getUrl());
+            }
+            public int pageColor() { return toolbar.getArcPhonePageColor(); }
+            public String pageUrl() { Tab tab=getActivityTab();return tab==null?"":tab.getUrl().getSpec(); }
+            public boolean favorite() {
+                Tab tab=getActivityTab();BookmarkModel model=mBookmarkModelSupplier.get();
+                return tab!=null&&!tab.isDestroyed()&&model!=null&&model.isBookmarkModelLoaded()
+                        &&model.getUserBookmarkIdForTab(tab)!=null;
             }
             public boolean pinned() { Tab tab=getActivityTab();return tab!=null && tab.getIsPinned(); }
             public boolean desktopSite() {

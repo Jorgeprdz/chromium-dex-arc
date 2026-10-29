@@ -114,4 +114,5 @@
     <string name="arc_camera_manual">Manual · %1$d°</string>
     <string name="arc_camera_rotate">Girar 90°</string>
     <string name="arc_camera_reset">Restablecer automático</string>
+    <string name="arc_phone_favorite_saved">En favoritos · Editar</string>
 </resources>

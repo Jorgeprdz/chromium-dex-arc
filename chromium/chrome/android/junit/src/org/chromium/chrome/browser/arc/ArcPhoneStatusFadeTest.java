@@ -28,6 +28,35 @@ import org.robolectric.annotation.SQLiteMode;
 @GraphicsMode(GraphicsMode.Mode.LEGACY)
 @SQLiteMode(SQLiteMode.Mode.LEGACY)
 public class ArcPhoneStatusFadeTest {
+    @Test public void dynamicPaletteRetainsHueAndContrastAcrossThemesAndExtremePages(){
+        for(int hue=0;hue<360;hue+=15)for(float saturation:new float[]{0f,.2f,1f})for(float value:new float[]{0f,.5f,1f}){
+            int page=Color.HSVToColor(new float[]{hue,saturation,value});
+            for(int surface:new int[]{Color.WHITE,0xff202124}){
+                int tint=ArcPhonePalette.statusTint(page,surface),opacity=ArcPhonePalette.statusOpacity(page,surface);
+                assertTrue(opacity<255);int behind=surface==Color.WHITE?Color.BLACK:Color.WHITE;
+                float a=opacity/255f;int mixed=Color.rgb(Math.round(Color.red(tint)*a+Color.red(behind)*(1-a)),
+                        Math.round(Color.green(tint)*a+Color.green(behind)*(1-a)),Math.round(Color.blue(tint)*a+Color.blue(behind)*(1-a)));
+                double l=Color.luminance(mixed);assertTrue(surface==Color.WHITE?(l+.05)/.05>=4.5:1.05/(l+.05)>=4.5);
+                if(saturation>.1f&&value>.1f){float[] actual=new float[3];Color.colorToHSV(ArcPhonePalette.accent(page,surface!=Color.WHITE),actual);assertEquals(hue,actual[0],4f);}
+            }
+        }
+        assertEquals(ArcPhonePalette.accent(Color.TRANSPARENT,false),ArcPhonePalette.accent(Color.WHITE,false));
+    }
+
+    @Test public void dynamicTintFollowsMetadataWithoutChangingBoundsOrInsets() throws Exception {
+        var activity=Robolectric.buildActivity(Activity.class).setup();var decor=new Decor(activity.get());decor.layout(0,0,400,800);
+        var owner=new ArcPhoneStatusFade(decor);owner.update(true,Color.WHITE);
+        assertTrue("Status tint needs the same metadata color as reveal",
+                java.util.Arrays.stream(owner.getClass().getMethods()).anyMatch(m->m.getName().equals("setPageColor")));
+        var method=owner.getClass().getMethod("setPageColor",int.class);var fade=drawable(owner);var bounds=new Rect(fade.getBounds());var insets=decor.raw;
+        method.invoke(owner,Color.RED);org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(250));
+        int red=org.robolectric.util.ReflectionHelpers.getField(fade,"mTint");
+        method.invoke(owner,Color.GREEN);org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(250));
+        int green=org.robolectric.util.ReflectionHelpers.getField(fade,"mTint");assertNotEquals(red,green);
+        assertTrue(Color.red(red)>Color.green(red));assertTrue(Color.green(green)>Color.red(green));
+        assertEquals(bounds,fade.getBounds());assertSame(insets,decor.raw);
+        owner.destroy();assertNull(org.robolectric.util.ReflectionHelpers.getField(fade,"mAnimator"));activity.pause().stop().destroy();
+    }
     @Test public void compactHidesOnlyStatusAndExpansionRestoresItOnce() {
         var activity=Robolectric.buildActivity(Activity.class).setup();
         var decor=new Decor(activity.get());

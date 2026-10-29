@@ -28,6 +28,19 @@ import org.robolectric.annotation.SQLiteMode;
 @GraphicsMode(GraphicsMode.Mode.LEGACY)
 @SQLiteMode(SQLiteMode.Mode.LEGACY)
 public class ArcPhoneGlassTest {
+    @Test public void floatingFinishKeepsOneTranslucentLayerAndNativeBounds() throws Exception {
+        var backdrop=new ArcPhoneGlass.Backdrop();
+        assertTrue("Floating material must reuse the existing backdrop",
+                java.util.Arrays.stream(backdrop.getClass().getMethods()).anyMatch(m->m.getName().equals("setFloatingMaterial")));
+        backdrop.getClass().getMethod("setFloatingMaterial",float.class).invoke(backdrop,2f);
+        backdrop.setCornerRadius(52);backdrop.setBounds(0,0,200,80);
+        var outline=new android.graphics.Outline();backdrop.getOutline(outline);assertEquals(40f,outline.getRadius(),0);
+        for(int color:new int[]{Color.WHITE,0xff202124}){
+            backdrop.setSurface(color);final int[] fills={0};
+            backdrop.draw(new Canvas(){@Override public void drawRect(RectF r,Paint p){fills[0]++;assertTrue(p.getAlpha()<255);assertTrue(p.getAlpha()>=200);}});
+            assertEquals("No opaque base plus second glass fill",1,fills[0]);
+        }
+    }
     @Test public void statusSampleOnlyDoesNotPaintPillTintOrOpaqueFallback() {
         var backdrop=new ArcPhoneGlass.Backdrop();backdrop.setSampleOnly(true);backdrop.setCornerRadius(0);backdrop.setBounds(0,0,200,30);
         final int[] fills={0};

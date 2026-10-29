@@ -40,8 +40,12 @@ public final class ArcPhoneStatusFade {
         return previous == Color.WHITE ? Color.WHITE : 0xff202124;
     }
 
+    /** The exact existing reveal metadata, with a separate contrast-constrained visual role. */
+    public void setPageColor(int color) { mFade.setPageColor(color, mAttached); }
+
     public void update(boolean enabled, int surface) {
         mFade.setSurface(surface);
+        if (!enabled) mFade.finishPalette();
         if (enabled != mAttached) {
             mAttached = enabled;
             if (enabled) {
@@ -122,6 +126,10 @@ public final class ArcPhoneStatusFade {
     static final class Fade extends Drawable implements Drawable.Callback {
         private final Paint mPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private int mSurface;
+        private int mPageColor=Color.TRANSPARENT,mTint;
+        private float mProtection=170;
+        private android.animation.ValueAnimator mAnimator;
+        private static final android.animation.ArgbEvaluator COLORS=new android.animation.ArgbEvaluator();
         private @Nullable Drawable mBackdrop;
         private final Paint mBackdropMask = new Paint(Paint.ANTI_ALIAS_FLAG);
 
@@ -147,8 +155,29 @@ public final class ArcPhoneStatusFade {
             int opaque = surface | 0xff000000;
             if (mSurface == opaque) return;
             mSurface = opaque;
-            updateShader();
+            // Native indicator role changes immediately; never interpolate through the opposite
+            // luminance while the system has already switched icon color.
+            finishPalette();
         }
+
+        void setPageColor(int color, boolean animate) {
+            if(mPageColor==color)return;mPageColor=color;
+            int target=ArcPhonePalette.statusTint(color,mSurface);
+            int opacity=ArcPhonePalette.statusOpacity(color,mSurface);
+            stopAnimation();
+            if(!animate||!android.animation.ValueAnimator.areAnimatorsEnabled()){
+                mTint=target;mProtection=opacity;updateShader();return;
+            }
+            final int start=mTint;final float alpha=mProtection;
+            mAnimator=android.animation.ValueAnimator.ofFloat(0f,1f);mAnimator.setDuration(220);
+            mAnimator.addUpdateListener(animation->{float fraction=(float)animation.getAnimatedValue();
+                mTint=(int)COLORS.evaluate(fraction,start,target);mProtection=alpha+(opacity-alpha)*fraction;updateShader();});
+            mAnimator.addListener(new android.animation.AnimatorListenerAdapter(){@Override public void onAnimationEnd(android.animation.Animator animation){mAnimator=null;}});
+            mAnimator.start();
+        }
+
+        private void stopAnimation(){if(mAnimator!=null){mAnimator.removeAllListeners();mAnimator.removeAllUpdateListeners();mAnimator.cancel();mAnimator=null;}}
+        void finishPalette(){stopAnimation();mTint=ArcPhonePalette.statusTint(mPageColor,mSurface);mProtection=ArcPhonePalette.statusOpacity(mPageColor,mSurface);updateShader();}
 
         static int[] colors(int surface) {
             int rgb = surface & 0x00ffffff;
@@ -163,7 +192,9 @@ public final class ArcPhoneStatusFade {
         private void updateShader() {
             Rect b = getBounds();
             mPaint.setShader(b.isEmpty() ? null : new LinearGradient(0, b.top, 0, b.bottom,
-                    colors(mSurface), new float[] {0f, .70f, 1f}, Shader.TileMode.CLAMP));
+                    Color.alpha(mPageColor)==0?colors(mSurface):new int[]{((Math.min(196,Math.round(mProtection)+8))<<24)|(mTint&0xffffff),
+                            (Math.round(mProtection)<<24)|(mTint&0xffffff),mTint&0xffffff},
+                    new float[] {0f, .70f, 1f}, Shader.TileMode.CLAMP));
             mBackdropMask.setShader(b.isEmpty() ? null : new LinearGradient(0, b.top, 0, b.bottom,
                     new int[] {Color.WHITE, Color.WHITE, 0x00ffffff},
                     new float[] {0f, .70f, 1f}, Shader.TileMode.CLAMP));

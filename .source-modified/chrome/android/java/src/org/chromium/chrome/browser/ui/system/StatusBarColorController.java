@@ -521,6 +521,10 @@ public class StatusBarColorController
         updateStatusBarColor();
     }
 
+    public void setArcPhonePageColor(int color) {
+        mArcPhoneStatusFade.setPageColor(color);
+    }
+
     public void setArcPhoneStatusBackdrop(android.graphics.drawable.@Nullable Drawable backdrop) {
         mArcPhoneStatusFade.setBackdrop(backdrop);
     }

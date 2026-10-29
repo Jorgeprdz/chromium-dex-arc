@@ -33,6 +33,24 @@ import org.chromium.ui.util.ColorUtils;
 @NullMarked
 public class ToolbarThemeColorProvider extends ThemeColorProvider
         implements BrowserControlsStateProvider.Observer, ThemeColorObserver, TintObserver {
+    private @Nullable Runnable mArcPhonePageColorChangedCallback;
+    private int mArcLastPageColor, mArcLastPageFallback;
+    private boolean mArcHasPageColor;
+    private final ThemeColorObserver mArcPageObserver=(color,animate)->{
+        int fallback=getArcPhoneSurfaceColor();
+        if(mArcHasPageColor&&mArcLastPageColor==color&&mArcLastPageFallback==fallback)return;
+        mArcHasPageColor=true;mArcLastPageColor=color;mArcLastPageFallback=fallback;
+        if(mArcPhonePageColorChangedCallback!=null)mArcPhonePageColorChangedCallback.run();
+    };
+
+    /** Metadata notification survives the floating toolbar's intentional neutral color clamp. */
+    public void setArcPhonePageColorChangedCallback(@Nullable Runnable callback){
+        if(mArcPhonePageColorChangedCallback==callback)return;
+        if(mArcPhonePageColorChangedCallback!=null)mTopUiThemeColorProvider.removeThemeColorObserver(mArcPageObserver);
+        mArcPhonePageColorChangedCallback=callback;mArcHasPageColor=false;
+        if(callback!=null)mTopUiThemeColorProvider.addThemeColorObserver(mArcPageObserver);
+    }
+
     private final Context mArcContext;
     private final BiFunction<Context, Boolean, Integer> mArcSurfaceColorResolver;
     private final BiFunction<Context, Integer, ColorStateList> mArcIconTintResolver;
@@ -138,6 +156,7 @@ public class ToolbarThemeColorProvider extends ThemeColorProvider
 
     @Override
     public void destroy() {
+        setArcPhonePageColorChangedCallback(null);
         super.destroy();
         mBrowserControlsStateProvider.removeObserver(this);
         if (mActiveProvider != null) {

@@ -45,7 +45,7 @@ public class ArcPhoneNavigationTest {
     private BottomSheetController mController;
     private FakeHost mHost;
     private static class FakeHost implements ArcPhoneNavigation.Host {
-        Object token=new Object(); int action=-1,zoom=100,count=8,color=0xfff0f0f6; boolean web=true,pinned,home;
+        Object token=new Object(); int action=-1,zoom=100,count=8,color=0xfff0f0f6; boolean web=true,pinned,home,favorite; int page=Color.RED; String url="https://example.test/";
         public Object pageToken(){return token;}
         public String domain(){return "example.test";}
         public Bitmap favicon(){return null;}
@@ -53,6 +53,9 @@ public class ArcPhoneNavigationTest {
         public boolean webPage(){return web;}
         public boolean pinned(){return pinned;}
         public boolean homePage(){return home;}
+        public int pageColor(){return page;}
+        public String pageUrl(){return url;}
+        public boolean favorite(){return favorite;}
         public boolean desktopSite(){return false;}
         public int zoomPercent(){return zoom;}
         public int surface(){return color;}
@@ -76,6 +79,91 @@ public class ArcPhoneNavigationTest {
         verify(mController).requestShowContent(c.capture(),anyBoolean());return c.getValue();
     }
     private int editors(View v){int n=v instanceof EditText?1:0;if(v instanceof ViewGroup g)for(int i=0;i<g.getChildCount();i++)n+=editors(g.getChildAt(i));return n;}
+    private android.graphics.drawable.Drawable aura(String tag) {
+        var button=(LinearLayout)find("arc-phone-"+tag);
+        var pill=(FrameLayout)button.getChildAt(0);
+        assertNotNull("Existing pill must own its persistent aura drawable",pill.getBackground());
+        assertFalse("Aura must be a soft gradient rather than a solid capsule",pill.getBackground() instanceof GradientDrawable);
+        return pill.getBackground();
+    }
+    private float strength(String tag){return org.robolectric.util.ReflectionHelpers.getField(aura(tag),"mStrength");}
+    private int auraColor(String tag){return org.robolectric.util.ReflectionHelpers.getField(aura(tag),"mColor");}
+    private void idle(long millis){org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(millis));}
+    @Test public void contextualAuraTracksPageHueWithoutRelayoutOrFakeSelection(){
+        View bar=mNavigation.getGlassTarget();Object geometry=bar.getLayoutParams();
+        mHost.home=true;mNavigation.refresh();idle(250);
+        int red=auraColor("home");float[] hsv=new float[3];Color.colorToHSV(red,hsv);assertTrue(hsv[0]<8||hsv[0]>352);
+        assertEquals(1f,strength("home"),.01f);
+        mHost.page=Color.GREEN;mNavigation.refresh();idle(250);
+        Color.colorToHSV(auraColor("home"),hsv);assertEquals(120f,hsv[0],3f);
+        assertSame(geometry,bar.getLayoutParams());assertEquals(4,((ViewGroup)bar).getChildCount());
+        mHost.home=false;mNavigation.refresh();idle(250);
+        for(String tag:new String[]{"home","new","tabs","menu"}){assertFalse(find("arc-phone-"+tag).isSelected());assertEquals(0f,strength(tag),.01f);}
+        mNavigation.getBottomBar().setParent(1);idle(250);assertTrue(find("arc-phone-tabs").isSelected());
+        assertEquals(1f,strength("tabs"),.01f);
+        mNavigation.getBottomBar().setParent(0);idle(250);assertFalse(find("arc-phone-tabs").isSelected());
+    }
+    @Test public void newTabPulseIsBriefAndNeverBecomesSelection(){
+        float old=android.animation.ValueAnimator.getDurationScale();
+        try{
+            android.animation.ValueAnimator.setDurationScale(1);
+            aura("new");find("arc-phone-new").performClick();
+            assertEquals(ArcPhoneNavigation.NEW_TAB,mHost.action);assertFalse(find("arc-phone-new").isSelected());
+            android.animation.ValueAnimator pulse=org.robolectric.util.ReflectionHelpers.getField(aura("new"),"mAnimator");
+            assertNotNull(pulse);assertEquals(220,pulse.getDuration());pulse.setCurrentFraction(.45f);
+            assertTrue(strength("new")>0);pulse.end();assertEquals(0f,strength("new"),.01f);
+        }finally{android.animation.ValueAnimator.setDurationScale(old);}
+        var sheet=menu();idle(250);assertTrue(find("arc-phone-menu").isSelected());
+        sheet.destroy();idle(250);assertFalse(find("arc-phone-menu").isSelected());assertEquals(0f,strength("menu"),.01f);
+    }
+    @Test public void disabledAnimationsAndDestroyLeaveNoAuraAnimator(){
+        aura("home");float scale=android.animation.ValueAnimator.getDurationScale();
+        try{android.animation.ValueAnimator.setDurationScale(0);mHost.home=true;mNavigation.refresh();
+            assertEquals(1f,strength("home"),0);assertNull(org.robolectric.util.ReflectionHelpers.getField(aura("home"),"mAnimator"));
+            find("arc-phone-new").performClick();assertEquals(0f,strength("new"),0);
+        }finally{android.animation.ValueAnimator.setDurationScale(scale);}
+        mHost.page=Color.BLUE;mNavigation.refresh();var drawables=new java.util.ArrayList<android.graphics.drawable.Drawable>();
+        for(String tag:new String[]{"home","new","tabs","menu"})drawables.add(aura(tag));
+        mNavigation.destroy();for(var drawable:drawables)assertNull(org.robolectric.util.ReflectionHelpers.getField(drawable,"mAnimator"));
+    }
+    @Test public void sheetHasNativeFavoriteStateCenteredZoomAndDistinctMoreGlyph(){
+        mHost.favorite=true;var sheet=menu();View content=sheet.getContentView();
+        assertTrue(content.findViewWithTag("arc-phone-favorite").isSelected());
+        var zoom=(TextView)content.findViewWithTag("arc-phone-zoom-value");
+        var group=(ViewGroup)zoom.getParent();assertEquals(3,group.getChildCount());assertSame(zoom,group.getChildAt(1));
+        assertSame(content.findViewWithTag("arc-phone-zoom-minus"),group.getChildAt(0));
+        assertSame(content.findViewWithTag("arc-phone-zoom-plus"),group.getChildAt(2));
+        var zoomRow=(ViewGroup)group.getParent();var zoomTitle=(TextView)zoomRow.getChildAt(0);zoomTitle.setText("Zoom");
+        content.measure(View.MeasureSpec.makeMeasureSpec(240,View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(600,View.MeasureSpec.EXACTLY));content.layout(0,0,240,600);
+        assertTrue("Zoom label must fit even in a narrow sheet",zoomTitle.getMeasuredWidth()>=Math.ceil(zoomTitle.getPaint().measureText("Zoom")));
+        assertTrue(zoom.getMeasuredWidth()>=Math.ceil(zoom.getPaint().measureText("100%")));
+        var row=(ViewGroup)content.findViewWithTag("arc-phone-more");
+        var icon=((android.widget.ImageView)row.getChildAt(0)).getDrawable();icon.setBounds(0,0,24,24);
+        final int[] dots={0};icon.draw(new android.graphics.Canvas(){@Override public void drawCircle(float x,float y,float radius,android.graphics.Paint paint){assertTrue(radius<2);dots[0]++;}});
+        assertEquals(3,dots[0]);
+        content.findViewWithTag("arc-phone-favorite").performClick();assertEquals(ArcPhoneNavigation.FAVORITE,mHost.action);
+    }
+    @Test public void sameTabNavigatingToAnotherUrlDismissesStaleSheet(){
+        var sheet=menu();mHost.url="https://another.test/";mNavigation.refresh();
+        verify(mController).hideContent(eq(sheet),anyBoolean());
+        sheet.getContentView().findViewWithTag("arc-phone-pin").performClick();assertEquals(-1,mHost.action);
+    }
+    @Test public void rawPageColorChangesNotifyEvenWhenToolbarStaysNeutral() throws Exception {
+        var top=mock(org.chromium.chrome.browser.theme.TopUiThemeColorProvider.class);
+        var bottom=mock(org.chromium.chrome.browser.theme.BottomUiThemeColorProvider.class);
+        var controls=mock(org.chromium.chrome.browser.browser_controls.BrowserControlsStateProvider.class);
+        when(controls.getControlsPosition()).thenReturn(0);when(top.getThemeColor()).thenReturn(Color.RED);
+        var provider=new org.chromium.chrome.browser.theme.ToolbarThemeColorProvider(mActivity.get(),top,bottom,controls,false,
+                (context,incognito)->Color.WHITE,(context,scheme)->android.content.res.ColorStateList.valueOf(Color.BLACK));
+        assertTrue("Need a metadata observer independent of the clamped toolbar color",
+                java.util.Arrays.stream(provider.getClass().getMethods()).anyMatch(m->m.getName().equals("setArcPhonePageColorChangedCallback")));
+        final int[] changes={0};provider.getClass().getMethod("setArcPhonePageColorChangedCallback",Runnable.class).invoke(provider,(Runnable)()->changes[0]++);
+        var captured=ArgumentCaptor.forClass(org.chromium.chrome.browser.theme.ThemeColorProvider.ThemeColorObserver.class);
+        verify(top,atLeastOnce()).addThemeColorObserver(captured.capture());
+        var observer=captured.getValue();observer.onThemeColorChanged(Color.RED,false);observer.onThemeColorChanged(Color.RED,false);assertEquals(1,changes[0]);
+        when(top.getThemeColor()).thenReturn(Color.GREEN);observer.onThemeColorChanged(Color.GREEN,false);assertEquals(2,changes[0]);
+        provider.destroy();verify(top).removeThemeColorObserver(observer);
+    }
     @Test public void oneSlotContainsExactlyFourNavigationTargets(){
         assertEquals(1,mSlot.getChildCount());
         ViewGroup bar=(ViewGroup)mSlot.getChildAt(0);assertEquals(4,bar.getChildCount());
@@ -255,7 +343,7 @@ public class ArcPhoneNavigationTest {
     @Test public void homeAndHubSelectionFollowNativeState(){
         mHost.home=true;mNavigation.refresh();assertTrue(find("arc-phone-home").isSelected());
         TextView label=(TextView)((LinearLayout)find("arc-phone-home")).getChildAt(1);
-        assertEquals(0xff155dff,label.getCurrentTextColor());
+        assertEquals(0xff202124,label.getCurrentTextColor()); // Native contrast; selection belongs to the aura.
         mHost.home=false;mNavigation.getBottomBar().setParent(1);
         assertFalse(find("arc-phone-home").isSelected());assertTrue(find("arc-phone-tabs").isSelected());
     }

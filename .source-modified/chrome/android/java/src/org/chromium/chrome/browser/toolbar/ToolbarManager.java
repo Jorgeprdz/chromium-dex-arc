@@ -2663,6 +2663,18 @@ public class ToolbarManager
         if (mArcPhoneNavigation != null) mArcPhoneNavigation.bind(host);
     }
 
+    /** Shared metadata source already used by pull-to-reveal; no pixel sampling or new timer. */
+    public int getArcPhonePageColor() {
+        return mToolbarThemeColorProvider.getArcPhonePageColor(mActivityTabProvider.get());
+    }
+
+    private void updateArcPhoneVisualColor() {
+        if(mIsDestroyed||mArcPhoneHost==null
+                ||org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.isDesktopWindow(mActivity))return;
+        mStatusBarColorController.setArcPhonePageColor(getArcPhonePageColor());
+        if(mArcPhoneNavigation!=null)mArcPhoneNavigation.refresh();
+    }
+
     private void updateArcPhoneFloatingSurfaces() {
         if (mIsDestroyed) return;
         boolean enabled = mArcPhoneHost != null
@@ -2683,6 +2695,10 @@ public class ToolbarManager
                                     tab==null?null:tab.getWebContents(),region,width,height,callback::accept);
                         }));
                 mArcPhoneTopGlass = mArcPhoneGlass.add(phone, phone::getArcPhoneGlassBounds);
+                mArcPhoneTopGlass.setFloatingMaterial(mActivity.getResources().getDisplayMetrics().density);
+                // Match the existing native capsule and its shadow (26dp for a 52dp surface).
+                mArcPhoneTopGlass.setCornerRadius(-1);
+                mToolbarThemeColorProvider.setArcPhonePageColorChangedCallback(this::updateArcPhoneVisualColor);
                 mArcPhoneStatusGlass = mArcPhoneGlass.add(mActivity.getWindow().getDecorView(),
                         mStatusBarColorController::getArcPhoneStatusBackdropBounds);
                 mArcPhoneStatusGlass.setSampleOnly(true);
@@ -2796,6 +2812,7 @@ public class ToolbarManager
             phone.setArcPhoneFloatingSurfaceEnabled(enabled);
             mStatusBarColorController.setArcPhoneFloatingSurfaceEnabled(floating);
             mStatusBarColorController.setArcPhoneStatusBackdrop(glass ? mArcPhoneStatusGlass : null);
+            updateArcPhoneVisualColor();
         }
         if (mArcPhoneNavigation != null) {
             mArcPhoneNavigation.setPhoneModeActive(enabled);
@@ -3817,6 +3834,7 @@ public class ToolbarManager
      */
     @Override
     public void onThemeColorChanged(int color, boolean shouldAnimate) {
+        updateArcPhoneVisualColor();
         if (mArcPhonePullReveal != null) {
             mArcPhonePullReveal.setSurface(mToolbarThemeColorProvider.getArcPhonePageColor(
                     mActivityTabProvider.get()));
