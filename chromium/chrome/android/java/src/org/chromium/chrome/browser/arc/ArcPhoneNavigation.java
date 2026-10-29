@@ -434,8 +434,11 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
         }
         private void setColor(int color){if(mColor==color&&mPaint.getShader()!=null)return;mColor=color;updateShader();invalidateSelf();}
         private void updateShader(){var b=getBounds();if(b.isEmpty())return;int rgb=mColor&0xffffff;
+            // Keep the approved 14% peak, but carry tint beyond the icon's optical box.
+            // The old early falloff left only ~5% alpha at 72% radius on a 44x24dp pill.
             var gradient=new android.graphics.RadialGradient(0,0,1,
-                    new int[]{0x24000000|rgb,0x18000000|rgb,rgb},new float[]{0f,.45f,1f},android.graphics.Shader.TileMode.CLAMP);
+                    new int[]{0x24000000|rgb,0x24000000|rgb,0x1c000000|rgb,rgb},
+                    new float[]{0f,.55f,.80f,1f},android.graphics.Shader.TileMode.CLAMP);
             var matrix=new android.graphics.Matrix();matrix.setScale(b.width()/2f,b.height()/2f);matrix.postTranslate(b.exactCenterX(),b.exactCenterY());
             gradient.setLocalMatrix(matrix);mPaint.setShader(gradient);}
         @Override protected void onBoundsChange(android.graphics.Rect bounds){updateShader();}

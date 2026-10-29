@@ -416,7 +416,7 @@
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcNavigationControls.java": "b9565e8723e4be96270ead77600756a260bca45d702da88c3fc87bdbac9386e2",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcOmniboxPlacement.java": "5e87e215d032ea6490db58099237e7c33d4e4c9632056c81c8cefd9297a249d7",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneGlass.java": "2926ffb21aeaaabcaf250d7da2c1178579925d9d43789177846b64571a59ba9b",
-    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneNavigation.java": "9146d08b4b1c9fd42a2b3755f21dd6ba136004518d71012d721f625aadeb02a6",
+    "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneNavigation.java": "fe3c436b5968d5895eb89b1e1c4ee7f79b5423b9f8071f158242a647c620256d",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhonePalette.java": "ccb89c0a3452215d23f177ed9c80c34afe00b6217fabc102ea9c1821d1091280",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhonePullReveal.java": "004db58789f0556d998c135617d446b59c11bdd2e5ccda3a70309429b95c846d",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhoneStatusFade.java": "fde594a3845cff992d1a1a5ba7c4f3a3721c9d7662defa2aef8f807be76dcd73",
@@ -445,7 +445,7 @@
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcNavigationControlsTest.java": "7a5e682dcf3a867d54df11e8cde32db02e2e3c1a328712b94c3d9874696d6af1",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcOmniboxPlacementTest.java": "8f648fd7a93b27b8d21a9f503717d3697ce4515c7b1095a29ee28d3201b81eff",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneGlassTest.java": "f0033d801e93c271d2f23ffe73517ed8cc6886cafd97eedde704858961bb95c6",
-    "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneNavigationTest.java": "59581c9aab3a71ae485c0e25bcdf0307e3bcfaec1b8ffe0ffd723fa3d0299243",
+    "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneNavigationTest.java": "9862ceac496e29ff3e8032854d729f6a959077c507b3cf21a22bf35f0bcd54ae",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhonePullRevealTest.java": "ab3a76c910da43290c233a5abe47b486c8f49c949d0718560d80182866ff0358",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcPhoneStatusFadeTest.java": "59af8033abd37e6b1f6db774a59b37a866675f17aa6b7d4b66f97527333c2f51",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcSplitContentHostTest.java": "1936e7181ffd28b3483fc41aa1288baa284c9605e29f1e717b77ba57663c673d",
@@ -492,5 +492,5 @@
     "third_party/blink/renderer/platform/mediastream/arc_camera_orientation_policy.h": "0166da7e26dd086305a76fe9037ef2ebe8e212375f979aaa29ea904986e97a0f",
     "third_party/blink/renderer/platform/mediastream/arc_camera_orientation_state.h": "d428cbfaf8f05e9ec97452c1a5b33cd750df705c3e289ef978a688031e356777"
   },
-  "patch_sha256": "0824e5e95c8bdca244b01286d7e05f13104f5fb360e7585f21ff56991eb756cb"
+  "patch_sha256": "45458db33ca54b90c344f5bf032d54c5c5ecde5ccaab01d27a6065520eafda07"
 }

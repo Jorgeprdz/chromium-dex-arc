@@ -103,6 +103,31 @@ public class ArcPhoneNavigationTest {
         assertEquals(1f,strength("tabs"),.01f);
         mNavigation.getBottomBar().setParent(0);idle(250);assertFalse(find("arc-phone-tabs").isSelected());
     }
+    @Test public void selectedAuraRetainsVisibleShoulderBeyondTheIconWithoutHigherPeakOpacity(){
+        mHost.home=true;mNavigation.refresh();idle(250);
+        var drawable=aura("home");drawable.setBounds(0,0,44,24);
+        android.graphics.Paint paint=org.robolectric.util.ReflectionHelpers.getField(drawable,"mPaint");
+        var gradient=(android.graphics.RadialGradient)paint.getShader();
+        long[] colors=org.robolectric.util.ReflectionHelpers.getField(gradient,"mColorLongs");
+        float[] positions=org.robolectric.util.ReflectionHelpers.getField(gradient,"mPositions");
+        assertNotNull(colors);assertNotNull(positions);
+        // On the existing 44x24dp pill, the icon hides much of the center.
+        // Demand at least 10% tint at 72% of the radius, while keeping the 15% cap.
+        float radius=.72f;float alpha=0;
+        for(int i=0;i<colors.length;i++){
+            int a=Color.alpha(Color.valueOf(colors[i]).toArgb());
+            assertTrue("Aura exceeds the approved 15% peak",a<=38);
+            if(i>0&&radius>=positions[i-1]&&radius<=positions[i]){
+                int previous=Color.alpha(Color.valueOf(colors[i-1]).toArgb());
+                float fraction=(radius-positions[i-1])/(positions[i]-positions[i-1]);
+                alpha=previous+(a-previous)*fraction;
+            }
+        }
+        assertTrue("Halo disappears outside the icon; shoulder alpha="+alpha,alpha>=25.5f);
+        assertEquals("No hard edge at the pill boundary",0,Color.alpha(Color.valueOf(colors[colors.length-1]).toArgb()));
+        assertEquals(1f,strength("home"),.01f);
+    }
+
     @Test public void newTabPulseIsBriefAndNeverBecomesSelection(){
         float old=android.animation.ValueAnimator.getDurationScale();
         try{
