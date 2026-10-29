@@ -1823,7 +1823,10 @@ public class LocationBarMediator
                 mUrlFocusChangeAnimator = null;
             }
 
-            if (mLocationBarDataProvider.getNewTabPageDelegate().isCurrentlyVisible()) {
+            // The command surface animates its own entry/exit while hosting this native editor.
+            // Complete native focus and IME state now; a second tablet animation would outlive it.
+            if (mLocationBarLayout.getArcCommandResults() != null
+                    || mLocationBarDataProvider.getNewTabPageDelegate().isCurrentlyVisible()) {
                 finishUrlFocusChange(hasFocus, /* shouldShowKeyboard= */ hasFocus);
                 return;
             }

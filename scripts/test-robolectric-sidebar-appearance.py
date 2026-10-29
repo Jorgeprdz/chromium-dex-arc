@@ -70,18 +70,53 @@ public class SidebarAppearanceProbe {
   TextView text=new TextView(a);text.setTextSize(12);
   var method=ArcDesktopAppearance.class.getMethod("styleSidebarTitle",TextView.class);
   method.invoke(null,text);method.invoke(null,text);
-  assertEquals(13,text.getTextSize()/a.getResources().getDisplayMetrics().scaledDensity,.01f);
+  assertEquals(14,text.getTextSize()/a.getResources().getDisplayMetrics().scaledDensity,.01f);
   ArcDesktopAppearance.setUiMode(a,ArcDesktopPolicy.MODE_MOBILE);method.invoke(null,text);
   assertEquals(12,text.getTextSize()/a.getResources().getDisplayMetrics().scaledDensity,.01f);
  }
+ void layoutIcon(FrameLayout owner,ImageView icon,int width,int height) {
+  owner.measure(View.MeasureSpec.makeMeasureSpec(owner.getLayoutParams().width,View.MeasureSpec.EXACTLY),
+    View.MeasureSpec.makeMeasureSpec(owner.getLayoutParams().height,View.MeasureSpec.EXACTLY));
+  owner.layout(0,0,owner.getMeasuredWidth(),owner.getMeasuredHeight());
+  assertTrue("Favicon must fit clipping owner horizontally",icon.getRight()<=owner.getWidth());
+  assertTrue("Favicon must fit clipping owner vertically",icon.getBottom()<=owner.getHeight());
+  assertEquals(width,owner.getWidth());assertEquals(height,owner.getHeight());
+  assertEquals(width,icon.getWidth());assertEquals(height,icon.getHeight());
+  assertEquals(ViewGroup.LayoutParams.MATCH_PARENT,icon.getLayoutParams().width);
+  assertEquals(ViewGroup.LayoutParams.MATCH_PARENT,icon.getLayoutParams().height);
+ }
  @Test public void pairedFaviconsHaveIndependentOpticalSpaceAndRestoreNativeBox() throws Exception {
-  ImageView icon=new ImageView(a);icon.setLayoutParams(new LinearLayout.LayoutParams(16,16));
-  var size=ArcDesktopAppearance.class.getMethod("sizeSidebarFavicon",ImageView.class,boolean.class,boolean.class);
-  size.invoke(null,icon,true,false);assertEquals(41,icon.getLayoutParams().width);assertEquals(20,icon.getLayoutParams().height);
-  size.invoke(null,icon,true,true);assertEquals(32,icon.getLayoutParams().width);assertEquals(20,icon.getLayoutParams().height);
-  size.invoke(null,icon,false,false);assertEquals(20,icon.getLayoutParams().width);
-  ArcDesktopAppearance.class.getMethod("restoreSidebarFaviconSize",ImageView.class).invoke(null,icon);
-  assertEquals(16,icon.getLayoutParams().width);assertEquals(16,icon.getLayoutParams().height);
+  FrameLayout owner=new FrameLayout(a);owner.setLayoutParams(new LinearLayout.LayoutParams(16,16));
+  ImageView icon=new ImageView(a);owner.addView(icon,new FrameLayout.LayoutParams(-1,-1));
+  ColorDrawable artwork=new ColorDrawable(Color.BLUE);icon.setImageDrawable(artwork);
+  Object generation=new Object();icon.setTag(generation);
+  ArcDesktopAppearance.sizeSidebarFavicon(icon,true,false);layoutIcon(owner,icon,45,22);
+  ArcDesktopAppearance.sizeSidebarFavicon(icon,true,true);layoutIcon(owner,icon,32,22);
+  ArcDesktopAppearance.sizeSidebarFavicon(icon,false,true);layoutIcon(owner,icon,22,22);
+  ArcDesktopAppearance.sizeSidebarFavicon(icon,false,false);layoutIcon(owner,icon,22,22);
+  ArcDesktopAppearance.sizeSidebarFavicon(icon,true,false);layoutIcon(owner,icon,45,22);
+  ArcDesktopAppearance.restoreSidebarFaviconSize(icon);layoutIcon(owner,icon,16,16);
+  ArcDesktopAppearance.restoreSidebarFaviconSize(icon);layoutIcon(owner,icon,16,16);
+  assertSame(artwork,icon.getDrawable());assertSame(generation,icon.getTag());
+  ArcDesktopAppearance.sizeSidebarFavicon(icon,false,false);layoutIcon(owner,icon,22,22);
+  ArcDesktopAppearance.restoreSidebarFaviconSize(icon);layoutIcon(owner,icon,16,16);
+ }
+ @Test public void explicitChildDimensionsAndOwnerMarginsRestore() {
+  FrameLayout owner=new FrameLayout(a);LinearLayout.LayoutParams params=new LinearLayout.LayoutParams(16,16);
+  params.leftMargin=7;owner.setLayoutParams(params);
+  ImageView icon=new ImageView(a);FrameLayout.LayoutParams child=new FrameLayout.LayoutParams(12,14);
+  child.gravity=Gravity.CENTER;owner.addView(icon,child);
+  ArcDesktopAppearance.sizeSidebarFavicon(icon,false,false);layoutIcon(owner,icon,22,22);
+  ArcDesktopAppearance.restoreSidebarFaviconSize(icon);
+  assertEquals(16,params.width);assertEquals(16,params.height);assertEquals(7,params.leftMargin);
+  assertEquals(12,child.width);assertEquals(14,child.height);assertEquals(Gravity.CENTER,child.gravity);
+ }
+ @Test public void sidebarMinimumRadiusGrowsOnceAndRestores() throws Exception {
+  View v=new View(a);GradientDrawable shape=new GradientDrawable();shape.setCornerRadius(8);v.setBackground(shape);
+  row(v,false,false,false);row(v,false,false,false);assertEquals(11,shape.getCornerRadius(),0);
+  ArcDesktopAppearance.clearSidebarRowState(v);assertEquals(8,shape.getCornerRadius(),0);
+  shape.setCornerRadius(14);row(v,false,false,false);assertEquals(14,shape.getCornerRadius(),0);
+  ArcDesktopAppearance.clearSidebarRowState(v);assertEquals(14,shape.getCornerRadius(),0);
  }
  @Test public void defaultLavenderAndVioletSelectionHaveReadableForegroundAndCustomColorsPersist(){
   var prefs=ArcDesktopAppearance.preferences(a);prefs.edit().remove(ArcDesktopAppearance.COLOR_KEY).commit();

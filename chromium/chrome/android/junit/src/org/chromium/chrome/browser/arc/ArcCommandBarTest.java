@@ -47,6 +47,92 @@ public class ArcCommandBarTest {
         }
         void finish() {bar.destroy(); activity.finish();}
     }
+    @Test public void closeCrossfadesAddressSnapshotBackToUnchangedOrigin() throws Exception {
+        Fixture f = new Fixture();
+        f.editor.setHint("Hint must not become the returning address");
+        String url = "https://example.test/path?q=1#fragment";
+        f.editor.setText(url);
+        f.bar.openAddress(() -> {
+            f.sessions.incrementAndGet(); f.editor.requestFocus();
+            f.editor.setText(url); f.editor.selectAll();
+        });
+        f.bar.finishAnimationForTesting();
+        FrameLayout overlay = (FrameLayout) f.bar.panelForTesting().getParent();
+        overlay.measure(android.view.View.MeasureSpec.makeMeasureSpec(1000, 1073741824),
+                android.view.View.MeasureSpec.makeMeasureSpec(800, 1073741824));
+        overlay.layout(0, 0, 1000, 800);
+        assertEquals(1, overlay.getChildCount());
+        f.editor.setText("canceled draft must not become the restored address");
+        f.bar.close(true, null);
+        assertEquals("Close must reuse this overlay with a noneditable return snapshot", 2, overlay.getChildCount());
+        android.widget.TextView proxy = (android.widget.TextView) overlay.getChildAt(1);
+        assertEquals(url, proxy.getText().toString());
+        assertFalse(proxy instanceof EditText); assertFalse(proxy.isClickable()); assertFalse(proxy.isFocusable());
+        assertSame(f.editor, f.root.findFocus()); assertEquals(1, f.sessions.get());
+        var field = ArcCommandBar.class.getDeclaredField("mAnimator"); field.setAccessible(true);
+        ValueAnimator animator = (ValueAnimator) field.get(f.bar);
+        animator.setCurrentFraction(0f); assertEquals(0f, proxy.getAlpha(), .001f);
+        animator.setCurrentFraction(.5f);
+        assertEquals(.5f, proxy.getAlpha(), .001f);
+        assertEquals(.5f, f.bar.panelForTesting().getAlpha(), .001f);
+        assertEquals(17, overlay.getBackground().getAlpha());
+        animator.setCurrentFraction(.999f);
+        FrameLayout.LayoutParams params = (FrameLayout.LayoutParams) proxy.getLayoutParams();
+        assertEquals(10, params.leftMargin); assertEquals(10, params.topMargin);
+        assertEquals(210, params.width); assertEquals(44, params.height);
+        assertTrue(proxy.getAlpha() > .99f);
+        f.bar.finishAnimationForTesting();
+        assertFalse(f.bar.isShowing()); assertNull(overlay.getParent());
+        assertEquals(1, overlay.getChildCount()); assertSame(f.original, f.holder.getParent());
+        assertEquals(0, f.sessions.get()); f.finish();
+    }
+
+    @Test public void openingTransfersHolderOnceAndHardwareKeysEditSelectedAddress() {
+        Fixture f = new Fixture();
+        AtomicInteger detached = new AtomicInteger(), attached = new AtomicInteger();
+        f.holder.addOnAttachStateChangeListener(new android.view.View.OnAttachStateChangeListener() {
+            public void onViewAttachedToWindow(android.view.View v) { attached.incrementAndGet(); }
+            public void onViewDetachedFromWindow(android.view.View v) { detached.incrementAndGet(); }
+        });
+        f.bar.openAddress(() -> {
+            f.sessions.incrementAndGet(); f.editor.requestFocus();
+            f.editor.setText("https://example.test/path?q=1#fragment"); f.editor.selectAll();
+        });
+        f.bar.finishAnimationForTesting();
+        assertEquals("Opening must transfer the native holder once", 1, detached.get());
+        assertEquals(1, attached.get()); assertSame(f.editor, f.root.findFocus());
+        f.root.measure(android.view.View.MeasureSpec.makeMeasureSpec(1000, 1073741824),
+                android.view.View.MeasureSpec.makeMeasureSpec(800, 1073741824));
+        f.root.layout(0, 0, 1000, 800);
+        assertTrue("Native editor must have drawable bounds before key dispatch", f.editor.getWidth() > 0);
+        f.root.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_A));
+        f.root.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_A));
+        assertEquals("a", f.editor.getText().toString());
+        f.editor.setSelection(0);
+        f.root.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_B));
+        f.root.dispatchKeyEvent(new KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_B));
+        assertEquals("ba", f.editor.getText().toString());
+        f.bar.close(false, null);
+        assertEquals(2, detached.get()); assertEquals(2, attached.get()); f.finish();
+    }
+
+    @Test public void nativeInputEndsUnderCommandOwnershipAndReentrantCloseRestoresOnce() {
+        Fixture f = new Fixture();
+        AtomicInteger ends = new AtomicInteger(), restores = new AtomicInteger();
+        ArcCommandBar[] bar = new ArcCommandBar[1];
+        bar[0] = new ArcCommandBar(f.activity, f.root, f.holder, f.editor, f.placement,
+                () -> new Rect(260, 0, 1000, 800), () -> f.editor.requestFocus(), () -> {
+                    ends.incrementAndGet();
+                    assertTrue("Command bridge must own native blur", bar[0].isShowing());
+                    bar[0].close(false, null); f.editor.clearFocus();
+                }, () -> { restores.incrementAndGet(); f.placement.restore(); },
+                actions -> List.of(), "Search", "Actions");
+        bar[0].open(false); bar[0].finishAnimationForTesting();
+        bar[0].close(true, null); bar[0].finishAnimationForTesting();
+        assertFalse(bar[0].isShowing()); assertEquals(1, ends.get()); assertEquals(1, restores.get());
+        assertSame(f.original, f.holder.getParent()); bar[0].destroy(); f.finish();
+    }
+
     @Test public void secondOriginClickKeepsEditorAndLaterOutsideClickCloses() {
         Fixture f = new Fixture();
         f.bar.open(false); f.bar.finishAnimationForTesting();

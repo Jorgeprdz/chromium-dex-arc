@@ -128,6 +128,27 @@ public class ArcPhoneNavigationTest {
         assertEquals(1f,strength("home"),.01f);
     }
 
+    @Test public void ambientHalosRemainOnAllWebButtonsWithoutFakeSelection(){
+        mHost.home=false;mHost.page=Color.GREEN;mNavigation.refresh();idle(250);
+        for(String tag:new String[]{"home","new","tabs","menu"}){
+            assertFalse(find("arc-phone-"+tag).isSelected());assertEquals(0f,strength(tag),.01f);
+            float ambient=org.robolectric.util.ReflectionHelpers.getField(aura(tag),"mAmbientStrength");
+            assertEquals(.70f,ambient,.001f);
+            aura(tag).setBounds(0,0,44,24);aura(tag).draw(new android.graphics.Canvas());
+            android.graphics.Paint paint=org.robolectric.util.ReflectionHelpers.getField(aura(tag),"mPaint");
+            assertEquals(Math.round(255*.70f),paint.getAlpha());
+        }
+        mHost.home=true;mNavigation.refresh();idle(250);
+        aura("home").draw(new android.graphics.Canvas());
+        android.graphics.Paint active=org.robolectric.util.ReflectionHelpers.getField(aura("home"),"mPaint");
+        assertEquals(255,active.getAlpha());
+        mNavigation.setPhoneModeActive(false);
+        for(String tag:new String[]{"home","new","tabs","menu"}){
+            float ambient=org.robolectric.util.ReflectionHelpers.getField(aura(tag),"mAmbientStrength");
+            assertEquals(0f,ambient,0f);assertEquals(0f,strength(tag),0f);
+        }
+    }
+
     @Test public void newTabPulseIsBriefAndNeverBecomesSelection(){
         float old=android.animation.ValueAnimator.getDurationScale();
         try{

@@ -152,10 +152,10 @@ public final class ArcCollectionsView extends LinearLayout {
     @Override
     protected void onMeasure(int widthSpec, int heightSpec) {
         int available = Math.max(0, MeasureSpec.getSize(widthSpec) - getPaddingLeft() - getPaddingRight());
-        int columns = favoriteColumns(available, dp(54));
+        int columns = favoriteColumns(available, dp(56));
         updateCollectionBudgets(columns);
         boolean empty = mFavorites.getChildCount() == 0;
-        boolean menuOnly = columns == 0 || mFavoritesScroll.mBudget < dp(54);
+        boolean menuOnly = columns == 0 || mFavoritesScroll.mBudget < dp(56);
         mFavoritesScroll.setVisibility(!empty && !menuOnly ? VISIBLE : GONE);
         mFavoritesMenu.setVisibility(!empty && menuOnly ? VISIBLE : GONE);
         if (columns >= 2 && columns != mFavorites.getColumnCount()) {
@@ -217,7 +217,7 @@ public final class ArcCollectionsView extends LinearLayout {
         result.setContentDescription(text);
         result.setTooltipText(text);
         result.setAllCaps(false);
-        result.setTextSize(13);
+        result.setTextSize(14);
         result.setMinWidth(0); result.setMinimumWidth(0);
         result.setPadding(dp(8), 0, dp(8), 0);
         result.setSingleLine(true);
@@ -249,10 +249,10 @@ public final class ArcCollectionsView extends LinearLayout {
 
     private void updateCollectionBudgets(int columns) {
         if (mCollectionHeight < 0) return;
-        // Allocate whole 48dp tiles plus their 3dp top/bottom margins. The previous
-        // half-budget (at most 96dp) exposed only part of a second 54dp grid row.
+        // Allocate whole 50dp tiles plus their 3dp top/bottom margins. The previous
+        // half-budget (at most 96dp) exposed only part of a second grid row.
         int rows = Math.max(0, mCollectionHeight - dp(88) - getPaddingTop() - getPaddingBottom());
-        int slot = dp(54);
+        int slot = dp(56);
         int count = mFavorites.getChildCount();
         int wantedRows = columns < 2 ? 0 : (count + columns - 1) / columns;
         int visibleRows = Math.min(wantedRows, Math.min(dp(216), rows) / slot);
@@ -286,7 +286,7 @@ public final class ArcCollectionsView extends LinearLayout {
                 ImageButton tile = (ImageButton) child;
                 tile.clearColorFilter();
                 int tileSurface = ArcDesktopPolicy.activeTabSurface(mSurface);
-                GradientDrawable shape = background(tileSurface, 12);
+                GradientDrawable shape = background(tileSurface, 13);
                 tile.setBackground(new RippleDrawable(ColorStateList.valueOf(mInteraction), shape, null));
                 tile.setOnHoverListener((view, event) -> {
                     if (event.getAction() == android.view.MotionEvent.ACTION_HOVER_ENTER) shape.setColor(mInteraction);
@@ -384,7 +384,7 @@ public final class ArcCollectionsView extends LinearLayout {
             favorite.setOnLongClickListener(view -> { showEntryMenu(view, entry); return true; });
             favorite.setOnContextClickListener(view -> { showEntryMenu(view, entry); return true; });
             GridLayout.LayoutParams tileParams = new GridLayout.LayoutParams();
-            tileParams.width = dp(48); tileParams.height = dp(48);
+            tileParams.width = dp(50); tileParams.height = dp(50);
             int index = mFavorites.getChildCount(), columns = mFavorites.getColumnCount();
             tileParams.rowSpec = GridLayout.spec(index / columns);
             tileParams.columnSpec = GridLayout.spec(index % columns);

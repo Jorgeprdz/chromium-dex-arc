@@ -28,6 +28,25 @@ import org.robolectric.annotation.SQLiteMode;
 @GraphicsMode(GraphicsMode.Mode.LEGACY)
 @SQLiteMode(SQLiteMode.Mode.LEGACY)
 public class ArcPhoneStatusFadeTest {
+    @Test public void revealSuppressesOnlyStatusProtectionAndRestoresWithoutChangingInsets() throws Exception {
+        var activity=Robolectric.buildActivity(Activity.class).setup();
+        try {
+            var decor=new Decor(activity.get());decor.layout(0,0,400,800);
+            var owner=new ArcPhoneStatusFade(decor);owner.update(true,Color.WHITE);
+            var reveal=new java.util.concurrent.atomic.AtomicBoolean(false);
+            owner.getClass().getMethod("setRevealStateSupplier",java.util.function.BooleanSupplier.class)
+                    .invoke(owner,(java.util.function.BooleanSupplier)reveal::get);
+            var fade=drawable(owner);Rect original=new Rect(fade.getBounds());var insets=decor.raw;
+            Rect sampled=new Rect();owner.getBackdropBounds(sampled);assertEquals(original,sampled);
+            reveal.set(true);decor.getViewTreeObserver().dispatchOnPreDraw();owner.getBackdropBounds(sampled);
+            assertTrue(sampled.isEmpty());assertEquals(true,org.robolectric.util.ReflectionHelpers.getField(fade,"mSuppressed"));
+            assertSame(insets,decor.raw);assertEquals(original,fade.getBounds());
+            reveal.set(false);decor.getViewTreeObserver().dispatchOnPreDraw();owner.getBackdropBounds(sampled);
+            assertEquals(original,sampled);assertEquals(false,org.robolectric.util.ReflectionHelpers.getField(fade,"mSuppressed"));
+            owner.destroy();assertNull(org.robolectric.util.ReflectionHelpers.getField(owner,"mRevealSupplier"));
+        } finally {activity.pause().stop().destroy();}
+    }
+
     @Test public void dynamicPaletteRetainsHueAndContrastAcrossThemesAndExtremePages(){
         for(int hue=0;hue<360;hue+=15)for(float saturation:new float[]{0f,.2f,1f})for(float value:new float[]{0f,.5f,1f}){
             int page=Color.HSVToColor(new float[]{hue,saturation,value});

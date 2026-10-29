@@ -305,6 +305,7 @@ import org.chromium.url.GURL;
 
 import java.util.List;
 import java.util.Set;
+import java.util.function.BooleanSupplier;
 import java.util.function.Supplier;
 
 /**
@@ -424,6 +425,8 @@ public class ToolbarManager
     private @Nullable ArcPhoneNavigation mArcPhoneNavigation;
     private @Nullable ArcPhoneGlass mArcPhoneGlass;
     private @Nullable ArcPhonePullReveal mArcPhonePullReveal;
+    private final BooleanSupplier mArcPhoneRevealActive =
+            () -> mArcPhonePullReveal != null && mArcPhonePullReveal.isRevealed();
     private @Nullable SwipeRefreshHandler mArcPhonePullHandler;
     private ArcPhoneGlass.@Nullable Backdrop mArcPhoneTopGlass;
     private ArcPhoneGlass.@Nullable Backdrop mArcPhoneStatusGlass;
@@ -2671,7 +2674,10 @@ public class ToolbarManager
     private void updateArcPhoneVisualColor() {
         if(mIsDestroyed||mArcPhoneHost==null
                 ||org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopAppearance.isDesktopWindow(mActivity))return;
-        mStatusBarColorController.setArcPhonePageColor(getArcPhonePageColor());
+        int page=getArcPhonePageColor();
+        mStatusBarColorController.setArcPhonePageColor(page);
+        mStatusBarColorController.setArcPhoneRevealStateSupplier(mArcPhoneRevealActive);
+        if(mArcPhoneTopGlass!=null)mArcPhoneTopGlass.setAmbientPageColor(page);
         if(mArcPhoneNavigation!=null)mArcPhoneNavigation.refresh();
     }
 

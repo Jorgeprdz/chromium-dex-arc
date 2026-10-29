@@ -7,13 +7,13 @@ import android.graphics.Color;
 
 /** Metadata-only phone color roles. The approved reveal resolver is never changed here. */
 final class ArcPhonePalette {
-    static final int FALLBACK = 0xff3b82f6;
+    static final int FALLBACK = 0xff4285f4;
     private ArcPhonePalette() {}
 
     static int accent(int page, boolean dark) {
         float[] hsv = new float[3];
         Color.colorToHSV(page, hsv);
-        if (Color.alpha(page) == 0 || hsv[1] < .06f) Color.colorToHSV(FALLBACK, hsv);
+        if (Color.alpha(page) == 0 || hsv[1] < .06f) return FALLBACK;
         hsv[1] = Math.max(.30f, Math.min(dark ? .58f : .70f, hsv[1]));
         hsv[2] = dark ? .96f : .80f;
         return Color.HSVToColor(hsv);

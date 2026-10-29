@@ -18,12 +18,15 @@ import android.view.WindowInsets;
 
 import org.chromium.build.annotations.Nullable;
 
+import java.util.function.BooleanSupplier;
+
 /** Phone-only visual protection of status indicators; never owns layout, input or web insets. */
 public final class ArcPhoneStatusFade {
     private final View mDecor;
     private final Fade mFade = new Fade();
     private final View.OnLayoutChangeListener mLayout = (v,l,t,r,b,ol,ot,or,ob) -> updateBounds();
     private boolean mAttached;
+    private @Nullable BooleanSupplier mRevealSupplier;
     // Showing system bars changes insets without necessarily changing the edge-to-edge layout.
     private final android.view.ViewTreeObserver.OnPreDrawListener mBeforeDraw = () -> {
         updateBounds();
@@ -31,6 +34,12 @@ public final class ArcPhoneStatusFade {
     };
 
     public ArcPhoneStatusFade(View decor) { mDecor = decor; }
+    /** Read the existing reveal state; never change reveal geometry, colors or gestures. */
+    public void setRevealStateSupplier(@Nullable BooleanSupplier supplier) {
+        mRevealSupplier=supplier;updateRevealProtection();
+    }
+    private void updateRevealProtection(){mFade.setSuppressed(mRevealSupplier!=null&&mRevealSupplier.getAsBoolean());}
+
 
     /** Metadata changes only: a dead band prevents a neutral page palette from flipping icons. */
     public static int selectSurface(int pageColor, int previous) {
@@ -76,11 +85,13 @@ public final class ArcPhoneStatusFade {
     public void setBackdrop(@Nullable Drawable backdrop) { mFade.setBackdrop(backdrop); }
 
     public void getBackdropBounds(Rect out) {
-        if (mAttached) out.set(mFade.getBounds());
+        updateRevealProtection();
+        if (mAttached && !mFade.mSuppressed) out.set(mFade.getBounds());
         else out.setEmpty();
     }
 
     private void updateBounds() {
+        updateRevealProtection();
         WindowInsets raw = mDecor.getRootWindowInsets();
         int top = raw == null ? 0 : Build.VERSION.SDK_INT >= Build.VERSION_CODES.R
                 ? raw.getInsets(WindowInsets.Type.statusBars()).top : raw.getSystemWindowInsetTop();
@@ -90,7 +101,7 @@ public final class ArcPhoneStatusFade {
         if (!mFade.getBounds().equals(next)) mFade.setBounds(next);
     }
 
-    public void destroy() { setBackdrop(null); update(false, Color.TRANSPARENT); }
+    public void destroy() { setRevealStateSupplier(null); setBackdrop(null); update(false, Color.TRANSPARENT); }
 
     /** Own only the status-bar hide requested by compact phone controls. */
     public static final class StatusVisibility {
@@ -128,6 +139,8 @@ public final class ArcPhoneStatusFade {
         private int mSurface;
         private int mPageColor=Color.TRANSPARENT,mTint;
         private float mProtection=170;
+        private boolean mSuppressed;
+        void setSuppressed(boolean suppressed){if(mSuppressed==suppressed)return;mSuppressed=suppressed;invalidateSelf();}
         private android.animation.ValueAnimator mAnimator;
         private static final android.animation.ArgbEvaluator COLORS=new android.animation.ArgbEvaluator();
         private @Nullable Drawable mBackdrop;
@@ -191,19 +204,21 @@ public final class ArcPhoneStatusFade {
 
         private void updateShader() {
             Rect b = getBounds();
+            int rgb=mTint&0xffffff;
+            int top=Color.alpha(mPageColor)==0?Color.alpha(colors(mSurface)[0]):Math.min(196,Math.round(mProtection)+8);
+            int middle=Color.alpha(mPageColor)==0?Color.alpha(colors(mSurface)[1]):Math.round(mProtection);
+            float[] positions={0f,.62f,.75f,.90f,1f};
             mPaint.setShader(b.isEmpty() ? null : new LinearGradient(0, b.top, 0, b.bottom,
-                    Color.alpha(mPageColor)==0?colors(mSurface):new int[]{((Math.min(196,Math.round(mProtection)+8))<<24)|(mTint&0xffffff),
-                            (Math.round(mProtection)<<24)|(mTint&0xffffff),mTint&0xffffff},
-                    new float[] {0f, .70f, 1f}, Shader.TileMode.CLAMP));
+                    new int[]{(top<<24)|rgb,(middle<<24)|rgb,(Math.round(middle*.9f)<<24)|rgb,
+                            (Math.round(middle*.45f)<<24)|rgb,rgb},positions,Shader.TileMode.CLAMP));
             mBackdropMask.setShader(b.isEmpty() ? null : new LinearGradient(0, b.top, 0, b.bottom,
-                    new int[] {Color.WHITE, Color.WHITE, 0x00ffffff},
-                    new float[] {0f, .70f, 1f}, Shader.TileMode.CLAMP));
+                    new int[]{Color.WHITE,Color.WHITE,0xe6ffffff,0x73ffffff,0x00ffffff},positions,Shader.TileMode.CLAMP));
             invalidateSelf();
         }
 
         @Override public void draw(Canvas canvas) {
             Rect bounds = getBounds();
-            if (bounds.isEmpty()) return;
+            if (bounds.isEmpty() || mSuppressed) return;
             Drawable backdrop = mBackdrop;
             if (backdrop != null) {
                 // A status-height layer only; taper sampled blur to the unmodified live page.

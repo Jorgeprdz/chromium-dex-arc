@@ -17,6 +17,8 @@ import androidx.annotation.ColorInt;
 import androidx.annotation.VisibleForTesting;
 import androidx.core.content.ContextCompat;
 
+import java.util.function.BooleanSupplier;
+
 import org.chromium.base.Callback;
 import org.chromium.base.CallbackController;
 import org.chromium.base.supplier.MonotonicObservableSupplier;
@@ -519,6 +521,10 @@ public class StatusBarColorController
         if (mArcPhoneStatusCompact == compact) return;
         mArcPhoneStatusCompact = compact;
         updateStatusBarColor();
+    }
+
+    public void setArcPhoneRevealStateSupplier(@Nullable BooleanSupplier supplier) {
+        mArcPhoneStatusFade.setRevealStateSupplier(supplier);
     }
 
     public void setArcPhonePageColor(int color) {

@@ -84,7 +84,7 @@ public final class ArcCommandBar {
     private final android.view.ViewTreeObserver.OnGlobalLayoutListener mGlobalLayout =
             this::onGlobalLayout;
     private State mState = State.CLOSED;
-    private boolean mActions, mDestroyed, mEditingAddress;
+    private boolean mActions, mDestroyed, mEditingAddress, mFinishingClose;
     private int mSelected = -1;
     private int mForeground, mSelection;
     private List<Result> mVisible = List.of();
@@ -95,6 +95,7 @@ public final class ArcCommandBar {
     private Rect mLastVisibleFrame = new Rect();
     private Rect mLastViewport = new Rect();
     private CharSequence mOriginalHint;
+    private String mReturnAddress;
     private View mPreviousFocus;
     private Runnable mBoundsChanged = () -> {};
 
@@ -183,22 +184,17 @@ public final class ArcCommandBar {
         }
         mActions = actions; mEditingAddress = editingAddress; mState = State.OPENING;
         mPreviousFocus = mRoot.findFocus(); mOriginalHint = mEditor.getHint();
+        mReturnAddress = mEditor.getText().toString();
         mOrigin = boundsInRoot(mHolder);
         mConsumeOriginGesture = false;
         mRoot.addView(mOverlay, new ViewGroup.LayoutParams(-1, -1));
         mRoot.addOnLayoutChangeListener(mLayoutListener);
         mOverlay.getViewTreeObserver().addOnGlobalLayoutListener(mGlobalLayout);
-        mPlacement.move(mHeader, new LinearLayout.LayoutParams(0, -1, 1));
-        mHeader.removeView(mHolder); mHeader.addView(mHolder, 0, new LinearLayout.LayoutParams(0, -1, 1));
+        mPlacement.move(mHeader, 0, new LinearLayout.LayoutParams(0, -1, 1));
         mEditor.setHint(mPlaceholder); mEditor.addTextChangedListener(mTextWatcher);
         resize();
         beginInput.run(); rebuildResults();
-        mProxy = new TextView(mActivity); mProxy.setText(mOriginalHint);
-        mProxy.setTextColor(mForeground); mProxy.setGravity(Gravity.CENTER_VERTICAL);
-        mProxy.setPadding(dp(12), 0, dp(12), 0); mProxy.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
-        mProxy.setClickable(false); mProxy.setFocusable(false);
-        GradientDrawable proxySurface = new GradientDrawable(); proxySurface.setColor(mSurface.getColor());
-        mProxy.setBackground(proxySurface); mOverlay.addView(mProxy);
+        createProxy(mReturnAddress, true);
         animate(mOrigin, panelBounds(), true, null);
     }
 
@@ -212,14 +208,18 @@ public final class ArcCommandBar {
     }
 
     public void close(boolean animated, Runnable after) {
-        if (mState == State.CLOSED) return;
+        if (mState == State.CLOSED || mFinishingClose) return;
         if (mState == State.CLOSING) {
             if (!animated) { cancelAnimator(); finishClose(after); }
             return;
         }
         cancelAnimator(); mState = State.CLOSING;
         if (animated && ValueAnimator.areAnimatorsEnabled()) {
-            animate(panelBounds(), mOrigin, false, after);
+            // Return to the native display captured before input began, rather than a canceled
+            // draft. The original editor and input connection stay in place during this crossfade.
+            createProxy(mReturnAddress, false);
+            Rect source = boundsInRoot(mHolder);
+            animate(source.isEmpty() ? panelBounds() : source, mOrigin, false, after);
         } else {
             finishClose(after);
         }
@@ -227,14 +227,22 @@ public final class ArcCommandBar {
 
     private void finishClose(Runnable after) {
         mEditor.removeTextChangedListener(mTextWatcher);
+        // Keep command ownership through native blur so its tablet focus transition finishes
+        // beneath this overlay. Native endInput may call back into close; finish only once.
+        mFinishingClose = true;
+        try {
+            mEndInput.run();
+        } finally {
+            mFinishingClose = false;
+        }
         mState = State.CLOSED;
         mBoundsChanged.run();
-        mEndInput.run(); mEditor.setHint(mOriginalHint);
+        mEditor.setHint(mOriginalHint);
         mRestore.run(); mRoot.removeOnLayoutChangeListener(mLayoutListener);
         if (mOverlay.getViewTreeObserver().isAlive()) {
             mOverlay.getViewTreeObserver().removeOnGlobalLayoutListener(mGlobalLayout);
         }
-        mRoot.removeView(mOverlay); removeProxy();
+        mRoot.removeView(mOverlay); removeProxy(); mReturnAddress = null;
         mRows.removeAllViews(); mVisible = List.of(); mSelected = -1;
         if (after != null) after.run();
         else if (mPreviousFocus != null && mPreviousFocus != mEditor && mPreviousFocus.isAttachedToWindow()) {
@@ -283,6 +291,20 @@ public final class ArcCommandBar {
                 location[0] - root[0] + view.getWidth(), location[1] - root[1] + view.getHeight());
     }
 
+    private void createProxy(CharSequence text, boolean opening) {
+        removeProxy();
+        mProxy = new TextView(mActivity); mProxy.setText(text);
+        mProxy.setSingleLine(true); mProxy.setTypeface(mEditor.getTypeface());
+        mProxy.setTextSize(android.util.TypedValue.COMPLEX_UNIT_PX, mEditor.getTextSize());
+        mProxy.setTextColor(mForeground); mProxy.setGravity(Gravity.CENTER_VERTICAL);
+        mProxy.setPadding(dp(12), 0, dp(12), 0);
+        mProxy.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        mProxy.setClickable(false); mProxy.setFocusable(false);
+        mProxy.setAlpha(opening ? 1 : 0);
+        GradientDrawable proxySurface = new GradientDrawable(); proxySurface.setColor(mSurface.getColor());
+        mProxy.setBackground(proxySurface); mOverlay.addView(mProxy);
+    }
+
     private void animate(Rect from, Rect to, boolean opening, Runnable after) {
         if (!ValueAnimator.areAnimatorsEnabled() || from.isEmpty() || to.isEmpty()) {
             if (opening) finishOpen(); else finishClose(after); return;
@@ -297,10 +319,13 @@ public final class ArcCommandBar {
                 p.leftMargin = Math.round(from.left + (to.left - from.left) * progress);
                 p.topMargin = Math.round(from.top + (to.top - from.top) * progress);
                 mProxy.setLayoutParams(p);
-                ((GradientDrawable) mProxy.getBackground()).setCornerRadius(dp(12) * progress);
-                mProxy.setElevation(dp(12) * progress); mProxy.setAlpha(1 - progress);
+                float expansion = opening ? progress : 1 - progress;
+                ((GradientDrawable) mProxy.getBackground()).setCornerRadius(dp(12) * expansion);
+                mProxy.setElevation(dp(12) * expansion);
+                mProxy.setAlpha(opening ? 1 - progress : progress);
             }
             float alpha = opening ? progress : 1 - progress;
+            mOverlay.getBackground().setAlpha(Math.round(255 * alpha));
             mPanel.setAlpha(alpha); mHeader.setAlpha(alpha);
             mDivider.setAlpha(Math.max(0, (alpha - .2f) / .8f));
             mScroll.setAlpha(Math.max(0, (alpha - .35f) / .65f));
@@ -314,6 +339,7 @@ public final class ArcCommandBar {
     }
     private void finishOpen() {
         mState = State.OPEN; removeProxy();
+        mOverlay.getBackground().setAlpha(255);
         mPanel.setAlpha(1); mHeader.setAlpha(1); mDivider.setAlpha(1); mScroll.setAlpha(1);
     }
     private void removeProxy() {

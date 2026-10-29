@@ -245,7 +245,7 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
             boolean selected=i==active;button.setSelected(selected);
             int foreground=mForeground;
             FrameLayout pill=(FrameLayout)button.getChildAt(0);
-            if(mPhoneModeActive)mAuras[i].update(selected,mAccentColor,true);
+            if(mPhoneModeActive){mAuras[i].setAmbientEnabled(mHost!=null);mAuras[i].update(selected,mAccentColor,true);}
             else mAuras[i].clear();
             ((ImageView)pill.getChildAt(0)).setImageDrawable(new Icon(i,foreground,i==TABS?count:""));
             ((TextView)button.getChildAt(1)).setTextColor(usesGlass()?mForeground:foreground);
@@ -405,15 +405,19 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
         private final Paint mPaint=new Paint(Paint.ANTI_ALIAS_FLAG);
         private static final android.animation.ArgbEvaluator COLORS=new android.animation.ArgbEvaluator();
         private int mColor=ArcPhonePalette.FALLBACK,mTargetColor=mColor,mAlpha=255;
-        private float mStrength,mTarget;
+        private float mStrength,mTarget,mAmbientStrength;
         private boolean mPulsing;
         private ValueAnimator mAnimator;
+        void setAmbientEnabled(boolean enabled){
+            float strength=enabled?.70f:0f;
+            if(mAmbientStrength==strength)return;mAmbientStrength=strength;invalidateSelf();
+        }
         void update(boolean selected,int color,boolean animate){
             if(mPulsing&&!selected){mTargetColor=color;setColor(color);return;}
             float target=selected?1f:0f;
             if(mTarget==target&&mTargetColor==color)return;
             cancel();mTarget=target;mTargetColor=color;
-            if(!animate||!ValueAnimator.areAnimatorsEnabled()||(mStrength==0&&target==0)){mStrength=target;setColor(color);invalidateSelf();return;}
+            if(!animate||!ValueAnimator.areAnimatorsEnabled()||(mStrength==0&&target==0&&mAmbientStrength==0)){mStrength=target;setColor(color);invalidateSelf();return;}
             run(false,color);
         }
         void pulse(int color){
@@ -442,9 +446,9 @@ public final class ArcPhoneNavigation implements BottomControlsContentDelegate {
             var matrix=new android.graphics.Matrix();matrix.setScale(b.width()/2f,b.height()/2f);matrix.postTranslate(b.exactCenterX(),b.exactCenterY());
             gradient.setLocalMatrix(matrix);mPaint.setShader(gradient);}
         @Override protected void onBoundsChange(android.graphics.Rect bounds){updateShader();}
-        @Override public void draw(Canvas canvas){if(mStrength<=0)return;var b=getBounds();mPaint.setAlpha(Math.round(mAlpha*mStrength));canvas.drawRoundRect(new RectF(b),b.height()/2f,b.height()/2f,mPaint);}
+        @Override public void draw(Canvas canvas){float strength=mAmbientStrength+(1-mAmbientStrength)*mStrength;if(strength<=0)return;var b=getBounds();mPaint.setAlpha(Math.round(mAlpha*strength));canvas.drawRoundRect(new RectF(b),b.height()/2f,b.height()/2f,mPaint);}
         private void cancel(){if(mAnimator!=null){mAnimator.removeAllListeners();mAnimator.removeAllUpdateListeners();mAnimator.cancel();mAnimator=null;}mPulsing=false;}
-        void clear(){cancel();mTarget=0;mStrength=0;invalidateSelf();}
+        void clear(){cancel();mTarget=0;mStrength=0;mAmbientStrength=0;invalidateSelf();}
         @Override public void setAlpha(int alpha){mAlpha=alpha;invalidateSelf();}
         @Override public void setColorFilter(ColorFilter filter){mPaint.setColorFilter(filter);invalidateSelf();}
         @Override public int getOpacity(){return PixelFormat.TRANSLUCENT;}

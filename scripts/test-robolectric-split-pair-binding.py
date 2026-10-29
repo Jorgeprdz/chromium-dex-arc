@@ -81,6 +81,7 @@ public class SplitPairBindingProbe {
   static int foreground(Context context,boolean incognito){return incognito?Color.WHITE:Color.BLACK;}
   static void normalizeSidebarFavicon(ImageView view){view.setScaleType(ImageView.ScaleType.FIT_CENTER);view.setImageTintList(null);}
   private static final java.util.WeakHashMap<ImageView,int[]> SIDEBAR_ICON_SIZE=new java.util.WeakHashMap<>();
+  private static final java.util.WeakHashMap<android.view.View,int[]> SIDEBAR_ICON_CONTAINER_SIZE=new java.util.WeakHashMap<>();
   static void sizeSidebarFavicon(ImageView icon,boolean pair,boolean compact) ARC_PAIR_SIZE_HOOK
   static void restoreSidebarFaviconSize(ImageView icon) ARC_PAIR_RESET_HOOK
  }
@@ -90,9 +91,11 @@ public class SplitPairBindingProbe {
   static void updateFaviconImage(PropertyModel model,ImageView view){view.setTag(model.get(TabProperties.FAVICON_FETCHER));view.setImageDrawable(ordinary);}
  }
  static class VerticalTabItemLayout extends LinearLayout {
-  final ImageView icon;
+  final ImageView icon;final android.widget.FrameLayout iconOwner;
   boolean showAction,showAlert,showLoading,showFavicon;
-  VerticalTabItemLayout(Context context){super(context);icon=new ImageView(context);icon.setId(R.id.tab_favicon);addView(icon);
+  VerticalTabItemLayout(Context context){super(context);icon=new ImageView(context);icon.setId(R.id.tab_favicon);
+   iconOwner=new android.widget.FrameLayout(context);addView(iconOwner,new LinearLayout.LayoutParams(16,16));
+   iconOwner.addView(icon,new android.widget.FrameLayout.LayoutParams(-1,-1));
    for(int id:new int[]{R.id.action_button,R.id.alert_indicator_icon,R.id.tab_loading_spinner}){View child=new View(context);child.setId(id);addView(child);}}
   void updateIconDisplay(boolean only,boolean action,boolean alert,boolean actor,boolean loading,int color,boolean favicon){
    showAction=action;showAlert=alert;showLoading=loading;showFavicon=favicon;
@@ -132,6 +135,14 @@ public class SplitPairBindingProbe {
   return new TabProperties.ArcSplitPair(17,18,17,"Left","Right",left,right,fallback);
  }
  void draw(ImageView view){Drawable d=view.getDrawable();assertNotNull(d);d.setBounds(0,0,48,24);d.draw(new Canvas());}
+ @Test public void pairSizingChangesOwnerAndKeepsImageContainedThroughCompactRecycle(){
+  DeferredFetcher l=new DeferredFetcher(),r=new DeferredFetcher();
+  VerticalTabItemLayout row=new VerticalTabItemLayout(a);PropertyModel m=model(17,pair(l,r,new ColorDrawable(Color.GRAY)),false);
+  updateFaviconImage(m,row);assertEquals(45,row.iconOwner.getLayoutParams().width);assertEquals(22,row.iconOwner.getLayoutParams().height);
+  assertEquals(-1,row.icon.getLayoutParams().width);assertEquals(-1,row.icon.getLayoutParams().height);
+  compact=true;updateIcons(m,row,true);assertEquals(32,row.iconOwner.getLayoutParams().width);
+  compact=false;updateIcons(m,row,false);assertEquals(45,row.iconOwner.getLayoutParams().width);
+ }
  @Test public void nativeFetchersPopulateBothIconsAndNullCallbacksKeepFallback(){
   DeferredFetcher left=new DeferredFetcher(),right=new DeferredFetcher();TrackedIcon fallback=new TrackedIcon(Color.GRAY),l=new TrackedIcon(Color.RED),r=new TrackedIcon(Color.BLUE);
   VerticalTabItemLayout row=new VerticalTabItemLayout(a);PropertyModel m=model(17,pair(left,right,fallback),false);

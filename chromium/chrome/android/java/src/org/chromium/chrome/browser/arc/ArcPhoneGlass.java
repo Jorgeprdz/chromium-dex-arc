@@ -64,6 +64,52 @@ public final class ArcPhoneGlass {
         public void setSampleOnly(boolean sampleOnly){mSampleOnly=sampleOnly;invalidateSelf();}
         private boolean mDesktop;
         private Paint mSheen;
+        private Paint mAmbientPaint;
+        private int mAmbientPage,mAmbientColor,mAmbientTarget;
+        private boolean mAmbientEnabled;
+        // Standalone drawables are active; sampler-owned backdrops follow their owner's lifecycle.
+        private boolean mAmbientActive=true;
+        private android.animation.ValueAnimator mAmbientAnimator;
+        private static final android.animation.ArgbEvaluator AMBIENT_COLORS=new android.animation.ArgbEvaluator();
+
+        /** Omnibar-only tint on the existing backdrop: no new view, capture, or GPU blur. */
+        public void setAmbientPageColor(int page){
+            if(mAmbientEnabled&&mAmbientPage==page)return;
+            boolean animate=mAmbientEnabled&&mAmbientActive;mAmbientEnabled=true;mAmbientPage=page;
+            if(mAmbientPaint==null)mAmbientPaint=new Paint(Paint.ANTI_ALIAS_FLAG);
+            updateAmbientColor(animate);
+        }
+        private void setAmbientActive(boolean active){
+            mAmbientActive=active;
+            if(!active){stopAmbientAnimation();mAmbientColor=mAmbientTarget;updateAmbientShader();}
+        }
+        private void stopAmbientAnimation(){
+            if(mAmbientAnimator==null)return;
+            mAmbientAnimator.removeAllListeners();mAmbientAnimator.removeAllUpdateListeners();
+            mAmbientAnimator.cancel();mAmbientAnimator=null;
+        }
+        private void updateAmbientColor(boolean animate){
+            if(!mAmbientEnabled)return;
+            int target=ArcPhonePalette.accent(mAmbientPage,Color.luminance(mSurface)<=.45);
+            if(mAmbientTarget==target&&mAmbientPaint.getShader()!=null)return;
+            stopAmbientAnimation();mAmbientTarget=target;
+            if(!animate||!android.animation.ValueAnimator.areAnimatorsEnabled()){
+                mAmbientColor=target;updateAmbientShader();return;
+            }
+            int start=mAmbientColor;
+            mAmbientAnimator=android.animation.ValueAnimator.ofFloat(0f,1f);mAmbientAnimator.setDuration(220);
+            mAmbientAnimator.addUpdateListener(value->{mAmbientColor=(int)AMBIENT_COLORS.evaluate((float)value.getAnimatedValue(),start,target);updateAmbientShader();});
+            mAmbientAnimator.addListener(new android.animation.AnimatorListenerAdapter(){@Override public void onAnimationEnd(android.animation.Animator animation){mAmbientAnimator=null;}});
+            mAmbientAnimator.start();
+        }
+        private void updateAmbientShader(){
+            Rect bounds=getBounds();if(!mAmbientEnabled||bounds.isEmpty())return;
+            int rgb=mAmbientColor&0xffffff;
+            var gradient=new android.graphics.RadialGradient(0,0,1,new int[]{0x12000000|rgb,0x0a000000|rgb,rgb},new float[]{0f,.65f,1f},Shader.TileMode.CLAMP);
+            var matrix=new android.graphics.Matrix();matrix.setScale(bounds.width()*.75f,bounds.height()*.85f);matrix.postTranslate(bounds.left+bounds.width()*.25f,bounds.exactCenterY());
+            gradient.setLocalMatrix(matrix);mAmbientPaint.setShader(gradient);invalidateSelf();
+        }
+
         private int mAlpha=255;
         private boolean mPaintReported;
         public void setSurface(int color){
@@ -74,7 +120,7 @@ public final class ArcPhoneGlass {
             int alpha=mDesktop&&luminance>=.10&&luminance<=.32?255:230;
             mTint=mFloating?(luminance>.45?0xd4ffffff:0xd9202124)
                     :mMilky?(color&0xffffff)|(alpha<<24):luminance>.45?0xb3ffffff:0xc4202124;
-            updateSheen();invalidateSelf();
+            updateSheen();updateAmbientColor(false);invalidateSelf();
         }
         private boolean mSurfaceInitialized;
         public void setMilky(boolean milky){mMilky=milky;mSurfaceInitialized=false;setSurface(mSurface);}
@@ -83,7 +129,7 @@ public final class ArcPhoneGlass {
         int sheenColor(){double l=Color.luminance(mSurface);return (l+.05)/.05>=1.05/(l+.05)?0x12ffffff:0x12000000;}
         private void updateSheen(){if(mSheen!=null)mSheen.setShader(new LinearGradient(0,getBounds().top,0,
                 Math.max(getBounds().top+1,getBounds().bottom),sheenColor(),sheenColor()&0xffffff,Shader.TileMode.CLAMP));}
-        @Override protected void onBoundsChange(Rect bounds){updateSheen();}
+        @Override protected void onBoundsChange(Rect bounds){updateSheen();updateAmbientShader();}
         public void setCornerRadius(float radius){mCornerRadius=radius;mTopCornersOnly=false;mCustomCorners=false;invalidateSelf();}
         public void setTopCorners(float radius){mCornerRadius=radius;mTopCornersOnly=true;mCustomCorners=false;invalidateSelf();}
         public void setCornerRadii(float[] radii){System.arraycopy(radii,0,mCornerRadii,0,8);mCustomCorners=true;invalidateSelf();}
@@ -94,7 +140,7 @@ public final class ArcPhoneGlass {
                     (float)(crop.top-requested.top)/requested.height(),(float)(crop.right-requested.left)/requested.width(),
                     (float)(crop.bottom-requested.top)/requested.height());invalidateSelf();
         }
-        public void clear(){mFrame=null;mPaintReported=false;invalidateSelf();}
+        public void clear(){mFrame=null;mPaintReported=false;stopAmbientAnimation();mAmbientColor=mAmbientTarget;updateAmbientShader();invalidateSelf();}
         boolean hasFrame(){return mFrame!=null;}
         int tintColor(){return mTint;}
         @Override public void draw(Canvas canvas){
@@ -117,11 +163,12 @@ public final class ArcPhoneGlass {
                 if(!mPaintReported){android.util.Log.i("ArchiumGlass","painted frame bounds="+getBounds().toShortString());mPaintReported=true;}
             }
             if(!mSampleOnly){mPaint.setColor(mTint);mPaint.setAlpha((mMilky&&mFrame==null?255:Color.alpha(mTint))*mAlpha/255);canvas.drawRect(mRect,mPaint);}
+            if(mAmbientEnabled&&mAmbientPaint!=null){mAmbientPaint.setAlpha(mAlpha);canvas.drawPath(mClip,mAmbientPaint);}
             if(mSheen!=null){mSheen.setAlpha(mAlpha);canvas.drawPath(mClip,mSheen);}
             if(mEdgeEnabled){
                 mEdgeRect.set(mRect);mEdgeRect.inset(mEdgeWidth/2,mEdgeWidth/2);
                 mEdgePaint.setStyle(Paint.Style.STROKE);mEdgePaint.setStrokeWidth(mEdgeWidth);
-                int edge=Color.luminance(mTint)>.45?0x241d2733:0x2cffffff;
+                int edge=mAmbientEnabled?0x24000000|(mAmbientColor&0xffffff):Color.luminance(mTint)>.45?0x241d2733:0x2cffffff;
                 mEdgePaint.setColor(edge);mEdgePaint.setAlpha(Color.alpha(edge)*mAlpha/255);
                 canvas.drawRoundRect(mEdgeRect,Math.max(0,radius-mEdgeWidth/2),Math.max(0,radius-mEdgeWidth/2),mEdgePaint);
             }
@@ -190,14 +237,15 @@ public final class ArcPhoneGlass {
     private int mGeneration,mNext;
     private long mInterval=120;
     public ArcPhoneGlass(View clock,Capture capture){mClock=clock;mCapture=capture;}
-    public Backdrop add(View view,Consumer<Rect> bounds){Target t=new Target(view,bounds);mTargets.add(t);return t.backdrop;}
+    public Backdrop add(View view,Consumer<Rect> bounds){Target t=new Target(view,bounds);t.backdrop.setAmbientActive(mEnabled&&!mDestroyed);mTargets.add(t);return t.backdrop;}
     public void remove(Backdrop backdrop){
-        mTargets.removeIf(t->{if(t.backdrop!=backdrop)return false;t.backdrop.clear();t.spare=null;return true;});
+        mTargets.removeIf(t->{if(t.backdrop!=backdrop)return false;t.backdrop.setAmbientActive(false);t.backdrop.clear();t.spare=null;return true;});
         mNext=0;
     }
     public void setInMotion(boolean moving){mInterval=moving?64:250;}
     public void setEnabled(boolean enabled){
         if(mDestroyed||mEnabled==enabled)return;mEnabled=enabled;
+        for(Target target:mTargets)target.backdrop.setAmbientActive(enabled);
         for(DecoratedSurface surface:mDecoratedSurfaces.values())surface.apply();
         if(!enabled){mClock.removeCallbacks(mTick);invalidateSource();mCapture.close();}else mClock.postOnAnimation(mTick);
     }
@@ -245,7 +293,7 @@ public final class ArcPhoneGlass {
             Bitmap old=target.backdrop.mFrame;target.backdrop.setFrame(pending,region.requested,region.local);target.spare=old;target.view.invalidate();
         });
     }
-    public void destroy(){if(mDestroyed)return;mEnabled=false;mDestroyed=true;mClock.removeCallbacks(mTick);invalidateSource();mCapture.close();
+    public void destroy(){if(mDestroyed)return;mEnabled=false;mDestroyed=true;for(Target target:mTargets)target.backdrop.setAmbientActive(false);mClock.removeCallbacks(mTick);invalidateSource();mCapture.close();
         for(DecoratedSurface surface:mDecoratedSurfaces.values()){
             surface.restore();surface.view.removeOnAttachStateChangeListener(mSurfaceDecorator);
         }

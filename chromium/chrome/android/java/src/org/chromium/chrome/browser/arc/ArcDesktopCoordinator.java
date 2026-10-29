@@ -470,7 +470,7 @@ public final class ArcDesktopCoordinator {
         mAppearanceButton = appearanceButton;
         appearanceButton.setImageDrawable(new ArcDesktopIcons(ArcDesktopIcons.Kind.PALETTE, Color.BLACK));
         appearanceButton.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
-        appearanceButton.setPadding(dp(10), dp(10), dp(10), dp(10));
+        appearanceButton.setPadding(dp(9), dp(9), dp(9), dp(9));
         appearanceButton.setOnClickListener(this::showAppearanceMenu);
         appearanceButton.setOnLongClickListener(v -> {
             ArcAppearanceDialog.createAddressBarPosition(mActivity, this::applyAppearance).show();
@@ -478,11 +478,11 @@ public final class ArcDesktopCoordinator {
         });
         appearanceButton.setTooltipText(activity.getString(R.string.arc_interface));
         bookmarksButton.setText(activity.getString(R.string.arc_bookmarks));
-        bookmarksButton.setTextSize(13);
+        bookmarksButton.setTextSize(14);
         bookmarksButton.setGravity(Gravity.START | Gravity.CENTER_VERTICAL);
         googleButton.setText("G");
         googleButton.setContentDescription("Google"); googleButton.setTooltipText("Google");
-        googleButton.setTextSize(14);
+        googleButton.setTextSize(15);
         googleButton.setGravity(Gravity.CENTER);
         appearanceButton.setContentDescription(activity.getString(R.string.arc_interface));
         for (View action : new View[] {bookmarksButton, googleButton}) {
@@ -499,6 +499,7 @@ public final class ArcDesktopCoordinator {
         mNewTabIcon = Objects.requireNonNull(activity.getDrawable(R.drawable.ic_add_24dp)).mutate();
         mNewTabIcon.setBounds(0, 0, dp(24), dp(24));
         mNewTabRow.setText("+  " + activity.getString(R.string.arc_new_tab));
+        mNewTabRow.setTextSize(15);
         mNewTabRow.setContentDescription(activity.getString(R.string.arc_new_tab));
         mNewTabRow.setTooltipText(activity.getString(R.string.arc_new_tab));
         mNewTabRow.setGravity(Gravity.CENTER_VERTICAL);
@@ -540,7 +541,7 @@ public final class ArcDesktopCoordinator {
         mCameraButton.setTooltipText(activity.getString(R.string.arc_camera_orientation));
         mCameraButton.setMinimumWidth(0);
         mCameraButton.setMinimumHeight(0);
-        mCameraButton.setPadding(dp(10), dp(8), dp(10), dp(8));
+        mCameraButton.setPadding(dp(9), dp(9), dp(9), dp(9));
         mCameraButton.setOnClickListener(view -> {
             Tab tab = mCurrentTab.get();
             if (!mDestroyed && tab != null && !tab.isDestroyed()) {
@@ -552,7 +553,7 @@ public final class ArcDesktopCoordinator {
         ImageButton about = new ImageButton(activity);
         about.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
         about.setImageDrawable(new ArcDesktopIcons(ArcDesktopIcons.Kind.INFO, Color.BLACK));
-        about.setPadding(dp(10), dp(10), dp(10), dp(10));
+        about.setPadding(dp(9), dp(9), dp(9), dp(9));
         about.setContentDescription(activity.getString(R.string.arc_about));
         about.setTooltipText(activity.getString(R.string.arc_about));
         about.setOnClickListener(v -> {
@@ -872,7 +873,7 @@ public final class ArcDesktopCoordinator {
         Button button = new Button(mActivity);
         button.setText(text);
         button.setAllCaps(false);
-        button.setTextSize(13);
+        button.setTextSize(14);
         button.setMinWidth(0);
         button.setMinimumWidth(0);
         button.setPadding(dp(4), 0, dp(4), 0);
@@ -951,7 +952,8 @@ public final class ArcDesktopCoordinator {
         button.setTooltipText(mActivity.getString(contentDescriptionRes));
         button.setMinimumWidth(0);
         button.setMinimumHeight(0);
-        button.setPadding(dp(10), dp(8), dp(10), dp(8));
+        button.setPadding(dp(9), dp(9), dp(9), dp(9));
+        button.setScaleType(android.widget.ImageView.ScaleType.FIT_CENTER);
         button.setOnClickListener(
                 v -> {
                     Tab tab = mCurrentTab.get();
@@ -1081,7 +1083,7 @@ public final class ArcDesktopCoordinator {
         }, (entry, button) -> {
             // Avoid issuing regular-profile favicon fetches for private collections.
             if (model.getProfile().isOffTheRecord()) return;
-            mIcons.getLargeIconForUrl(new org.chromium.url.GURL(entry.url), dp(24),
+            mIcons.getLargeIconForUrl(new org.chromium.url.GURL(entry.url), dp(26),
                     (icon, color, fallback, type) -> {
                         if (!mDestroyed && mTabSession == session && icon != null) button.setImageBitmap(icon);
                     });

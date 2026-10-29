@@ -28,6 +28,57 @@ import org.robolectric.annotation.SQLiteMode;
 @GraphicsMode(GraphicsMode.Mode.LEGACY)
 @SQLiteMode(SQLiteMode.Mode.LEGACY)
 public class ArcPhoneGlassTest {
+    @Test public void ownedAmbientStopsWhenInactiveAndResumesAfterSourceInvalidation() {
+        var activity=Robolectric.buildActivity(Activity.class).setup();
+        float scale=android.animation.ValueAnimator.getDurationScale();
+        var owner=new ArcPhoneGlass(new View(activity.get()),new ArcPhoneGlass.Capture(){
+            public boolean available(){return false;}
+            public void copy(Rect r,Bitmap b,Consumer<Boolean> result){result.accept(false);}
+            public void close(){}
+        });
+        try {
+            android.animation.ValueAnimator.setDurationScale(1);
+            var backdrop=owner.add(new View(activity.get()),r->r.set(0,0,320,48));
+            backdrop.setBounds(0,0,320,48);backdrop.setSurface(Color.WHITE);
+            backdrop.setAmbientPageColor(Color.RED);backdrop.setAmbientPageColor(Color.GREEN);
+            assertNull(org.robolectric.util.ReflectionHelpers.getField(backdrop,"mAmbientAnimator"));
+            assertEquals(ArcPhonePalette.accent(Color.GREEN,false),(int)org.robolectric.util.ReflectionHelpers.getField(backdrop,"mAmbientColor"));
+            owner.setEnabled(true);backdrop.setAmbientPageColor(Color.BLUE);
+            android.animation.ValueAnimator animation=org.robolectric.util.ReflectionHelpers.getField(backdrop,"mAmbientAnimator");
+            assertNotNull(animation);assertEquals(220,animation.getDuration());
+            owner.invalidateSource();backdrop.setAmbientPageColor(Color.RED);
+            assertNotNull(org.robolectric.util.ReflectionHelpers.getField(backdrop,"mAmbientAnimator"));
+            owner.setEnabled(false);
+            assertNull(org.robolectric.util.ReflectionHelpers.getField(backdrop,"mAmbientAnimator"));
+            backdrop.setAmbientPageColor(Color.GREEN);
+            assertNull(org.robolectric.util.ReflectionHelpers.getField(backdrop,"mAmbientAnimator"));
+            assertEquals(ArcPhonePalette.accent(Color.GREEN,false),(int)org.robolectric.util.ReflectionHelpers.getField(backdrop,"mAmbientColor"));
+            owner.setEnabled(true);backdrop.setAmbientPageColor(Color.BLUE);owner.remove(backdrop);
+            backdrop.setAmbientPageColor(Color.RED);
+            assertNull(org.robolectric.util.ReflectionHelpers.getField(backdrop,"mAmbientAnimator"));
+            var second=owner.add(new View(activity.get()),r->r.set(0,0,320,48));second.setBounds(0,0,320,48);
+            second.setAmbientPageColor(Color.RED);second.setAmbientPageColor(Color.GREEN);
+            assertNotNull(org.robolectric.util.ReflectionHelpers.getField(second,"mAmbientAnimator"));
+            owner.destroy();second.setAmbientPageColor(Color.BLUE);
+            assertNull(org.robolectric.util.ReflectionHelpers.getField(second,"mAmbientAnimator"));
+        } finally {owner.destroy();android.animation.ValueAnimator.setDurationScale(scale);activity.pause().stop().destroy();}
+    }
+
+    @Test public void omniboxAmbientUsesSamePageHueAndClearsItsAnimator() throws Exception {
+        var glass=new ArcPhoneGlass.Backdrop();glass.setFloatingMaterial(1);glass.setSurface(Color.WHITE);glass.setBounds(0,0,320,48);
+        var method=glass.getClass().getMethod("setAmbientPageColor",int.class);
+        method.invoke(glass,Color.RED);
+        assertEquals(ArcPhonePalette.accent(Color.RED,false),(int)org.robolectric.util.ReflectionHelpers.getField(glass,"mAmbientColor"));
+        method.invoke(glass,Color.GREEN);
+        org.robolectric.Shadows.shadowOf(android.os.Looper.getMainLooper()).idleFor(java.time.Duration.ofMillis(250));
+        assertEquals(ArcPhonePalette.accent(Color.GREEN,false),(int)org.robolectric.util.ReflectionHelpers.getField(glass,"mAmbientColor"));
+        assertEquals(new Rect(0,0,320,48),glass.getBounds());
+        assertNotNull(org.robolectric.util.ReflectionHelpers.getField(glass,"mAmbientPaint"));
+        method.invoke(glass,Color.BLUE);glass.clear();
+        assertNull(org.robolectric.util.ReflectionHelpers.getField(glass,"mAmbientAnimator"));
+        assertEquals(0xff4285f4,ArcPhonePalette.accent(Color.TRANSPARENT,false));
+    }
+
     @Test public void floatingFinishKeepsOneTranslucentLayerAndNativeBounds() throws Exception {
         var backdrop=new ArcPhoneGlass.Backdrop();
         assertTrue("Floating material must reuse the existing backdrop",

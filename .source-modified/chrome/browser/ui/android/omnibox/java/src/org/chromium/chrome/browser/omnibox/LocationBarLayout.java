@@ -327,7 +327,9 @@ public class LocationBarLayout extends ConstraintLayout {
         mArcCommandInputEnd = null;
         if (close == null) return false;
         close.run();
-        return true;
+        // A guarded callback during Arc's own close keeps ownership until native endInput
+        // completes. Let that call continue; an external close clears the bridge itself.
+        return mArcCommandResults == null;
     }
 
     /* package */ void updateVisualsForState(@BrandedColorScheme int brandedColorScheme) {

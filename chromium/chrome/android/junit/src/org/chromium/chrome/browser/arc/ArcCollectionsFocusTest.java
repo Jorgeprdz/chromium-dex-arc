@@ -195,7 +195,7 @@ public class ArcCollectionsFocusTest {
         f.view.refresh();f.view.setCollectionHeight(240);f.measure();
         View mosaic=f.view.findViewWithTag("arc-favorites-mosaic");
         float density=f.activity.getResources().getDisplayMetrics().density;
-        int slot=Math.round(54*density);
+        int slot=Math.round(56*density);
         assertEquals("Two favorite rows must be fully visible",2*slot,mosaic.getMeasuredHeight());
         f.view.measure(View.MeasureSpec.makeMeasureSpec(Math.round(220*density),View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(1200,View.MeasureSpec.AT_MOST));
         f.view.layout(0,0,f.view.getMeasuredWidth(),f.view.getMeasuredHeight());
@@ -232,11 +232,11 @@ public class ArcCollectionsFocusTest {
         f.view.refresh(); f.measure();
         View tile = f.view.findViewWithTag("arc-entry:" + id);
         float density = f.activity.getResources().getDisplayMetrics().density;
-        assertEquals(Math.round(48 * density), tile.getMeasuredWidth());
+        assertEquals(Math.round(50 * density), tile.getMeasuredWidth());
         assertTrue(tile.getMeasuredWidth() >= Math.round(44 * density));
         assertEquals(Math.round(12 * density), tile.getPaddingLeft());
-        assertEquals(4, ArcCollectionsView.favoriteColumns(216, 54));
-        assertEquals(0, ArcCollectionsView.favoriteColumns(107, 54));
+        assertEquals(4, ArcCollectionsView.favoriteColumns(224, 56));
+        assertEquals(0, ArcCollectionsView.favoriteColumns(111, 56));
     }
 
     @Test public void faviconOpticalBoxIsStableAcrossBitmapDensitiesAndRefresh() {
@@ -250,7 +250,7 @@ public class ArcCollectionsFocusTest {
             tile.setImageBitmap(bitmap); f.measure();
             var optical = new android.graphics.RectF(tile.getDrawable().getBounds());
             tile.getImageMatrix().mapRect(optical);
-            assertEquals(24 * f.activity.getResources().getDisplayMetrics().density, optical.width(), 1f);
+            assertEquals(26 * f.activity.getResources().getDisplayMetrics().density, optical.width(), 1f);
             assertEquals(optical.width(), optical.height(), .01f);
             assertNull(tile.getColorFilter());
         }
