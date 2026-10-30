@@ -105,7 +105,7 @@ public class DesktopFooterProbe {
  assertFalse("48px native menu +132px controls need180px",s.canExpandControls());s.mRail.layout(0,0,180,800);assertTrue(s.canExpandControls());}
  @Test public void fractionalDensityReservesEachMeasuredRowAndGap(){assertEquals(127,
  ArcDesktopPolicy.collectionScrollBudgetPx(1600,2.625f,0,false)-ArcDesktopPolicy.collectionScrollBudgetPx(1600,2.625f,0,true));}
- @Test public void extraRowReservedBeforeCollections(){assertEquals(144,ArcDesktopPolicy.collectionScrollBudgetPx(700,1,0,true));assertEquals(192,ArcDesktopPolicy.collectionScrollBudgetPx(700,1,0,false));}
+ @Test public void extraRowReservedBeforeCollections(){assertEquals(304,ArcDesktopPolicy.collectionScrollBudgetPx(700,1,0,true));assertEquals(352,ArcDesktopPolicy.collectionScrollBudgetPx(700,1,0,false));}
 }
 '''
 rows='mFooter=new LinearLayout(a);mFooter.setOrientation(LinearLayout.VERTICAL);mBrowserControlsRow=mFooter;mExtensionsRow=mFooter;'

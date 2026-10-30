@@ -73,7 +73,7 @@ public final class ArcDesktopPolicy {
         return original + outer;
     }
 
-    /** Reserve caption, five control rows, collection chrome and native tab space. */
+    /** Reserve caption, five external control rows and native tab space. */
     public static int collectionScrollBudgetPx(int height, float density, int captionHeight) {
         return collectionScrollBudgetPx(height, density, captionHeight, false);
     }
@@ -82,7 +82,9 @@ public final class ArcDesktopPolicy {
     public static int collectionScrollBudgetPx(
             int height, float density, int captionHeight, boolean extensionsVisible) {
         if (!(density > 0f) || height <= 0) return 0;
-        int reservedDp = 5 * ARC_NAV_ROW_HEIGHT_DP + 160 + 2 * ARC_OUTER_PADDING_DP + 112;
+        // This is the total collection height. ArcCollectionsView reserves its
+        // own selector/folder/action chrome inside it; do not subtract it twice.
+        int reservedDp = 5 * ARC_NAV_ROW_HEIGHT_DP + 2 * ARC_OUTER_PADDING_DP + 112;
         int extensionHeight = extensionsVisible ? Math.round(ARC_NAV_ROW_HEIGHT_DP * density)
                 + Math.round(ARC_FOOTER_ROW_GAP_DP * density) : 0;
         long remaining = (long) height - Math.round(reservedDp * density)

@@ -19,10 +19,6 @@ class MockAutoPictureInPictureTabModelObserverHelperDelegate
     : public AutoPictureInPictureTabModelObserverHelper::Delegate {
  public:
   MOCK_CONST_METHOD1(IsTabDragging, bool(content::WebContents*));
-  bool ShouldObserveVisibility(content::WebContents*) const override {
-    return observe_visibility;
-  }
-  bool observe_visibility = false;
 };
 
 class AutoPictureInPictureTabModelObserverHelperTest
@@ -104,92 +100,4 @@ TEST_F(AutoPictureInPictureTabModelObserverHelperTest,
       .WillOnce(Return(false));
   EXPECT_CALL(callback_, Run(false));
   tab_model_->AddEmptyTab(2, true);
-}
-
-TEST_F(AutoPictureInPictureTabModelObserverHelperTest,
-       DesktopMinimizeAndRestoreChangeEffectiveActivation) {
-  auto web_contents = CreateTestWebContents();
-  content::WebContents* raw_contents = web_contents.get();
-  raw_contents->WasShown();
-  tab_model_->AddTabFromWebContents(std::move(web_contents), 0, true);
-  auto delegate = std::make_unique<
-      MockAutoPictureInPictureTabModelObserverHelperDelegate>();
-  auto* raw_delegate = delegate.get();
-  raw_delegate->observe_visibility = true;
-  EXPECT_CALL(*raw_delegate, IsTabDragging(raw_contents))
-      .WillRepeatedly(Return(false));
-  helper_ = std::make_unique<AutoPictureInPictureTabModelObserverHelper>(
-      raw_contents, callback_.Get(), std::move(delegate));
-
-  EXPECT_CALL(callback_, Run(true));
-  helper_->StartObserving();
-  EXPECT_CALL(callback_, Run(false));
-  raw_contents->WasHidden();
-  // The selected tab remains selected, but async PiP acknowledgement must see
-  // it as inactive to avoid immediately closing the newly opened native PiP.
-  EXPECT_EQ(raw_contents, tab_model_->GetActiveWebContents());
-  EXPECT_FALSE(helper_->IsTabActivated());
-  EXPECT_CALL(callback_, Run(true));
-  raw_contents->WasShown();
-  EXPECT_TRUE(helper_->IsTabActivated());
-}
-
-TEST_F(AutoPictureInPictureTabModelObserverHelperTest,
-       PhoneHideDoesNotChangeSelectionActivation) {
-  auto web_contents = CreateTestWebContents();
-  content::WebContents* raw_contents = web_contents.get();
-  raw_contents->WasShown();
-  tab_model_->AddTabFromWebContents(std::move(web_contents), 0, true);
-  auto delegate = std::make_unique<
-      MockAutoPictureInPictureTabModelObserverHelperDelegate>();
-  helper_ = std::make_unique<AutoPictureInPictureTabModelObserverHelper>(
-      raw_contents, callback_.Get(), std::move(delegate));
-  EXPECT_CALL(callback_, Run(true));
-  helper_->StartObserving();
-  testing::Mock::VerifyAndClearExpectations(&callback_);
-  EXPECT_CALL(callback_, Run(_)).Times(0);
-  raw_contents->WasHidden();
-  EXPECT_TRUE(helper_->IsTabActivated());
-}
-
-TEST_F(AutoPictureInPictureTabModelObserverHelperTest,
-       ClosingDesktopTabDoesNotEnterPiPOnHide) {
-  auto web_contents = CreateTestWebContents();
-  content::WebContents* raw_contents = web_contents.get();
-  raw_contents->WasShown();
-  tab_model_->AddTabFromWebContents(std::move(web_contents), 0, true);
-  auto delegate = std::make_unique<
-      MockAutoPictureInPictureTabModelObserverHelperDelegate>();
-  delegate->observe_visibility = true;
-  helper_ = std::make_unique<AutoPictureInPictureTabModelObserverHelper>(
-      raw_contents, callback_.Get(), std::move(delegate));
-  EXPECT_CALL(callback_, Run(true));
-  helper_->StartObserving();
-  testing::Mock::VerifyAndClearExpectations(&callback_);
-  EXPECT_CALL(callback_, Run(_)).Times(0);
-  helper_->WillCloseTab(tab_model_->GetTabAt(0));
-  raw_contents->WasHidden();
-}
-
-TEST_F(AutoPictureInPictureTabModelObserverHelperTest,
-       StoppedObserverIgnoresVisibilityUntilRestart) {
-  auto web_contents = CreateTestWebContents();
-  content::WebContents* raw_contents = web_contents.get();
-  raw_contents->WasShown();
-  tab_model_->AddTabFromWebContents(std::move(web_contents), 0, true);
-  auto delegate = std::make_unique<
-      MockAutoPictureInPictureTabModelObserverHelperDelegate>();
-  delegate->observe_visibility = true;
-  helper_ = std::make_unique<AutoPictureInPictureTabModelObserverHelper>(
-      raw_contents, callback_.Get(), std::move(delegate));
-  EXPECT_CALL(callback_, Run(true));
-  helper_->StartObserving();
-  helper_->StopObserving();
-  testing::Mock::VerifyAndClearExpectations(&callback_);
-  EXPECT_CALL(callback_, Run(_)).Times(0);
-  raw_contents->WasHidden();
-  testing::Mock::VerifyAndClearExpectations(&callback_);
-  EXPECT_CALL(callback_, Run(false));
-  helper_->StartObserving();
-  EXPECT_FALSE(helper_->IsTabActivated());
 }

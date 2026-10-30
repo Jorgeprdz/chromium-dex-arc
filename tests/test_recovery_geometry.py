@@ -13,10 +13,10 @@ class RecoveryGeometryTests(unittest.TestCase):
 public class GeometryProbe {
  static void eq(int a,int b){if(a!=b)throw new AssertionError(a+" != "+b);}
  public static void main(String[] args){
-  eq(ArcDesktopPolicy.collectionScrollBudgetPx(800,1f,20),272);
-  eq(ArcDesktopPolicy.collectionScrollBudgetPx(1100,1f,20),572);
-  eq(ArcDesktopPolicy.collectionScrollBudgetPx(600,1f,20),72);
-  eq(ArcDesktopPolicy.collectionScrollBudgetPx(400,1f,0),0);
+  eq(ArcDesktopPolicy.collectionScrollBudgetPx(800,1f,20),432);
+  eq(ArcDesktopPolicy.collectionScrollBudgetPx(1100,1f,20),732);
+  eq(ArcDesktopPolicy.collectionScrollBudgetPx(600,1f,20),232);
+  eq(ArcDesktopPolicy.collectionScrollBudgetPx(400,1f,0),52);
   eq(ArcDesktopPolicy.collectionScrollBudgetPx(800,0f,0),0);
   if(ArcDesktopPolicy.containsArcContentPoint(0,99,0,0,100,100,16))throw new AssertionError("bottom left corner must be round");
   if(ArcDesktopPolicy.containsArcContentPoint(99,99,0,0,100,100,16))throw new AssertionError("bottom right corner must reject outside-arc input");

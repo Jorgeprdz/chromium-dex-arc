@@ -223,6 +223,26 @@ public class ArcCollectionsFocusTest {
         assertTrue(f.view.getMeasuredHeight()<=Math.round(280*density));
     }
 
+    @Test public void actualSidebarBudgetShowsBothFavoriteRowsWithoutChargingChromeTwice() {
+        Fixture f = new Fixture();
+        for (int i = 0; i < 8; i++) f.controller.rememberTab(80 + i,
+                "https://budget.test/" + i, "Favorite " + i, true);
+        f.view.refresh();
+        float density = f.activity.getResources().getDisplayMetrics().density;
+        int budget = org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy
+                .collectionScrollBudgetPx(Math.round(800 * density), density,
+                        Math.round(20 * density), true);
+        f.view.setCollectionHeight(budget);
+        int width = Math.round(240 * density);
+        f.view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(Math.round(800 * density), View.MeasureSpec.AT_MOST));
+        f.view.layout(0, 0, width, f.view.getMeasuredHeight());
+        View mosaic = f.view.findViewWithTag("arc-favorites-mosaic");
+        assertEquals("Eight favorites must show both complete rows in a normal sidebar",
+                2 * Math.round(56 * density), mosaic.getMeasuredHeight());
+        assertTrue("Native tab space must remain reserved", f.view.getMeasuredHeight() <= budget);
+    }
+
     @Test public void favoritesUseEveryCompleteRowAvailableBeyondThreeRows() {
         Fixture f = new Fixture();
         for (int i = 0; i < 17; i++) f.controller.rememberTab(70 + i,

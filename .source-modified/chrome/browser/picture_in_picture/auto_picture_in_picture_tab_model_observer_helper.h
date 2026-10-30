@@ -10,7 +10,6 @@
 #include "chrome/browser/ui/android/tab_model/tab_model.h"
 #include "chrome/browser/ui/android/tab_model/tab_model_list_observer.h"
 #include "chrome/browser/ui/android/tab_model/tab_model_observer.h"
-#include "content/public/browser/web_contents_observer.h"
 
 class TabModel;
 class TabAndroid;
@@ -21,20 +20,16 @@ class WebContents;
 
 // Android implementation of AutoPictureInPictureTabObserverHelperBase.
 // Observes a TabModel to detect when the associated WebContents becomes active
-// or inactive. On supported Archium desktop windows, activation also requires
-// visible WebContents, so minimizing or leaving the app uses the same native
-// auto-PiP eligibility path as selecting another tab.
+// or inactive.
 class AutoPictureInPictureTabModelObserverHelper final
     : public AutoPictureInPictureTabObserverHelperBase,
       public TabModelObserver,
-      public TabModelListObserver,
-      public content::WebContentsObserver {
+      public TabModelListObserver {
  public:
   class Delegate {
    public:
     virtual ~Delegate() = default;
     virtual bool IsTabDragging(content::WebContents* web_contents) const = 0;
-    virtual bool ShouldObserveVisibility(content::WebContents* web_contents) const;
   };
 
   AutoPictureInPictureTabModelObserverHelper(
@@ -48,9 +43,6 @@ class AutoPictureInPictureTabModelObserverHelper final
   void StopObserving() override;
   content::WebContents* GetActiveWebContents() const override;
   bool IsTabActivated() override;
-
-  // WebContentsObserver:
-  void OnVisibilityWillChange(content::Visibility visibility) override;
 
   // TabModelObserver:
   void DidSelectTab(TabAndroid* tab) override;
@@ -76,8 +68,6 @@ class AutoPictureInPictureTabModelObserverHelper final
   raw_ptr<TabModel> observed_tab_model_ = nullptr;
   bool is_tab_activated_ = false;
   bool is_observing_ = false;
-  bool is_web_contents_visible_ = true;
-  bool is_closing_ = false;
 };
 
 #endif  // CHROME_BROWSER_PICTURE_IN_PICTURE_AUTO_PICTURE_IN_PICTURE_TAB_MODEL_OBSERVER_HELPER_H_

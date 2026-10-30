@@ -4,18 +4,11 @@
 
 #include "chrome/browser/picture_in_picture/auto_picture_in_picture_tab_model_observer_helper.h"
 
-#include <algorithm>
-
-#include "base/android/jni_android.h"
 #include "base/notimplemented.h"
 #include "chrome/browser/android/tab_android.h"  // nogncheck crbug.com/413572035
 #include "chrome/browser/ui/android/tab_model/tab_model.h"
 #include "chrome/browser/ui/android/tab_model/tab_model_list.h"
 #include "content/public/browser/web_contents.h"
-
-// JNI conversions must precede the generated header.
-#include "url/android/gurl_android.h"
-#include "chrome/browser/android/content/jni_headers/ArcDesktopPolicyBridge_jni.h"
 
 // static
 std::unique_ptr<AutoPictureInPictureTabObserverHelperBase>
@@ -35,23 +28,9 @@ class TabAndroidDelegate
     auto* tab = TabAndroid::FromWebContents(web_contents);
     return tab && tab->IsDragging();
   }
-
-  bool ShouldObserveVisibility(
-      content::WebContents* web_contents) const override {
-    // Match the existing per-window Document PiP API policy: Archium desktop
-    // on Android 17+, leaving phone and older Android behavior unchanged.
-    return Java_ArcDesktopPolicyBridge_isArchiumDocumentPipEnabled(
-        base::android::AttachCurrentThread(),
-        web_contents->GetJavaWebContents());
-  }
 };
 
 }  // namespace
-
-bool AutoPictureInPictureTabModelObserverHelper::Delegate::
-    ShouldObserveVisibility(content::WebContents*) const {
-  return false;
-}
 
 AutoPictureInPictureTabModelObserverHelper::
     AutoPictureInPictureTabModelObserverHelper(
@@ -73,10 +52,6 @@ void AutoPictureInPictureTabModelObserverHelper::StartObserving() {
     return;
   }
   is_observing_ = true;
-  is_closing_ = false;
-  is_web_contents_visible_ =
-      GetObservedWebContents()->GetVisibility() == content::Visibility::VISIBLE;
-  Observe(GetObservedWebContents());
 
   // Start observing the list of TabModels.
   TabModelList::AddObserver(this);
@@ -99,7 +74,6 @@ void AutoPictureInPictureTabModelObserverHelper::StopObserving() {
     return;
   }
   is_observing_ = false;
-  Observe(nullptr);
 
   // Remove the global TabModelList observer.
   TabModelList::RemoveObserver(this);
@@ -129,26 +103,9 @@ bool AutoPictureInPictureTabModelObserverHelper::IsTabActivated() {
     return is_tab_activated_;
   }
 
-  // Otherwise, calculate it now, including visibility changes while stopped.
-  is_web_contents_visible_ =
-      GetObservedWebContents()->GetVisibility() == content::Visibility::VISIBLE;
+  // Otherwise, calculate it now.
   ReevaluateObservedModelAndState();
   return is_tab_activated_;
-}
-
-void AutoPictureInPictureTabModelObserverHelper::OnVisibilityWillChange(
-    content::Visibility visibility) {
-  if (!is_observing_ || is_closing_ ||
-      !delegate_->ShouldObserveVisibility(GetObservedWebContents()) ||
-      delegate_->IsTabDragging(GetObservedWebContents())) {
-    return;
-  }
-
-  // Arm the existing media-session auto-PiP path before the opener is hidden.
-  // Cache the incoming state because GetVisibility() still holds the old value
-  // here, and the asynchronous PiP acknowledgement checks IsTabActivated().
-  is_web_contents_visible_ = visibility == content::Visibility::VISIBLE;
-  UpdateIsTabActivated();
 }
 
 void AutoPictureInPictureTabModelObserverHelper::DidSelectTab(TabAndroid* tab) {
@@ -176,9 +133,6 @@ void AutoPictureInPictureTabModelObserverHelper::WillCloseTabs(
   // skip checking the activation status, effectively freezing the state until
   // the tab is destroyed. It's required because when closing a tab via
   // WillCloseTabs, Clank doesn't immediately remove the tab from the TabModel.
-  is_closing_ = is_closing_ || std::ranges::any_of(tabs, [this](TabAndroid* tab) {
-    return tab->web_contents() == GetObservedWebContents();
-  });
   ReevaluateObservedModelAndState(false);
 }
 
@@ -187,7 +141,6 @@ void AutoPictureInPictureTabModelObserverHelper::WillCloseTab(TabAndroid* tab) {
   // skip checking the activation status, effectively freezing the state until
   // the tab is destroyed. It's required because when closing a tab via
   // WillCloseTab, Clank doesn't immediately remove the tab from the TabModel.
-  is_closing_ = is_closing_ || tab->web_contents() == GetObservedWebContents();
   ReevaluateObservedModelAndState(false);
 }
 
@@ -225,12 +178,9 @@ void AutoPictureInPictureTabModelObserverHelper::UpdateIsTabActivated() {
   if (observed_tab_model_) {
     bool was_active = is_tab_activated_;
 
-    // Preserve tab selection semantics on phones. Supported desktop windows
-    // also become inactive when minimized or hidden behind another app.
-    is_tab_activated_ =
-        GetActiveWebContents() == GetObservedWebContents() &&
-        (!delegate_->ShouldObserveVisibility(GetObservedWebContents()) ||
-         is_web_contents_visible_);
+    // The observed tab is considered "active" if its model exists and its
+    // WebContents is the currently active one in that model.
+    is_tab_activated_ = GetActiveWebContents() == GetObservedWebContents();
 
     if (is_tab_activated_ != was_active && is_observing_) {
       RunCallback(is_tab_activated_);

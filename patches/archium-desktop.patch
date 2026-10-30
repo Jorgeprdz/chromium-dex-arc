@@ -6169,303 +6169,6 @@ diff --git a/chrome/browser/password_manager/factories/profile_password_store_fa
    // Android gets logins with affiliations directly from the backend.
    auto password_affiliation_adapter =
        std::make_unique<password_manager::PasswordAffiliationSourceAdapter>();
-diff --git a/chrome/browser/picture_in_picture/BUILD.gn b/chrome/browser/picture_in_picture/BUILD.gn
---- a/chrome/browser/picture_in_picture/BUILD.gn
-+++ b/chrome/browser/picture_in_picture/BUILD.gn
-@@ -135,6 +135,7 @@
-     ]
-     deps += [
-       "//chrome/android:chrome_jni_headers",
-+      "//chrome/browser/android/content:jni_headers",
-       "//chrome/browser/ui/android/overlay",
-       "//components/strings:components_strings",
-     ]
-diff --git a/chrome/browser/picture_in_picture/auto_picture_in_picture_tab_model_observer_helper.cc b/chrome/browser/picture_in_picture/auto_picture_in_picture_tab_model_observer_helper.cc
---- a/chrome/browser/picture_in_picture/auto_picture_in_picture_tab_model_observer_helper.cc
-+++ b/chrome/browser/picture_in_picture/auto_picture_in_picture_tab_model_observer_helper.cc
-@@ -4,11 +4,18 @@
-
- #include "chrome/browser/picture_in_picture/auto_picture_in_picture_tab_model_observer_helper.h"
-
-+#include <algorithm>
-+
-+#include "base/android/jni_android.h"
- #include "base/notimplemented.h"
- #include "chrome/browser/android/tab_android.h"  // nogncheck crbug.com/413572035
- #include "chrome/browser/ui/android/tab_model/tab_model.h"
- #include "chrome/browser/ui/android/tab_model/tab_model_list.h"
- #include "content/public/browser/web_contents.h"
-+
-+// JNI conversions must precede the generated header.
-+#include "url/android/gurl_android.h"
-+#include "chrome/browser/android/content/jni_headers/ArcDesktopPolicyBridge_jni.h"
-
- // static
- std::unique_ptr<AutoPictureInPictureTabObserverHelperBase>
-@@ -28,9 +35,23 @@
-     auto* tab = TabAndroid::FromWebContents(web_contents);
-     return tab && tab->IsDragging();
-   }
-+
-+  bool ShouldObserveVisibility(
-+      content::WebContents* web_contents) const override {
-+    // Match the existing per-window Document PiP API policy: Archium desktop
-+    // on Android 17+, leaving phone and older Android behavior unchanged.
-+    return Java_ArcDesktopPolicyBridge_isArchiumDocumentPipEnabled(
-+        base::android::AttachCurrentThread(),
-+        web_contents->GetJavaWebContents());
-+  }
- };
-
- }  // namespace
-+
-+bool AutoPictureInPictureTabModelObserverHelper::Delegate::
-+    ShouldObserveVisibility(content::WebContents*) const {
-+  return false;
-+}
-
- AutoPictureInPictureTabModelObserverHelper::
-     AutoPictureInPictureTabModelObserverHelper(
-@@ -52,6 +73,10 @@
-     return;
-   }
-   is_observing_ = true;
-+  is_closing_ = false;
-+  is_web_contents_visible_ =
-+      GetObservedWebContents()->GetVisibility() == content::Visibility::VISIBLE;
-+  Observe(GetObservedWebContents());
-
-   // Start observing the list of TabModels.
-   TabModelList::AddObserver(this);
-@@ -74,6 +99,7 @@
-     return;
-   }
-   is_observing_ = false;
-+  Observe(nullptr);
-
-   // Remove the global TabModelList observer.
-   TabModelList::RemoveObserver(this);
-@@ -103,9 +129,26 @@
-     return is_tab_activated_;
-   }
-
--  // Otherwise, calculate it now.
-+  // Otherwise, calculate it now, including visibility changes while stopped.
-+  is_web_contents_visible_ =
-+      GetObservedWebContents()->GetVisibility() == content::Visibility::VISIBLE;
-   ReevaluateObservedModelAndState();
-   return is_tab_activated_;
-+}
-+
-+void AutoPictureInPictureTabModelObserverHelper::OnVisibilityWillChange(
-+    content::Visibility visibility) {
-+  if (!is_observing_ || is_closing_ ||
-+      !delegate_->ShouldObserveVisibility(GetObservedWebContents()) ||
-+      delegate_->IsTabDragging(GetObservedWebContents())) {
-+    return;
-+  }
-+
-+  // Arm the existing media-session auto-PiP path before the opener is hidden.
-+  // Cache the incoming state because GetVisibility() still holds the old value
-+  // here, and the asynchronous PiP acknowledgement checks IsTabActivated().
-+  is_web_contents_visible_ = visibility == content::Visibility::VISIBLE;
-+  UpdateIsTabActivated();
- }
-
- void AutoPictureInPictureTabModelObserverHelper::DidSelectTab(TabAndroid* tab) {
-@@ -133,6 +176,9 @@
-   // skip checking the activation status, effectively freezing the state until
-   // the tab is destroyed. It's required because when closing a tab via
-   // WillCloseTabs, Clank doesn't immediately remove the tab from the TabModel.
-+  is_closing_ = is_closing_ || std::ranges::any_of(tabs, [this](TabAndroid* tab) {
-+    return tab->web_contents() == GetObservedWebContents();
-+  });
-   ReevaluateObservedModelAndState(false);
- }
-
-@@ -141,6 +187,7 @@
-   // skip checking the activation status, effectively freezing the state until
-   // the tab is destroyed. It's required because when closing a tab via
-   // WillCloseTab, Clank doesn't immediately remove the tab from the TabModel.
-+  is_closing_ = is_closing_ || tab->web_contents() == GetObservedWebContents();
-   ReevaluateObservedModelAndState(false);
- }
-
-@@ -178,9 +225,12 @@
-   if (observed_tab_model_) {
-     bool was_active = is_tab_activated_;
-
--    // The observed tab is considered "active" if its model exists and its
--    // WebContents is the currently active one in that model.
--    is_tab_activated_ = GetActiveWebContents() == GetObservedWebContents();
-+    // Preserve tab selection semantics on phones. Supported desktop windows
-+    // also become inactive when minimized or hidden behind another app.
-+    is_tab_activated_ =
-+        GetActiveWebContents() == GetObservedWebContents() &&
-+        (!delegate_->ShouldObserveVisibility(GetObservedWebContents()) ||
-+         is_web_contents_visible_);
-
-     if (is_tab_activated_ != was_active && is_observing_) {
-       RunCallback(is_tab_activated_);
-diff --git a/chrome/browser/picture_in_picture/auto_picture_in_picture_tab_model_observer_helper.h b/chrome/browser/picture_in_picture/auto_picture_in_picture_tab_model_observer_helper.h
---- a/chrome/browser/picture_in_picture/auto_picture_in_picture_tab_model_observer_helper.h
-+++ b/chrome/browser/picture_in_picture/auto_picture_in_picture_tab_model_observer_helper.h
-@@ -10,6 +10,7 @@
- #include "chrome/browser/ui/android/tab_model/tab_model.h"
- #include "chrome/browser/ui/android/tab_model/tab_model_list_observer.h"
- #include "chrome/browser/ui/android/tab_model/tab_model_observer.h"
-+#include "content/public/browser/web_contents_observer.h"
-
- class TabModel;
- class TabAndroid;
-@@ -20,16 +21,20 @@
-
- // Android implementation of AutoPictureInPictureTabObserverHelperBase.
- // Observes a TabModel to detect when the associated WebContents becomes active
--// or inactive.
-+// or inactive. On supported Archium desktop windows, activation also requires
-+// visible WebContents, so minimizing or leaving the app uses the same native
-+// auto-PiP eligibility path as selecting another tab.
- class AutoPictureInPictureTabModelObserverHelper final
-     : public AutoPictureInPictureTabObserverHelperBase,
-       public TabModelObserver,
--      public TabModelListObserver {
-+      public TabModelListObserver,
-+      public content::WebContentsObserver {
-  public:
-   class Delegate {
-    public:
-     virtual ~Delegate() = default;
-     virtual bool IsTabDragging(content::WebContents* web_contents) const = 0;
-+    virtual bool ShouldObserveVisibility(content::WebContents* web_contents) const;
-   };
-
-   AutoPictureInPictureTabModelObserverHelper(
-@@ -43,6 +48,9 @@
-   void StopObserving() override;
-   content::WebContents* GetActiveWebContents() const override;
-   bool IsTabActivated() override;
-+
-+  // WebContentsObserver:
-+  void OnVisibilityWillChange(content::Visibility visibility) override;
-
-   // TabModelObserver:
-   void DidSelectTab(TabAndroid* tab) override;
-@@ -68,6 +76,8 @@
-   raw_ptr<TabModel> observed_tab_model_ = nullptr;
-   bool is_tab_activated_ = false;
-   bool is_observing_ = false;
-+  bool is_web_contents_visible_ = true;
-+  bool is_closing_ = false;
- };
-
- #endif  // CHROME_BROWSER_PICTURE_IN_PICTURE_AUTO_PICTURE_IN_PICTURE_TAB_MODEL_OBSERVER_HELPER_H_
-diff --git a/chrome/browser/picture_in_picture/auto_picture_in_picture_tab_model_observer_helper_unittest.cc b/chrome/browser/picture_in_picture/auto_picture_in_picture_tab_model_observer_helper_unittest.cc
---- a/chrome/browser/picture_in_picture/auto_picture_in_picture_tab_model_observer_helper_unittest.cc
-+++ b/chrome/browser/picture_in_picture/auto_picture_in_picture_tab_model_observer_helper_unittest.cc
-@@ -19,6 +19,10 @@
-     : public AutoPictureInPictureTabModelObserverHelper::Delegate {
-  public:
-   MOCK_CONST_METHOD1(IsTabDragging, bool(content::WebContents*));
-+  bool ShouldObserveVisibility(content::WebContents*) const override {
-+    return observe_visibility;
-+  }
-+  bool observe_visibility = false;
- };
-
- class AutoPictureInPictureTabModelObserverHelperTest
-@@ -101,3 +105,91 @@
-   EXPECT_CALL(callback_, Run(false));
-   tab_model_->AddEmptyTab(2, true);
- }
-+
-+TEST_F(AutoPictureInPictureTabModelObserverHelperTest,
-+       DesktopMinimizeAndRestoreChangeEffectiveActivation) {
-+  auto web_contents = CreateTestWebContents();
-+  content::WebContents* raw_contents = web_contents.get();
-+  raw_contents->WasShown();
-+  tab_model_->AddTabFromWebContents(std::move(web_contents), 0, true);
-+  auto delegate = std::make_unique<
-+      MockAutoPictureInPictureTabModelObserverHelperDelegate>();
-+  auto* raw_delegate = delegate.get();
-+  raw_delegate->observe_visibility = true;
-+  EXPECT_CALL(*raw_delegate, IsTabDragging(raw_contents))
-+      .WillRepeatedly(Return(false));
-+  helper_ = std::make_unique<AutoPictureInPictureTabModelObserverHelper>(
-+      raw_contents, callback_.Get(), std::move(delegate));
-+
-+  EXPECT_CALL(callback_, Run(true));
-+  helper_->StartObserving();
-+  EXPECT_CALL(callback_, Run(false));
-+  raw_contents->WasHidden();
-+  // The selected tab remains selected, but async PiP acknowledgement must see
-+  // it as inactive to avoid immediately closing the newly opened native PiP.
-+  EXPECT_EQ(raw_contents, tab_model_->GetActiveWebContents());
-+  EXPECT_FALSE(helper_->IsTabActivated());
-+  EXPECT_CALL(callback_, Run(true));
-+  raw_contents->WasShown();
-+  EXPECT_TRUE(helper_->IsTabActivated());
-+}
-+
-+TEST_F(AutoPictureInPictureTabModelObserverHelperTest,
-+       PhoneHideDoesNotChangeSelectionActivation) {
-+  auto web_contents = CreateTestWebContents();
-+  content::WebContents* raw_contents = web_contents.get();
-+  raw_contents->WasShown();
-+  tab_model_->AddTabFromWebContents(std::move(web_contents), 0, true);
-+  auto delegate = std::make_unique<
-+      MockAutoPictureInPictureTabModelObserverHelperDelegate>();
-+  helper_ = std::make_unique<AutoPictureInPictureTabModelObserverHelper>(
-+      raw_contents, callback_.Get(), std::move(delegate));
-+  EXPECT_CALL(callback_, Run(true));
-+  helper_->StartObserving();
-+  testing::Mock::VerifyAndClearExpectations(&callback_);
-+  EXPECT_CALL(callback_, Run(_)).Times(0);
-+  raw_contents->WasHidden();
-+  EXPECT_TRUE(helper_->IsTabActivated());
-+}
-+
-+TEST_F(AutoPictureInPictureTabModelObserverHelperTest,
-+       ClosingDesktopTabDoesNotEnterPiPOnHide) {
-+  auto web_contents = CreateTestWebContents();
-+  content::WebContents* raw_contents = web_contents.get();
-+  raw_contents->WasShown();
-+  tab_model_->AddTabFromWebContents(std::move(web_contents), 0, true);
-+  auto delegate = std::make_unique<
-+      MockAutoPictureInPictureTabModelObserverHelperDelegate>();
-+  delegate->observe_visibility = true;
-+  helper_ = std::make_unique<AutoPictureInPictureTabModelObserverHelper>(
-+      raw_contents, callback_.Get(), std::move(delegate));
-+  EXPECT_CALL(callback_, Run(true));
-+  helper_->StartObserving();
-+  testing::Mock::VerifyAndClearExpectations(&callback_);
-+  EXPECT_CALL(callback_, Run(_)).Times(0);
-+  helper_->WillCloseTab(tab_model_->GetTabAt(0));
-+  raw_contents->WasHidden();
-+}
-+
-+TEST_F(AutoPictureInPictureTabModelObserverHelperTest,
-+       StoppedObserverIgnoresVisibilityUntilRestart) {
-+  auto web_contents = CreateTestWebContents();
-+  content::WebContents* raw_contents = web_contents.get();
-+  raw_contents->WasShown();
-+  tab_model_->AddTabFromWebContents(std::move(web_contents), 0, true);
-+  auto delegate = std::make_unique<
-+      MockAutoPictureInPictureTabModelObserverHelperDelegate>();
-+  delegate->observe_visibility = true;
-+  helper_ = std::make_unique<AutoPictureInPictureTabModelObserverHelper>(
-+      raw_contents, callback_.Get(), std::move(delegate));
-+  EXPECT_CALL(callback_, Run(true));
-+  helper_->StartObserving();
-+  helper_->StopObserving();
-+  testing::Mock::VerifyAndClearExpectations(&callback_);
-+  EXPECT_CALL(callback_, Run(_)).Times(0);
-+  raw_contents->WasHidden();
-+  testing::Mock::VerifyAndClearExpectations(&callback_);
-+  EXPECT_CALL(callback_, Run(false));
-+  helper_->StartObserving();
-+  EXPECT_FALSE(helper_->IsTabActivated());
-+}
 diff --git a/chrome/browser/prefs/browser_prefs.cc b/chrome/browser/prefs/browser_prefs.cc
 --- a/chrome/browser/prefs/browser_prefs.cc
 +++ b/chrome/browser/prefs/browser_prefs.cc
@@ -19494,7 +19197,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCollect
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCollectionsFocusTest.java
-@@ -0,0 +1,498 @@
+@@ -0,0 +1,518 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -19718,6 +19421,26 @@ new file mode 100644
 +        f.view.layout(0,0,f.view.getMeasuredWidth(),f.view.getMeasuredHeight());
 +        assertEquals("Resize may scroll rows but never expose a sliced row",0,mosaic.getMeasuredHeight()%slot);
 +        assertTrue(f.view.getMeasuredHeight()<=Math.round(280*density));
++    }
++
++    @Test public void actualSidebarBudgetShowsBothFavoriteRowsWithoutChargingChromeTwice() {
++        Fixture f = new Fixture();
++        for (int i = 0; i < 8; i++) f.controller.rememberTab(80 + i,
++                "https://budget.test/" + i, "Favorite " + i, true);
++        f.view.refresh();
++        float density = f.activity.getResources().getDisplayMetrics().density;
++        int budget = org.chromium.chrome.browser.ui.vertical_tabs.ArcDesktopPolicy
++                .collectionScrollBudgetPx(Math.round(800 * density), density,
++                        Math.round(20 * density), true);
++        f.view.setCollectionHeight(budget);
++        int width = Math.round(240 * density);
++        f.view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
++                View.MeasureSpec.makeMeasureSpec(Math.round(800 * density), View.MeasureSpec.AT_MOST));
++        f.view.layout(0, 0, width, f.view.getMeasuredHeight());
++        View mosaic = f.view.findViewWithTag("arc-favorites-mosaic");
++        assertEquals("Eight favorites must show both complete rows in a normal sidebar",
++                2 * Math.round(56 * density), mosaic.getMeasuredHeight());
++        assertTrue("Native tab space must remain reserved", f.view.getMeasuredHeight() <= budget);
 +    }
 +
 +    @Test public void favoritesUseEveryCompleteRowAvailableBeyondThreeRows() {
@@ -28567,7 +28290,7 @@ diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrom
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java
-@@ -0,0 +1,155 @@
+@@ -0,0 +1,157 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -28643,7 +28366,7 @@ new file mode 100644
 +        return original + outer;
 +    }
 +
-+    /** Reserve caption, five control rows, collection chrome and native tab space. */
++    /** Reserve caption, five external control rows and native tab space. */
 +    public static int collectionScrollBudgetPx(int height, float density, int captionHeight) {
 +        return collectionScrollBudgetPx(height, density, captionHeight, false);
 +    }
@@ -28652,7 +28375,9 @@ new file mode 100644
 +    public static int collectionScrollBudgetPx(
 +            int height, float density, int captionHeight, boolean extensionsVisible) {
 +        if (!(density > 0f) || height <= 0) return 0;
-+        int reservedDp = 5 * ARC_NAV_ROW_HEIGHT_DP + 160 + 2 * ARC_OUTER_PADDING_DP + 112;
++        // This is the total collection height. ArcCollectionsView reserves its
++        // own selector/folder/action chrome inside it; do not subtract it twice.
++        int reservedDp = 5 * ARC_NAV_ROW_HEIGHT_DP + 2 * ARC_OUTER_PADDING_DP + 112;
 +        int extensionHeight = extensionsVisible ? Math.round(ARC_NAV_ROW_HEIGHT_DP * density)
 +                + Math.round(ARC_FOOTER_ROW_GAP_DP * density) : 0;
 +        long remaining = (long) height - Math.round(reservedDp * density)
