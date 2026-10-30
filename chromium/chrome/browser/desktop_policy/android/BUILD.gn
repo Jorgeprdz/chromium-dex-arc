@@ -3,11 +3,20 @@
 # found in the LICENSE file.
 import("//build/config/android/rules.gni")
 
+android_assets("build_info_assets") {
+  # Written before gn gen by archium-build-version.py. The input is in the
+  # checkpointed source tree so resumed stages package the same build identity.
+  sources = [ "archium-build.json" ]
+}
+
 android_library("java") {
   sources = [
     "java/src/org/chromium/chrome/browser/desktop_policy/ArchiumWindowClass.java",
     "java/src/org/chromium/chrome/browser/desktop_policy/ArchiumWindowMetrics.java",
   ]
   # Window publicly exports the pinned Window Core dependency and its size classes.
-  deps = [ "//third_party/androidx:androidx_window_window_java" ]
+  deps = [
+    ":build_info_assets",
+    "//third_party/androidx:androidx_window_window_java",
+  ]
 }

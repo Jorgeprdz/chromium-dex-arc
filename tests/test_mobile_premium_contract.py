@@ -14,11 +14,31 @@ class MobilePremiumContracts(unittest.TestCase):
   self.assertEqual(self.baseline['methods'][path][pattern],hashlib.sha256(actual).hexdigest())
  def test_approved_pull_and_native_owners_are_byte_identical(self):
   paths=['chromium/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcPhonePullReveal.java',
-   '.source-modified/chrome/android/java/src/org/chromium/chrome/browser/SwipeRefreshHandler.java',
-   '.source-modified/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarPhone.java',
-   'chromium/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCameraControls.java']
+   '.source-modified/chrome/android/java/src/org/chromium/chrome/browser/SwipeRefreshHandler.java']
+  # Desktop camera menu labels/choices are an approved UI-only exception.
+  # The approved phone capsule inset is also presentation-only. Native phone
+  # input/layout methods and capture/reveal owners remain protected below.
   for path in paths:
    with self.subTest(path=path):self.assertEqual(self.baseline['files'][path],hashlib.sha256((ROOT/path).read_bytes()).hexdigest())
+ def test_native_phone_input_and_layout_survive_the_capsule_presentation_change(self):
+  path='.source-modified/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarPhone.java'
+  # Pinned from 0f5de40 before the authorized background-only height adjustment.
+  expected={
+   'public boolean onInterceptTouchEvent\\(': '7b6485cb4ff6d86292cb4bdaf2d0543a156c0a642ad95ff187489fb7e94a1db3',
+   'public boolean onTouchEvent\\(': '357dcebeba62591b215dbea4a9b0b5f04a3b5a330481e764cd8ddecdf7ca9737',
+   'protected void onMeasure\\(': '5d48d56e6041929416b13e119dbca43c0e243b819749d0d3773460e05e297f96',
+   'private boolean updateUnfocusedLocationBarLayoutParams\\(': '157d85e7b2e3e715a0d9bf063083aeda85a6b8fa9154a41c7577715cbbc2c699',
+   'private int getFocusedLocationBarWidth\\(': '5ac588192e845a3f0fe1121a6ac11ddcbf5935b57b60598f497ef28d35b1c04a',
+   'private int getFocusedLocationBarLeftMargin\\(': '8aba1b9157ff7508c52db391be2380d8e167fd9d036eebcca7e9c9436e630888',
+   'private void updateLocationBarLayoutForExpansionAnimation\\(': '120d451c08b5ec0f8385b669dffb73f3332f1f4bb69763f0f5ae6e79535b888d',
+   'public void onUrlFocusChange\\(': '2695bba4301a3b5cb196ea8a512dbd8d40db3be99d595df9e498c0dc46e26a6b',
+   'private void updateLayoutParamsForMultiline\\(': '8b6fbfa9f954c6166c816ca9bdf6e65dcfb5c0dc3fd17d99055f102042d7512d',
+   'private int calculateOnFocusHeightIncrease\\(': '8e6c7af7279485f3e2de4327a37c8b0bf6cba95b2f13fb64e4e241b853f8f55b',
+  }
+  source=(ROOT/path).read_text()
+  for pattern,digest in expected.items():
+   with self.subTest(method=pattern):
+    self.assertEqual(digest,hashlib.sha256(method_body(source,pattern).encode()).hexdigest())
  def test_color_resolver_and_reveal_binding_are_unchanged(self):
   path='.source-modified/chrome/browser/ui/android/theme/java/src/org/chromium/chrome/browser/theme/ToolbarThemeColorProvider.java'
   pattern=r'public @ColorInt int getArcPhonePageColor\('

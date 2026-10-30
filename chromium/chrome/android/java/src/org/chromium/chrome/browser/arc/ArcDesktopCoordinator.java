@@ -563,8 +563,8 @@ public final class ArcDesktopCoordinator {
             mAboutDialog = ArcAboutDialog.show(activity, activity.getString(R.string.arc_about),
                     activity.getString(R.string.arc_version));
         });
-        mBrowserControlsRow.addView(about, new LinearLayout.LayoutParams(dp(44), dp(44)));
         mBrowserControlsRow.addView(appearanceButton, new LinearLayout.LayoutParams(dp(44), dp(44)));
+        mBrowserControlsRow.addView(about, new LinearLayout.LayoutParams(dp(44), dp(44)));
         rail.addView(mColumn, new ViewGroup.LayoutParams(-1, -1));
 
         mArcContentOutlineProvider =
@@ -1383,7 +1383,7 @@ public final class ArcDesktopCoordinator {
         updateNewTabRow(expanded);
         if (mCollectionsView != null) {
             mCollectionsView.setVisibility(View.VISIBLE);
-            mCollectionsView.setCompact(!expanded || collectionBudget < dp(80));
+            mCollectionsView.setCompact(!expanded || collectionBudget < dp(154));
         }
         applyFrameGeometry();
         if (mCollectionsView != null) {

@@ -14,30 +14,23 @@ import org.chromium.content_public.browser.WebContents;
 /** Native Desktop action beside extensions; calibration is owned by the chosen tab. */
 @NullMarked
 public final class ArcCameraControls {
-    private static final int AUTO = 1, MANUAL = 2, ROTATE = 3, RESET = 4;
     private ArcCameraControls() {}
 
     public static void show(View anchor, @Nullable WebContents contents) {
         if (contents == null || contents.isDestroyed()) return;
         final int mode = ContentUtils.getArcCameraOrientation(contents);
         PopupMenu popup = new PopupMenu(anchor.getContext(), anchor);
-        popup.getMenu().add(1, AUTO, 0, R.string.arc_camera_auto).setCheckable(true).setChecked(mode < 0);
-        popup.getMenu().add(1, MANUAL, 1, anchor.getContext().getString(
-                R.string.arc_camera_manual, Math.max(0, mode) * 90))
-                .setCheckable(true).setChecked(mode >= 0);
+        for (int turns = 1; turns <= 3; turns++) {
+            popup.getMenu().add(1, turns, turns - 1,
+                    anchor.getContext().getString(R.string.arc_camera_angle, turns * 90))
+                    .setCheckable(true).setChecked(mode == turns);
+        }
         popup.getMenu().setGroupCheckable(1, true, true);
-        popup.getMenu().add(0, ROTATE, 2, R.string.arc_camera_rotate).setEnabled(mode >= 0);
-        popup.getMenu().add(0, RESET, 3, R.string.arc_camera_reset).setEnabled(mode >= 0);
         popup.setOnMenuItemClickListener(item -> {
             if (contents.isDestroyed()) return false;
-            int next;
-            switch (item.getItemId()) {
-                case AUTO: case RESET: next = -1; break;
-                case MANUAL: next = Math.max(0, mode); break;
-                case ROTATE: next = (Math.max(0, mode) + 1) % 4; break;
-                default: return false;
-            }
-            ContentUtils.setArcCameraOrientation(contents, next);
+            int turns = item.getItemId();
+            if (turns < 1 || turns > 3) return false;
+            ContentUtils.setArcCameraOrientation(contents, turns);
             return true;
         });
         popup.show();

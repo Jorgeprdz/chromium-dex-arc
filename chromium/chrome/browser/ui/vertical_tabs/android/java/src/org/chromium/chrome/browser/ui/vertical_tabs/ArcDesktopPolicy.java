@@ -87,7 +87,9 @@ public final class ArcDesktopPolicy {
                 + Math.round(ARC_FOOTER_ROW_GAP_DP * density) : 0;
         long remaining = (long) height - Math.round(reservedDp * density)
                 - Math.max(0, captionHeight) - extensionHeight;
-        return (int) Math.min(Math.round(240 * density), Math.max(0L, remaining));
+        // Complete collection rows may use the remaining height. A fixed 240dp
+        // ceiling hid favorites and clipped the folder action on tall windows.
+        return (int) Math.min(Integer.MAX_VALUE, Math.max(0L, remaining));
     }
 
     /** Match all four compositor/SurfaceView outline corners. */

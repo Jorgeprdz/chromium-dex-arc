@@ -35,17 +35,26 @@ public class ArcAboutDialogTest {
             info.versionName = "9.8.7";
             info.setLongVersionCode(987);
             shadowOf(activity.getPackageManager()).installPackage(info);
-            dialog = ArcAboutDialog.show(activity, "Acerca de Archium", "Versión %1$s (%2$d)");
+            dialog = ArcAboutDialog.show(activity, "Acerca de Archium", "Archium %1$s\nChromium %2$s (%3$d)");
             TextView version = dialog.findViewById(android.R.id.content)
                     .getRootView().findViewWithTag("arc-about-version");
             ImageView logo = dialog.findViewById(android.R.id.content)
                     .getRootView().findViewWithTag("arc-about-logo");
-            assertEquals("Versión 9.8.7 (987)", version.getText().toString());
+            assertEquals("Archium desarrollo\nChromium 9.8.7 (987)", version.getText().toString());
             assertNotNull(logo.getDrawable());
             assertTrue(dialog.isShowing());
         } finally {
             if (dialog != null) dialog.dismiss();
             activity.finish();
         }
+    }
+
+    @Test public void independentBuildVersionIsValidatedWithoutUsingChromiumVersion() {
+        assertEquals("0.9.201", ArcAboutDialog.parseArchiumVersion(
+                "{\"version\":\"0.9.201\",\"build_number\":201}"));
+        assertEquals("desarrollo", ArcAboutDialog.parseArchiumVersion("{}"));
+        assertEquals("desarrollo", ArcAboutDialog.parseArchiumVersion("not json"));
+        assertEquals("desarrollo", ArcAboutDialog.parseArchiumVersion(
+                "{\"version\":\"157.0.8086.0\",\"build_number\":201}"));
     }
 }

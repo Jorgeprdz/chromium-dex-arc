@@ -103,8 +103,6 @@ public class ArcCollectionsFocusTest {
         var arrow=space.getCompoundDrawablesRelative()[2];assertNotNull(arrow);
         assertEquals(Math.round(16*density),arrow.getBounds().width());
         assertEquals(Math.round(44*density),space.getMeasuredHeight());
-        var params=(android.widget.LinearLayout.LayoutParams)space.getLayoutParams();
-        assertEquals(Math.round(6*density),params.topMargin+params.bottomMargin);
         assertTrue(space.performClick());
         assertNotNull(org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu());
         f.controller.createSpace("Long Space title for an end-ellipsized accessible heading");
@@ -180,8 +178,10 @@ public class ArcCollectionsFocusTest {
         f.view.setCollectionHeight(240);
         f.measure();
         View newFolder = f.view.findViewWithTag("arc-new-folder:" + f.controller.state().selectedSpace());
-        View scroll = (View) newFolder.getParent().getParent();
-        assertEquals("Empty collection has only its actual New folder row", newFolder.getMeasuredHeight(), scroll.getMeasuredHeight());
+        View scroll = f.view.findViewWithTag("arc-collection-scroll");
+        assertEquals("Empty entries do not reserve scroll space", 0, scroll.getMeasuredHeight());
+        assertSame(f.view, newFolder.getParent());
+        assertEquals(44, newFolder.getMeasuredHeight());
         assertEquals(android.view.ViewGroup.LayoutParams.WRAP_CONTENT, scroll.getLayoutParams().height);
     }
 
@@ -190,12 +190,12 @@ public class ArcCollectionsFocusTest {
         Fixture f = new Fixture();
         for (int i = 0; i < 20; i++) f.controller.createFolder(null, "Folder " + i);
         f.view.refresh(); f.view.setCollectionHeight(240); f.measure();
-        View scroll = (View) f.view.findViewWithTag("arc-new-folder:" + f.controller.state().selectedSpace()).getParent().getParent();
-        int chrome = Math.round(94 * f.activity.getResources().getDisplayMetrics().density)
+        View scroll = f.view.findViewWithTag("arc-collection-scroll");
+        int chrome = Math.round(142 * f.activity.getResources().getDisplayMetrics().density)
                 + f.view.getPaddingTop() + f.view.getPaddingBottom();
-        assertEquals(Math.max(0, 240 - chrome), scroll.getMeasuredHeight());
+        assertEquals(Math.max(0, 240 - chrome) / 44 * 44, scroll.getMeasuredHeight());
         f.view.setCollectionHeight(100); f.measure();
-        assertEquals(Math.max(0, 100 - chrome), scroll.getMeasuredHeight());
+        assertEquals("Short budget hides expanded entries", View.GONE, scroll.getVisibility());
     }
 
     @Test
@@ -212,7 +212,7 @@ public class ArcCollectionsFocusTest {
     @Test public void favoritesBudgetShowsWholeRowsAndRecomputesAfterWidthChange() {
         Fixture f=new Fixture();
         for(int i=0;i<8;i++)f.controller.rememberTab(70+i,"https://rows.test/"+i,"Favorite "+i,true);
-        f.view.refresh();f.view.setCollectionHeight(240);f.measure();
+        f.view.refresh();f.view.setCollectionHeight(280);f.measure();
         View mosaic=f.view.findViewWithTag("arc-favorites-mosaic");
         float density=f.activity.getResources().getDisplayMetrics().density;
         int slot=Math.round(56*density);
@@ -220,7 +220,74 @@ public class ArcCollectionsFocusTest {
         f.view.measure(View.MeasureSpec.makeMeasureSpec(Math.round(220*density),View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(1200,View.MeasureSpec.AT_MOST));
         f.view.layout(0,0,f.view.getMeasuredWidth(),f.view.getMeasuredHeight());
         assertEquals("Resize may scroll rows but never expose a sliced row",0,mosaic.getMeasuredHeight()%slot);
-        assertTrue(f.view.getMeasuredHeight()<=Math.round(240*density));
+        assertTrue(f.view.getMeasuredHeight()<=Math.round(280*density));
+    }
+
+    @Test public void favoritesUseEveryCompleteRowAvailableBeyondThreeRows() {
+        Fixture f = new Fixture();
+        for (int i = 0; i < 17; i++) f.controller.rememberTab(70 + i,
+                "https://many.test/" + i, "Favorite " + i, true);
+        f.view.refresh();
+        float density = f.activity.getResources().getDisplayMetrics().density;
+        f.view.setCollectionHeight(Math.round(600 * density));
+        int width = Math.round(240 * density);
+        f.view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
+                View.MeasureSpec.makeMeasureSpec(Math.round(1200 * density), View.MeasureSpec.AT_MOST));
+        f.view.layout(0, 0, width, f.view.getMeasuredHeight());
+        View mosaic = f.view.findViewWithTag("arc-favorites-mosaic");
+        assertEquals("17 favorites in four columns need five complete rows",
+                Math.round(280 * density), mosaic.getMeasuredHeight());
+        View folder = f.view.findViewWithTag("arc-new-folder:" + f.controller.state().selectedSpace());
+        assertTrue("Folder action remains fully visible after the mosaic grows",
+                folder.getBottom() <= f.view.getMeasuredHeight() - f.view.getPaddingBottom());
+    }
+
+    @Test public void favoritesLeaveACompleteFolderActionAndBreathingRoom() {
+        Fixture f = new Fixture();
+        for (int i = 0; i < 8; i++) f.controller.rememberTab(70 + i,
+                "https://folder-room.test/" + i, "Favorite " + i, true);
+        f.view.refresh(); f.view.setCollectionHeight(240); f.measure();
+        View folder = f.view.findViewWithTag("arc-new-folder:" + f.controller.state().selectedSpace());
+        assertSame("New Folder remains available outside scrolling folder entries", f.view, folder.getParent());
+        assertTrue("New Folder must not be sliced by the collection boundary",
+                folder.getBottom() <= f.view.getMeasuredHeight() - f.view.getPaddingBottom());
+        View mosaic = f.view.findViewWithTag("arc-favorites-mosaic");
+        View space = f.view.findViewWithTag("arc-current-space");
+        assertTrue("Favorites and folder controls have breathing room",
+                space.getTop() - mosaic.getBottom() >= Math.round(8 * f.activity.getResources().getDisplayMetrics().density));
+    }
+
+    @Test public void favoriteFallbackFitsExpandedBudgetBoundariesAfterCountChanges() {
+        Fixture f = new Fixture();
+        float density = f.activity.getResources().getDisplayMetrics().density;
+        f.view.setCompact(false);
+        java.util.List<String> favorites = new java.util.ArrayList<>();
+        for (int count : new int[] {0, 8, 0}) {
+            if (count == 8) {
+                for (int i = 0; i < count; i++) favorites.add(f.controller.rememberTab(
+                        70 + i, "https://boundary.test/" + i, "Favorite " + i, true));
+            } else {
+                for (String id : favorites) f.controller.remove(id);
+                favorites.clear();
+            }
+            // Native favorite refresh does not notify the coordinator to reset compact mode.
+            f.view.refresh();
+            for (int budgetDp : new int[] {154, 155, 197, 198}) {
+                int budget = Math.round(budgetDp * density);
+                f.view.setCollectionHeight(budget); f.measure();
+                assertTrue("Count " + count + " must fit its " + budgetDp + "dp budget",
+                        f.view.getMeasuredHeight() <= budget);
+                boolean expanded = count == 0 || budgetDp == 198;
+                assertEquals("Compact choice for count " + count + " and budget " + budgetDp,
+                        expanded ? View.VISIBLE : View.GONE,
+                        f.view.findViewWithTag("arc-current-space").getVisibility());
+                View action = f.view.findViewWithTag("arc-new-folder:" + f.controller.state().selectedSpace());
+                assertEquals(expanded ? View.VISIBLE : View.GONE, action.getVisibility());
+                if (expanded) assertEquals(Math.round(44 * density), action.getMeasuredHeight());
+                if (count > 0) assertEquals(View.VISIBLE,
+                        f.view.findViewWithTag("arc-favorites-menu").getVisibility());
+            }
+        }
     }
 
     @Test public void shortWindowKeepsAllFavoritesInAnAccessibleCompactMenu() {

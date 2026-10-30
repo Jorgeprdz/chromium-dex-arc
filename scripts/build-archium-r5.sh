@@ -124,6 +124,9 @@ if [[ "$phase" != --work ]]; then
     run_prepare python3 "$GITHUB_WORKSPACE/scripts/transition-archium-patches.py" "$PWD" \
         --source-commit "$ARCHIUM_SOURCE_COMMIT" --implementation-commit "$GITHUB_SHA"
     run_prepare "$host_python" "$GITHUB_WORKSPACE/scripts/integrate-archium-portal.py" "$PWD"
+    run_prepare "$host_python" "$GITHUB_WORKSPACE/scripts/archium-build-version.py" \
+        --checkout "$PWD" --source-sha "$GITHUB_SHA" \
+        --build-number "${GITHUB_RUN_NUMBER:?CI build sequence is required}" --run-id "$GITHUB_RUN_ID"
     run_prepare gn gen out/Archium
     printf '%s\n%s\n%s\n' "$GITHUB_SHA" "$job_started" "$deadline" > "$prepared_marker"
     df -B1 .
@@ -290,6 +293,8 @@ stage S4
 compile_slice chrome_public_apk
 apk="$PWD/out/Archium/apks/ChromePublic.apk"
 [[ -s "$apk" ]] || die 'APK absent or empty.'
+gate "$host_python" "$GITHUB_WORKSPACE/scripts/archium-build-version.py" \
+    --checkout "$PWD" --verify-apk "$apk"
 gate "$host_python" "$GITHUB_WORKSPACE/scripts/verify-archium-portal-apk.py" \
     --apk "$apk" --aapt2 "$sdk_tools/aapt2" --report "$PWD/out/Archium/archium-apk-verification.json"
 gate "$sdk_tools/apksigner" verify --verbose "$apk"
@@ -306,12 +311,16 @@ cp "$apk" "$output/Archium-for-Android-arm64.apk"
 cp LICENSE "$output/LICENSE.chromium"
 "$sdk_tools/apksigner" verify --verbose --print-certs "$apk" > "$output/SIGNATURE.txt"
 cp "$RUNNER_TEMP/archium-apk-badging.txt" "$output/APK_BADGING.txt"
+cp chrome/browser/desktop_policy/android/archium-build.json "$output/ARCHIUM_VERSION.json"
 (cd "$output"; sha256sum Archium-for-Android-arm64.apk > SHA256SUMS)
 "$host_python" - "$output/BUILD_REPORT.json" <<'PY'
 import json, os, sys
 from pathlib import Path
+identity = json.loads(Path(sys.argv[1]).with_name('ARCHIUM_VERSION.json').read_text())
+assert identity['source_sha'] == os.environ['GITHUB_SHA'], 'Archium identity differs from build source'
 Path(sys.argv[1]).write_text(json.dumps({
     'source_sha': os.environ['GITHUB_SHA'],
+    'archium_version': identity['version'], 'archium_build_number': identity['build_number'],
     'branch': os.environ['GITHUB_REF_NAME'], 'run_id': os.environ['GITHUB_RUN_ID'],
     'source_checkpoint': os.environ['ARCHIUM_SOURCE_TAG'],
     'checkpoint_commit': os.environ['ARCHIUM_SOURCE_COMMIT'],

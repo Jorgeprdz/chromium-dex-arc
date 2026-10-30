@@ -13,7 +13,8 @@ class RecoveryGeometryTests(unittest.TestCase):
 public class GeometryProbe {
  static void eq(int a,int b){if(a!=b)throw new AssertionError(a+" != "+b);}
  public static void main(String[] args){
-  eq(ArcDesktopPolicy.collectionScrollBudgetPx(800,1f,20),240);
+  eq(ArcDesktopPolicy.collectionScrollBudgetPx(800,1f,20),272);
+  eq(ArcDesktopPolicy.collectionScrollBudgetPx(1100,1f,20),572);
   eq(ArcDesktopPolicy.collectionScrollBudgetPx(600,1f,20),72);
   eq(ArcDesktopPolicy.collectionScrollBudgetPx(400,1f,0),0);
   eq(ArcDesktopPolicy.collectionScrollBudgetPx(800,0f,0),0);

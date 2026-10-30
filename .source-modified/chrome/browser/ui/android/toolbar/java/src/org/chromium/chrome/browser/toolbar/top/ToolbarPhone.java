@@ -1009,6 +1009,7 @@ public class ToolbarPhone extends ToolbarLayout
             surface.setElevation(mArcOriginalLocationBarElevation);
         }
         mArcPhoneFloatingSurface = enabled;
+        updateLocationBarBackgroundBounds(mLocationBarBackgroundBounds, mVisualState);
         updateToolbarAndLocationBarColorForFocusChange();
         updateModernLocationBarCorners();
         updateHairlineVisibility();
@@ -1255,13 +1256,20 @@ public class ToolbarPhone extends ToolbarLayout
         return mTabSwitcherState != STATIC_TAB;
     }
 
+    /** Enlarge only the floating capsule; editor bounds and focus expansion remain native. */
+    private int getArcLocationBarVerticalInset() {
+        if (!mArcPhoneFloatingSurface) return mLocationBarBackgroundVerticalInset;
+        int edge = Math.round(getResources().getDisplayMetrics().density);
+        return Math.max(0, mLocationBarBackgroundVerticalInset - edge);
+    }
+
     /** Calculate the bounds for the location bar background and set them to {@code out}. */
     private void updateLocationBarBackgroundBounds(Rect out, @VisualState int visualState) {
         // Calculate the visible boundaries of the left and right most child views of the
         // location bar.
         int leftViewPosition = getLeftPositionOfLocationBarBackground(visualState);
         int rightViewPosition = getRightPositionOfLocationBarBackground(visualState);
-        int verticalInset = mLocationBarBackgroundVerticalInset - calculateOnFocusHeightIncrease();
+        int verticalInset = getArcLocationBarVerticalInset() - calculateOnFocusHeightIncrease();
 
         // The bounds are set by the following:
         // - The left most visible location bar child view.

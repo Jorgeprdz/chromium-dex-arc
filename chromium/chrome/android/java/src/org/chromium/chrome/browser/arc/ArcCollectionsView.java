@@ -49,9 +49,11 @@ public final class ArcCollectionsView extends LinearLayout {
     private final LinearLayout mEntries;
     private final LinearLayout mControls;
     private final Button mSpace;
+    private final Button mNewFolder;
     private final BoundedScrollView mScroll;
     private final BoundedScrollView mFavoritesScroll;
     private int mCollectionHeight = -1;
+    private boolean mCompactRequested;
     private android.graphics.drawable.Drawable mPinGlyph, mFavoriteGlyph, mFavoriteFilledGlyph, mSpaceChevron;
     private void updateGlyphs() {
         mSpaceChevron = new ArcDesktopIcons(ArcDesktopIcons.Kind.CHEVRON_DOWN, mForeground);
@@ -103,13 +105,13 @@ public final class ArcCollectionsView extends LinearLayout {
         mCurrentTab = currentTab;
         mLoadIcon = loadIcon;
         setOrientation(VERTICAL);
-        setPadding(dp(8), dp(4), dp(8), dp(4));
+        setPadding(dp(8), dp(4), dp(8), dp(8));
         mFavorites = new GridLayout(activity);
         mFavorites.setColumnCount(2);
         mFavorites.setContentDescription(activity.getString(R.string.arc_favorites));
         mFavorites.setAccessibilityHeading(true);
         mFavoritesScroll = new BoundedScrollView(activity);
-        mFavoritesScroll.setBudget(dp(216));
+        mFavoritesScroll.setBudget(Integer.MAX_VALUE);
         mFavoritesScroll.setTag("arc-favorites-mosaic");
         mFavoritesScroll.addView(mFavorites);
         addView(mFavoritesScroll, new LayoutParams(-1, LayoutParams.WRAP_CONTENT));
@@ -129,7 +131,7 @@ public final class ArcCollectionsView extends LinearLayout {
         mSpace.setCompoundDrawablePadding(dp(8));
         mSpace.setCompoundDrawablesRelative(null, null, mSpaceChevron, null);
         LayoutParams spaceParams = new LayoutParams(-1, dp(44));
-        spaceParams.topMargin = dp(4); spaceParams.bottomMargin = dp(2);
+        spaceParams.topMargin = dp(8); spaceParams.bottomMargin = dp(2);
         addView(mSpace, spaceParams);
         mEntries = new LinearLayout(activity);
         mEntries.setOrientation(VERTICAL);
@@ -139,6 +141,19 @@ public final class ArcCollectionsView extends LinearLayout {
         mScroll.setTag("arc-collection-scroll");
         mScroll.addView(mEntries);
         addView(mScroll, new LayoutParams(-1, LayoutParams.WRAP_CONTENT));
+        mNewFolder = button(mActivity.getString(R.string.arc_new_folder), () -> {
+            String space = mController.state().selectedSpace();
+            String parent = mOpenFolder;
+            requestName(R.string.arc_new_folder, name -> {
+                if (!space.equals(mController.state().selectedSpace())) {
+                    throw new IllegalStateException("Space changed");
+                }
+                mController.createFolder(parent, name);
+            });
+        });
+        // Keep the action outside the scrolling entries so the boundary below collections
+        // cannot expose only the top of its normal 44dp target.
+        addView(mNewFolder, new LayoutParams(-1, dp(44)));
         LinearLayout controls = new LinearLayout(activity);
         mControls = controls;
         Button pin = button(activity.getString(R.string.arc_pin_current), () -> remember(false));
@@ -161,6 +176,8 @@ public final class ArcCollectionsView extends LinearLayout {
     protected void onMeasure(int widthSpec, int heightSpec) {
         int available = Math.max(0, MeasureSpec.getSize(widthSpec) - getPaddingLeft() - getPaddingRight());
         int columns = favoriteColumns(available, dp(56));
+        // Favorite refreshes may arrive without a coordinator geometry update.
+        updateCompactViews();
         updateCollectionBudgets(columns);
         boolean empty = mFavorites.getChildCount() == 0;
         boolean menuOnly = columns == 0 || mFavoritesScroll.mBudget < dp(56);
@@ -245,30 +262,42 @@ public final class ArcCollectionsView extends LinearLayout {
 
     /** Compact native rail keeps favorites accessible without expanded collection chrome. */
     public void setCompact(boolean compact) {
+        mCompactRequested = compact;
+        updateCompactViews();
+    }
+
+    private void updateCompactViews() {
+        int minimumExpanded = dp(142) + getPaddingTop() + getPaddingBottom()
+                + (mFavorites.getChildCount() == 0 ? 0 : dp(44));
+        boolean compact = mCompactRequested
+                || (mCollectionHeight >= 0 && mCollectionHeight < minimumExpanded);
         mSpace.setVisibility(compact ? GONE : VISIBLE);
         mScroll.setVisibility(compact ? GONE : VISIBLE);
         mControls.setVisibility(compact ? GONE : VISIBLE);
+        mNewFolder.setVisibility(compact ? GONE : VISIBLE);
     }
 
     public void setCollectionHeight(int height) {
         mCollectionHeight = height;
+        // Visibility changes request a measure even if both scroll budgets remain zero.
+        updateCompactViews();
         updateCollectionBudgets(mFavorites.getColumnCount());
     }
 
     private void updateCollectionBudgets(int columns) {
         if (mCollectionHeight < 0) return;
-        // Allocate whole 50dp tiles plus their 3dp top/bottom margins. The previous
-        // half-budget (at most 96dp) exposed only part of a second grid row.
-        int rows = Math.max(0, mCollectionHeight - dp(94) - getPaddingTop() - getPaddingBottom());
+        // Reserve space selector (44dp + 8dp/2dp margins), the fixed New Folder
+        // action and the pin/favorite action row before assigning scrollable content.
+        int rows = Math.max(0, mCollectionHeight - dp(142) - getPaddingTop() - getPaddingBottom());
         int slot = dp(56);
         int count = mFavorites.getChildCount();
         int wantedRows = columns < 2 ? 0 : (count + columns - 1) / columns;
-        int visibleRows = Math.min(wantedRows, Math.min(dp(216), rows) / slot);
+        int visibleRows = Math.min(wantedRows, rows / slot);
         int favorites = visibleRows * slot;
         mFavoritesScroll.setBudget(favorites);
         // A menu fallback still consumes a 44dp row inside the same shared budget.
-        int occupied = count > 0 && favorites == 0 ? Math.min(dp(44), rows) : favorites;
-        mScroll.setBudget(Math.max(0, rows - occupied));
+        int occupied = count > 0 && favorites == 0 ? dp(44) : favorites;
+        mScroll.setBudget(Math.max(0, rows - occupied) / dp(44) * dp(44));
     }
 
     /** Owns collection styling so site favicons retain their original colors and rounded tiles. */
@@ -442,18 +471,7 @@ public final class ArcCollectionsView extends LinearLayout {
             row.setTooltipText(mActivity.getString(R.string.arc_pinned_entry_actions));
             mEntries.addView(row, new LayoutParams(-1, dp(44)));
         }
-        Button newFolder = button(mActivity.getString(R.string.arc_new_folder), () -> {
-            String space = state.selectedSpace();
-            String parent = mOpenFolder;
-            requestName(R.string.arc_new_folder, name -> {
-                if (!space.equals(mController.state().selectedSpace())) {
-                    throw new IllegalStateException("Space changed");
-                }
-                mController.createFolder(parent, name);
-            });
-        });
-        newFolder.setTag("arc-new-folder:" + state.selectedSpace());
-        mEntries.addView(newFolder, new LayoutParams(-1, dp(44)));
+        mNewFolder.setTag("arc-new-folder:" + state.selectedSpace());
         applyAppearance(this);
         restoreFocus(mFavorites, favoriteFocus);
         restoreFocus(mEntries, entryFocus);

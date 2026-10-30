@@ -40,6 +40,9 @@ elif name=='python3' and args and args[0].endswith('archium-autoninja.py'):
   if r.returncode or r.stderr:print('JAVAC_STDERR='+r.stderr,file=sys.stderr);sys.exit(83)
 elif name=='python3' and args and args[0].endswith('archium-java-preflight.py'):
  pathlib.Path(args[args.index('--targets-file')+1]).write_text('obj/recovery-fixture.javac.jar\n')
+elif name=='python3' and args and args[0].endswith('archium-build-version.py'):
+ if '--verify-apk' in args:sys.exit(int(os.environ.get('BUILD_VERSION_EXIT','0')))
+ os.execv('/usr/bin/python3',['python3',os.environ['REAL_VERSION_SCRIPT']]+args[1:])
 elif name=='python3' and args and args[0].endswith('archium-ninja-query.py'):
  os.execv('/usr/bin/python3',['python3',os.environ['REAL_QUERY_SCRIPT']]+args[1:])
 elif name=='python3' and args and args[0].endswith('check-archium-password-deprecation.py'):
@@ -88,6 +91,8 @@ class R5BuildRoutingTests(unittest.TestCase):
    'ARCHIUM_SOURCE_TAG':'archium-checkpoint-123-1','ARCHIUM_SOURCE_COMMIT':'a'*40,
    'ARCHIUM_CHECKPOINT_TAG':'archium-checkpoint-456-1','ARCHIUM_CHECKPOINT_DIR':str(self.root/'checkpoint'),
    'ARCHIUM_HOST_PYTHON':str(self.bin/'python3')}
+  self.env['GITHUB_RUN_NUMBER']='201'
+  self.env['REAL_VERSION_SCRIPT']=str(ROOT/'scripts/archium-build-version.py')
   self.env['REAL_QUERY_SCRIPT']=str(ROOT/'scripts/archium-ninja-query.py')
   self.env['REAL_DEPRECATION_SCRIPT']=str(ROOT/'scripts/check-archium-password-deprecation.py')
   (self.root/'runner').mkdir();(self.root/'checkpoint').mkdir()
@@ -107,6 +112,11 @@ class R5BuildRoutingTests(unittest.TestCase):
  def test_split_steps_restore_only_once(self):
   r=self.build('--prepare');self.assertEqual(r.returncode,0,r.stderr);self.assertEqual(self.targets(),[])
   r=self.build('--work');self.assertEqual(r.returncode,0,r.stdout+r.stderr);self.assertEqual(sum('restore' in c for c in self.calls()),1)
+ def test_apk_version_mismatch_blocks_publication(self):
+  r=self.build(BUILD_VERSION_EXIT='19')
+  self.assertEqual(r.returncode,19,r.stdout+r.stderr)
+  self.assertNotIn('complete=true',self.output.read_text())
+  self.assertFalse((self.repo/'archium-output').exists())
  def test_same_source_continuation_reuses_completed_host_and_robolectric_gates(self):
   r=self.build();self.assertEqual(r.returncode,0,r.stdout+r.stderr)
   def expensive():

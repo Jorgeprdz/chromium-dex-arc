@@ -6169,6 +6169,303 @@ diff --git a/chrome/browser/password_manager/factories/profile_password_store_fa
    // Android gets logins with affiliations directly from the backend.
    auto password_affiliation_adapter =
        std::make_unique<password_manager::PasswordAffiliationSourceAdapter>();
+diff --git a/chrome/browser/picture_in_picture/BUILD.gn b/chrome/browser/picture_in_picture/BUILD.gn
+--- a/chrome/browser/picture_in_picture/BUILD.gn
++++ b/chrome/browser/picture_in_picture/BUILD.gn
+@@ -135,6 +135,7 @@
+     ]
+     deps += [
+       "//chrome/android:chrome_jni_headers",
++      "//chrome/browser/android/content:jni_headers",
+       "//chrome/browser/ui/android/overlay",
+       "//components/strings:components_strings",
+     ]
+diff --git a/chrome/browser/picture_in_picture/auto_picture_in_picture_tab_model_observer_helper.cc b/chrome/browser/picture_in_picture/auto_picture_in_picture_tab_model_observer_helper.cc
+--- a/chrome/browser/picture_in_picture/auto_picture_in_picture_tab_model_observer_helper.cc
++++ b/chrome/browser/picture_in_picture/auto_picture_in_picture_tab_model_observer_helper.cc
+@@ -4,11 +4,18 @@
+
+ #include "chrome/browser/picture_in_picture/auto_picture_in_picture_tab_model_observer_helper.h"
+
++#include <algorithm>
++
++#include "base/android/jni_android.h"
+ #include "base/notimplemented.h"
+ #include "chrome/browser/android/tab_android.h"  // nogncheck crbug.com/413572035
+ #include "chrome/browser/ui/android/tab_model/tab_model.h"
+ #include "chrome/browser/ui/android/tab_model/tab_model_list.h"
+ #include "content/public/browser/web_contents.h"
++
++// JNI conversions must precede the generated header.
++#include "url/android/gurl_android.h"
++#include "chrome/browser/android/content/jni_headers/ArcDesktopPolicyBridge_jni.h"
+
+ // static
+ std::unique_ptr<AutoPictureInPictureTabObserverHelperBase>
+@@ -28,9 +35,23 @@
+     auto* tab = TabAndroid::FromWebContents(web_contents);
+     return tab && tab->IsDragging();
+   }
++
++  bool ShouldObserveVisibility(
++      content::WebContents* web_contents) const override {
++    // Match the existing per-window Document PiP API policy: Archium desktop
++    // on Android 17+, leaving phone and older Android behavior unchanged.
++    return Java_ArcDesktopPolicyBridge_isArchiumDocumentPipEnabled(
++        base::android::AttachCurrentThread(),
++        web_contents->GetJavaWebContents());
++  }
+ };
+
+ }  // namespace
++
++bool AutoPictureInPictureTabModelObserverHelper::Delegate::
++    ShouldObserveVisibility(content::WebContents*) const {
++  return false;
++}
+
+ AutoPictureInPictureTabModelObserverHelper::
+     AutoPictureInPictureTabModelObserverHelper(
+@@ -52,6 +73,10 @@
+     return;
+   }
+   is_observing_ = true;
++  is_closing_ = false;
++  is_web_contents_visible_ =
++      GetObservedWebContents()->GetVisibility() == content::Visibility::VISIBLE;
++  Observe(GetObservedWebContents());
+
+   // Start observing the list of TabModels.
+   TabModelList::AddObserver(this);
+@@ -74,6 +99,7 @@
+     return;
+   }
+   is_observing_ = false;
++  Observe(nullptr);
+
+   // Remove the global TabModelList observer.
+   TabModelList::RemoveObserver(this);
+@@ -103,9 +129,26 @@
+     return is_tab_activated_;
+   }
+
+-  // Otherwise, calculate it now.
++  // Otherwise, calculate it now, including visibility changes while stopped.
++  is_web_contents_visible_ =
++      GetObservedWebContents()->GetVisibility() == content::Visibility::VISIBLE;
+   ReevaluateObservedModelAndState();
+   return is_tab_activated_;
++}
++
++void AutoPictureInPictureTabModelObserverHelper::OnVisibilityWillChange(
++    content::Visibility visibility) {
++  if (!is_observing_ || is_closing_ ||
++      !delegate_->ShouldObserveVisibility(GetObservedWebContents()) ||
++      delegate_->IsTabDragging(GetObservedWebContents())) {
++    return;
++  }
++
++  // Arm the existing media-session auto-PiP path before the opener is hidden.
++  // Cache the incoming state because GetVisibility() still holds the old value
++  // here, and the asynchronous PiP acknowledgement checks IsTabActivated().
++  is_web_contents_visible_ = visibility == content::Visibility::VISIBLE;
++  UpdateIsTabActivated();
+ }
+
+ void AutoPictureInPictureTabModelObserverHelper::DidSelectTab(TabAndroid* tab) {
+@@ -133,6 +176,9 @@
+   // skip checking the activation status, effectively freezing the state until
+   // the tab is destroyed. It's required because when closing a tab via
+   // WillCloseTabs, Clank doesn't immediately remove the tab from the TabModel.
++  is_closing_ = is_closing_ || std::ranges::any_of(tabs, [this](TabAndroid* tab) {
++    return tab->web_contents() == GetObservedWebContents();
++  });
+   ReevaluateObservedModelAndState(false);
+ }
+
+@@ -141,6 +187,7 @@
+   // skip checking the activation status, effectively freezing the state until
+   // the tab is destroyed. It's required because when closing a tab via
+   // WillCloseTab, Clank doesn't immediately remove the tab from the TabModel.
++  is_closing_ = is_closing_ || tab->web_contents() == GetObservedWebContents();
+   ReevaluateObservedModelAndState(false);
+ }
+
+@@ -178,9 +225,12 @@
+   if (observed_tab_model_) {
+     bool was_active = is_tab_activated_;
+
+-    // The observed tab is considered "active" if its model exists and its
+-    // WebContents is the currently active one in that model.
+-    is_tab_activated_ = GetActiveWebContents() == GetObservedWebContents();
++    // Preserve tab selection semantics on phones. Supported desktop windows
++    // also become inactive when minimized or hidden behind another app.
++    is_tab_activated_ =
++        GetActiveWebContents() == GetObservedWebContents() &&
++        (!delegate_->ShouldObserveVisibility(GetObservedWebContents()) ||
++         is_web_contents_visible_);
+
+     if (is_tab_activated_ != was_active && is_observing_) {
+       RunCallback(is_tab_activated_);
+diff --git a/chrome/browser/picture_in_picture/auto_picture_in_picture_tab_model_observer_helper.h b/chrome/browser/picture_in_picture/auto_picture_in_picture_tab_model_observer_helper.h
+--- a/chrome/browser/picture_in_picture/auto_picture_in_picture_tab_model_observer_helper.h
++++ b/chrome/browser/picture_in_picture/auto_picture_in_picture_tab_model_observer_helper.h
+@@ -10,6 +10,7 @@
+ #include "chrome/browser/ui/android/tab_model/tab_model.h"
+ #include "chrome/browser/ui/android/tab_model/tab_model_list_observer.h"
+ #include "chrome/browser/ui/android/tab_model/tab_model_observer.h"
++#include "content/public/browser/web_contents_observer.h"
+
+ class TabModel;
+ class TabAndroid;
+@@ -20,16 +21,20 @@
+
+ // Android implementation of AutoPictureInPictureTabObserverHelperBase.
+ // Observes a TabModel to detect when the associated WebContents becomes active
+-// or inactive.
++// or inactive. On supported Archium desktop windows, activation also requires
++// visible WebContents, so minimizing or leaving the app uses the same native
++// auto-PiP eligibility path as selecting another tab.
+ class AutoPictureInPictureTabModelObserverHelper final
+     : public AutoPictureInPictureTabObserverHelperBase,
+       public TabModelObserver,
+-      public TabModelListObserver {
++      public TabModelListObserver,
++      public content::WebContentsObserver {
+  public:
+   class Delegate {
+    public:
+     virtual ~Delegate() = default;
+     virtual bool IsTabDragging(content::WebContents* web_contents) const = 0;
++    virtual bool ShouldObserveVisibility(content::WebContents* web_contents) const;
+   };
+
+   AutoPictureInPictureTabModelObserverHelper(
+@@ -43,6 +48,9 @@
+   void StopObserving() override;
+   content::WebContents* GetActiveWebContents() const override;
+   bool IsTabActivated() override;
++
++  // WebContentsObserver:
++  void OnVisibilityWillChange(content::Visibility visibility) override;
+
+   // TabModelObserver:
+   void DidSelectTab(TabAndroid* tab) override;
+@@ -68,6 +76,8 @@
+   raw_ptr<TabModel> observed_tab_model_ = nullptr;
+   bool is_tab_activated_ = false;
+   bool is_observing_ = false;
++  bool is_web_contents_visible_ = true;
++  bool is_closing_ = false;
+ };
+
+ #endif  // CHROME_BROWSER_PICTURE_IN_PICTURE_AUTO_PICTURE_IN_PICTURE_TAB_MODEL_OBSERVER_HELPER_H_
+diff --git a/chrome/browser/picture_in_picture/auto_picture_in_picture_tab_model_observer_helper_unittest.cc b/chrome/browser/picture_in_picture/auto_picture_in_picture_tab_model_observer_helper_unittest.cc
+--- a/chrome/browser/picture_in_picture/auto_picture_in_picture_tab_model_observer_helper_unittest.cc
++++ b/chrome/browser/picture_in_picture/auto_picture_in_picture_tab_model_observer_helper_unittest.cc
+@@ -19,6 +19,10 @@
+     : public AutoPictureInPictureTabModelObserverHelper::Delegate {
+  public:
+   MOCK_CONST_METHOD1(IsTabDragging, bool(content::WebContents*));
++  bool ShouldObserveVisibility(content::WebContents*) const override {
++    return observe_visibility;
++  }
++  bool observe_visibility = false;
+ };
+
+ class AutoPictureInPictureTabModelObserverHelperTest
+@@ -101,3 +105,91 @@
+   EXPECT_CALL(callback_, Run(false));
+   tab_model_->AddEmptyTab(2, true);
+ }
++
++TEST_F(AutoPictureInPictureTabModelObserverHelperTest,
++       DesktopMinimizeAndRestoreChangeEffectiveActivation) {
++  auto web_contents = CreateTestWebContents();
++  content::WebContents* raw_contents = web_contents.get();
++  raw_contents->WasShown();
++  tab_model_->AddTabFromWebContents(std::move(web_contents), 0, true);
++  auto delegate = std::make_unique<
++      MockAutoPictureInPictureTabModelObserverHelperDelegate>();
++  auto* raw_delegate = delegate.get();
++  raw_delegate->observe_visibility = true;
++  EXPECT_CALL(*raw_delegate, IsTabDragging(raw_contents))
++      .WillRepeatedly(Return(false));
++  helper_ = std::make_unique<AutoPictureInPictureTabModelObserverHelper>(
++      raw_contents, callback_.Get(), std::move(delegate));
++
++  EXPECT_CALL(callback_, Run(true));
++  helper_->StartObserving();
++  EXPECT_CALL(callback_, Run(false));
++  raw_contents->WasHidden();
++  // The selected tab remains selected, but async PiP acknowledgement must see
++  // it as inactive to avoid immediately closing the newly opened native PiP.
++  EXPECT_EQ(raw_contents, tab_model_->GetActiveWebContents());
++  EXPECT_FALSE(helper_->IsTabActivated());
++  EXPECT_CALL(callback_, Run(true));
++  raw_contents->WasShown();
++  EXPECT_TRUE(helper_->IsTabActivated());
++}
++
++TEST_F(AutoPictureInPictureTabModelObserverHelperTest,
++       PhoneHideDoesNotChangeSelectionActivation) {
++  auto web_contents = CreateTestWebContents();
++  content::WebContents* raw_contents = web_contents.get();
++  raw_contents->WasShown();
++  tab_model_->AddTabFromWebContents(std::move(web_contents), 0, true);
++  auto delegate = std::make_unique<
++      MockAutoPictureInPictureTabModelObserverHelperDelegate>();
++  helper_ = std::make_unique<AutoPictureInPictureTabModelObserverHelper>(
++      raw_contents, callback_.Get(), std::move(delegate));
++  EXPECT_CALL(callback_, Run(true));
++  helper_->StartObserving();
++  testing::Mock::VerifyAndClearExpectations(&callback_);
++  EXPECT_CALL(callback_, Run(_)).Times(0);
++  raw_contents->WasHidden();
++  EXPECT_TRUE(helper_->IsTabActivated());
++}
++
++TEST_F(AutoPictureInPictureTabModelObserverHelperTest,
++       ClosingDesktopTabDoesNotEnterPiPOnHide) {
++  auto web_contents = CreateTestWebContents();
++  content::WebContents* raw_contents = web_contents.get();
++  raw_contents->WasShown();
++  tab_model_->AddTabFromWebContents(std::move(web_contents), 0, true);
++  auto delegate = std::make_unique<
++      MockAutoPictureInPictureTabModelObserverHelperDelegate>();
++  delegate->observe_visibility = true;
++  helper_ = std::make_unique<AutoPictureInPictureTabModelObserverHelper>(
++      raw_contents, callback_.Get(), std::move(delegate));
++  EXPECT_CALL(callback_, Run(true));
++  helper_->StartObserving();
++  testing::Mock::VerifyAndClearExpectations(&callback_);
++  EXPECT_CALL(callback_, Run(_)).Times(0);
++  helper_->WillCloseTab(tab_model_->GetTabAt(0));
++  raw_contents->WasHidden();
++}
++
++TEST_F(AutoPictureInPictureTabModelObserverHelperTest,
++       StoppedObserverIgnoresVisibilityUntilRestart) {
++  auto web_contents = CreateTestWebContents();
++  content::WebContents* raw_contents = web_contents.get();
++  raw_contents->WasShown();
++  tab_model_->AddTabFromWebContents(std::move(web_contents), 0, true);
++  auto delegate = std::make_unique<
++      MockAutoPictureInPictureTabModelObserverHelperDelegate>();
++  delegate->observe_visibility = true;
++  helper_ = std::make_unique<AutoPictureInPictureTabModelObserverHelper>(
++      raw_contents, callback_.Get(), std::move(delegate));
++  EXPECT_CALL(callback_, Run(true));
++  helper_->StartObserving();
++  helper_->StopObserving();
++  testing::Mock::VerifyAndClearExpectations(&callback_);
++  EXPECT_CALL(callback_, Run(_)).Times(0);
++  raw_contents->WasHidden();
++  testing::Mock::VerifyAndClearExpectations(&callback_);
++  EXPECT_CALL(callback_, Run(false));
++  helper_->StartObserving();
++  EXPECT_FALSE(helper_->IsTabActivated());
++}
 diff --git a/chrome/browser/prefs/browser_prefs.cc b/chrome/browser/prefs/browser_prefs.cc
 --- a/chrome/browser/prefs/browser_prefs.cc
 +++ b/chrome/browser/prefs/browser_prefs.cc
@@ -6718,7 +7015,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
  import android.graphics.drawable.GradientDrawable;
  import android.graphics.drawable.LayerDrawable;
  import android.os.Handler;
-@@ -112,6 +114,51 @@
+@@ -112,6 +114,61 @@
      private int mTargetPopoverLeftOffset;
      private @BrandedColorScheme int mBrandedColorScheme = BrandedColorScheme.APP_DEFAULT;
      private boolean mShowFocusRing;
@@ -6737,6 +7034,8 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
 +                && (surface == null || mArcGlassLayers != null)) return;
 +        mArcGlassBackground = surface;
 +        mArcGlassLayers = null;
++        int verticalInset = getArcBackgroundVerticalInset();
++        mLocationBarBackground.setInsets(0, verticalInset, 0, verticalInset);
 +        if (integrated) {
 +            // The toolbar/panel owns one continuous surface. Palette refreshes must not
 +            // reinstall the sidebar's rounded glass capsule or its lower highlight here.
@@ -6750,8 +7049,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
 +                    return mLocationBarBackground.getPadding(padding);
 +                }
 +            };
-+            layers.setLayerInset(0, 0, mModernToolbarBackgroundVerticalOffset,
-+                    0, mModernToolbarBackgroundVerticalOffset);
++            layers.setLayerInset(0, 0, verticalInset, 0, verticalInset);
 +            mArcGlassLayers = layers;
 +        }
 +        // Fusebox owns its expanded popup. Restore the layered background on returning to normal.
@@ -6760,9 +7058,18 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
 +        }
 +        updateBackgroundColor();
 +    }
++    /** One extra dp per edge for the sidebar capsule; native layout stays intact. */
++    private int getArcBackgroundVerticalInset() {
++        if (mArcGlassBackground == null || mArcTopBar || getArcCommandResults() != null) {
++            return mModernToolbarBackgroundVerticalOffset;
++        }
++        int edge = Math.round(getResources().getDisplayMetrics().density);
++        return Math.max(0, mModernToolbarBackgroundVerticalOffset - edge);
++    }
++
 +    @Override public void getArcGlassBounds(Rect bounds) {
 +        getDrawingRect(bounds);
-+        bounds.inset(0, mModernToolbarBackgroundVerticalOffset);
++        bounds.inset(0, getArcBackgroundVerticalInset());
 +    }
 +    @Override public float getArcGlassCornerRadius() { return mModernToolbarBackgroundCornerRadius; }
 +    private @Nullable MarginLayoutParams mArcCommandOriginalChildParams;
@@ -6770,7 +7077,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
      private boolean mIsHovered;
      private boolean mIsGlifActive;
      private boolean mStartGlifOnNextLayout;
-@@ -178,7 +225,7 @@
+@@ -178,7 +235,7 @@
      @Override
      protected void onFinishInflate() {
          super.onFinishInflate();
@@ -6779,7 +7086,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
 
          mLocationBarIcon = findViewById(R.id.location_bar_status_icon);
          mBookmarkButton = findViewById(R.id.bookmark_button);
-@@ -512,28 +559,102 @@
+@@ -512,28 +569,102 @@
          if (mLayoutMode == FuseboxLayoutMode.SUGGESTIONS_POPOVER) {
              @ColorInt
              int popoverColor =
@@ -6890,7 +7197,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
              @ColorInt
              int standbyBorderColor =
                      OmniboxResourceProvider.getColorPrimary(context, mBrandedColorScheme);
-@@ -547,8 +668,21 @@
+@@ -547,8 +678,21 @@
                              color,
                              mBrandedColorScheme == BrandedColorScheme.INCOGNITO,
                              /* isCustomTab= */ false);
@@ -6914,7 +7221,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
      }
 
      @Override
-@@ -607,6 +741,7 @@
+@@ -607,6 +751,7 @@
              mGlifBorderDrawable.setCornerRadius(mOmniboxSuggestionDropdownRoundCornerRadius);
              updateLayoutAndBackground();
          }
@@ -6922,7 +7229,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
      }
 
      @Override
-@@ -649,6 +784,8 @@
+@@ -649,6 +794,8 @@
              mGlifForegroundTarget.setForeground(null);
              mGlifForegroundTarget = null;
          }
@@ -6931,7 +7238,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
 
          if (mLayoutMode == FuseboxLayoutMode.SUGGESTIONS_POPOVER
                  && (mUrlCoordinator == null || !mUrlCoordinator.hasFocus())) {
-@@ -676,7 +813,7 @@
+@@ -676,7 +823,7 @@
                  mGlifBorderDrawable.reset();
              }
 
@@ -6940,7 +7247,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
                      && (mLayoutMode != FuseboxLayoutMode.SUGGESTIONS_POPOVER
                              || !mUrlCoordinator.hasFocus())) {
                  setForeground(mHoverDrawable);
-@@ -709,12 +846,35 @@
+@@ -709,12 +856,35 @@
                              + (mHolder == null ? null : mHolder.getLayoutParams());
              return;
          }
@@ -6978,7 +7285,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
          boolean isPopoverMode = mLayoutMode == FuseboxLayoutMode.SUGGESTIONS_POPOVER;
          boolean isFuseboxActive =
                  (mFuseboxState == FuseboxState.COMPACT || mFuseboxState == FuseboxState.EXPANDED);
-@@ -727,9 +887,13 @@
+@@ -727,9 +897,13 @@
              int additionalWidth =
                      isPopoverMode ? mPopoverAdditionalWidth : mLocationBarTabletFuseboxPopupInset;
              // Determine available headroom above toolbar (stored in mPositionArray[1]).
@@ -6995,7 +7302,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
                  availableTopHeadroomPx = Math.max(0, mPositionArray[1]);
              }
              int topMarginExpansion = Math.min(expansionPx, availableTopHeadroomPx);
-@@ -766,7 +930,7 @@
+@@ -766,7 +940,7 @@
              ViewUtils.setAncestorsShouldClipChildren(this, true, View.NO_ID);
              // Reset our background to reflect non-zero suggestion count, which is the typical
              // state. Not setting this risks visual glitches when returning to the fusebox.
@@ -7004,7 +7311,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
          }
 
          // Put the focused foreground back into its starting state before swapping it out;
-@@ -845,18 +1009,44 @@
+@@ -845,18 +1019,44 @@
          }
      }
 
@@ -7054,7 +7361,7 @@ diff --git a/chrome/browser/ui/android/omnibox/java/src/org/chromium/chrome/brow
          int unexpandedWidth =
                  mHolder.getMeasuredWidth() + layoutParams.leftMargin + layoutParams.rightMargin;
          int unexpandedLeft = mPositionArray[0] - layoutParams.leftMargin;
-@@ -996,9 +1186,8 @@
+@@ -996,9 +1196,8 @@
       * falling back to the window width before the container has been laid out.
       */
      private @Px int getAvailableContainerWidth() {
@@ -8128,6 +8435,151 @@ diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/brow
          // If the offset is greater than the toolbar's height, don't draw the layer.
          return mIsVisible && mCurrentYOffsetPx < mBottomView.getHeight() - mTopShadowHeightPx;
      }
+diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuCoordinator.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuCoordinator.java
+--- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuCoordinator.java
++++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsMenuCoordinator.java
+@@ -108,6 +108,7 @@
+     @Nullable @VisibleForTesting ExtensionsMenuMediator mMediator;
+     private long mLastDismissalTimeMs;
+     private boolean mIsMenuOpen;
++    private @Nullable View mMenuAnchorView;
+     private final boolean mIsWebApp;
+
+     /**
+@@ -184,7 +185,8 @@
+
+                     @Override
+                     public RectProvider getRectProvider(View listMenuHostingView) {
+-                        return MenuBuilderHelper.getRectProvider(mExtensionsMenuButton);
++                        return MenuBuilderHelper.getRectProvider(
++                                mMenuAnchorView != null ? mMenuAnchorView : mExtensionsMenuButton);
+                     }
+                 },
+                 /* overrideOnClickListener= */ true);
+@@ -214,6 +216,7 @@
+                     @Override
+                     public void onPopupMenuDismissed() {
+                         mIsMenuOpen = false;
++                        mMenuAnchorView = null;
+                         mLastDismissalTimeMs = TimeUtils.elapsedRealtimeMillis();
+                         mMenuButtonPinningDelegate.requestLayoutWithViewUtils();
+                         destroyMediator();
+@@ -250,6 +253,16 @@
+         updateButtonState();
+
+         mModalDialogManager.addObserver(mModalDialogManagerObserver);
++    }
++
++    /** Includes asynchronous native mediator initialization before the popup is shown. */
++    boolean isExtensionsMenuOpeningOrOpen() {
++        return mIsMenuOpen || mMediator != null;
++    }
++
++    /** Uses another native toolbar button when the puzzle button's row is hidden. */
++    void setMenuAnchorView(@Nullable View anchorView) {
++        mMenuAnchorView = anchorView;
+     }
+
+     /**
+diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsToolbarCoordinatorImpl.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsToolbarCoordinatorImpl.java
+--- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsToolbarCoordinatorImpl.java
++++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/extensions/ExtensionsToolbarCoordinatorImpl.java
+@@ -16,6 +16,7 @@
+ import android.view.View;
+ import android.view.ViewGroup;
+ import android.view.ViewStub;
++import android.view.ViewTreeObserver;
+ import android.widget.LinearLayout;
+ import android.widget.TextView;
+
+@@ -83,6 +84,8 @@
+
+     private boolean mCanShowMenuIcon = true;
+     private boolean mShowExtensionsMenuPending;
++    private ViewTreeObserver.@Nullable OnPreDrawListener mShowMenuPreDrawListener;
++    private @Nullable ViewTreeObserver mPendingMenuObserver;
+     private boolean mIsDestroyed;
+     private final ExtensionsToolbarBridge.Observer mExtensionsToolbarBridgeObserver =
+             new ExtensionsToolbarBridge.Observer() {
+@@ -231,6 +234,7 @@
+             return;
+         }
+         mIsDestroyed = true;
++        cancelPendingMenuShow();
+
+         if (mLayoutChangeListener != null && mContainer != null) {
+             View anchorView = mContainer.findViewById(R.id.extensions_menu_button);
+@@ -312,17 +316,65 @@
+
+     @Override
+     public void showExtensionsMenu() {
++        if (mIsDestroyed || mShowExtensionsMenuPending || mShowMenuPreDrawListener != null
++                || mExtensionsMenuCoordinator.isExtensionsMenuOpen()) {
++            return;
++        }
+         mShowExtensionsMenuPending = true;
+         updateMenuIconVisibility();
+
+         ListMenuButton extensionsMenuButton = mContainer.findViewById(R.id.extensions_menu_button);
+         assert extensionsMenuButton != null;
+
+-        // Post to click after the layout pass.
+-        extensionsMenuButton.post(
+-                () -> {
+-                    extensionsMenuButton.performClick();
+-                });
++        // The native toolbar can live in a separate row whose parent is still
++        // GONE when this request arrives from the app menu. View.post does not
++        // wait for that row to become visible or finish layout. Keep the native
++        // menu and use a visible native button with real bounds as its anchor;
++        // this also lets the app menu finish dismissing first.
++        mShowMenuPreDrawListener = () -> {
++            View anchorView = extensionsMenuButton;
++            if (!isMenuAnchorReady(anchorView)) {
++                // Compact layouts intentionally keep the extensions row hidden.
++                // Anchor the same native popup to the visible app-menu button.
++                anchorView = mContainer.getRootView().findViewById(R.id.menu_button_wrapper);
++            }
++            if (!isMenuAnchorReady(anchorView)) return true;
++            mExtensionsMenuCoordinator.setMenuAnchorView(anchorView);
++            cancelPendingMenuShow();
++            if (!mIsDestroyed) {
++                extensionsMenuButton.performClick();
++                // The touch-up dismissal debounce can intentionally ignore this
++                // click. Only retain pending state if native menu creation was
++                // accepted; otherwise a later app-menu request must be retryable.
++                if (!mExtensionsMenuCoordinator.isExtensionsMenuOpeningOrOpen()) {
++                    mShowExtensionsMenuPending = false;
++                    mExtensionsMenuCoordinator.setMenuAnchorView(null);
++                    updateMenuIconVisibility();
++                }
++            }
++            return true;
++        };
++        mPendingMenuObserver = extensionsMenuButton.getViewTreeObserver();
++        mPendingMenuObserver.addOnPreDrawListener(mShowMenuPreDrawListener);
++        extensionsMenuButton.requestLayout();
++    }
++
++    private static boolean isMenuAnchorReady(@Nullable View anchorView) {
++        return anchorView != null
++                && anchorView.isShown()
++                && !anchorView.isLayoutRequested()
++                && anchorView.getWidth() > 0
++                && anchorView.getHeight() > 0
++                && anchorView.getGlobalVisibleRect(new Rect());
++    }
++
++    private void cancelPendingMenuShow() {
++        if (mPendingMenuObserver != null && mPendingMenuObserver.isAlive()
++                && mShowMenuPreDrawListener != null) {
++            mPendingMenuObserver.removeOnPreDrawListener(mShowMenuPreDrawListener);
++        }
++        mShowMenuPreDrawListener = null;
++        mPendingMenuObserver = null;
+     }
+
+     private void showIphInternal() {
 diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarControlContainer.java b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarControlContainer.java
 --- a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarControlContainer.java
 +++ b/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/browser/toolbar/top/ToolbarControlContainer.java
@@ -8279,7 +8731,7 @@ diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/brow
          if (ChromeFeatureList.sToolbarPhoneAnimationRefactor.isEnabled()) {
              mLocationBar.getContainerView().invalidateOutline();
          }
-@@ -926,7 +979,70 @@
+@@ -926,7 +979,71 @@
          return Math.max(mToolbarSidePaddingForNtp, toolbarButtonsContainerWidth);
      }
 
@@ -8313,6 +8765,7 @@ diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/brow
 +            surface.setElevation(mArcOriginalLocationBarElevation);
 +        }
 +        mArcPhoneFloatingSurface = enabled;
++        updateLocationBarBackgroundBounds(mLocationBarBackgroundBounds, mVisualState);
 +        updateToolbarAndLocationBarColorForFocusChange();
 +        updateModernLocationBarCorners();
 +        updateHairlineVisibility();
@@ -8350,7 +8803,7 @@ diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/brow
          if (mToolbarBackground.getColor() == color) return;
          mToolbarBackground.setColor(color);
          setToolbarHairlineColor(color);
-@@ -1025,7 +1141,7 @@
+@@ -1025,7 +1142,7 @@
 
      @Override
      protected boolean verifyDrawable(Drawable who) {
@@ -8359,7 +8812,29 @@ diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/brow
      }
 
      private void onNtpScrollChanged(float scrollFraction) {
-@@ -1854,7 +1970,12 @@
+@@ -1139,13 +1256,20 @@
+         return mTabSwitcherState != STATIC_TAB;
+     }
+
++    /** Enlarge only the floating capsule; editor bounds and focus expansion remain native. */
++    private int getArcLocationBarVerticalInset() {
++        if (!mArcPhoneFloatingSurface) return mLocationBarBackgroundVerticalInset;
++        int edge = Math.round(getResources().getDisplayMetrics().density);
++        return Math.max(0, mLocationBarBackgroundVerticalInset - edge);
++    }
++
+     /** Calculate the bounds for the location bar background and set them to {@code out}. */
+     private void updateLocationBarBackgroundBounds(Rect out, @VisualState int visualState) {
+         // Calculate the visible boundaries of the left and right most child views of the
+         // location bar.
+         int leftViewPosition = getLeftPositionOfLocationBarBackground(visualState);
+         int rightViewPosition = getRightPositionOfLocationBarBackground(visualState);
+-        int verticalInset = mLocationBarBackgroundVerticalInset - calculateOnFocusHeightIncrease();
++        int verticalInset = getArcLocationBarVerticalInset() - calculateOnFocusHeightIncrease();
+
+         // The bounds are set by the following:
+         // - The left most visible location bar child view.
+@@ -1854,7 +1978,12 @@
                          mLocationBarBackgroundBounds.right + mLocationBarBackgroundNtpOffset.right,
                          mLocationBarBackgroundBounds.bottom
                                  + mLocationBarBackgroundNtpOffset.bottom);
@@ -8373,7 +8848,7 @@ diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/brow
              }
 
              float locationBarClipLeft =
-@@ -1966,6 +2087,7 @@
+@@ -1966,6 +2095,7 @@
          // after this point was having no affect.
          assert !mTextureCaptureMode || getAlpha() == 1f;
          super.draw(canvas);
@@ -8381,7 +8856,7 @@ diff --git a/chrome/browser/ui/android/toolbar/java/src/org/chromium/chrome/brow
      }
 
      @Override
-@@ -3129,6 +3251,7 @@
+@@ -3129,6 +3259,7 @@
       */
      @Override
      protected boolean shouldDrawHairline() {
@@ -10470,11 +10945,11 @@ diff --git a/chrome/android/java/res/values/arc_strings.xml b/chrome/android/jav
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/res/values/arc_strings.xml
-@@ -0,0 +1,118 @@
+@@ -0,0 +1,115 @@
 +<?xml version="1.0" encoding="utf-8"?>
 +<resources>
 +    <string name="arc_about">Acerca de Archium</string>
-+    <string name="arc_version">Versión %1$s (%2$d)</string>
++    <string name="arc_version">Archium %1$s\nChromium %2$s (%3$d)</string>
 +    <string name="arc_bookmarks">Marcadores</string>
 +    <string name="arc_bookmark_root">‹ Carpetas</string>
 +    <string name="arc_frame_color">Color del navegador</string>
@@ -10583,17 +11058,14 @@ new file mode 100644
 +    <string name="arc_desktop_material">Intensidad del acabado Desktop</string>
 +    <string name="arc_desktop_material_description">Ajusta la iluminación y el relieve del marco y la barra lateral.</string>
 +    <string name="arc_camera_orientation">Orientación de cámara</string>
-+    <string name="arc_camera_auto">Automático</string>
-+    <string name="arc_camera_manual">Manual · %1$d°</string>
-+    <string name="arc_camera_rotate">Girar 90°</string>
-+    <string name="arc_camera_reset">Restablecer automático</string>
++    <string name="arc_camera_angle">%1$d°</string>
 +    <string name="arc_phone_favorite_saved">En favoritos · Editar</string>
 +</resources>
 diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAboutDialog.java b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAboutDialog.java
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcAboutDialog.java
-@@ -0,0 +1,52 @@
+@@ -0,0 +1,84 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -10608,11 +11080,42 @@ new file mode 100644
 +import android.widget.LinearLayout;
 +import android.widget.TextView;
 +
++import org.json.JSONObject;
++
++import java.io.InputStream;
++import java.nio.charset.StandardCharsets;
 +import java.util.Locale;
 +
 +/** Displays the installed application's approved icon and actual package version. */
 +public final class ArcAboutDialog {
 +    private ArcAboutDialog() {}
++
++    static String parseArchiumVersion(String metadata) {
++        try {
++            JSONObject identity = new JSONObject(metadata);
++            String version = identity.getString("version");
++            int number = identity.getInt("build_number");
++            return number > 0 && version.equals("0.9." + number) ? version : "desarrollo";
++        } catch (Exception unavailable) {
++            return "desarrollo";
++        }
++    }
++
++    private static String archiumVersion(Activity activity) {
++        try (InputStream input = activity.getAssets().open("archium-build.json")) {
++            byte[] metadata = new byte[4097];
++            int length = 0;
++            while (length < metadata.length) {
++                int read = input.read(metadata, length, metadata.length - length);
++                if (read < 0) break;
++                length += read;
++            }
++            return length > 4096 ? "desarrollo"
++                    : parseArchiumVersion(new String(metadata, 0, length, StandardCharsets.UTF_8));
++        } catch (Exception unavailable) {
++            return "desarrollo";
++        }
++    }
 +
 +    public static AlertDialog show(Activity activity, String title, String versionFormat) {
 +        int padding = Math.round(24 * activity.getResources().getDisplayMetrics().density);
@@ -10634,7 +11137,8 @@ new file mode 100644
 +        try {
 +            PackageInfo info = activity.getPackageManager().getPackageInfo(activity.getPackageName(), 0);
 +            String name = info.versionName == null ? Long.toString(info.getLongVersionCode()) : info.versionName;
-+            version.setText(String.format(Locale.getDefault(), versionFormat, name, info.getLongVersionCode()));
++            version.setText(String.format(Locale.getDefault(), versionFormat,
++                    archiumVersion(activity), name, info.getLongVersionCode()));
 +        } catch (PackageManager.NameNotFoundException unavailable) {
 +            // Own package metadata should exist; an unavailable package manager must not crash UI.
 +            version.setText("Versión no disponible");
@@ -10732,7 +11236,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCameraCo
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCameraControls.java
-@@ -0,0 +1,45 @@
+@@ -0,0 +1,38 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -10749,30 +11253,23 @@ new file mode 100644
 +/** Native Desktop action beside extensions; calibration is owned by the chosen tab. */
 +@NullMarked
 +public final class ArcCameraControls {
-+    private static final int AUTO = 1, MANUAL = 2, ROTATE = 3, RESET = 4;
 +    private ArcCameraControls() {}
 +
 +    public static void show(View anchor, @Nullable WebContents contents) {
 +        if (contents == null || contents.isDestroyed()) return;
 +        final int mode = ContentUtils.getArcCameraOrientation(contents);
 +        PopupMenu popup = new PopupMenu(anchor.getContext(), anchor);
-+        popup.getMenu().add(1, AUTO, 0, R.string.arc_camera_auto).setCheckable(true).setChecked(mode < 0);
-+        popup.getMenu().add(1, MANUAL, 1, anchor.getContext().getString(
-+                R.string.arc_camera_manual, Math.max(0, mode) * 90))
-+                .setCheckable(true).setChecked(mode >= 0);
++        for (int turns = 1; turns <= 3; turns++) {
++            popup.getMenu().add(1, turns, turns - 1,
++                    anchor.getContext().getString(R.string.arc_camera_angle, turns * 90))
++                    .setCheckable(true).setChecked(mode == turns);
++        }
 +        popup.getMenu().setGroupCheckable(1, true, true);
-+        popup.getMenu().add(0, ROTATE, 2, R.string.arc_camera_rotate).setEnabled(mode >= 0);
-+        popup.getMenu().add(0, RESET, 3, R.string.arc_camera_reset).setEnabled(mode >= 0);
 +        popup.setOnMenuItemClickListener(item -> {
 +            if (contents.isDestroyed()) return false;
-+            int next;
-+            switch (item.getItemId()) {
-+                case AUTO: case RESET: next = -1; break;
-+                case MANUAL: next = Math.max(0, mode); break;
-+                case ROTATE: next = (Math.max(0, mode) + 1) % 4; break;
-+                default: return false;
-+            }
-+            ContentUtils.setArcCameraOrientation(contents, next);
++            int turns = item.getItemId();
++            if (turns < 1 || turns > 3) return false;
++            ContentUtils.setArcCameraOrientation(contents, turns);
 +            return true;
 +        });
 +        popup.show();
@@ -10940,7 +11437,7 @@ diff --git a/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollecti
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/java/src/org/chromium/chrome/browser/arc/ArcCollectionsView.java
-@@ -0,0 +1,619 @@
+@@ -0,0 +1,637 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -10992,9 +11489,11 @@ new file mode 100644
 +    private final LinearLayout mEntries;
 +    private final LinearLayout mControls;
 +    private final Button mSpace;
++    private final Button mNewFolder;
 +    private final BoundedScrollView mScroll;
 +    private final BoundedScrollView mFavoritesScroll;
 +    private int mCollectionHeight = -1;
++    private boolean mCompactRequested;
 +    private android.graphics.drawable.Drawable mPinGlyph, mFavoriteGlyph, mFavoriteFilledGlyph, mSpaceChevron;
 +    private void updateGlyphs() {
 +        mSpaceChevron = new ArcDesktopIcons(ArcDesktopIcons.Kind.CHEVRON_DOWN, mForeground);
@@ -11046,13 +11545,13 @@ new file mode 100644
 +        mCurrentTab = currentTab;
 +        mLoadIcon = loadIcon;
 +        setOrientation(VERTICAL);
-+        setPadding(dp(8), dp(4), dp(8), dp(4));
++        setPadding(dp(8), dp(4), dp(8), dp(8));
 +        mFavorites = new GridLayout(activity);
 +        mFavorites.setColumnCount(2);
 +        mFavorites.setContentDescription(activity.getString(R.string.arc_favorites));
 +        mFavorites.setAccessibilityHeading(true);
 +        mFavoritesScroll = new BoundedScrollView(activity);
-+        mFavoritesScroll.setBudget(dp(216));
++        mFavoritesScroll.setBudget(Integer.MAX_VALUE);
 +        mFavoritesScroll.setTag("arc-favorites-mosaic");
 +        mFavoritesScroll.addView(mFavorites);
 +        addView(mFavoritesScroll, new LayoutParams(-1, LayoutParams.WRAP_CONTENT));
@@ -11072,7 +11571,7 @@ new file mode 100644
 +        mSpace.setCompoundDrawablePadding(dp(8));
 +        mSpace.setCompoundDrawablesRelative(null, null, mSpaceChevron, null);
 +        LayoutParams spaceParams = new LayoutParams(-1, dp(44));
-+        spaceParams.topMargin = dp(4); spaceParams.bottomMargin = dp(2);
++        spaceParams.topMargin = dp(8); spaceParams.bottomMargin = dp(2);
 +        addView(mSpace, spaceParams);
 +        mEntries = new LinearLayout(activity);
 +        mEntries.setOrientation(VERTICAL);
@@ -11082,6 +11581,19 @@ new file mode 100644
 +        mScroll.setTag("arc-collection-scroll");
 +        mScroll.addView(mEntries);
 +        addView(mScroll, new LayoutParams(-1, LayoutParams.WRAP_CONTENT));
++        mNewFolder = button(mActivity.getString(R.string.arc_new_folder), () -> {
++            String space = mController.state().selectedSpace();
++            String parent = mOpenFolder;
++            requestName(R.string.arc_new_folder, name -> {
++                if (!space.equals(mController.state().selectedSpace())) {
++                    throw new IllegalStateException("Space changed");
++                }
++                mController.createFolder(parent, name);
++            });
++        });
++        // Keep the action outside the scrolling entries so the boundary below collections
++        // cannot expose only the top of its normal 44dp target.
++        addView(mNewFolder, new LayoutParams(-1, dp(44)));
 +        LinearLayout controls = new LinearLayout(activity);
 +        mControls = controls;
 +        Button pin = button(activity.getString(R.string.arc_pin_current), () -> remember(false));
@@ -11104,6 +11616,8 @@ new file mode 100644
 +    protected void onMeasure(int widthSpec, int heightSpec) {
 +        int available = Math.max(0, MeasureSpec.getSize(widthSpec) - getPaddingLeft() - getPaddingRight());
 +        int columns = favoriteColumns(available, dp(56));
++        // Favorite refreshes may arrive without a coordinator geometry update.
++        updateCompactViews();
 +        updateCollectionBudgets(columns);
 +        boolean empty = mFavorites.getChildCount() == 0;
 +        boolean menuOnly = columns == 0 || mFavoritesScroll.mBudget < dp(56);
@@ -11188,30 +11702,42 @@ new file mode 100644
 +
 +    /** Compact native rail keeps favorites accessible without expanded collection chrome. */
 +    public void setCompact(boolean compact) {
++        mCompactRequested = compact;
++        updateCompactViews();
++    }
++
++    private void updateCompactViews() {
++        int minimumExpanded = dp(142) + getPaddingTop() + getPaddingBottom()
++                + (mFavorites.getChildCount() == 0 ? 0 : dp(44));
++        boolean compact = mCompactRequested
++                || (mCollectionHeight >= 0 && mCollectionHeight < minimumExpanded);
 +        mSpace.setVisibility(compact ? GONE : VISIBLE);
 +        mScroll.setVisibility(compact ? GONE : VISIBLE);
 +        mControls.setVisibility(compact ? GONE : VISIBLE);
++        mNewFolder.setVisibility(compact ? GONE : VISIBLE);
 +    }
 +
 +    public void setCollectionHeight(int height) {
 +        mCollectionHeight = height;
++        // Visibility changes request a measure even if both scroll budgets remain zero.
++        updateCompactViews();
 +        updateCollectionBudgets(mFavorites.getColumnCount());
 +    }
 +
 +    private void updateCollectionBudgets(int columns) {
 +        if (mCollectionHeight < 0) return;
-+        // Allocate whole 50dp tiles plus their 3dp top/bottom margins. The previous
-+        // half-budget (at most 96dp) exposed only part of a second grid row.
-+        int rows = Math.max(0, mCollectionHeight - dp(94) - getPaddingTop() - getPaddingBottom());
++        // Reserve space selector (44dp + 8dp/2dp margins), the fixed New Folder
++        // action and the pin/favorite action row before assigning scrollable content.
++        int rows = Math.max(0, mCollectionHeight - dp(142) - getPaddingTop() - getPaddingBottom());
 +        int slot = dp(56);
 +        int count = mFavorites.getChildCount();
 +        int wantedRows = columns < 2 ? 0 : (count + columns - 1) / columns;
-+        int visibleRows = Math.min(wantedRows, Math.min(dp(216), rows) / slot);
++        int visibleRows = Math.min(wantedRows, rows / slot);
 +        int favorites = visibleRows * slot;
 +        mFavoritesScroll.setBudget(favorites);
 +        // A menu fallback still consumes a 44dp row inside the same shared budget.
-+        int occupied = count > 0 && favorites == 0 ? Math.min(dp(44), rows) : favorites;
-+        mScroll.setBudget(Math.max(0, rows - occupied));
++        int occupied = count > 0 && favorites == 0 ? dp(44) : favorites;
++        mScroll.setBudget(Math.max(0, rows - occupied) / dp(44) * dp(44));
 +    }
 +
 +    /** Owns collection styling so site favicons retain their original colors and rounded tiles. */
@@ -11385,18 +11911,7 @@ new file mode 100644
 +            row.setTooltipText(mActivity.getString(R.string.arc_pinned_entry_actions));
 +            mEntries.addView(row, new LayoutParams(-1, dp(44)));
 +        }
-+        Button newFolder = button(mActivity.getString(R.string.arc_new_folder), () -> {
-+            String space = state.selectedSpace();
-+            String parent = mOpenFolder;
-+            requestName(R.string.arc_new_folder, name -> {
-+                if (!space.equals(mController.state().selectedSpace())) {
-+                    throw new IllegalStateException("Space changed");
-+                }
-+                mController.createFolder(parent, name);
-+            });
-+        });
-+        newFolder.setTag("arc-new-folder:" + state.selectedSpace());
-+        mEntries.addView(newFolder, new LayoutParams(-1, dp(44)));
++        mNewFolder.setTag("arc-new-folder:" + state.selectedSpace());
 +        applyAppearance(this);
 +        restoreFocus(mFavorites, favoriteFocus);
 +        restoreFocus(mEntries, entryFocus);
@@ -13077,8 +13592,8 @@ new file mode 100644
 +            mAboutDialog = ArcAboutDialog.show(activity, activity.getString(R.string.arc_about),
 +                    activity.getString(R.string.arc_version));
 +        });
-+        mBrowserControlsRow.addView(about, new LinearLayout.LayoutParams(dp(44), dp(44)));
 +        mBrowserControlsRow.addView(appearanceButton, new LinearLayout.LayoutParams(dp(44), dp(44)));
++        mBrowserControlsRow.addView(about, new LinearLayout.LayoutParams(dp(44), dp(44)));
 +        rail.addView(mColumn, new ViewGroup.LayoutParams(-1, -1));
 +
 +        mArcContentOutlineProvider =
@@ -13897,7 +14412,7 @@ new file mode 100644
 +        updateNewTabRow(expanded);
 +        if (mCollectionsView != null) {
 +            mCollectionsView.setVisibility(View.VISIBLE);
-+            mCollectionsView.setCompact(!expanded || collectionBudget < dp(80));
++            mCollectionsView.setCompact(!expanded || collectionBudget < dp(154));
 +        }
 +        applyFrameGeometry();
 +        if (mCollectionsView != null) {
@@ -18892,7 +19407,7 @@ diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcAboutDi
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcAboutDialogTest.java
-@@ -0,0 +1,51 @@
+@@ -0,0 +1,60 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -18930,12 +19445,12 @@ new file mode 100644
 +            info.versionName = "9.8.7";
 +            info.setLongVersionCode(987);
 +            shadowOf(activity.getPackageManager()).installPackage(info);
-+            dialog = ArcAboutDialog.show(activity, "Acerca de Archium", "Versión %1$s (%2$d)");
++            dialog = ArcAboutDialog.show(activity, "Acerca de Archium", "Archium %1$s\nChromium %2$s (%3$d)");
 +            TextView version = dialog.findViewById(android.R.id.content)
 +                    .getRootView().findViewWithTag("arc-about-version");
 +            ImageView logo = dialog.findViewById(android.R.id.content)
 +                    .getRootView().findViewWithTag("arc-about-logo");
-+            assertEquals("Versión 9.8.7 (987)", version.getText().toString());
++            assertEquals("Archium desarrollo\nChromium 9.8.7 (987)", version.getText().toString());
 +            assertNotNull(logo.getDrawable());
 +            assertTrue(dialog.isShowing());
 +        } finally {
@@ -18943,12 +19458,21 @@ new file mode 100644
 +            activity.finish();
 +        }
 +    }
++
++    @Test public void independentBuildVersionIsValidatedWithoutUsingChromiumVersion() {
++        assertEquals("0.9.201", ArcAboutDialog.parseArchiumVersion(
++                "{\"version\":\"0.9.201\",\"build_number\":201}"));
++        assertEquals("desarrollo", ArcAboutDialog.parseArchiumVersion("{}"));
++        assertEquals("desarrollo", ArcAboutDialog.parseArchiumVersion("not json"));
++        assertEquals("desarrollo", ArcAboutDialog.parseArchiumVersion(
++                "{\"version\":\"157.0.8086.0\",\"build_number\":201}"));
++    }
 +}
 diff --git a/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCollectionsFocusTest.java b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCollectionsFocusTest.java
 new file mode 100644
 --- /dev/null
 +++ b/chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCollectionsFocusTest.java
-@@ -0,0 +1,431 @@
+@@ -0,0 +1,498 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -19054,8 +19578,6 @@ new file mode 100644
 +        var arrow=space.getCompoundDrawablesRelative()[2];assertNotNull(arrow);
 +        assertEquals(Math.round(16*density),arrow.getBounds().width());
 +        assertEquals(Math.round(44*density),space.getMeasuredHeight());
-+        var params=(android.widget.LinearLayout.LayoutParams)space.getLayoutParams();
-+        assertEquals(Math.round(6*density),params.topMargin+params.bottomMargin);
 +        assertTrue(space.performClick());
 +        assertNotNull(org.robolectric.shadows.ShadowPopupMenu.getLatestPopupMenu());
 +        f.controller.createSpace("Long Space title for an end-ellipsized accessible heading");
@@ -19131,8 +19653,10 @@ new file mode 100644
 +        f.view.setCollectionHeight(240);
 +        f.measure();
 +        View newFolder = f.view.findViewWithTag("arc-new-folder:" + f.controller.state().selectedSpace());
-+        View scroll = (View) newFolder.getParent().getParent();
-+        assertEquals("Empty collection has only its actual New folder row", newFolder.getMeasuredHeight(), scroll.getMeasuredHeight());
++        View scroll = f.view.findViewWithTag("arc-collection-scroll");
++        assertEquals("Empty entries do not reserve scroll space", 0, scroll.getMeasuredHeight());
++        assertSame(f.view, newFolder.getParent());
++        assertEquals(44, newFolder.getMeasuredHeight());
 +        assertEquals(android.view.ViewGroup.LayoutParams.WRAP_CONTENT, scroll.getLayoutParams().height);
 +    }
 +
@@ -19141,12 +19665,12 @@ new file mode 100644
 +        Fixture f = new Fixture();
 +        for (int i = 0; i < 20; i++) f.controller.createFolder(null, "Folder " + i);
 +        f.view.refresh(); f.view.setCollectionHeight(240); f.measure();
-+        View scroll = (View) f.view.findViewWithTag("arc-new-folder:" + f.controller.state().selectedSpace()).getParent().getParent();
-+        int chrome = Math.round(94 * f.activity.getResources().getDisplayMetrics().density)
++        View scroll = f.view.findViewWithTag("arc-collection-scroll");
++        int chrome = Math.round(142 * f.activity.getResources().getDisplayMetrics().density)
 +                + f.view.getPaddingTop() + f.view.getPaddingBottom();
-+        assertEquals(Math.max(0, 240 - chrome), scroll.getMeasuredHeight());
++        assertEquals(Math.max(0, 240 - chrome) / 44 * 44, scroll.getMeasuredHeight());
 +        f.view.setCollectionHeight(100); f.measure();
-+        assertEquals(Math.max(0, 100 - chrome), scroll.getMeasuredHeight());
++        assertEquals("Short budget hides expanded entries", View.GONE, scroll.getVisibility());
 +    }
 +
 +    @Test
@@ -19163,7 +19687,7 @@ new file mode 100644
 +    @Test public void favoritesBudgetShowsWholeRowsAndRecomputesAfterWidthChange() {
 +        Fixture f=new Fixture();
 +        for(int i=0;i<8;i++)f.controller.rememberTab(70+i,"https://rows.test/"+i,"Favorite "+i,true);
-+        f.view.refresh();f.view.setCollectionHeight(240);f.measure();
++        f.view.refresh();f.view.setCollectionHeight(280);f.measure();
 +        View mosaic=f.view.findViewWithTag("arc-favorites-mosaic");
 +        float density=f.activity.getResources().getDisplayMetrics().density;
 +        int slot=Math.round(56*density);
@@ -19171,7 +19695,74 @@ new file mode 100644
 +        f.view.measure(View.MeasureSpec.makeMeasureSpec(Math.round(220*density),View.MeasureSpec.EXACTLY),View.MeasureSpec.makeMeasureSpec(1200,View.MeasureSpec.AT_MOST));
 +        f.view.layout(0,0,f.view.getMeasuredWidth(),f.view.getMeasuredHeight());
 +        assertEquals("Resize may scroll rows but never expose a sliced row",0,mosaic.getMeasuredHeight()%slot);
-+        assertTrue(f.view.getMeasuredHeight()<=Math.round(240*density));
++        assertTrue(f.view.getMeasuredHeight()<=Math.round(280*density));
++    }
++
++    @Test public void favoritesUseEveryCompleteRowAvailableBeyondThreeRows() {
++        Fixture f = new Fixture();
++        for (int i = 0; i < 17; i++) f.controller.rememberTab(70 + i,
++                "https://many.test/" + i, "Favorite " + i, true);
++        f.view.refresh();
++        float density = f.activity.getResources().getDisplayMetrics().density;
++        f.view.setCollectionHeight(Math.round(600 * density));
++        int width = Math.round(240 * density);
++        f.view.measure(View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
++                View.MeasureSpec.makeMeasureSpec(Math.round(1200 * density), View.MeasureSpec.AT_MOST));
++        f.view.layout(0, 0, width, f.view.getMeasuredHeight());
++        View mosaic = f.view.findViewWithTag("arc-favorites-mosaic");
++        assertEquals("17 favorites in four columns need five complete rows",
++                Math.round(280 * density), mosaic.getMeasuredHeight());
++        View folder = f.view.findViewWithTag("arc-new-folder:" + f.controller.state().selectedSpace());
++        assertTrue("Folder action remains fully visible after the mosaic grows",
++                folder.getBottom() <= f.view.getMeasuredHeight() - f.view.getPaddingBottom());
++    }
++
++    @Test public void favoritesLeaveACompleteFolderActionAndBreathingRoom() {
++        Fixture f = new Fixture();
++        for (int i = 0; i < 8; i++) f.controller.rememberTab(70 + i,
++                "https://folder-room.test/" + i, "Favorite " + i, true);
++        f.view.refresh(); f.view.setCollectionHeight(240); f.measure();
++        View folder = f.view.findViewWithTag("arc-new-folder:" + f.controller.state().selectedSpace());
++        assertSame("New Folder remains available outside scrolling folder entries", f.view, folder.getParent());
++        assertTrue("New Folder must not be sliced by the collection boundary",
++                folder.getBottom() <= f.view.getMeasuredHeight() - f.view.getPaddingBottom());
++        View mosaic = f.view.findViewWithTag("arc-favorites-mosaic");
++        View space = f.view.findViewWithTag("arc-current-space");
++        assertTrue("Favorites and folder controls have breathing room",
++                space.getTop() - mosaic.getBottom() >= Math.round(8 * f.activity.getResources().getDisplayMetrics().density));
++    }
++
++    @Test public void favoriteFallbackFitsExpandedBudgetBoundariesAfterCountChanges() {
++        Fixture f = new Fixture();
++        float density = f.activity.getResources().getDisplayMetrics().density;
++        f.view.setCompact(false);
++        java.util.List<String> favorites = new java.util.ArrayList<>();
++        for (int count : new int[] {0, 8, 0}) {
++            if (count == 8) {
++                for (int i = 0; i < count; i++) favorites.add(f.controller.rememberTab(
++                        70 + i, "https://boundary.test/" + i, "Favorite " + i, true));
++            } else {
++                for (String id : favorites) f.controller.remove(id);
++                favorites.clear();
++            }
++            // Native favorite refresh does not notify the coordinator to reset compact mode.
++            f.view.refresh();
++            for (int budgetDp : new int[] {154, 155, 197, 198}) {
++                int budget = Math.round(budgetDp * density);
++                f.view.setCollectionHeight(budget); f.measure();
++                assertTrue("Count " + count + " must fit its " + budgetDp + "dp budget",
++                        f.view.getMeasuredHeight() <= budget);
++                boolean expanded = count == 0 || budgetDp == 198;
++                assertEquals("Compact choice for count " + count + " and budget " + budgetDp,
++                        expanded ? View.VISIBLE : View.GONE,
++                        f.view.findViewWithTag("arc-current-space").getVisibility());
++                View action = f.view.findViewWithTag("arc-new-folder:" + f.controller.state().selectedSpace());
++                assertEquals(expanded ? View.VISIBLE : View.GONE, action.getVisibility());
++                if (expanded) assertEquals(Math.round(44 * density), action.getMeasuredHeight());
++                if (count > 0) assertEquals(View.VISIBLE,
++                        f.view.findViewWithTag("arc-favorites-menu").getVisibility());
++            }
++        }
 +    }
 +
 +    @Test public void shortWindowKeepsAllFavoritesInAnAccessibleCompactMenu() {
@@ -23342,7 +23933,7 @@ diff --git a/chrome/browser/android/content/arc_camera_orientation.h b/chrome/br
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/android/content/arc_camera_orientation.h
-@@ -0,0 +1,27 @@
+@@ -0,0 +1,29 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -23360,7 +23951,9 @@ new file mode 100644
 +inline int Get(content::WebContents* contents) {
 +  if (!contents) return -1;
 +  auto* data = static_cast<OrientationData*>(contents->GetUserData(kOrientationKey));
-+  return data ? data->turns : -1;
++  // Only the Desktop policy consumes this value; Mobile keeps native orientation.
++  // Existing explicit angles, including zero, belong to their WebContents.
++  return data && data->turns >= 0 ? data->turns : 1;
 +}
 +inline void Set(content::WebContents* contents, int turns) {
 +  if (!contents) return;
@@ -23447,11 +24040,17 @@ diff --git a/chrome/browser/desktop_policy/android/BUILD.gn b/chrome/browser/des
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/desktop_policy/android/BUILD.gn
-@@ -0,0 +1,13 @@
+@@ -0,0 +1,22 @@
 +# Copyright 2026 The Chromium Authors
 +# Use of this source code is governed by a BSD-style license that can be
 +# found in the LICENSE file.
 +import("//build/config/android/rules.gni")
++
++android_assets("build_info_assets") {
++  # Written before gn gen by archium-build-version.py. The input is in the
++  # checkpointed source tree so resumed stages package the same build identity.
++  sources = [ "archium-build.json" ]
++}
 +
 +android_library("java") {
 +  sources = [
@@ -23459,7 +24058,10 @@ new file mode 100644
 +    "java/src/org/chromium/chrome/browser/desktop_policy/ArchiumWindowMetrics.java",
 +  ]
 +  # Window publicly exports the pinned Window Core dependency and its size classes.
-+  deps = [ "//third_party/androidx:androidx_window_window_java" ]
++  deps = [
++    ":build_info_assets",
++    "//third_party/androidx:androidx_window_window_java",
++  ]
 +}
 diff --git a/chrome/browser/desktop_policy/android/java/src/org/chromium/chrome/browser/desktop_policy/ArchiumWindowClass.java b/chrome/browser/desktop_policy/android/java/src/org/chromium/chrome/browser/desktop_policy/ArchiumWindowClass.java
 new file mode 100644
@@ -27943,7 +28545,7 @@ diff --git a/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrom
 new file mode 100644
 --- /dev/null
 +++ b/chrome/browser/ui/vertical_tabs/android/java/src/org/chromium/chrome/browser/ui/vertical_tabs/ArcDesktopPolicy.java
-@@ -0,0 +1,153 @@
+@@ -0,0 +1,155 @@
 +// Copyright 2026 The Chromium Authors
 +// Use of this source code is governed by a BSD-style license that can be
 +// found in the LICENSE file.
@@ -28033,7 +28635,9 @@ new file mode 100644
 +                + Math.round(ARC_FOOTER_ROW_GAP_DP * density) : 0;
 +        long remaining = (long) height - Math.round(reservedDp * density)
 +                - Math.max(0, captionHeight) - extensionHeight;
-+        return (int) Math.min(Math.round(240 * density), Math.max(0L, remaining));
++        // Complete collection rows may use the remaining height. A fixed 240dp
++        // ceiling hid favorites and clipped the folder action on tall windows.
++        return (int) Math.min(Integer.MAX_VALUE, Math.max(0L, remaining));
 +    }
 +
 +    /** Match all four compositor/SurfaceView outline corners. */

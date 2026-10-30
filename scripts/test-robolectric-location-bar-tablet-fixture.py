@@ -55,6 +55,10 @@ def main():
     bodies = [method(source, name) for name in ('onFuseboxStateChanged', 'updateLayoutAndBackground', 'setMarginsForAvailableWidth', 'getAvailableContainerWidth', 'isTooNarrowForExpandedActivationChip')]
     if 'public void setArcCommandBar(' in source:
         bodies.append(method(source, 'setArcCommandBar'))
+    if 'public void setArcGlassBackground(' in source:
+        bodies.append(method(source, 'setArcGlassBackground'))
+        if 'private int getArcBackgroundVerticalInset(' in source:
+            bodies.append(method(source, 'getArcBackgroundVerticalInset'))
     if 'public void setArcTopBar(' in source:
         bodies.append(method(source, 'setArcTopBar'))
     native = native_definition((ROOT / '.source-modified' / REL / 'LocationBarLayout.java').read_text())
@@ -119,6 +123,7 @@ import android.content.res.Resources;
 import android.graphics.Rect;
 import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.LayerDrawable;
 import android.view.Gravity;
 import android.view.View;
 import android.view.ViewGroup;
@@ -137,7 +142,12 @@ class LocationBarTablet extends BaseLayout {
     int mLocationBarTabletFuseboxPopupInset=16, mPopoverAdditionalWidth=16;
 __TABLET_FIELDS__
     ViewOutlineProvider mOutlineProvider;
-    GradientDrawable mFocusedPopupDrawable=new GradientDrawable(), mLocationBarBackground=new GradientDrawable();
+    GradientDrawable mFocusedPopupDrawable=new GradientDrawable();
+    // Chrome's native border rasterization is outside this holder/focus fixture.
+    static class Border extends GradientDrawable { void setInsets(int l,int t,int r,int b) {} }
+    Border mLocationBarBackground=new Border();
+    int mModernToolbarBackgroundVerticalOffset=4;
+    private void updateBackgroundColor() {}
     int[] mPositionArray=new int[2];
     BooleanSupplier mIsFullWidthExpansionAllowedSupplier;
     WindowAndroid mWindowAndroid=new WindowAndroid();

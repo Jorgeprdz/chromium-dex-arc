@@ -129,6 +129,8 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
                 && (surface == null || mArcGlassLayers != null)) return;
         mArcGlassBackground = surface;
         mArcGlassLayers = null;
+        int verticalInset = getArcBackgroundVerticalInset();
+        mLocationBarBackground.setInsets(0, verticalInset, 0, verticalInset);
         if (integrated) {
             // The toolbar/panel owns one continuous surface. Palette refreshes must not
             // reinstall the sidebar's rounded glass capsule or its lower highlight here.
@@ -142,8 +144,7 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
                     return mLocationBarBackground.getPadding(padding);
                 }
             };
-            layers.setLayerInset(0, 0, mModernToolbarBackgroundVerticalOffset,
-                    0, mModernToolbarBackgroundVerticalOffset);
+            layers.setLayerInset(0, 0, verticalInset, 0, verticalInset);
             mArcGlassLayers = layers;
         }
         // Fusebox owns its expanded popup. Restore the layered background on returning to normal.
@@ -152,9 +153,18 @@ class LocationBarTablet extends LocationBarLayout implements OnLongClickListener
         }
         updateBackgroundColor();
     }
+    /** One extra dp per edge for the sidebar capsule; native layout stays intact. */
+    private int getArcBackgroundVerticalInset() {
+        if (mArcGlassBackground == null || mArcTopBar || getArcCommandResults() != null) {
+            return mModernToolbarBackgroundVerticalOffset;
+        }
+        int edge = Math.round(getResources().getDisplayMetrics().density);
+        return Math.max(0, mModernToolbarBackgroundVerticalOffset - edge);
+    }
+
     @Override public void getArcGlassBounds(Rect bounds) {
         getDrawingRect(bounds);
-        bounds.inset(0, mModernToolbarBackgroundVerticalOffset);
+        bounds.inset(0, getArcBackgroundVerticalInset());
     }
     @Override public float getArcGlassCornerRadius() { return mModernToolbarBackgroundCornerRadius; }
     private @Nullable MarginLayoutParams mArcCommandOriginalChildParams;

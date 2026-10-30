@@ -10,8 +10,12 @@ class TopbarSurfaceContractTest(unittest.TestCase):
   setter=method_body(source,r'public void setArcGlassBackground\(').replace('android.graphics.Color.TRANSPARENT','0')
   mode=method_body(source,r'public void setArcTopBar\(')
   command=method_body(source,r'public void setArcCommandBar\(')
+  inset=method_body(source,r'private int getArcBackgroundVerticalInset\(')
   java='''class Rect {}
 class Drawable {boolean getPadding(Rect r){return true;}}
+class NativeBackground extends Drawable {void setInsets(int l,int t,int r,int b){}}
+class Metrics {float density=1f;}
+class Resources {Metrics getDisplayMetrics(){return new Metrics();}}
 class LayerDrawable extends Drawable {LayerDrawable(Drawable[] d){}void setLayerInset(int n,int l,int t,int r,int b){}}
 class MarginLayoutParams {}
 class FrameLayout {static class LayoutParams extends MarginLayoutParams {LayoutParams(LayoutParams p){}}}
@@ -26,7 +30,9 @@ class NativeEditor {
 public class Probe extends NativeEditor {
  boolean mArcTopBar;Drawable background;
  MarginLayoutParams mArcCommandOriginalChildParams;int mArcCommandOriginalPaddingBottom;
- Drawable mArcGlassBackground,mArcGlassLayers,mLocationBarBackground=new Drawable(),mFocusedPopupDrawable=new Drawable();
+ Drawable mArcGlassBackground,mArcGlassLayers,mFocusedPopupDrawable=new Drawable();
+ NativeBackground mLocationBarBackground=new NativeBackground();
+ Resources getResources(){return new Resources();}
  int mModernToolbarBackgroundVerticalOffset=4;
  Drawable getBackground(){return background;}
  void setBackground(Drawable d){background=d;}
@@ -35,6 +41,7 @@ public class Probe extends NativeEditor {
  void updateForegroundAndGlifAnimation(){}
  void updateLayoutAndBackground(){if(mArcTopBar||command!=null)setBackgroundColor(0);else setBackground(mArcGlassLayers==null?mLocationBarBackground:mArcGlassLayers);}
  public void setArcGlassBackground(Drawable surface) SETTER
+ private int getArcBackgroundVerticalInset() INSET
  public void setArcTopBar(boolean active) MODE
  public void setArcCommandBar(Rect results,boolean actions,Runnable beforeNavigation,Runnable inputEnd) COMMAND
  static void check(boolean b,String m){if(!b)throw new AssertionError(m);}
@@ -48,7 +55,7 @@ public class Probe extends NativeEditor {
   p.setArcCommandBar(null,false,null,null);check(p.background instanceof LayerDrawable,"Native command exit must rebuild sidebar glass without another appearance event");
   p.background=p.mFocusedPopupDrawable;p.setArcGlassBackground(new Drawable());check(p.background==p.mFocusedPopupDrawable,"Native focused popup replaced outside integrated mode");
  }
-}'''.replace('SETTER',setter).replace('MODE',mode).replace('COMMAND',command)
+}'''.replace('SETTER',setter).replace('MODE',mode).replace('COMMAND',command).replace('INSET',inset)
   with tempfile.TemporaryDirectory() as d:
    f=Path(d)/'Probe.java';f.write_text(java)
    p=subprocess.run(['javac',str(f)],capture_output=True,text=True);self.assertEqual(0,p.returncode,p.stderr)

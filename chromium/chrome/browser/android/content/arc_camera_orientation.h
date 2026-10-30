@@ -15,7 +15,9 @@ struct OrientationData final : base::SupportsUserData::Data {
 inline int Get(content::WebContents* contents) {
   if (!contents) return -1;
   auto* data = static_cast<OrientationData*>(contents->GetUserData(kOrientationKey));
-  return data ? data->turns : -1;
+  // Only the Desktop policy consumes this value; Mobile keeps native orientation.
+  // Existing explicit angles, including zero, belong to their WebContents.
+  return data && data->turns >= 0 ? data->turns : 1;
 }
 inline void Set(content::WebContents* contents, int turns) {
   if (!contents) return;

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="arc_about">Acerca de Archium</string>
-    <string name="arc_version">Versión %1$s (%2$d)</string>
+    <string name="arc_version">Archium %1$s\nChromium %2$s (%3$d)</string>
     <string name="arc_bookmarks">Marcadores</string>
     <string name="arc_bookmark_root">‹ Carpetas</string>
     <string name="arc_frame_color">Color del navegador</string>
@@ -110,9 +110,6 @@
     <string name="arc_desktop_material">Intensidad del acabado Desktop</string>
     <string name="arc_desktop_material_description">Ajusta la iluminación y el relieve del marco y la barra lateral.</string>
     <string name="arc_camera_orientation">Orientación de cámara</string>
-    <string name="arc_camera_auto">Automático</string>
-    <string name="arc_camera_manual">Manual · %1$d°</string>
-    <string name="arc_camera_rotate">Girar 90°</string>
-    <string name="arc_camera_reset">Restablecer automático</string>
+    <string name="arc_camera_angle">%1$d°</string>
     <string name="arc_phone_favorite_saved">En favoritos · Editar</string>
 </resources>
