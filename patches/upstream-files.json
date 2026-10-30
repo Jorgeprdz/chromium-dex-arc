@@ -449,7 +449,7 @@
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitViewCoordinator.java": "95b0e0bb87daf759d84c80f65190c9ae2ecbd490b620bc56424cadf33eb3b787",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcSplitViewportPolicy.java": "34798662718e2b91eb2fc3a5f7d5d45f49579db7933d167d0fd2914812da7751",
     "chrome/android/java/src/org/chromium/chrome/browser/arc/ArcTabActions.java": "33d3ffcb067dbabae3cb992b394426253483efe4a3ae9286fe5f66d10a17eee3",
-    "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcAboutDialogTest.java": "5478d0d1050d192ba1a82c9a7344e429bdb09357ac9e253d980dccf4a317dad5",
+    "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcAboutDialogTest.java": "4063d24561cb41d73aacb33051b3f66eabe8110f7e37d7ae974a039319812231",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCollectionsFocusTest.java": "0586230d1e3207635c962b1b7098ebdfbb9c01fda5afcc9e1369f21259479841",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcColorPickerTest.java": "d9e30c75b9d1c783b14c0f04af385942c66f9d8b51da8e2548c58633604c5940",
     "chrome/android/junit/src/org/chromium/chrome/browser/arc/ArcCommandBarTest.java": "b29dfcccacc5c1bc792bdaf4df3b15015e7f3fc3fdbaba87b3ffe0c015be0cc1",
@@ -506,5 +506,5 @@
     "third_party/blink/renderer/platform/mediastream/arc_camera_orientation_policy.h": "0166da7e26dd086305a76fe9037ef2ebe8e212375f979aaa29ea904986e97a0f",
     "third_party/blink/renderer/platform/mediastream/arc_camera_orientation_state.h": "d428cbfaf8f05e9ec97452c1a5b33cd750df705c3e289ef978a688031e356777"
   },
-  "patch_sha256": "1c83617da800a0106ffc872dfc34221c1148283806b4d9440792847ab08b0e92"
+  "patch_sha256": "344316d79d684b8e60bf153a1e4caa0b821d8949558505ba6f0a787d6a5d93e5"
 }

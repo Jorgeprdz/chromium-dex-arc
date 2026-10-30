@@ -12,6 +12,12 @@ import android.content.pm.PackageInfo;
 import android.widget.ImageView;
 import android.widget.TextView;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
+
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.robolectric.Robolectric;
@@ -25,10 +31,24 @@ import org.robolectric.annotation.SQLiteMode;
 @GraphicsMode(GraphicsMode.Mode.LEGACY)
 @SQLiteMode(SQLiteMode.Mode.LEGACY)
 public class ArcAboutDialogTest {
-    @Test public void showsInstalledVersionAndApplicationIcon() {
+    @Test public void showsInstalledVersionAndApplicationIcon() throws Exception {
         Activity activity = Robolectric.buildActivity(Activity.class).setup().get();
         AlertDialog dialog = null;
+        Path directory = Files.createTempDirectory("archium-about-assets");
+        Path assets = directory.resolve("fixture.apk");
         try {
+            // The Chromium runner contains the real CI asset; the standalone
+            // runner does not. Overlay a known test-owned asset in both cases.
+            try (ZipOutputStream zip = new ZipOutputStream(Files.newOutputStream(assets))) {
+                zip.putNextEntry(new ZipEntry("assets/archium-build.json"));
+                zip.write("{\"version\":\"0.9.201\",\"build_number\":201}"
+                        .getBytes(StandardCharsets.UTF_8));
+                zip.closeEntry();
+            }
+            int cookie = (Integer) android.content.res.AssetManager.class
+                    .getMethod("addAssetPath", String.class)
+                    .invoke(activity.getAssets(), assets.toString());
+            assertTrue("The test asset must be available to the real dialog", cookie > 0);
             PackageInfo info = new PackageInfo();
             info.packageName = activity.getPackageName();
             info.applicationInfo = activity.getApplicationInfo();
@@ -40,12 +60,14 @@ public class ArcAboutDialogTest {
                     .getRootView().findViewWithTag("arc-about-version");
             ImageView logo = dialog.findViewById(android.R.id.content)
                     .getRootView().findViewWithTag("arc-about-logo");
-            assertEquals("Archium desarrollo\nChromium 9.8.7 (987)", version.getText().toString());
+            assertEquals("Archium 0.9.201\nChromium 9.8.7 (987)", version.getText().toString());
             assertNotNull(logo.getDrawable());
             assertTrue(dialog.isShowing());
         } finally {
             if (dialog != null) dialog.dismiss();
             activity.finish();
+            Files.deleteIfExists(assets);
+            Files.deleteIfExists(directory);
         }
     }
 
